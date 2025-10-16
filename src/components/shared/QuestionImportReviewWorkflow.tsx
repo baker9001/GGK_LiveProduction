@@ -25,6 +25,7 @@ import { supabase } from '../../lib/supabase';
 import { toast } from './Toast';
 import { cn } from '../../lib/utils';
 import { FormField, Input, Select, Textarea } from './FormField';
+import { RichTextEditor } from './RichTextEditor';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -707,11 +708,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                 label="Answer text"
                 className="mb-0"
               >
-                <Textarea
+                <RichTextEditor
                   id={`${config.keyPrefix}-answer-${index}-text`}
                   value={answer?.answer ?? ''}
-                  onChange={event => config.onChange(index, { answer: event.target.value })}
-                  rows={3}
+                  onChange={(value) => config.onChange(index, { answer: value })}
+                  placeholder="Type the answer content..."
+                  minHeight={120}
                 />
               </FormField>
               <FormField
@@ -868,11 +870,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                 label="Option text"
                 className="mb-0"
               >
-                <Textarea
+                <RichTextEditor
                   id={`${config.keyPrefix}-option-${index}-text`}
                   value={option?.text ?? ''}
-                  onChange={event => config.onChange(index, { text: event.target.value })}
-                  rows={2}
+                  onChange={(value) => config.onChange(index, { text: value })}
+                  placeholder="Option content..."
+                  minHeight={100}
                 />
               </FormField>
             </div>
@@ -1745,11 +1748,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         label="Question text"
                         className="mb-0 md:col-span-2 lg:col-span-3"
                       >
-                        <Textarea
+                        <RichTextEditor
                           id={`${question.id}-question-text`}
                           value={question.question_text}
-                          onChange={(event) => handleQuestionFieldChange(question, 'question_text', event.target.value)}
-                          rows={4}
+                          onChange={(value) => handleQuestionFieldChange(question, 'question_text', value)}
+                          placeholder="Write the main question prompt..."
+                          minHeight={180}
                         />
                       </FormField>
 
@@ -2084,11 +2088,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                               label="Part question text"
                               className="mb-0"
                             >
-                              <Textarea
+                              <RichTextEditor
                                 id={`question-${question.id}-part-${partIndex}-text`}
                                 value={part.question_text ?? ''}
-                                onChange={(event) => handlePartFieldChange(question, partIndex, { question_text: event.target.value })}
-                                rows={3}
+                                onChange={(value) => handlePartFieldChange(question, partIndex, { question_text: value })}
+                                placeholder="Describe this part..."
+                                minHeight={140}
                               />
                             </FormField>
                             <div className="grid gap-3 md:grid-cols-2">
@@ -2283,15 +2288,16 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         label="Subpart question text"
                                         className="mb-0"
                                       >
-                                        <Textarea
+                                        <RichTextEditor
                                           id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-text`}
                                           value={subpart.question_text ?? ''}
-                                          onChange={(event) =>
+                                          onChange={(value) =>
                                             handleSubpartFieldChange(question, partIndex, subIndex, {
-                                              question_text: event.target.value
+                                              question_text: value
                                             })
                                           }
-                                          rows={2}
+                                          placeholder="Describe the subpart..."
+                                          minHeight={120}
                                         />
                                       </FormField>
                                       <div className="grid gap-3 md:grid-cols-2">
