@@ -59,9 +59,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [currentValue, setCurrentValue] = useState(() => sanitizeRichText(value));
   const [currentBlock, setCurrentBlock] = useState('p');
   const [showSymbolPicker, setShowSymbolPicker] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  const [currentValue, setCurrentValue] = useState(() => sanitizeRichText(value));
-  const [currentBlock, setCurrentBlock] = useState('p');
 
   useEffect(() => {
     const sanitized = sanitizeRichText(value);

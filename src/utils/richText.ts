@@ -33,7 +33,6 @@ const allowedTags = new Set([
 ]);
 
 const globalAllowedAttributes = new Set<string>(['data-equation']);
-const globalAllowedAttributes = new Set<string>();
 
 const tagSpecificAllowedAttributes: Record<string, Set<string>> = {
   a: new Set(['href', 'target', 'rel']),
