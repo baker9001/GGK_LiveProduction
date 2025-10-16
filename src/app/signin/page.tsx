@@ -25,6 +25,7 @@ import {
 } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 import { getPreferredName, getTimeBasedGreeting } from '../../lib/greeting';
+import { saveWelcomeNotice } from '../../lib/welcomeNotice';
 
 export default function SignInPage() {
   const navigate = useNavigate();
@@ -326,7 +327,13 @@ export default function SignInPage() {
       const personalizedGreeting = displayName
         ? `${friendlyGreeting}, ${displayName}.`
         : `${friendlyGreeting}.`;
-      toast.success(`${personalizedGreeting} You're now signed in and ready to go.`);
+
+      const formattedGreeting = personalizedGreeting.replace(/\.$/, '!');
+      saveWelcomeNotice({
+        greeting: formattedGreeting,
+        message: "You're now signed in and ready to go.",
+        timestamp: Date.now()
+      });
       
       // Redirect based on user type
       const redirectPath = getRedirectPath(userType, userRole);
