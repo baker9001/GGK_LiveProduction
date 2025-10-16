@@ -3,8 +3,6 @@
 import React from 'react';
 import { Check, X, AlertCircle, FileText, Beaker, Calculator, Hash } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { RichTextRenderer } from '../shared/RichTextRenderer';
-import { extractPlainText } from '../../utils/richText';
 
 interface CorrectAnswer {
   answer: string;
@@ -100,23 +98,11 @@ export function DynamicAnswerDisplay({
         )}
         <div className="space-y-2">
           {question.options.map((option) => {
-            const optionPlain = extractPlainText(option.text);
-            const normalizedOptionPlain = optionPlain.toLowerCase();
-            const normalizedLabel = option.label.toLowerCase();
-            const normalizedCorrectAnswer =
-              typeof question.correct_answer === 'string'
-                ? extractPlainText(question.correct_answer).toLowerCase()
-                : undefined;
-            const isCorrect = option.is_correct ||
-              normalizedCorrectAnswer === normalizedLabel ||
-              normalizedCorrectAnswer === normalizedOptionPlain ||
-              question.correct_answers?.some(ca => {
-                const normalizedAnswer = extractPlainText(ca.answer).toLowerCase();
-                return (
-                  normalizedAnswer === normalizedLabel ||
-                  normalizedAnswer === normalizedOptionPlain
-                );
-              });
+            const isCorrect = option.is_correct || 
+                             question.correct_answer === option.label ||
+                             question.correct_answers?.some(ca => 
+                               ca.answer === option.label || ca.answer === option.text
+                             );
             
             return (
               <div
@@ -136,7 +122,7 @@ export function DynamicAnswerDisplay({
                 )}>
                   {option.label}
                 </span>
-                <RichTextRenderer value={option.text} className="flex-1" />
+                <span className="flex-1">{option.text}</span>
                 {isCorrect && <Check className="w-5 h-5 text-green-600 dark:text-green-400 ml-2" />}
               </div>
             );

@@ -25,8 +25,6 @@ import {
 import { Button, IconButton } from './Button';
 import { Input } from './FormField';
 import { SearchableMultiSelect } from './SearchableMultiSelect';
-import { RichTextRenderer } from './RichTextRenderer';
-import { extractPlainText } from '../../utils/richText';
 
 export interface QuestionAttachment {
   id: string;
@@ -147,7 +145,7 @@ export function EnhancedQuestionSelector({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (q) =>
-          extractPlainText(q.question_description).toLowerCase().includes(query) ||
+          q.question_description.toLowerCase().includes(query) ||
           q.question_number?.toLowerCase().includes(query) ||
           q.topic?.toLowerCase().includes(query)
       );
@@ -551,7 +549,7 @@ export function EnhancedQuestionSelector({
                             </div>
 
                             <p className="text-sm text-gray-900 dark:text-white mb-2 line-clamp-2">
-                              {extractPlainText(question.question_description)}
+                              {question.question_description}
                             </p>
 
                             {(question.topic || question.year) && (
@@ -580,7 +578,7 @@ export function EnhancedQuestionSelector({
                                       )}
                                     </div>
                                     <p className="text-gray-700 dark:text-gray-300 line-clamp-2">
-                                      {extractPlainText(part.question_description)}
+                                      {part.question_description}
                                     </p>
                                   </div>
                                 ))}
@@ -710,10 +708,9 @@ export function EnhancedQuestionSelector({
                               )}
                             </div>
 
-                            <RichTextRenderer
-                              value={question.question_description}
-                              className="text-sm text-gray-900 dark:text-white mb-3"
-                            />
+                            <p className="text-sm text-gray-900 dark:text-white mb-3">
+                              {question.question_description}
+                            </p>
 
                             {/* Sub-questions (expanded) */}
                             {isExpanded && hasSubQuestions && (
@@ -728,10 +725,9 @@ export function EnhancedQuestionSelector({
                                         {part.marks}m
                                       </span>
                                     </div>
-                                    <RichTextRenderer
-                                      value={part.question_description}
-                                      className="text-gray-700 dark:text-gray-300"
-                                    />
+                                    <p className="text-gray-700 dark:text-gray-300">
+                                      {part.question_description}
+                                    </p>
                                   </div>
                                 ))}
                               </div>

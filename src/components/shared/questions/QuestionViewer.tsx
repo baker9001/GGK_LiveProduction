@@ -31,8 +31,6 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import { RichTextRenderer } from '../RichTextRenderer';
-import { extractPlainText } from '../../../utils/richText';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../Tabs';
 import { Button } from '../Button';
 import { toast } from '../Toast';
@@ -201,7 +199,7 @@ interface ComplianceSummaryProps {
 const QUESTION_ATTACHMENT_BUCKET = 'question-attachments';
 
 const normalizeText = (value: string) =>
-  extractPlainText(value)
+  value
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ');
@@ -533,7 +531,7 @@ const evaluatePart = (
       if (subject?.includes('math')) {
         const result = MathematicsAdapter.validateNumericalPrecision(
           userValue,
-          parseFloat(extractPlainText(bestAlternative.answer)),
+          parseFloat(bestAlternative.answer),
           bestAlternative.tolerance,
           part.meta?.significantFigures,
         );
@@ -544,7 +542,7 @@ const evaluatePart = (
         };
       }
 
-      const numericAnswer = parseFloat(extractPlainText(bestAlternative.answer));
+      const numericAnswer = parseFloat(bestAlternative.answer);
       const tolerance = bestAlternative.tolerance;
       let isValid = userValue === numericAnswer;
       if (tolerance?.abs !== undefined) {
@@ -752,10 +750,9 @@ const QuestionBody: React.FC<{
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2">
             <BookOpen className="h-4 w-4" /> Question Stem
           </h4>
-          <RichTextRenderer
-            value={question.question_text}
-            className="text-sm leading-relaxed text-gray-900 dark:text-gray-100"
-          />
+          <p className="text-sm leading-relaxed text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+            {question.question_text}
+          </p>
         </div>
       )}
 
@@ -776,10 +773,9 @@ const QuestionBody: React.FC<{
                       {part.answer_format.replace('_', ' ')}
                     </span>
                   </div>
-                  <RichTextRenderer
-                    value={part.question_text}
-                    className="mt-2 text-sm text-gray-700 dark:text-gray-200"
-                  />
+                  <p className="mt-2 text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
+                    {part.question_text}
+                  </p>
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold text-blue-600 dark:text-blue-300">{part.marks}</div>
@@ -1013,21 +1009,16 @@ const MCQViewer: React.FC<{
   allowMultiple: boolean;
 }> = ({ part, response, options, onChange, readOnly, allowMultiple }) => {
   const shuffle = part.meta?.shuffle === true;
-  const preparedOptions = useMemo(() => {
-    const withPlain = options.map((option, index) => ({
-      ...option,
-      plainText:
-        extractPlainText(option.text) || option.label || String.fromCharCode(65 + index),
-    }));
-    if (!shuffle) return withPlain;
-    return [...withPlain].sort(() => Math.random() - 0.5);
+  const displayedOptions = useMemo(() => {
+    if (!shuffle) return options;
+    return [...options].sort(() => Math.random() - 0.5);
   }, [options, shuffle]);
 
   const isSelected = (value: string) => {
     if (response.type === 'mcq_single') {
-      return normalizeText(response.value) === normalizeText(value);
+      return response.value === value;
     }
-    return response.value.map(normalizeText).includes(normalizeText(value));
+    return response.value.includes(value);
   };
 
   const toggleValue = (value: string) => {
@@ -1035,9 +1026,9 @@ const MCQViewer: React.FC<{
     if (response.type === 'mcq_single') {
       onChange(value);
     } else {
-      const exists = response.value.map(normalizeText).includes(normalizeText(value));
+      const exists = response.value.includes(value);
       const next = exists
-        ? response.value.filter((option) => normalizeText(option) !== normalizeText(value))
+        ? response.value.filter((option) => option !== value)
         : [...response.value, value];
       onChange(next);
     }
@@ -1045,25 +1036,25 @@ const MCQViewer: React.FC<{
 
   return (
     <div className="grid gap-2">
-      {preparedOptions.map((option, index) => (
+      {displayedOptions.map((option, index) => (
         <button
           key={`${option.label}-${index}`}
           type="button"
           className={cn(
             'flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition',
-            isSelected(option.plainText)
+            isSelected(option.text)
               ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
               : 'border-gray-200 bg-white hover:border-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-blue-600',
             readOnly && 'pointer-events-none opacity-80',
           )}
-          onClick={() => toggleValue(option.plainText)}
-          aria-pressed={isSelected(option.plainText)}
+          onClick={() => toggleValue(option.text)}
+          aria-pressed={isSelected(option.text)}
         >
           <span className="flex items-center gap-3">
             <span className="flex h-6 w-6 items-center justify-center rounded-full border border-current text-xs font-semibold">
               {option.label}
             </span>
-            <RichTextRenderer value={option.text} className="text-sm" />
+            {option.text}
           </span>
           {allowMultiple && (
             <span className="text-[10px] uppercase tracking-wide text-gray-400">Multi</span>
@@ -1318,10 +1309,9 @@ const AnswerArea: React.FC<AnswerAreaProps> = ({
                     {part.answer_format.replace('_', ' ')}
                   </span>
                 </div>
-                <RichTextRenderer
-                  value={part.question_text}
-                  className="mt-2 text-sm text-gray-800 dark:text-gray-200"
-                />
+                <p className="mt-2 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                  {part.question_text}
+                </p>
                 {part.hint && (
                   <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
                     <Lightbulb className="h-3 w-3" /> Hint available
