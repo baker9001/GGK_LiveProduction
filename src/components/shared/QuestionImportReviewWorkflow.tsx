@@ -20,7 +20,14 @@ import {
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
 import { EnhancedQuestionDisplay, QuestionDisplayData, QuestionPart } from './EnhancedQuestionDisplay';
-import { TestSimulationMode } from './TestSimulationMode';
+import {
+  ExamSimulation,
+  type QAReviewResultPayload
+} from '@/app/system-admin/learning/practice-management/questions-setup/components/ExamSimulation';
+import {
+  buildSimulationPaper,
+  type SimulationPaper
+} from '@/lib/simulation/simulationPaperBuilder';
 import { supabase } from '../../lib/supabase';
 import { toast } from './Toast';
 import { cn } from '../../lib/utils';
@@ -118,6 +125,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 }) => {
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
   const [showSimulation, setShowSimulation] = useState(false);
+  const [simulationPaper, setSimulationPaper] = useState<SimulationPaper | null>(null);
   const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null);
   const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -1253,6 +1261,16 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       return;
     }
 
+    const simulation = buildSimulationPaper({
+      questions: memoizedQuestions,
+      paperTitle: paperTitle || 'QA Preview',
+      totalMarks,
+      paperCode: importSessionId ? `session-${importSessionId}` : 'qa-preview',
+      subject: paperTitle || 'IGCSE Practice Paper',
+      duration: paperDuration || null
+    });
+
+    setSimulationPaper(simulation);
     setShowSimulation(true);
   };
 
@@ -1263,57 +1281,82 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     initializeReviewSession();
   };
 
-  const handleSimulationComplete = async (results: SimulationResults) => {
-    if (!reviewSessionId) return;
+  const handleSimulationExit = async (result?: QAReviewResultPayload) => {
+    setShowSimulation(false);
+    setSimulationPaper(null);
+
+    if (!result) {
+      return;
+    }
+
+    if (!reviewSessionId) {
+      toast.error('Unable to save simulation results. Review session not found.');
+      return;
+    }
+
+    const summary = result.summary;
+    if (!summary) {
+      toast.error('Simulation summary is missing. Please rerun the test.');
+      return;
+    }
+
+    const simulationSummary: SimulationResults = {
+      totalQuestions: summary.totalQuestions,
+      answeredQuestions: summary.answeredQuestions,
+      correctAnswers: summary.correctAnswers,
+      partiallyCorrect: summary.partiallyCorrect,
+      incorrectAnswers: summary.incorrectAnswers,
+      totalMarks: summary.totalMarks,
+      earnedMarks: summary.earnedMarks,
+      percentage: summary.percentage,
+      timeSpent: result.timeElapsed,
+      questionResults: result.questionResults || []
+    };
 
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        toast.error('Current user not found. Please sign in again.');
+        return;
+      }
 
-      // Save simulation results to database
       const { error } = await supabase
         .from('question_import_simulation_results')
         .insert({
           review_session_id: reviewSessionId,
           user_id: user.id,
           simulation_completed_at: new Date().toISOString(),
-          total_questions: results.totalQuestions,
-          answered_questions: results.answeredQuestions,
-          correct_answers: results.correctAnswers,
-          partially_correct: results.partiallyCorrect,
-          incorrect_answers: results.incorrectAnswers,
-          total_marks: results.totalMarks,
-          earned_marks: results.earnedMarks,
-          percentage: results.percentage,
-          time_spent_seconds: results.timeSpent,
-          passed: results.percentage >= 70,
+          total_questions: simulationSummary.totalQuestions,
+          answered_questions: simulationSummary.answeredQuestions,
+          correct_answers: simulationSummary.correctAnswers,
+          partially_correct: simulationSummary.partiallyCorrect,
+          incorrect_answers: simulationSummary.incorrectAnswers,
+          total_marks: simulationSummary.totalMarks,
+          earned_marks: simulationSummary.earnedMarks,
+          percentage: simulationSummary.percentage,
+          time_spent_seconds: simulationSummary.timeSpent,
+          passed: simulationSummary.percentage >= 70,
           pass_threshold: 70.0,
-          question_results: results.questionResults
+          question_results: simulationSummary.questionResults
         });
 
       if (error) throw error;
 
-      // Update review session
       await supabase
         .from('question_import_review_sessions')
         .update({
           simulation_completed: true,
-          simulation_passed: results.percentage >= 70,
+          simulation_passed: simulationSummary.percentage >= 70,
           updated_at: new Date().toISOString()
         })
         .eq('id', reviewSessionId);
 
-      setSimulationResults(results);
+      setSimulationResults(simulationSummary);
       toast.success('Simulation completed successfully');
     } catch (error) {
       console.error('Error saving simulation results:', error);
       toast.error('Failed to save simulation results');
     }
-  };
-
-  const handleSimulationExit = () => {
-    setShowSimulation(false);
   };
 
   const toggleQuestionExpansion = (questionId: string) => {
@@ -1347,17 +1390,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     );
   }
 
-  if (showSimulation) {
+  if (showSimulation && simulationPaper) {
     return (
-      <TestSimulationMode
-        questions={memoizedQuestions}
-        paperTitle={paperTitle}
-        duration={paperDuration}
-        totalMarks={totalMarks}
-        onComplete={handleSimulationComplete}
+      <ExamSimulation
+        paper={simulationPaper}
         onExit={handleSimulationExit}
-        allowPause={true}
-        showAnswersOnCompletion={true}
+        isQAMode={true}
       />
     );
   }

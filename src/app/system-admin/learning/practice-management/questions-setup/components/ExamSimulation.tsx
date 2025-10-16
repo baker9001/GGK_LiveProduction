@@ -65,7 +65,30 @@ interface SimulationIssue {
   message: string;
 }
 
-interface QAReviewResultPayload {
+export interface QAReviewQuestionResult {
+  questionId: string;
+  questionNumber: string;
+  status: 'correct' | 'partial' | 'incorrect' | 'unanswered';
+  isCorrect: boolean;
+  earnedMarks: number;
+  totalMarks: number;
+  userAnswer: unknown;
+  correctAnswers: CorrectAnswer[];
+  feedback: string;
+}
+
+export interface QAReviewSummary {
+  totalQuestions: number;
+  answeredQuestions: number;
+  correctAnswers: number;
+  partiallyCorrect: number;
+  incorrectAnswers: number;
+  totalMarks: number;
+  earnedMarks: number;
+  percentage: number;
+}
+
+export interface QAReviewResultPayload {
   completed: boolean;
   completedAt: string;
   mode: 'qa_review';
@@ -78,6 +101,8 @@ interface QAReviewResultPayload {
   answeredCount: number;
   totalQuestions: number;
   visitedQuestions: string[];
+  summary: QAReviewSummary;
+  questionResults: QAReviewQuestionResult[];
 }
 
 const deriveOptionLabel = (orderIndex: number): string => {
@@ -687,23 +712,157 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
       };
     });
 
-    let answeredCount = 0;
     const questionTimes: Record<string, number> = {};
 
     paper.questions.forEach(question => {
       const summary = answeredLookup[question.id];
-      if (summary?.answered) {
-        answeredCount += 1;
-      }
       if (summary && summary.timeSpent > 0) {
         questionTimes[question.id] = summary.timeSpent;
       }
     });
 
-    const score = totalQuestions > 0
-      ? Math.round((answeredCount / totalQuestions) * 100)
-      : undefined;
+    const questionResults: QAReviewQuestionResult[] = paper.questions.map(question => {
+      let totalMarks = 0;
+      let earnedMarks = 0;
+      let answeredComponents = 0;
+      let totalComponents = 0;
+      let correctComponents = 0;
+      let partialComponents = 0;
 
+      const responseSummary: Array<{
+        id: string;
+        label?: string;
+        answer: unknown;
+        earnedMarks: number;
+        isCorrect: boolean;
+        timeSpent?: number;
+      }> = [];
+
+      const recordResponse = (
+        key: string,
+        label: string | undefined,
+        marks: number,
+        answerRecord?: UserAnswer
+      ) => {
+        totalComponents += 1;
+        totalMarks += marks;
+
+        const earned = answerRecord?.marksAwarded ?? 0;
+        const hasResponse = answerRecord?.answer !== undefined && answerRecord?.answer !== '';
+
+        if (hasResponse) {
+          answeredComponents += 1;
+          earnedMarks += earned;
+          if (answerRecord?.isCorrect) {
+            correctComponents += 1;
+          } else if (earned > 0) {
+            partialComponents += 1;
+          }
+        }
+
+        responseSummary.push({
+          id: key,
+          label,
+          answer: answerRecord?.answer,
+          earnedMarks: earned,
+          isCorrect: Boolean(answerRecord?.isCorrect),
+          timeSpent: answerRecord?.timeSpent
+        });
+      };
+
+      if (question.parts.length > 0) {
+        question.parts.forEach(part => {
+          if (part.subparts && part.subparts.length > 0) {
+            part.subparts.forEach(subpart => {
+              const key = `${question.id}-${part.id}-${subpart.id}`;
+              const label = [part.part_label, subpart.subpart_label]
+                .filter(Boolean)
+                .join(' ')
+                .trim() || undefined;
+              const answerRecord = userAnswers[key];
+              recordResponse(key, label, subpart.marks ?? 0, answerRecord);
+            });
+          } else {
+            const key = `${question.id}-${part.id}`;
+            const answerRecord = userAnswers[key];
+            recordResponse(key, part.part_label, part.marks ?? 0, answerRecord);
+          }
+        });
+
+        if (totalComponents === 0) {
+          totalMarks += question.marks ?? 0;
+        }
+      } else {
+        const key = question.id;
+        const answerRecord = userAnswers[key];
+        recordResponse(key, undefined, question.marks ?? 0, answerRecord);
+      }
+
+      const questionAnswered = totalComponents > 0
+        ? answeredComponents === totalComponents
+        : answeredComponents > 0;
+      const hasEarnedMarks = earnedMarks > 0;
+      const allComponentsCorrect = totalComponents > 0 && correctComponents === totalComponents;
+      const status: QAReviewQuestionResult['status'] = !questionAnswered
+        ? 'unanswered'
+        : allComponentsCorrect
+          ? 'correct'
+          : hasEarnedMarks
+            ? 'partial'
+            : 'incorrect';
+
+      const feedback = !questionAnswered
+        ? 'No answer provided'
+        : status === 'correct'
+          ? 'All components correct'
+          : status === 'partial'
+            ? 'Partial credit awarded'
+            : 'Incorrect answer';
+
+      const aggregatedCorrectAnswers: CorrectAnswer[] = [];
+      if (question.correct_answers?.length) {
+        aggregatedCorrectAnswers.push(...question.correct_answers);
+      }
+      question.parts.forEach(part => {
+        if (part.correct_answers?.length) {
+          aggregatedCorrectAnswers.push(...part.correct_answers);
+        }
+        part.subparts?.forEach(subpart => {
+          if (subpart.correct_answers?.length) {
+            aggregatedCorrectAnswers.push(...subpart.correct_answers);
+          }
+        });
+      });
+
+      return {
+        questionId: question.id,
+        questionNumber: question.question_number,
+        status,
+        isCorrect: status === 'correct',
+        earnedMarks,
+        totalMarks,
+        userAnswer: responseSummary.length <= 1 ? (responseSummary[0] ?? null) : responseSummary,
+        correctAnswers: aggregatedCorrectAnswers,
+        feedback
+      };
+    });
+
+    const summary: QAReviewSummary = {
+      totalQuestions,
+      answeredQuestions: questionResults.filter(result => result.status !== 'unanswered').length,
+      correctAnswers: questionResults.filter(result => result.status === 'correct').length,
+      partiallyCorrect: questionResults.filter(result => result.status === 'partial').length,
+      incorrectAnswers: questionResults.filter(result => result.status === 'incorrect').length,
+      totalMarks: questionResults.reduce((sum, result) => sum + result.totalMarks, 0),
+      earnedMarks: questionResults.reduce((sum, result) => sum + result.earnedMarks, 0),
+      percentage: 0
+    };
+
+    summary.percentage = summary.totalMarks > 0
+      ? Math.round((summary.earnedMarks / summary.totalMarks) * 100)
+      : 0;
+
+    const score = summary.percentage;
     const issues: SimulationIssue[] = [];
     const recommendations: string[] = [];
 
@@ -717,9 +876,11 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
       questionTimes,
       score,
       timeElapsed,
-      answeredCount,
+      answeredCount: summary.answeredQuestions,
       totalQuestions,
       visitedQuestions: Array.from(visitedQuestions),
+      summary,
+      questionResults,
     };
   }, [flaggedQuestions, paper, timeElapsed, totalQuestions, userAnswers, visitedQuestions]);
 

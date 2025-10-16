@@ -35,7 +35,17 @@ import { Select } from '../../../../../../components/shared/Select';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
 
 // Import ExamSimulation component
-import { ExamSimulation } from '../../questions-setup/components/ExamSimulation';
+import {
+  ExamSimulation,
+  type QAReviewQuestionResult,
+  type QAReviewResultPayload,
+  type QAReviewSummary
+} from '../../questions-setup/components/ExamSimulation';
+import {
+  buildSimulationPaper,
+  generateAttachmentKey,
+  mergeAttachmentSources
+} from '@/lib/simulation/simulationPaperBuilder';
 
 // Import data operations (with optional validateQuestionsForImport)
 import {
@@ -394,169 +404,11 @@ interface SimulationResult {
   recommendations: string[];
   overallScore?: number;
   timeSpent?: number;
+  answeredCount?: number;
+  totalQuestions?: number;
+  summary?: QAReviewSummary;
+  questionResults?: QAReviewQuestionResult[];
 }
-
-// FIXED: Standardized attachment key generation
-const generateAttachmentKey = (questionId: string, partIndex?: number, subpartIndex?: number): string => {
-  let key = questionId;
-  if (partIndex !== undefined) {
-    key += `_p${partIndex}`;
-  }
-  if (subpartIndex !== undefined) {
-    key += `_s${subpartIndex}`;
-  }
-  return key;
-};
-
-type SimulationAttachment = {
-  id: string;
-  file_url: string;
-  file_name: string;
-  file_type: string;
-};
-
-const guessMimeTypeFromSource = (source: string): string | undefined => {
-  if (!source) {
-    return undefined;
-  }
-
-  if (source.startsWith('data:')) {
-    const mime = source.slice(5, source.indexOf(';'));
-    return mime || undefined;
-  }
-
-  const extensionMatch = source.match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
-  if (!extensionMatch) {
-    return undefined;
-  }
-
-  const extension = extensionMatch[1].toLowerCase();
-  const mimeMap: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    bmp: 'image/bmp',
-    svg: 'image/svg+xml',
-    pdf: 'application/pdf',
-    doc: 'application/msword',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xls: 'application/vnd.ms-excel',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  };
-
-  return mimeMap[extension];
-};
-
-const deriveFileNameFromUrl = (source: string): string | undefined => {
-  if (!source || source.startsWith('data:')) {
-    return undefined;
-  }
-
-  const cleaned = source.split('?')[0].split('#')[0];
-  const segments = cleaned.split('/').filter(Boolean);
-  const lastSegment = segments[segments.length - 1];
-  return lastSegment ? decodeURIComponent(lastSegment) : undefined;
-};
-
-const normalizeAttachmentForSimulation = (
-  attachment: any,
-  fallbackPrefix: string,
-  index: number
-): SimulationAttachment | null => {
-  if (!attachment) {
-    return null;
-  }
-
-  if (typeof attachment === 'string') {
-    const trimmed = attachment.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const fileName = deriveFileNameFromUrl(trimmed) || `Attachment_${index + 1}`;
-    const fileType = guessMimeTypeFromSource(trimmed) || 'image/png';
-
-    return {
-      id: `${fallbackPrefix}_att_${index}`,
-      file_url: trimmed,
-      file_name: fileName,
-      file_type: fileType
-    };
-  }
-
-  const urlCandidates = [
-    attachment.file_url,
-    attachment.url,
-    attachment.dataUrl,
-    attachment.data,
-    attachment.preview,
-    attachment.publicUrl,
-    attachment.public_url,
-    attachment.signedUrl,
-    attachment.signed_url,
-    attachment.path
-  ];
-
-  const fileUrl = urlCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)?.trim();
-
-  if (!fileUrl) {
-    return null;
-  }
-
-  const nameCandidates = [
-    attachment.file_name,
-    attachment.name,
-    attachment.fileName,
-    attachment.originalName,
-    attachment.filename,
-    attachment.title
-  ];
-
-  const resolvedName = nameCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)?.trim();
-  const fileName = resolvedName || deriveFileNameFromUrl(fileUrl) || `Attachment_${index + 1}`;
-
-  const typeCandidates = [attachment.file_type, attachment.type, attachment.mime_type];
-  const resolvedType = typeCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)?.trim();
-  const fileType = resolvedType || guessMimeTypeFromSource(fileUrl) || 'image/png';
-
-  return {
-    id: String(attachment.id ?? `${fallbackPrefix}_att_${index}`),
-    file_url: fileUrl,
-    file_name: fileName,
-    file_type: fileType
-  };
-};
-
-const mergeAttachmentSources = (
-  primary: any,
-  secondary: any,
-  fallbackPrefix: string
-): SimulationAttachment[] => {
-  const primaryArray = ensureArray(primary);
-  const secondaryArray = ensureArray(secondary);
-  const combined = [
-    ...primaryArray.map((item, index) => ({ item, index })),
-    ...secondaryArray.map((item, index) => ({ item, index: index + primaryArray.length }))
-  ];
-
-  const seen = new Set<string>();
-
-  return combined.reduce<SimulationAttachment[]>((acc, { item, index }) => {
-    const normalized = normalizeAttachmentForSimulation(item, fallbackPrefix, index);
-
-    if (normalized) {
-      const dedupeKey = `${normalized.file_url}::${normalized.file_name}`;
-      if (!seen.has(dedupeKey)) {
-        seen.add(dedupeKey);
-        acc.push(normalized);
-      }
-    }
-
-    return acc;
-  }, []);
-};
 
 function QuestionsTabInner({
   importSession,
@@ -2516,186 +2368,41 @@ function QuestionsTabInner({
 
   const handleStartSimulation = () => {
     try {
-      // Transform questions data for simulation format with dynamic fields support
-      const transformedQuestions = questions.map((q, qIndex) => {
-        const questionAttachments = mergeAttachmentSources(q.attachments, attachments[q.id], q.id);
+      const derivedTotalMarks = typeof paperMetadata?.total_marks === 'number'
+        ? paperMetadata.total_marks
+        : Number(paperMetadata?.total_marks) || questions.reduce((sum, q) => sum + (q.marks || 0), 0);
 
-        return {
-          id: q.id,
-          question_number: q.question_number,
-          question_description: q.question_text,
-          marks: q.marks,
-          type: q.question_type as 'mcq' | 'tf' | 'descriptive',
-          difficulty: q.difficulty,
-          topic_name: q.topic,
-          subtopic_names: [q.subtopic].filter(Boolean),
-          // Dynamic answer fields
-          answer_format: q.answer_format,
-          answer_requirement: q.answer_requirement,
-          correct_answers: q.correct_answers?.map(ans => ({
-            answer: ans.answer,
-            marks: ans.marks,
-            alternative_id: ans.alternative_id,
-            linked_alternatives: ans.linked_alternatives,
-            alternative_type: ans.alternative_type,
-            context: ans.context,
-            unit: ans.unit,
-            measurement_details: ans.measurement_details,
-            accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-            error_carried_forward: ans.error_carried_forward,
-            answer_requirement: ans.answer_requirement,
-            total_alternatives: ans.total_alternatives
-          })),
-          correct_answer: q.correct_answers?.[0]?.answer, // For MCQ compatibility
-          total_alternatives: q.total_alternatives,
-          subject: paperMetadata.subject, // Question-level subject context
-          figure: q.figure, // Figure requirement flag
-          unit_name: q.original_unit, // Unit/chapter context
-          status: 'pending', // Initialize status
-          options: q.options?.map((opt, index) => ({
-            id: `opt_${index}`,
-            label: opt.label || opt.option_label || String.fromCharCode(65 + index),
-            option_text: opt.text,
-            is_correct: opt.is_correct,
-            order: index
-          })),
-          parts: q.parts?.map((p, pIndex) => {
-            const partKey = generateAttachmentKey(q.id, pIndex);
-            const partAttachments = mergeAttachmentSources(p.attachments, attachments[partKey], partKey);
-
-            return {
-              id: `${q.id}_p${pIndex}`,
-              part_label: p.part,
-              question_description: p.question_text,
-              marks: p.marks,
-              difficulty: q.difficulty,
-              type: (() => {
-                // Enhanced type detection for parts
-                if (p.options && p.options.length > 0) return 'mcq';
-                if (p.answer_format === 'true_false' || (p.question_text || '').toLowerCase().includes('true or false')) return 'tf';
-                return 'descriptive';
-              })() as 'mcq' | 'tf' | 'descriptive',
-              status: 'pending',
-              topic_id: q.original_topics?.[0], // Include topic mapping
-              unit_name: q.original_unit,
-              subtopics: q.original_subtopics?.map(st => ({ id: st, name: st })),
-              // Dynamic answer fields for parts
-              answer_format: p.answer_format,
-              answer_requirement: p.answer_requirement,
-              correct_answers: p.correct_answers?.map(ans => ({
-                answer: ans.answer,
-                marks: ans.marks,
-                alternative_id: ans.alternative_id,
-                linked_alternatives: ans.linked_alternatives,
-                alternative_type: ans.alternative_type,
-                context: ans.context,
-                unit: ans.unit,
-                measurement_details: ans.measurement_details,
-                accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-                error_carried_forward: ans.error_carried_forward,
-                answer_requirement: ans.answer_requirement,
-                total_alternatives: ans.total_alternatives
-              })),
-              correct_answer: p.correct_answers?.[0]?.answer, // For MCQ compatibility
-              options: p.options?.map((opt, index) => ({
-                id: `opt_${index}`,
-                label: opt.label || opt.option_label || String.fromCharCode(65 + index),
-                option_text: opt.text,
-                is_correct: opt.is_correct,
-                order: index
-              })),
-              // Subparts support for complex questions
-              subparts: p.subparts?.map((sp, spIndex) => {
-                const subpartKey = generateAttachmentKey(q.id, pIndex, spIndex);
-                const subpartAttachments = mergeAttachmentSources(sp.attachments, attachments[subpartKey], subpartKey);
-
-                return {
-                  id: `${q.id}_p${pIndex}_s${spIndex}`,
-                  subpart_label: sp.subpart,
-                  question_description: sp.question_text,
-                  marks: sp.marks,
-                  answer_format: sp.answer_format,
-                  answer_requirement: sp.answer_requirement,
-                  correct_answers: sp.correct_answers?.map(ans => ({
-                    answer: ans.answer,
-                    marks: ans.marks,
-                    alternative_id: ans.alternative_id,
-                    linked_alternatives: ans.linked_alternatives,
-                    alternative_type: ans.alternative_type,
-                    context: ans.context,
-                    unit: ans.unit,
-                    measurement_details: ans.measurement_details,
-                    accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-                    error_carried_forward: ans.error_carried_forward,
-                    answer_requirement: ans.answer_requirement,
-                    total_alternatives: ans.total_alternatives
-                  })),
-                  options: sp.options?.map((opt, index) => ({
-                    id: `opt_${index}`,
-                    label: opt.label || opt.option_label || String.fromCharCode(65 + index),
-                    option_text: opt.text || opt.option_text,
-                    is_correct: opt.is_correct,
-                    order: index
-                  })),
-                  attachments: subpartAttachments,
-                  hint: sp.hint,
-                  explanation: sp.explanation,
-                  requires_manual_marking: sp.requires_manual_marking,
-                  marking_criteria: sp.marking_criteria
-                };
-              }),
-              attachments: partAttachments,
-              hint: p.hint,
-              explanation: p.explanation,
-              requires_manual_marking: p.requires_manual_marking,
-              marking_criteria: p.marking_criteria
-            };
-          }) || [],
-          attachments: questionAttachments,
-          hint: q.hint,
-          explanation: q.explanation,
-          requires_manual_marking: q.requires_manual_marking,
-          marking_criteria: q.marking_criteria,
-          // Navigation and progress tracking
-          _navigation: {
-            index: qIndex,
-            total: questions.length,
-            next: qIndex < questions.length - 1 ? questions[qIndex + 1].id : null,
-            previous: qIndex > 0 ? questions[qIndex - 1].id : null
-          }
-        };
-      });
-
-      const simulationPaper = {
-        id: 'preview',
-        code: paperMetadata.paper_code,
-        subject: paperMetadata.subject,
-        duration: paperMetadata.paper_duration,
-        total_marks: paperMetadata.total_marks,
-        status: 'qa_review', // Paper status for QA mode
-        provider: paperMetadata.provider,
-        program: paperMetadata.program,
-        exam_board: paperMetadata.exam_board,
-        qualification: paperMetadata.qualification,
-        exam_session: paperMetadata.exam_session,
-        exam_year: paperMetadata.exam_year,
-        // Validation configuration
-        validation_config: {
-          strict_marking: false, // Allow partial credit
+      const subjectForSimulation = (paperMetadata?.subject || paperTitleForMetadata || 'IGCSE Practice Paper').toString();
+      const simulationPaper = buildSimulationPaper({
+        questions,
+        paperTitle: paperTitleForMetadata || paperMetadata?.paper_title || 'Preview Paper',
+        totalMarks: derivedTotalMarks,
+        paperCode: paperCodeForMetadata || paperMetadata?.paper_code || 'qa-preview',
+        subject: subjectForSimulation,
+        duration: paperMetadata?.paper_duration ? String(paperMetadata.paper_duration) : null,
+        attachmentsMap: attachments,
+        metadata: {
+          provider: paperMetadata?.provider,
+          program: paperMetadata?.program,
+          exam_board: paperMetadata?.exam_board,
+          qualification: paperMetadata?.qualification,
+          exam_session: paperMetadata?.exam_session,
+          exam_year: paperMetadata?.exam_year
+        },
+        validationConfig: {
+          strict_marking: false,
           allow_equivalent_phrasing: true,
           case_sensitive: false,
           trim_whitespace: true,
           subject_specific_rules: {
-            chemistry: paperMetadata.subject?.toLowerCase().includes('chemistry'),
-            physics: paperMetadata.subject?.toLowerCase().includes('physics'),
-            biology: paperMetadata.subject?.toLowerCase().includes('biology'),
-            mathematics: paperMetadata.subject?.toLowerCase().includes('math')
+            chemistry: subjectForSimulation.toLowerCase().includes('chemistry'),
+            physics: subjectForSimulation.toLowerCase().includes('physics'),
+            biology: subjectForSimulation.toLowerCase().includes('biology'),
+            mathematics: subjectForSimulation.toLowerCase().includes('math')
           }
-        },
-        questions: transformedQuestions,
+        }
+      });
 
-      };
-      
       setSimulationPaper(simulationPaper);
       setShowSimulation(true);
     } catch (error) {
@@ -2704,7 +2411,7 @@ function QuestionsTabInner({
     }
   };
 
-  const handleSimulationExit = async (result?: any) => {
+  const handleSimulationExit = async (result?: QAReviewResultPayload) => {
     setShowSimulation(false);
 
     // Process simulation results if provided
@@ -2715,10 +2422,14 @@ function QuestionsTabInner({
         flaggedQuestions: result.flaggedQuestions || [],
         issues: result.issues || [],
         recommendations: result.recommendations || [],
-        overallScore: result.score,
-        timeSpent: result.timeElapsed
+        overallScore: result.summary?.percentage ?? result.score,
+        timeSpent: result.timeElapsed,
+        answeredCount: result.summary?.answeredQuestions ?? result.answeredCount,
+        totalQuestions: result.summary?.totalQuestions ?? result.totalQuestions,
+        summary: result.summary,
+        questionResults: result.questionResults
       };
-      
+
       // Add dynamic field validation issues
       const dynamicFieldIssues: any[] = [];
       
