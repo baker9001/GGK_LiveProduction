@@ -20,7 +20,7 @@ import {
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
 import { EnhancedQuestionDisplay, QuestionDisplayData, QuestionPart } from './EnhancedQuestionDisplay';
-import { TestSimulationMode } from './TestSimulationMode';
+import { UnifiedTestSimulation } from './UnifiedTestSimulation';
 import { supabase } from '../../lib/supabase';
 import { toast } from './Toast';
 import { cn } from '../../lib/utils';
@@ -1348,14 +1348,52 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   }
 
   if (showSimulation) {
+    // Transform questions into the UnifiedTestSimulation format
+    const simulationPaper = {
+      id: 'import-preview',
+      code: paperTitle,
+      subject: paperSubject || 'General',
+      duration: paperDuration,
+      total_marks: totalMarks,
+      questions: memoizedQuestions.map((q, index) => ({
+        id: q.id,
+        question_number: q.question_number || `${index + 1}`,
+        question_description: q.question_description || '',
+        marks: q.marks || 0,
+        type: (q.question_type as 'mcq' | 'tf' | 'descriptive') || 'descriptive',
+        difficulty: q.difficulty || 'medium',
+        topic_name: q.topic_name,
+        subtopic_names: q.subtopic_names || [],
+        options: q.options?.map((opt, optIndex) => ({
+          id: opt.id || `opt-${optIndex}`,
+          option_text: opt.text || opt.option_text || '',
+          is_correct: opt.is_correct || false,
+          order: optIndex
+        })),
+        parts: [],
+        answer_format: q.answer_format,
+        answer_requirement: q.answer_requirement,
+        correct_answers: q.correct_answers,
+        correct_answer: q.correct_answer,
+        total_alternatives: q.total_alternatives,
+        hint: q.hint,
+        explanation: q.explanation,
+        requires_manual_marking: q.requires_manual_marking,
+        marking_criteria: q.marking_criteria,
+        attachments: q.attachments?.map((att, attIndex) => ({
+          id: att.id || `att-${attIndex}`,
+          file_url: att.file_url || att.url || att.preview || '',
+          file_name: att.file_name || att.name || `Attachment ${attIndex + 1}`,
+          file_type: att.file_type || att.type || 'image/png'
+        }))
+      }))
+    };
+
     return (
-      <TestSimulationMode
-        questions={memoizedQuestions}
-        paperTitle={paperTitle}
-        duration={paperDuration}
-        totalMarks={totalMarks}
-        onComplete={handleSimulationComplete}
+      <UnifiedTestSimulation
+        paper={simulationPaper}
         onExit={handleSimulationExit}
+        isQAMode={false}
         allowPause={true}
         showAnswersOnCompletion={true}
       />
