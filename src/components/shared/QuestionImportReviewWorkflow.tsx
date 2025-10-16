@@ -14,7 +14,8 @@ import {
   Trash2,
   Image as ImageIcon,
   AlertCircle,
-  List
+  List,
+  Paperclip
 } from 'lucide-react';
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
@@ -33,6 +34,23 @@ const formatOptionLabel = (value: string) =>
 
 type EditableCorrectAnswer = NonNullable<QuestionDisplayData['correct_answers']>[number];
 type EditableOption = NonNullable<QuestionDisplayData['options']>[number];
+
+const countAttachmentsInParts = (parts?: QuestionPart[]): number => {
+  if (!Array.isArray(parts)) {
+    return 0;
+  }
+
+  return parts.reduce((total, part) => {
+    const directAttachments = Array.isArray(part.attachments) ? part.attachments.length : 0;
+    const subpartAttachments = countAttachmentsInParts(part.subparts);
+    return total + directAttachments + subpartAttachments;
+  }, 0);
+};
+
+const getQuestionAttachmentCount = (question: QuestionDisplayData): number => {
+  const directAttachments = Array.isArray(question.attachments) ? question.attachments.length : 0;
+  return directAttachments + countAttachmentsInParts(question.parts);
+};
 
 interface UnitRecord {
   id: string;
@@ -1452,8 +1470,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           };
           const isExpanded = expandedQuestions.has(question.id);
           const requiresFigure = Boolean(question.figure_required ?? question.figure);
-          const attachmentsCount = Array.isArray(question.attachments) ? question.attachments.length : 0;
+          const attachmentsCount = getQuestionAttachmentCount(question);
           const hasFigureAttachment = attachmentsCount > 0;
+          const attachmentBadgeLabel = attachmentsCount > 0
+            ? `${attachmentsCount} attachment${attachmentsCount === 1 ? '' : 's'}`
+            : requiresFigure
+            ? 'Attachment missing'
+            : null;
+          const attachmentBadgeClass = attachmentsCount > 0
+            ? requiresFigure
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+              : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+            : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200';
           const { unitId: selectedUnitId, topicId: selectedTopicId, subtopicId: selectedSubtopicId } =
             getEffectiveSelections(question);
           const selectedUnit = selectedUnitId ? units.find(unit => unit.id === selectedUnitId) : undefined;
@@ -1592,6 +1620,17 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         >
                           <ImageIcon className="h-3 w-3" />
                           {hasFigureAttachment ? 'Figure attached' : 'Figure required'}
+                        </span>
+                      )}
+                      {attachmentBadgeLabel && (
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                            attachmentBadgeClass
+                          )}
+                        >
+                          <Paperclip className="h-3 w-3" />
+                          {attachmentBadgeLabel}
                         </span>
                       )}
                     </div>
