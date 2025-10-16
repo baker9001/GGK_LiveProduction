@@ -81,7 +81,6 @@ import {
 } from '../../../../../../lib/extraction/preImportValidation';
 
 // Import sub-components and utilities
-import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
 import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import QuestionSupportMatrix from './components/QuestionSupportMatrix';
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
@@ -4425,14 +4424,6 @@ function QuestionsTabInner({
             )}
           </Button>
 
-          <FixIncompleteQuestionsButton
-            incompleteQuestions={questions || []}
-            onFix={async (updatedQuestions) => {
-              setQuestions(updatedQuestions);
-              toast.success('Questions updated with complete data');
-            }}
-          />
-
           {Object.keys(validationErrors).length > 0 && (
             <Button
               variant="outline"
@@ -4514,10 +4505,9 @@ function QuestionsTabInner({
           question_text: q.question_text || '',
           question_type: q.question_type as 'mcq' | 'tf' | 'descriptive' | 'calculation' | 'diagram' | 'essay',
           marks: q.marks || 0,
-          unit: q.unit ?? q.original_unit ?? null,
+          unit: q.original_unit ?? q.unit ?? null,
           unit_id: q.unit_id ?? null,
           difficulty: q.difficulty,
-          unit: q.original_unit,
           topic: q.topic,
           topic_id: q.topic_id ?? null,
           subtopic: q.subtopic,
