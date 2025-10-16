@@ -26,7 +26,6 @@ import {
 import ScientificEditor from './ScientificEditor';
 import Button from './Button';
 import { cn } from '@/lib/utils';
-import { RichTextRenderer } from './RichTextRenderer';
 
 // Type definitions
 interface CorrectAnswer {
@@ -1297,10 +1296,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     {option.label}
                   </span>
                   <div className="flex flex-col">
-                    <RichTextRenderer
-                      value={option.text}
-                      className="text-gray-700 dark:text-gray-300"
-                    />
+                    <span className="text-gray-700 dark:text-gray-300">{option.text}</span>
                     {shouldShowFeedback && isCorrect && (
                       <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
                         <CircleCheck className="h-3.5 w-3.5" /> Correct answer
