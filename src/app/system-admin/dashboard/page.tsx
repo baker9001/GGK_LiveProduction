@@ -1,43 +1,71 @@
 // /src/app/system-admin/dashboard/page.tsx
 
 import React, { useState } from 'react';
+import clsx from 'clsx';
 import { Building2, Users, Key, ClipboardList, FlaskConical } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { TestAnyUserModal } from '../../../components/admin/TestAnyUserModal';
 import { getRealAdminUser, isInTestMode } from '../../../lib/auth';
+import { getPreferredName, getTimeBasedGreeting } from '../../../lib/greeting';
 
 export default function DashboardPage() {
   const [showTestModal, setShowTestModal] = useState(false);
-  
+
   const realAdmin = getRealAdminUser();
   const isSSA = realAdmin?.role === 'SSA';
   const inTestMode = isInTestMode();
 
+  const greeting = getTimeBasedGreeting();
+  const preferredName = getPreferredName(realAdmin?.name) ?? 'Admin';
+
   return (
     <div className="p-6 space-y-6">
       {/* Header with Test Mode Button */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            System Dashboard
-          </h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
-            Welcome back, {realAdmin?.name || 'Admin'}! Here's an overview of your system.
-          </p>
-        </div>
-        
-        {/* Test Mode Button - Only show for SSA and not already in test mode */}
-        {isSSA && !inTestMode && (
-          <Button
-            onClick={() => setShowTestModal(true)}
-            variant="outline"
-            leftIcon={<FlaskConical className="h-4 w-4" />}
-            className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-          >
-            Test as User
-          </Button>
+      <section
+        className={clsx(
+          'relative overflow-hidden rounded-2xl border border-gray-200',
+          'bg-gradient-to-r from-indigo-50 via-white to-purple-50 p-6 shadow-sm',
+          'dark:border-gray-700 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950'
         )}
-      </div>
+        aria-live="polite"
+      >
+        <div
+          className={clsx(
+            'pointer-events-none absolute -right-12 top-0 hidden h-40 w-40 rounded-full',
+            'bg-indigo-200/50 blur-3xl sm:block dark:bg-indigo-500/10'
+          )}
+          aria-hidden="true"
+        />
+        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+              {greeting}, {preferredName}
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold text-gray-900 dark:text-white">
+              Your system overview is ready.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
+              Review the live metrics below to stay ahead of adoption, licensing, and activity
+              trends across your organization.
+            </p>
+          </div>
+
+          {/* Test Mode Button - Only show for SSA and not already in test mode */}
+          {isSSA && !inTestMode && (
+            <Button
+              onClick={() => setShowTestModal(true)}
+              variant="outline"
+              leftIcon={<FlaskConical className="h-4 w-4" />}
+              className={clsx(
+                'border-indigo-500 text-indigo-600 backdrop-blur hover:bg-indigo-50',
+                'dark:border-indigo-500/50 dark:text-indigo-200 dark:hover:bg-indigo-500/10'
+              )}
+            >
+              Test as User
+            </Button>
+          )}
+        </div>
+      </section>
 
       {/* Simple Statistics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
