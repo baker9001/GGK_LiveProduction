@@ -41,6 +41,10 @@ interface Attachment {
   id: string;
   url?: string;
   preview?: string;
+  file_url?: string;
+  thumbnail_url?: string;
+  dataUrl?: string;
+  data?: string;
   file_name?: string;
   file_type?: string;
 }
@@ -125,6 +129,53 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const resolveAttachmentSource = (attachment: Attachment): string | undefined => {
+    const candidates = [
+      attachment.preview,
+      attachment.url,
+      attachment.file_url,
+      attachment.dataUrl,
+      attachment.data,
+      attachment.thumbnail_url
+    ];
+
+    return candidates.find((src): src is string => typeof src === 'string' && src.trim().length > 0);
+  };
+
+  const isImageAttachment = (attachment: Attachment, src?: string): boolean => {
+    if (attachment.file_type) {
+      return attachment.file_type.startsWith('image/');
+    }
+
+    if (src) {
+      const lowerSrc = src.toLowerCase();
+      if (lowerSrc.startsWith('data:image')) {
+        return true;
+      }
+
+      try {
+        const url = new URL(lowerSrc, 'http://localhost');
+        const pathname = url.pathname.toLowerCase();
+        if (/[.](png|jpe?g|gif|bmp|webp|svg)$/.test(pathname)) {
+          return true;
+        }
+      } catch {
+        if (/[.](png|jpe?g|gif|bmp|webp|svg)(\?|$)/.test(lowerSrc)) {
+          return true;
+        }
+      }
+    }
+
+    if (attachment.file_name) {
+      const lowerName = attachment.file_name.toLowerCase();
+      if (/[.](png|jpe?g|gif|bmp|webp|svg)$/.test(lowerName)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -357,19 +408,25 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
           <div className="flex flex-wrap justify-center gap-4">
             {question.attachments.map((attachment, index) => {
-              const imgSrc = attachment.preview || attachment.url;
+              const imageSrc = resolveAttachmentSource(attachment);
+              const isImage = isImageAttachment(attachment, imageSrc);
+              const fallbackLabel = attachment.file_name || `Attachment ${index + 1}`;
 
-              if (!imgSrc) {
-                // Fallback for attachments without preview
+              if (!imageSrc || !isImage) {
                 return (
                   <div
                     key={attachment.id || index}
-                    className="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center"
+                    className="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center min-w-[180px]"
                   >
-                    <ImageIcon className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                      {attachment.file_name || `Attachment ${index + 1}`}
+                    <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                      {fallbackLabel}
                     </p>
+                    {attachment.file_type && (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
+                        {attachment.file_type}
+                      </p>
+                    )}
                   </div>
                 );
               }
@@ -377,15 +434,15 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
               return (
                 <button
                   key={attachment.id || index}
-                  onClick={() => setImagePreview(imgSrc)}
+                  onClick={() => imageSrc && setImagePreview(imageSrc)}
                   className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-all shadow-sm hover:shadow-md"
                   style={{ maxWidth: '100%' }}
                 >
                   {/* Dynamic image container that adjusts to content */}
                   <div className="relative">
                     <img
-                      src={imgSrc}
-                      alt={attachment.file_name || `Attachment ${index + 1}`}
+                      src={imageSrc}
+                      alt={fallbackLabel}
                       className="max-w-full h-auto max-h-96 object-contain"
                       onError={(e) => {
                         // Handle broken image
@@ -554,19 +611,25 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                 <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                   <div className="flex flex-wrap justify-center gap-3">
                     {part.attachments.map((attachment, attIdx) => {
-                      const imgSrc = attachment.preview || attachment.url;
+                      const imageSrc = resolveAttachmentSource(attachment);
+                      const isImage = isImageAttachment(attachment, imageSrc);
+                      const fallbackLabel = attachment.file_name || `Attachment ${attIdx + 1}`;
 
-                      if (!imgSrc) {
-                        // Fallback for attachments without preview
+                      if (!imageSrc || !isImage) {
                         return (
                           <div
                             key={attIdx}
-                            className="bg-gray-200 dark:bg-gray-700 rounded-lg p-3 text-center"
+                            className="bg-gray-200 dark:bg-gray-700 rounded-lg p-3 text-center min-w-[160px]"
                           >
-                            <ImageIcon className="h-6 w-6 mx-auto mb-1 text-gray-400" />
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
-                              {attachment.file_name || `Attachment ${attIdx + 1}`}
+                            <FileText className="h-6 w-6 mx-auto mb-1 text-gray-400" />
+                            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                              {fallbackLabel}
                             </p>
+                            {attachment.file_type && (
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
+                                {attachment.file_type}
+                              </p>
+                            )}
                           </div>
                         );
                       }
@@ -574,15 +637,15 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                       return (
                         <button
                           key={attIdx}
-                          onClick={() => setImagePreview(imgSrc)}
+                          onClick={() => imageSrc && setImagePreview(imageSrc)}
                           className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-all shadow-sm hover:shadow-md"
                           style={{ maxWidth: '100%' }}
                         >
                           {/* Dynamic image container that adjusts to content */}
                           <div className="relative">
                             <img
-                              src={imgSrc}
-                              alt={attachment.file_name || `Attachment ${attIdx + 1}`}
+                              src={imageSrc}
+                              alt={fallbackLabel}
                               className="max-w-full h-auto max-h-80 object-contain"
                               onError={(e) => {
                                 // Handle broken image
