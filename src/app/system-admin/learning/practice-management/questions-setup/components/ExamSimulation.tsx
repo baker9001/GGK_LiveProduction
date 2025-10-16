@@ -287,7 +287,7 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-6">
         {attachments.map((attachment, index) => {
           const isImage = attachment.file_type?.startsWith('image/');
           const id = attachment.id || `${attachment.file_url}-${index}`;
@@ -295,23 +295,69 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
           return (
             <div
               key={id}
-              className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/70 shadow-sm transition-all hover:shadow-md"
+              className={cn(
+                'group relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm transition-all hover:shadow-md dark:border-gray-700 dark:bg-gray-900/60',
+                isImage && 'bg-transparent shadow-none hover:shadow-none'
+              )}
             >
-              <div className="relative">
+              <div
+                className={cn(
+                  'relative flex flex-col',
+                  isImage ? 'gap-3 rounded-2xl bg-white p-4 dark:bg-gray-900/70' : 'bg-white dark:bg-gray-900/60'
+                )}
+              >
                 {isImage ? (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewAttachment(attachment)}
-                    className="flex w-full items-center justify-center bg-white dark:bg-gray-900/60 p-4"
-                  >
-                    <img
-                      src={attachment.file_url}
-                      alt={attachment.file_name || 'Attachment preview'}
-                      className="max-h-80 w-full object-contain"
-                    />
-                  </button>
+                  <figure className="flex flex-col">
+                    <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950/60">
+                      <img
+                        src={attachment.file_url}
+                        alt={attachment.file_name || 'Attachment preview'}
+                        className="w-full max-h-[520px] object-contain"
+                      />
+
+                      <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/60 p-2 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAttachment(attachment)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-white hover:bg-black/70"
+                          aria-label="Preview attachment"
+                        >
+                          <Maximize2 className="h-4 w-4" />
+                        </button>
+                        <a
+                          href={attachment.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-white hover:bg-black/70"
+                          aria-label="Open attachment in new tab"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <a
+                          href={attachment.file_url}
+                          download={attachment.file_name || undefined}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-white hover:bg-black/70"
+                          aria-label="Download attachment"
+                        >
+                          <Download className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
+                    {(attachment.file_name || attachment.file_type) && (
+                      <figcaption className="mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <span className="truncate font-medium text-gray-700 dark:text-gray-200">
+                          {attachment.file_name || 'Attachment'}
+                        </span>
+                        {attachment.file_type && (
+                          <span className="ml-4 shrink-0 uppercase tracking-wide text-[10px] text-gray-400 dark:text-gray-500">
+                            {attachment.file_type.split('/').pop()}
+                          </span>
+                        )}
+                      </figcaption>
+                    )}
+                  </figure>
                 ) : (
-                  <div className="bg-white p-4 dark:bg-gray-900/60">
+                  <div className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800/80">
                         <FileText className="h-6 w-6 text-gray-500 dark:text-gray-300" />
@@ -328,44 +374,27 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
                   </div>
                 )}
 
-                <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {isImage && (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewAttachment(attachment)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
-                      aria-label="Preview attachment"
+                {!isImage && (
+                  <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-800">
+                    <a
+                      href={attachment.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:text-blue-600 dark:bg-gray-800/80 dark:text-gray-200"
+                      aria-label="Open attachment in new tab"
                     >
-                      <Maximize2 className="h-4 w-4" />
-                    </button>
-                  )}
-                  <a
-                    href={attachment.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800/80 dark:text-gray-200"
-                    aria-label="Open attachment in new tab"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                  <a
-                    href={attachment.file_url}
-                    download={attachment.file_name || undefined}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800/80 dark:text-gray-200"
-                    aria-label="Download attachment"
-                  >
-                    <Download className="h-4 w-4" />
-                  </a>
-                </div>
-              </div>
-
-              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {attachment.file_name || 'Attachment'}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {attachment.file_type || 'Attachment'}
-                </p>
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                    <a
+                      href={attachment.file_url}
+                      download={attachment.file_name || undefined}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:text-blue-600 dark:bg-gray-800/80 dark:text-gray-200"
+                      aria-label="Download attachment"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           );
