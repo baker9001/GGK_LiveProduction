@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Button, IconButton } from './Button';
+import { RichTextRenderer } from './RichTextRenderer';
 import type { Question, SubQuestion, QuestionAttachment } from './EnhancedQuestionSelector';
 
 interface EnhancedQuestionPreviewProps {
@@ -135,11 +136,10 @@ export function EnhancedQuestionPreview({
           </div>
         </div>
 
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
-            {part.question_description}
-          </p>
-        </div>
+        <RichTextRenderer
+          value={part.question_description ?? part.question_text ?? ''}
+          className="text-gray-900 dark:text-white"
+        />
 
         {part.attachments && part.attachments.length > 0 && (
           <div className="mt-4 space-y-3">
@@ -288,11 +288,10 @@ export function EnhancedQuestionPreview({
                   )}
                 </div>
 
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <p className="text-base text-gray-900 dark:text-white whitespace-pre-wrap">
-                    {question.question_description}
-                  </p>
-                </div>
+                <RichTextRenderer
+                  value={question.question_description ?? question.question_text ?? ''}
+                  className="text-base text-gray-900 dark:text-white"
+                />
 
                 {question.attachments && question.attachments.length > 0 && (
                   <div className="mt-4 space-y-3">
