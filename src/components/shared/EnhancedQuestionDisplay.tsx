@@ -348,28 +348,78 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
     }
 
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
           <ImageIcon className="h-4 w-4" />
           Attachments ({question.attachments.length})
         </h4>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {question.attachments.map((attachment, index) => (
-            <button
-              key={attachment.id || index}
-              onClick={() => setImagePreview(attachment.url || attachment.preview || null)}
-              className="group relative aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
-            >
-              <img
-                src={attachment.url || attachment.preview}
-                alt={attachment.file_name || `Attachment ${index + 1}`}
-                className="w-full h-full object-contain"
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
-                <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </button>
-          ))}
+        {/* Full width container aligned with question text box */}
+        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-wrap justify-center gap-4">
+            {question.attachments.map((attachment, index) => {
+              const imgSrc = attachment.preview || attachment.url;
+
+              if (!imgSrc) {
+                // Fallback for attachments without preview
+                return (
+                  <div
+                    key={attachment.id || index}
+                    className="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center"
+                  >
+                    <ImageIcon className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      {attachment.file_name || `Attachment ${index + 1}`}
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={attachment.id || index}
+                  onClick={() => setImagePreview(imgSrc)}
+                  className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-all shadow-sm hover:shadow-md"
+                  style={{ maxWidth: '100%' }}
+                >
+                  {/* Dynamic image container that adjusts to content */}
+                  <div className="relative">
+                    <img
+                      src={imgSrc}
+                      alt={attachment.file_name || `Attachment ${index + 1}`}
+                      className="max-w-full h-auto max-h-96 object-contain"
+                      onError={(e) => {
+                        // Handle broken image
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement?.parentElement;
+                        if (parent) {
+                          parent.innerHTML = `
+                            <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center min-w-[200px]">
+                              <svg class="h-8 w-8 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <p class="text-xs text-gray-600 dark:text-gray-400">Image not available</p>
+                            </div>
+                          `;
+                        }
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
+                      <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </div>
+                  {/* Optional: Show filename below image */}
+                  {attachment.file_name && (
+                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                        {attachment.file_name}
+                      </p>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -500,15 +550,73 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                   <ImageIcon className="h-3 w-3" />
                   Attachments ({part.attachments.length})
                 </h5>
-                <div className="grid grid-cols-2 gap-2">
-                  {part.attachments.map((attachment, attIdx) => (
-                    <div
-                      key={attIdx}
-                      className="bg-gray-100 dark:bg-gray-700 rounded p-2 text-xs text-gray-600 dark:text-gray-400"
-                    >
-                      {attachment.file_name || attachment.description || `Attachment ${attIdx + 1}`}
-                    </div>
-                  ))}
+                {/* Full width container aligned with part content */}
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-wrap justify-center gap-3">
+                    {part.attachments.map((attachment, attIdx) => {
+                      const imgSrc = attachment.preview || attachment.url;
+
+                      if (!imgSrc) {
+                        // Fallback for attachments without preview
+                        return (
+                          <div
+                            key={attIdx}
+                            className="bg-gray-200 dark:bg-gray-700 rounded-lg p-3 text-center"
+                          >
+                            <ImageIcon className="h-6 w-6 mx-auto mb-1 text-gray-400" />
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              {attachment.file_name || `Attachment ${attIdx + 1}`}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={attIdx}
+                          onClick={() => setImagePreview(imgSrc)}
+                          className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-all shadow-sm hover:shadow-md"
+                          style={{ maxWidth: '100%' }}
+                        >
+                          {/* Dynamic image container that adjusts to content */}
+                          <div className="relative">
+                            <img
+                              src={imgSrc}
+                              alt={attachment.file_name || `Attachment ${attIdx + 1}`}
+                              className="max-w-full h-auto max-h-80 object-contain"
+                              onError={(e) => {
+                                // Handle broken image
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const parent = target.parentElement?.parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `
+                                    <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-3 text-center min-w-[180px]">
+                                      <svg class="h-6 w-6 mx-auto mb-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                      </svg>
+                                      <p class="text-xs text-gray-600 dark:text-gray-400">Image not available</p>
+                                    </div>
+                                  `;
+                                }
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
+                              <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                          {/* Optional: Show filename below image */}
+                          {attachment.file_name && (
+                            <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                {attachment.file_name}
+                              </p>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
