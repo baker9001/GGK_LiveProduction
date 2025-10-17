@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { getDyslexiaPreference, setDyslexiaPreference } from '@/lib/accessibility';
 import { BookOpen, Clock, Target, Trophy, Zap, Flame, ChevronRight, ChevronLeft, Brain, Award, Filter, Sparkles, BarChart3, ShieldCheck, HelpCircle, Accessibility, Highlighter } from 'lucide-react';
 import dayjs from 'dayjs';
+import { PracticeResultsAnalytics } from '@/components/practice/PracticeResultsAnalytics';
 
 interface PracticeSetWithMeta extends PracticeSet {
   subject_name?: string | null;
@@ -632,71 +633,23 @@ const PracticePage: React.FC = () => {
     </div>
   );
 
-  const renderResults = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-          <Trophy className="w-6 h-6 text-amber-500" /> Session Results
-        </h2>
-        <button
-          type="button"
-          onClick={() => {
-            setMode('hub');
-            setSessionState(null);
-            setSessionSummary(null);
-            setReport(null);
-          }}
-          className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-        >
-          Back to Hub <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded-2xl p-6">
-          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Performance</h3>
-          <div className="mt-4 space-y-3">
-            <StatLine icon={<Target className="w-5 h-5 text-indigo-500" />} label="Accuracy" value={`${Math.round((sessionSummary?.totals.accuracy ?? 0) * 100)}%`} />
-            <StatLine icon={<Zap className="w-5 h-5 text-amber-500" />} label="XP Earned" value={`${sessionSummary?.totals.xpEarned ?? 0}`} />
-            <StatLine icon={<Flame className="w-5 h-5 text-red-500" />} label="Streak" value={`${sessionSummary?.totals.streakDelta >= 0 ? '+' : ''}${sessionSummary?.totals.streakDelta ?? 0} days`} />
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 lg:col-span-2">
-          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Next Steps</h3>
-          <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            {report?.recommendations.map((item) => (
-              <li key={item.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                <p className="font-semibold text-gray-900 dark:text-white">{item.title}</p>
-                <p className="text-gray-500 mt-1">{item.description}</p>
-                <a href={item.actionUrl} className="inline-flex items-center gap-1 mt-2 text-blue-600 text-xs font-medium">{item.actionLabel} <ChevronRight className="w-4 h-4" /></a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded-2xl p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Answer Review</h3>
-        <div className="space-y-4">
-          {report?.answers.map((entry) => (
-            <div key={entry.item.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <span>Question {(entry.item.order_index ?? 0) + 1}</span>
-                <span className={cn('font-semibold', entry.answer.is_correct ? 'text-emerald-600' : 'text-rose-500')}>
-                  {entry.answer.is_correct ? 'Correct' : 'Review'}
-                </span>
-              </div>
-              <p className="mt-2 text-gray-900 dark:text-gray-100 text-sm">{entry.item.question?.question_description}</p>
-              <div className="mt-3 text-xs text-gray-500">
-                Awarded: {entry.marking?.awarded.map((award) => award.pointId).join(', ') || 'None'}
-              </div>
-              {entry.explanation && (
-                <div className="mt-2 text-xs text-gray-400">{entry.explanation}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  const renderResults = () => {
+    if (!sessionSummary) {
+      return null;
+    }
+
+    return (
+      <PracticeResultsAnalytics
+        sessionId={sessionSummary.sessionId}
+        onClose={() => {
+          setMode('hub');
+          setSessionState(null);
+          setSessionSummary(null);
+          setReport(null);
+        }}
+      />
+    );
+  };
 
   return (
     <div className="p-6 space-y-6">

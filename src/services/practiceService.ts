@@ -7,6 +7,7 @@ import { applyGamificationRewards } from './gamificationService';
 import { updateLeaderboards } from './leaderboardService';
 import { AnswerSubmissionPayload, AutoMarkResult } from '@/types/practice';
 import { v4 as uuidv4 } from 'uuid';
+import { computeComprehensiveAnalytics } from './practice/resultsAnalyticsService';
 
 interface QuestionWithMarkScheme extends QuestionMasterAdmin {
   paper_code?: string | null;
@@ -340,6 +341,11 @@ export async function finishSession(sessionId: string): Promise<SessionSummary> 
     marksAvailable: totalAvailable,
     xpAwarded: completionPayload.xpAwarded,
     streakDelta: completionPayload.streakDelta
+  });
+
+  // Compute comprehensive analytics in the background (don't await to avoid blocking)
+  computeComprehensiveAnalytics(sessionId).catch((error) => {
+    console.error('Failed to compute analytics:', error);
   });
 
   return {
