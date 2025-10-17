@@ -29,12 +29,24 @@ export interface QuestionOption {
   option_text: string;
   is_correct: boolean;
   order: number;
+  text?: string;
+  label?: string;
 }
 
 export interface Subtopic {
   id: string;
   name: string;
   topic_id?: string;
+}
+
+export interface CorrectAnswer {
+  id: string;
+  answer: string;
+  marks?: number;
+  alternative_id?: number;
+  context_type?: string;
+  context_value?: string;
+  context_label?: string;
 }
 
 export interface SubQuestion {
@@ -55,6 +67,14 @@ export interface SubQuestion {
   attachments: Attachment[];
   hint?: string;
   explanation?: string;
+  answer_format?: string;
+  answer_requirement?: string;
+  total_alternatives?: number;
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string;
+  parent_id?: string | null;
+  level?: number | null;
+  order_index?: number | null;
 }
 
 export interface Question {
@@ -76,6 +96,11 @@ export interface Question {
   hint?: string;
   explanation?: string;
   unit_id?: string;
+  answer_format?: string;
+  answer_requirement?: string;
+  total_alternatives?: number;
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string;
 }
 
 export interface GroupedPaper {
@@ -207,6 +232,10 @@ export default function QuestionsSetupPage() {
           status,
           topic_id,
           subtopic_id,
+          answer_format,
+          answer_requirement,
+          total_alternatives,
+          correct_answer,
           primary_subtopic:edu_subtopics!questions_master_admin_subtopic_id_fkey (
             id,
             name,
@@ -237,12 +266,24 @@ export default function QuestionsSetupPage() {
             id,
             option_text,
             is_correct,
-            order
+            order,
+            label,
+            text
+          ),
+          question_correct_answers(
+            id,
+            answer,
+            marks,
+            alternative_id,
+            context_type,
+            context_value,
+            context_label
           ),
           sub_questions(
             id,
             question_id,
             type,
+            part_label,
             topic_id,
             subtopic_id,
             question_description,
@@ -257,6 +298,10 @@ export default function QuestionsSetupPage() {
             level,
             explanation,
             status,
+            answer_format,
+            answer_requirement,
+            total_alternatives,
+            correct_answer,
             primary_subtopic:edu_subtopics!sub_questions_subtopic_id_fkey (
               id,
               name,
@@ -274,7 +319,18 @@ export default function QuestionsSetupPage() {
               id,
               option_text,
               is_correct,
-              order
+              order,
+              label,
+              text
+            ),
+            question_correct_answers(
+              id,
+              answer,
+              marks,
+              alternative_id,
+              context_type,
+              context_value,
+              context_label
             ),
             questions_attachments(
               id,
@@ -452,6 +508,40 @@ export default function QuestionsSetupPage() {
 
         const mergedSubtopics = Array.from(mergedSubtopicsMap.values());
 
+        const mapOptions = (options: any[] | null | undefined): QuestionOption[] => {
+          if (!Array.isArray(options)) return [];
+
+          return options
+            .map((option, index) => {
+              const resolvedOrder = typeof option.order === 'number' ? option.order : index;
+              const optionText = option.option_text || option.text || '';
+
+              return {
+                id: option.id,
+                option_text: optionText,
+                text: optionText,
+                is_correct: Boolean(option.is_correct),
+                order: resolvedOrder,
+                label: option.label || String.fromCharCode(65 + resolvedOrder)
+              } as QuestionOption;
+            })
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        };
+
+        const mapCorrectAnswers = (answers: any[] | null | undefined): CorrectAnswer[] => {
+          if (!Array.isArray(answers)) return [];
+
+          return answers.map(answer => ({
+            id: answer.id,
+            answer: answer.answer,
+            marks: answer.marks ?? undefined,
+            alternative_id: answer.alternative_id ?? undefined,
+            context_type: answer.context_type ?? undefined,
+            context_value: answer.context_value ?? undefined,
+            context_label: answer.context_label ?? undefined
+          }));
+        };
+
         // Format the question
         const formattedQuestion: Question = {
           id: question.id,
@@ -468,10 +558,15 @@ export default function QuestionsSetupPage() {
           unit_id: topicInfo?.unit_id,
           subtopic_id: question.subtopic_id || primarySubtopicRecord?.id || undefined,
           subtopics: mergedSubtopics,
-          options: question.question_options || [],
+          options: mapOptions(question.question_options),
           attachments: question.questions_attachments || [],
           hint: question.hint || question.questions_hints?.[0]?.hint_text,
           explanation: question.explanation,
+          answer_format: question.answer_format || undefined,
+          answer_requirement: question.answer_requirement || undefined,
+          total_alternatives: question.total_alternatives || undefined,
+          correct_answer: question.correct_answer || undefined,
+          correct_answers: mapCorrectAnswers(question.question_correct_answers),
           parts: question.sub_questions?.
             sort((a: any, b: any) => (a.sort_order || a.order_index || a.order || 0) - (b.sort_order || b.order_index || b.order || 0))
             .map((sq: any, index: number) => {
@@ -508,7 +603,7 @@ export default function QuestionsSetupPage() {
 
               return {
                 id: sq.id,
-                part_label: `Part ${String.fromCharCode(97 + index)}`,
+                part_label: sq.part_label || `Part ${String.fromCharCode(97 + index)}`,
                 question_description: sq.question_description,
                 marks: sq.marks,
                 difficulty: 'medium', // Default since sub_questions doesn't have difficulty column
@@ -520,10 +615,18 @@ export default function QuestionsSetupPage() {
                 unit_id: subQuestionTopicInfo?.unit_id,
                 subtopic_id: sq.subtopic_id || primarySubQuestionSubtopic?.id || undefined,
                 subtopics: subQuestionMergedSubtopics,
-                options: sq.question_options || [],
+                options: mapOptions(sq.question_options),
                 attachments: sq.questions_attachments || [],
                 hint: sq.hint || sq.questions_hints?.[0]?.hint_text,
-                explanation: sq.explanation
+                explanation: sq.explanation,
+                answer_format: sq.answer_format || undefined,
+                answer_requirement: sq.answer_requirement || undefined,
+                total_alternatives: sq.total_alternatives || undefined,
+                correct_answers: mapCorrectAnswers(sq.question_correct_answers),
+                correct_answer: sq.correct_answer || undefined,
+                parent_id: sq.parent_id || null,
+                level: sq.level ?? null,
+                order_index: sq.sort_order || sq.order_index || sq.order || index
               };
             }) || []
         };
