@@ -20,7 +20,7 @@ import {
   Loader2, Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
   Calculator, PenTool, Table, Code, Mic, LineChart, FileUp,
   HelpCircle, BookOpen, Lightbulb, Target, Award, PlayCircle,
-  Flag, CheckSquare, FileCheck, ShieldCheck
+  Flag, CheckSquare, FileCheck, ShieldCheck, Activity
 } from 'lucide-react';
 
 // Import shared components
@@ -92,7 +92,8 @@ import { QuestionImportReviewWorkflow } from '../../../../../../components/share
 import type { QuestionDisplayData } from '../../../../../../components/shared/EnhancedQuestionDisplay';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
-import { ExtractionRules, QuestionSupportSummary } from '../types';
+import { ExtractionRules, QuestionSupportSummary, type SimulationResult } from '../types';
+import { SimulationResultsSummary } from '../components/SimulationResultsSummary';
 import { ErrorBoundary } from '../../../../../../components/shared/ErrorBoundary';
 
 // Try to import validateQuestionsForImport if it exists
@@ -383,20 +384,6 @@ interface ProcessedOption {
   label: string;
   text: string;
   is_correct: boolean;
-}
-
-interface SimulationResult {
-  completed: boolean;
-  completedAt?: string;
-  flaggedQuestions: string[];
-  issues: Array<{
-    questionId: string;
-    type: 'error' | 'warning' | 'info';
-    message: string;
-  }>;
-  recommendations: string[];
-  overallScore?: number;
-  timeSpent?: number;
 }
 
 // FIXED: Standardized attachment key generation
@@ -3116,10 +3103,199 @@ function QuestionsTabInner({
         completedAt: new Date().toISOString(),
         flaggedQuestions: result.flaggedQuestions || [],
         issues: result.issues || [],
-        recommendations: result.recommendations || [],
+        recommendations: Array.isArray(result.recommendations) ? [...result.recommendations] : [],
         overallScore: result.score,
-        timeSpent: result.timeElapsed
+        timeSpent: result.timeElapsed,
+        timeSpentSeconds: typeof result.timeElapsed === 'number' ? result.timeElapsed : undefined
       };
+
+      if (typeof simulationResult.timeSpentSeconds === 'number') {
+        simulationResult.timeSpent = simulationResult.timeSpentSeconds;
+      }
+
+      const addRecommendation = (message: string) => {
+        if (!message) return;
+        const normalized = message.trim();
+        if (!normalized) return;
+        if (!simulationResult.recommendations.some(rec => rec.toLowerCase() === normalized.toLowerCase())) {
+          simulationResult.recommendations.push(normalized);
+        }
+      };
+
+      const userAnswers: Record<string, any> = result.userAnswers || {};
+      const stats = result.stats;
+
+      if (stats) {
+        const totalQuestions = stats.totalQuestions ?? questions.length;
+        const attemptedQuestions = stats.attemptedQuestions ?? 0;
+        const unattempted = stats.unattemptedQuestions ?? Math.max(0, totalQuestions - attemptedQuestions);
+        const correctAnswers = stats.correctAnswers ?? 0;
+        const partiallyCorrectAnswers = stats.partiallyCorrectAnswers ?? 0;
+        const incorrectAnswers = stats.incorrectAnswers ?? Math.max(0, attemptedQuestions - correctAnswers - partiallyCorrectAnswers);
+        const totalPossibleMarks = stats.totalPossibleMarks ?? 0;
+        const earnedMarks = stats.earnedMarks ?? 0;
+        const percentage = Number.isFinite(stats.percentage) ? stats.percentage : (typeof result.score === 'number' ? result.score : 0);
+        const accuracy = Number.isFinite(stats.accuracy) ? stats.accuracy : (attemptedQuestions > 0 ? (correctAnswers / attemptedQuestions) * 100 : 0);
+        const completionRate = Number.isFinite(stats.completionRate) ? stats.completionRate : (totalQuestions > 0 ? (attemptedQuestions / totalQuestions) * 100 : 0);
+
+        simulationResult.summaryStats = {
+          totalQuestions,
+          attemptedQuestions,
+          unattemptedQuestions: unattempted,
+          correctAnswers,
+          partiallyCorrectAnswers,
+          incorrectAnswers,
+          totalPossibleMarks,
+          earnedMarks,
+          percentage,
+          accuracy,
+          completionRate,
+          difficultyStats: stats.difficultyStats ?? {},
+          topicStats: stats.topicStats ?? {},
+          typeStats: stats.typeStats ?? {}
+        };
+
+        simulationResult.totalQuestions = totalQuestions;
+        simulationResult.answeredCount = attemptedQuestions;
+        simulationResult.correctAnswers = correctAnswers;
+        simulationResult.partiallyCorrect = partiallyCorrectAnswers;
+        simulationResult.incorrectAnswers = incorrectAnswers;
+        simulationResult.totalMarks = totalPossibleMarks;
+        simulationResult.earnedMarks = earnedMarks;
+        simulationResult.percentage = percentage;
+        simulationResult.accuracy = accuracy;
+        simulationResult.completionRate = completionRate;
+
+        if (Number.isFinite(percentage)) {
+          simulationResult.overallScore = Math.round(percentage);
+        }
+
+        if (attemptedQuestions > 0 && typeof simulationResult.timeSpentSeconds === 'number') {
+          simulationResult.averageTimePerQuestion = simulationResult.timeSpentSeconds / attemptedQuestions;
+        }
+      }
+
+      const timeByQuestion: Record<string, number> = {};
+      const questionPerformance = questions.map(question => {
+        const questionId = question.id;
+        let totalMarks = question.marks || 0;
+        let earnedMarks = 0;
+        let attempted = false;
+        let partialCredit = false;
+
+        const accumulateAnswer = (answerKey: string, maxMarks: number) => {
+          const answer = userAnswers[answerKey];
+          if (!answer) {
+            return;
+          }
+
+          const hasResponse = answer.answer !== undefined && answer.answer !== null && answer.answer !== '';
+          if (hasResponse) {
+            attempted = true;
+          }
+
+          const awarded = typeof answer.marksAwarded === 'number' ? answer.marksAwarded : 0;
+          earnedMarks += awarded;
+
+          if (maxMarks > 0 && awarded > 0 && awarded < maxMarks) {
+            partialCredit = true;
+          } else if (!answer.isCorrect && awarded > 0) {
+            partialCredit = true;
+          }
+
+          if (typeof answer.timeSpent === 'number') {
+            timeByQuestion[questionId] = (timeByQuestion[questionId] || 0) + answer.timeSpent;
+          }
+        };
+
+        if (question.parts && question.parts.length > 0) {
+          totalMarks = 0;
+          question.parts.forEach(part => {
+            if (part.subparts && part.subparts.length > 0) {
+              part.subparts.forEach(subpart => {
+                const subMarks = subpart.marks || 0;
+                totalMarks += subMarks;
+                const key = `${question.id}-${part.id}-${subpart.id}`;
+                accumulateAnswer(key, subMarks);
+              });
+            } else {
+              const partMarks = part.marks || 0;
+              totalMarks += partMarks;
+              const key = `${question.id}-${part.id}`;
+              accumulateAnswer(key, partMarks);
+            }
+          });
+        } else {
+          totalMarks = question.marks || 0;
+          accumulateAnswer(question.id, totalMarks);
+        }
+
+        if (totalMarks > 0 && earnedMarks > totalMarks) {
+          earnedMarks = totalMarks;
+        }
+
+        let status: 'correct' | 'partial' | 'incorrect' | 'unattempted' = 'unattempted';
+        if (attempted) {
+          if (totalMarks > 0 && earnedMarks >= totalMarks - 0.01) {
+            status = 'correct';
+          } else if (earnedMarks > 0 || partialCredit) {
+            status = 'partial';
+          } else {
+            status = 'incorrect';
+          }
+        }
+
+        const timeSpent = timeByQuestion[questionId] || 0;
+
+        return {
+          questionId,
+          questionNumber: question.question_number,
+          status,
+          earnedMarks,
+          totalMarks,
+          timeSpent
+        };
+      });
+
+      if (questionPerformance.length > 0) {
+        simulationResult.questionPerformance = questionPerformance;
+        simulationResult.timePerQuestion = timeByQuestion;
+
+        if (!simulationResult.summaryStats) {
+          const attemptedCount = questionPerformance.filter(q => q.status !== 'unattempted').length;
+          const correctCount = questionPerformance.filter(q => q.status === 'correct').length;
+          const partialCount = questionPerformance.filter(q => q.status === 'partial').length;
+          const incorrectCount = questionPerformance.filter(q => q.status === 'incorrect').length;
+          const derivedTotalMarks = questionPerformance.reduce((sum, q) => sum + q.totalMarks, 0);
+          const derivedEarnedMarks = questionPerformance.reduce((sum, q) => sum + q.earnedMarks, 0);
+
+          simulationResult.totalQuestions = questions.length;
+          simulationResult.answeredCount = attemptedCount;
+          simulationResult.correctAnswers = correctCount;
+          simulationResult.partiallyCorrect = partialCount;
+          simulationResult.incorrectAnswers = incorrectCount;
+          simulationResult.totalMarks = derivedTotalMarks;
+          simulationResult.earnedMarks = derivedEarnedMarks;
+        }
+
+        const timeEntries = Object.entries(timeByQuestion).filter(([, value]) => typeof value === 'number' && value > 0);
+        if (timeEntries.length > 0) {
+          const fastest = timeEntries.reduce<[string, number]>((min, entry) => (entry[1] < min[1] ? entry as [string, number] : min), timeEntries[0] as [string, number]);
+          const slowest = timeEntries.reduce<[string, number]>((max, entry) => (entry[1] > max[1] ? entry as [string, number] : max), timeEntries[0] as [string, number]);
+
+          simulationResult.timeInsights = {
+            averagePerQuestion: simulationResult.averageTimePerQuestion,
+            fastestQuestionId: fastest[0],
+            fastestTime: fastest[1],
+            slowestQuestionId: slowest[0],
+            slowestTime: slowest[1]
+          };
+        } else if (simulationResult.averageTimePerQuestion) {
+          simulationResult.timeInsights = {
+            averagePerQuestion: simulationResult.averageTimePerQuestion
+          };
+        }
+      }
       
       // Add dynamic field validation issues
       const dynamicFieldIssues: any[] = [];
@@ -3258,9 +3434,7 @@ function QuestionsTabInner({
       
       // Add recommendations for dynamic fields
       if (dynamicFieldIssues.length > 0) {
-        simulationResult.recommendations.push(
-          'Review dynamic answer requirements and ensure all have appropriate correct answers configured'
-        );
+        addRecommendation('Review dynamic answer requirements and ensure all have appropriate correct answers configured');
       }
       
       const hasComplexFormats = questions.some(q => 
@@ -3268,9 +3442,7 @@ function QuestionsTabInner({
       );
       
       if (hasComplexFormats) {
-        simulationResult.recommendations.push(
-          'Consider adding detailed marking criteria for questions with complex answer formats'
-        );
+        addRecommendation('Consider adding detailed marking criteria for questions with complex answer formats');
       }
       
       const missingAttachments = dynamicFieldIssues.filter(issue => 
@@ -3278,19 +3450,66 @@ function QuestionsTabInner({
       ).length;
       
       if (missingAttachments > 0) {
-        simulationResult.recommendations.push(
-          `Upload PDF and add ${missingAttachments} missing figure attachment(s) using the snipping tool`
-        );
+        addRecommendation(`Upload PDF and add ${missingAttachments} missing figure attachment(s) using the snipping tool`);
       }
       
       // Check overall paper balance
       const avgMarksPerQuestion = paperMetadata.total_marks / questions.length;
       if (avgMarksPerQuestion > 10) {
-        simulationResult.recommendations.push(
-          'Consider breaking down high-mark questions into smaller parts for better assessment'
-        );
+        addRecommendation('Consider breaking down high-mark questions into smaller parts for better assessment');
       }
-      
+
+      if (simulationResult.summaryStats) {
+        const {
+          percentage = 0,
+          accuracy = 0,
+          completionRate = 0,
+          topicStats = {},
+          difficultyStats = {},
+          typeStats = {}
+        } = simulationResult.summaryStats;
+
+        if (percentage < 70) {
+          addRecommendation('Simulation score below 70%. Review flagged questions and marking schemes before import.');
+        }
+
+        if (accuracy < 80) {
+          addRecommendation('Answer accuracy is below 80%. Validate answer keys and marking logic for tricky questions.');
+        }
+
+        if (completionRate < 100) {
+          addRecommendation('Not all questions were attempted in the simulation. Re-run after ensuring every question can be answered.');
+        }
+
+        const strugglingDifficulties = Object.entries(difficultyStats)
+          .filter(([, data]) => (data.marks || 0) > 0 && (data.earnedMarks / data.marks) < 0.6)
+          .map(([label]) => label.charAt(0).toUpperCase() + label.slice(1));
+
+        if (strugglingDifficulties.length > 0) {
+          addRecommendation(`Focus on ${strugglingDifficulties.join(', ')} difficulty questions—simulation accuracy was low.`);
+        }
+
+        const strugglingTopics = Object.entries(topicStats)
+          .filter(([, data]) => (data.marks || 0) > 0 && (data.earnedMarks / data.marks) < 0.6)
+          .sort(([, a], [, b]) => (b.marks || 0) - (a.marks || 0))
+          .slice(0, 3)
+          .map(([topic]) => topic);
+
+        if (strugglingTopics.length > 0) {
+          addRecommendation(`Strengthen answer quality for ${strugglingTopics.join(', ')}—these topics underperformed in the simulation.`);
+        }
+
+        const typeAlerts = Object.entries(typeStats)
+          .filter(([, data]) => (data.total || 0) > 0 && (data.correct / data.total) < 0.6)
+          .map(([type]) => type.toUpperCase());
+
+        if (typeAlerts.length > 0) {
+          addRecommendation(`Investigate ${typeAlerts.join(', ')} question types—less than 60% were answered correctly.`);
+        }
+      }
+
+      simulationResult.recommendations = Array.from(new Set(simulationResult.recommendations));
+
       setSimulationResult(simulationResult);
       
       // Update questions with simulation flags
@@ -4437,6 +4656,119 @@ function QuestionsTabInner({
         }
       }
     });
+
+    const formatDuration = (seconds?: number | null) => {
+      if (seconds === null || seconds === undefined || Number.isNaN(seconds)) {
+        return '—';
+      }
+
+      const totalSeconds = Math.max(0, Math.round(seconds));
+      if (totalSeconds < 60) {
+        return `${totalSeconds}s`;
+      }
+
+      const minutes = Math.floor(totalSeconds / 60);
+      const remainingSeconds = totalSeconds % 60;
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+
+      if (hours > 0) {
+        return `${hours}h ${remainingMinutes}m`;
+      }
+
+      return `${remainingMinutes}m${remainingSeconds > 0 ? ` ${remainingSeconds}s` : ''}`;
+    };
+
+    const formatPercentage = (value?: number | null) => {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return '—';
+      }
+      const rounded = Math.round(value * 10) / 10;
+      return `${Number.isInteger(rounded) ? Math.round(rounded) : rounded.toFixed(1)}%`;
+    };
+
+    type SimulationMetric = {
+      label: string;
+      value: string;
+      icon: React.ComponentType<{ className?: string }>;
+      bg: string;
+      iconColor: string;
+    };
+
+    let simulationMetrics: SimulationMetric[] = [];
+    let simulationTimeSummary: string | null = null;
+
+    if (simulationResult) {
+      const summary = simulationResult.summaryStats;
+      const totalSimQuestions = simulationResult.totalQuestions ?? summary?.totalQuestions ?? questions.length;
+      const answeredSim = simulationResult.answeredCount ?? summary?.attemptedQuestions ?? 0;
+      const scoreValue = summary?.percentage ?? simulationResult.percentage ?? simulationResult.overallScore ?? null;
+      const accuracyValue = summary?.accuracy ?? simulationResult.accuracy ?? null;
+      const completionValue = summary?.completionRate ?? (totalSimQuestions > 0 ? (answeredSim / totalSimQuestions) * 100 : null);
+      const totalTimeSeconds = typeof simulationResult.timeSpentSeconds === 'number'
+        ? simulationResult.timeSpentSeconds
+        : typeof simulationResult.timeSpent === 'number'
+          ? simulationResult.timeSpent
+          : null;
+      const averageTimeSeconds = simulationResult.averageTimePerQuestion
+        ?? simulationResult.timeInsights?.averagePerQuestion
+        ?? (answeredSim > 0 && typeof totalTimeSeconds === 'number' ? totalTimeSeconds / answeredSim : null);
+
+      simulationMetrics = [
+        {
+          label: 'Score',
+          value: formatPercentage(scoreValue),
+          icon: Target,
+          bg: 'bg-green-100 dark:bg-green-900/20',
+          iconColor: 'text-green-600 dark:text-green-400'
+        },
+        {
+          label: 'Accuracy',
+          value: formatPercentage(accuracyValue),
+          icon: Activity,
+          bg: 'bg-blue-100 dark:bg-blue-900/20',
+          iconColor: 'text-blue-600 dark:text-blue-400'
+        },
+        {
+          label: 'Completion',
+          value: formatPercentage(completionValue),
+          icon: CheckCircle,
+          bg: 'bg-teal-100 dark:bg-teal-900/20',
+          iconColor: 'text-teal-600 dark:text-teal-400'
+        },
+        {
+          label: 'Avg Time',
+          value: formatDuration(averageTimeSeconds),
+          icon: Clock,
+          bg: 'bg-indigo-100 dark:bg-indigo-900/20',
+          iconColor: 'text-indigo-600 dark:text-indigo-400'
+        },
+        {
+          label: 'Flagged',
+          value: String(questionStats.flaggedInSimulation),
+          icon: Flag,
+          bg: 'bg-yellow-100 dark:bg-yellow-900/20',
+          iconColor: 'text-yellow-600 dark:text-yellow-400'
+        },
+        {
+          label: 'Issues',
+          value: String(simulationResult.issues?.length ?? 0),
+          icon: AlertCircle,
+          bg: 'bg-red-100 dark:bg-red-900/20',
+          iconColor: 'text-red-600 dark:text-red-400'
+        }
+      ];
+
+      const parts: string[] = [];
+      if (typeof totalTimeSeconds === 'number') {
+        parts.push(`Total simulation time: ${formatDuration(totalTimeSeconds)}`);
+      }
+      if (answeredSim > 0 && totalSimQuestions > 0) {
+        parts.push(`Coverage: ${answeredSim}/${totalSimQuestions} answered`);
+      }
+
+      simulationTimeSummary = parts.length > 0 ? parts.join(' • ') : null;
+    }
     
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
@@ -4631,51 +4963,26 @@ function QuestionsTabInner({
           
           {/* Simulation Status */}
           {simulationResult && (
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/20 flex items-center justify-center">
-                  <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Flagged</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {questionStats.flaggedInSimulation}
+            <div className="mt-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                {simulationMetrics.map(metric => (
+                  <div
+                    key={metric.label}
+                    className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-700"
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${metric.bg}`}>
+                      <metric.icon className={`h-4 w-4 ${metric.iconColor}`} />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">{metric.label}</div>
+                      <div className="font-medium text-gray-900 dark:text-white">{metric.value}</div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
-                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Issues</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.issues?.length || 0}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                  <Target className="h-4 w-4 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Score</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.overallScore ? `${simulationResult.overallScore}%` : '-'}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Time</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.timeSpent ? `${Math.floor(simulationResult.timeSpent / 60)}m` : '-'}
-                  </div>
-                </div>
-              </div>
+              {simulationTimeSummary && (
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{simulationTimeSummary}</p>
+              )}
             </div>
           )}
         </div>
@@ -4912,40 +5219,12 @@ function QuestionsTabInner({
         </div>
       </div>
 
-      {/* Simulation Results Summary */}
-      {simulationResult && simulationResult.issues.length > 0 && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-yellow-900 dark:text-yellow-100 mb-2">
-                Simulation Issues Found
-              </h4>
-              <ul className="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
-                {simulationResult.issues.slice(0, 3).map((issue, idx) => (
-                  <li key={idx}>
-                    • Question {questions.find(q => q.id === issue.questionId)?.question_number}: {issue.message}
-                  </li>
-                ))}
-                {simulationResult.issues.length > 3 && (
-                  <li>• ...and {simulationResult.issues.length - 3} more issues</li>
-                )}
-              </ul>
-              {simulationResult.recommendations.length > 0 && (
-                <div className="mt-3">
-                  <h5 className="text-xs font-medium text-yellow-900 dark:text-yellow-100 mb-1">
-                    Recommendations:
-                  </h5>
-                  <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-0.5">
-                    {simulationResult.recommendations.map((rec, idx) => (
-                      <li key={idx}>• {rec}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {simulationResult && (
+        <SimulationResultsSummary
+          result={simulationResult}
+          questions={questions}
+          onFocusQuestion={scrollToQuestion}
+        />
       )}
 
       {/* Questions Review Section */}
@@ -4985,16 +5264,30 @@ function QuestionsTabInner({
         onRequestSnippingTool={handleRequestSnippingTool}
         onRequestSimulation={handleStartSimulation}
         simulationResults={simulationResult ? {
-          totalQuestions: simulationResult.totalQuestions,
-          answeredQuestions: simulationResult.answeredQuestions,
-          correctAnswers: simulationResult.correctAnswers,
-          partiallyCorrect: simulationResult.partiallyCorrect,
-          incorrectAnswers: simulationResult.incorrectAnswers,
-          totalMarks: simulationResult.totalMarks,
-          earnedMarks: simulationResult.earnedMarks,
-          percentage: simulationResult.percentage,
-          timeSpent: simulationResult.timeSpentSeconds,
-          questionResults: []
+          totalQuestions: simulationResult.totalQuestions ?? simulationResult.summaryStats?.totalQuestions ?? questions.length,
+          answeredQuestions: simulationResult.answeredCount ?? simulationResult.summaryStats?.attemptedQuestions ?? 0,
+          correctAnswers: simulationResult.correctAnswers ?? simulationResult.summaryStats?.correctAnswers ?? 0,
+          partiallyCorrect: simulationResult.partiallyCorrect ?? simulationResult.summaryStats?.partiallyCorrectAnswers ?? 0,
+          incorrectAnswers: simulationResult.incorrectAnswers ?? simulationResult.summaryStats?.incorrectAnswers ?? 0,
+          totalMarks: simulationResult.totalMarks ?? simulationResult.summaryStats?.totalPossibleMarks ?? 0,
+          earnedMarks: simulationResult.earnedMarks ?? simulationResult.summaryStats?.earnedMarks ?? 0,
+          percentage: simulationResult.percentage ?? simulationResult.summaryStats?.percentage ?? simulationResult.overallScore ?? 0,
+          timeSpent: simulationResult.timeSpentSeconds ?? simulationResult.timeSpent ?? 0,
+          questionResults: (simulationResult.questionPerformance || []).map(perf => ({
+            questionId: perf.questionId,
+            questionNumber: perf.questionNumber,
+            isCorrect: perf.status === 'correct',
+            earnedMarks: perf.earnedMarks,
+            totalMarks: perf.totalMarks,
+            userAnswer: undefined,
+            correctAnswers: [],
+            feedback:
+              perf.status === 'partial'
+                ? 'Partial credit earned in simulation'
+                : perf.status === 'incorrect'
+                  ? 'Incorrect during simulation run'
+                  : undefined
+          }))
         } : null}
         simulationCompleted={simulationCompleted}
         onAllQuestionsReviewed={() => {
