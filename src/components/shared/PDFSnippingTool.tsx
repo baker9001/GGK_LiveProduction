@@ -21,6 +21,7 @@ interface PDFSnippingToolProps {
   initialPage?: number;
   initialScale?: number;
   onViewStateChange?: (state: { page: number; scale: number }) => void;
+  questionLabel?: string;
 }
 
 export function PDFSnippingTool({
@@ -32,7 +33,8 @@ export function PDFSnippingTool({
   className,
   initialPage,
   initialScale,
-  onViewStateChange
+  onViewStateChange,
+  questionLabel
 }: PDFSnippingToolProps) {
   const DEFAULT_PAGE = 1;
   const DEFAULT_SCALE = 1.5;
@@ -707,9 +709,14 @@ export function PDFSnippingTool({
     <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden ${className}`}>
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
-          <Scissors className="h-5 w-5 mr-2 text-blue-500 dark:text-blue-400" />
-          PDF Snipping Tool
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <Scissors className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+          <span>PDF Snipping Tool</span>
+          {questionLabel && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+              {questionLabel}
+            </span>
+          )}
         </h3>
         <button
           onClick={onClose}
