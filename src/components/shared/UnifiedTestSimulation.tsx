@@ -598,7 +598,7 @@ export function UnifiedTestSimulation({
     showHints: isQAMode,
     showExplanations: isQAMode,
     showCorrectAnswers: isQAMode,
-    enableTimer: false,
+    enableTimer: true,
     allowAnswerInput: true
   });
   const [showQuestionNavigation, setShowQuestionNavigation] = useState(true);
