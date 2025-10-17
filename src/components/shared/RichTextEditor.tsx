@@ -322,7 +322,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl dark:bg-gray-900">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Insert Equation</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Use LaTeX-style notation. Supports fractions (\\frac{a}{b}), square roots (\\sqrt{a}), superscripts (^), and subscripts (_).
+              {'Use LaTeX-style notation. Supports fractions (\\frac{a}{b}), square roots (\\sqrt{a}), superscripts (^), and subscripts (_).'}
             </p>
             <textarea
               value={equationInput}
