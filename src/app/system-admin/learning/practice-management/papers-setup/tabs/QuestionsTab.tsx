@@ -79,6 +79,10 @@ import {
   getValidationReportSummary,
   type PreImportValidationResult
 } from '../../../../../../lib/extraction/preImportValidation';
+import {
+  deriveAnswerRequirement,
+  type AnswerRequirement
+} from '../../../../../../lib/extraction/answerRequirementDeriver';
 
 // Import sub-components and utilities
 import { QuestionsReviewSection } from './components/QuestionsReviewSection';
@@ -1023,18 +1027,23 @@ function QuestionsTabInner({
   };
 
   // Helper function to parse answer requirement from mark scheme text
+  // Returns undefined (not empty string) when unable to determine requirement
   const parseAnswerRequirement = (markSchemeText: string, marks: number): string | undefined => {
+    if (!markSchemeText || typeof markSchemeText !== 'string') {
+      return undefined;
+    }
+
     const text = markSchemeText.toLowerCase();
-    
+
     // Check for specific patterns
     if (text.includes('any two from') || text.includes('any 2 from')) {
-      return 'any_two_from';
+      return 'any_2_from';
     }
     if (text.includes('any three from') || text.includes('any 3 from')) {
-      return 'any_three_from';
+      return 'any_3_from';
     }
     if (text.includes('any one from') || text.includes('any 1 from')) {
-      return 'any_one_from';
+      return 'single_choice';
     }
     if (text.includes('both required') || text.includes('both needed')) {
       return 'both_required';
@@ -1046,25 +1055,25 @@ function QuestionsTabInner({
       return 'alternative_methods';
     }
     if (text.includes('owtte') || text.includes('words to that effect')) {
-      return 'acceptable_variations';
+      return 'alternative_methods';
     }
-    
+
     // IGCSE specific patterns
     if (text.includes('name') && text.includes('two') && !text.includes('between')) {
-      return 'any_two_from';
+      return 'any_2_from';
     }
     if (text.includes('state') && text.includes('give') && text.includes('reason')) {
       return 'both_required';
     }
     if (text.includes('either') && text.includes('or')) {
-      return 'any_one_from';
+      return 'single_choice';
     }
-    
+
     // Check based on marks and answer count
     if (marks === 2 && text.includes(' and ')) {
       return 'both_required';
     }
-    
+
     // Check for forward slashes indicating alternatives
     const slashCount = (text.match(/\//g) || []).length;
     if (slashCount >= 2) {
@@ -2348,6 +2357,95 @@ function QuestionsTabInner({
     }
   };
 
+  // Handler to bulk auto-fill missing answer requirements
+  const handleBulkAutoFillAnswerRequirements = () => {
+    let filledCount = 0;
+    let partFilledCount = 0;
+    let subpartFilledCount = 0;
+
+    const updatedQuestions = questions.map(question => {
+      let questionUpdated = false;
+
+      // Auto-fill main question answer requirement
+      if (!question.answer_requirement || question.answer_requirement.trim() === '') {
+        const derivedResult = deriveAnswerRequirement({
+          questionType: question.question_type,
+          answerFormat: question.answer_format,
+          correctAnswers: question.correct_answers,
+          totalAlternatives: question.total_alternatives,
+          options: question.options
+        });
+
+        if (derivedResult.answerRequirement) {
+          question.answer_requirement = derivedResult.answerRequirement;
+          filledCount++;
+          questionUpdated = true;
+        }
+      }
+
+      // Auto-fill parts
+      if (question.parts && Array.isArray(question.parts)) {
+        question.parts = question.parts.map((part: any) => {
+          if (!part.answer_requirement || part.answer_requirement.trim() === '') {
+            const partDerivedResult = deriveAnswerRequirement({
+              questionType: part.question_type || 'descriptive',
+              answerFormat: part.answer_format,
+              correctAnswers: part.correct_answers,
+              totalAlternatives: part.total_alternatives,
+              options: part.options
+            });
+
+            if (partDerivedResult.answerRequirement) {
+              part.answer_requirement = partDerivedResult.answerRequirement;
+              partFilledCount++;
+            }
+          }
+
+          // Auto-fill subparts
+          if (part.subparts && Array.isArray(part.subparts)) {
+            part.subparts = part.subparts.map((subpart: any) => {
+              if (!subpart.answer_requirement || subpart.answer_requirement.trim() === '') {
+                const subpartDerivedResult = deriveAnswerRequirement({
+                  questionType: subpart.question_type || 'descriptive',
+                  answerFormat: subpart.answer_format,
+                  correctAnswers: subpart.correct_answers,
+                  totalAlternatives: subpart.total_alternatives,
+                  options: subpart.options
+                });
+
+                if (subpartDerivedResult.answerRequirement) {
+                  subpart.answer_requirement = subpartDerivedResult.answerRequirement;
+                  subpartFilledCount++;
+                }
+              }
+              return subpart;
+            });
+          }
+
+          return part;
+        });
+      }
+
+      return question;
+    });
+
+    setQuestions(updatedQuestions);
+
+    const totalFilled = filledCount + partFilledCount + subpartFilledCount;
+    if (totalFilled > 0) {
+      let message = `Auto-filled ${filledCount} question${filledCount !== 1 ? 's' : ''}`;
+      if (partFilledCount > 0) {
+        message += `, ${partFilledCount} part${partFilledCount !== 1 ? 's' : ''}`;
+      }
+      if (subpartFilledCount > 0) {
+        message += `, ${subpartFilledCount} subpart${subpartFilledCount !== 1 ? 's' : ''}`;
+      }
+      toast.success(message);
+    } else {
+      toast.info('All questions already have answer requirements set');
+    }
+  };
+
   const handleAutoMapQuestions = async (showNotification = true) => {
     if (!dataStructureInfo || units.length === 0) {
       toast.error('Academic structure not loaded yet');
@@ -2433,6 +2531,7 @@ function QuestionsTabInner({
       );
 
       // Merge mapping results back into questions with human-readable names
+      // ALSO auto-fill missing answer requirements
       const questionsWithMappings = enhancedQuestions.map(question => {
         const mapping = mappingResult.mappings[question.id];
 
@@ -2472,6 +2571,63 @@ function QuestionsTabInner({
               question.original_subtopics = subtopicNames;
             }
           }
+        }
+
+        // Auto-fill answer requirement if missing or empty
+        if (!question.answer_requirement || question.answer_requirement.trim() === '') {
+          const derivedResult = deriveAnswerRequirement({
+            questionType: question.question_type,
+            answerFormat: question.answer_format,
+            correctAnswers: question.correct_answers,
+            totalAlternatives: question.total_alternatives,
+            options: question.options
+          });
+
+          if (derivedResult.answerRequirement) {
+            question.answer_requirement = derivedResult.answerRequirement;
+            console.log(`Auto-filled answer requirement for Q${question.question_number}: ${derivedResult.answerRequirement} (${derivedResult.confidence} confidence)`);
+          }
+        }
+
+        // Auto-fill answer requirements for parts
+        if (question.parts && Array.isArray(question.parts)) {
+          question.parts = question.parts.map((part: any) => {
+            if (!part.answer_requirement || part.answer_requirement.trim() === '') {
+              const partDerivedResult = deriveAnswerRequirement({
+                questionType: part.question_type || 'descriptive',
+                answerFormat: part.answer_format,
+                correctAnswers: part.correct_answers,
+                totalAlternatives: part.total_alternatives,
+                options: part.options
+              });
+
+              if (partDerivedResult.answerRequirement) {
+                part.answer_requirement = partDerivedResult.answerRequirement;
+              }
+            }
+
+            // Auto-fill for subparts
+            if (part.subparts && Array.isArray(part.subparts)) {
+              part.subparts = part.subparts.map((subpart: any) => {
+                if (!subpart.answer_requirement || subpart.answer_requirement.trim() === '') {
+                  const subpartDerivedResult = deriveAnswerRequirement({
+                    questionType: subpart.question_type || 'descriptive',
+                    answerFormat: subpart.answer_format,
+                    correctAnswers: subpart.correct_answers,
+                    totalAlternatives: subpart.total_alternatives,
+                    options: subpart.options
+                  });
+
+                  if (subpartDerivedResult.answerRequirement) {
+                    subpart.answer_requirement = subpartDerivedResult.answerRequirement;
+                  }
+                }
+                return subpart;
+              });
+            }
+
+            return part;
+          });
         }
 
         return question;
@@ -2722,6 +2878,18 @@ function QuestionsTabInner({
       const dynamicFieldIssues: any[] = [];
       
       questions.forEach(q => {
+        // Check for missing answer requirements - CRITICAL for MCQ and other structured questions
+        if (!q.answer_requirement || q.answer_requirement.trim() === '') {
+          const questionTypeLabel = q.question_type === 'mcq' ? 'MCQ' :
+                                    q.question_type === 'tf' ? 'True/False' :
+                                    q.question_type;
+          dynamicFieldIssues.push({
+            questionId: q.id,
+            type: q.question_type === 'mcq' || q.question_type === 'tf' ? 'error' : 'warning',
+            message: `${questionTypeLabel} question missing answer requirement field`
+          });
+        }
+
         // Check for dynamic answer field issues
         if (q.answer_requirement && !q.correct_answers?.length) {
           dynamicFieldIssues.push({
@@ -2767,6 +2935,18 @@ function QuestionsTabInner({
           const partKey = generateAttachmentKey(q.id, pIndex);
           const partAttachmentAssets = mergeAttachmentSources(p.attachments, attachments[partKey], partKey);
 
+          // Check for missing answer requirement in parts
+          if (!p.answer_requirement || p.answer_requirement.trim() === '') {
+            const partTypeLabel = p.question_type === 'mcq' ? 'MCQ' :
+                                  p.question_type === 'tf' ? 'True/False' :
+                                  p.question_type || 'Question';
+            dynamicFieldIssues.push({
+              questionId: q.id,
+              type: p.question_type === 'mcq' || p.question_type === 'tf' ? 'error' : 'warning',
+              message: `Part ${p.part}: ${partTypeLabel} missing answer requirement field`
+            });
+          }
+
           if (p.answer_requirement && !p.correct_answers?.length) {
             dynamicFieldIssues.push({
               questionId: q.id,
@@ -2782,6 +2962,20 @@ function QuestionsTabInner({
               message: `Part ${p.part}: Requires figure but no attachment provided`
             });
           }
+
+          // Check subparts for missing answer requirements
+          p.subparts?.forEach((sp: any, spIndex: number) => {
+            if (!sp.answer_requirement || sp.answer_requirement.trim() === '') {
+              const subpartTypeLabel = sp.question_type === 'mcq' ? 'MCQ' :
+                                       sp.question_type === 'tf' ? 'True/False' :
+                                       sp.question_type || 'Question';
+              dynamicFieldIssues.push({
+                questionId: q.id,
+                type: sp.question_type === 'mcq' || sp.question_type === 'tf' ? 'error' : 'warning',
+                message: `Part ${p.part}(${sp.subpart}): ${subpartTypeLabel} missing answer requirement field`
+              });
+            }
+          });
         });
       });
       
@@ -4422,6 +4616,16 @@ function QuestionsTabInner({
                 Auto-Map Questions
               </>
             )}
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={handleBulkAutoFillAnswerRequirements}
+            disabled={questions.length === 0}
+            title="Automatically fill missing answer requirements based on question type and format"
+          >
+            <CheckSquare className="h-4 w-4 mr-2" />
+            Auto-Fill Requirements
           </Button>
 
           {Object.keys(validationErrors).length > 0 && (
