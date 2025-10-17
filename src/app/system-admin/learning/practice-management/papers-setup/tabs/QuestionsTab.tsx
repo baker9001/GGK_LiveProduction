@@ -638,6 +638,7 @@ function QuestionsTabInner({
   const [showSimulation, setShowSimulation] = useState(false);
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
+  const [simulationValidationErrors, setSimulationValidationErrors] = useState<Record<string, string[]>>({});
 
   // Review workflow states
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
@@ -2688,14 +2689,91 @@ function QuestionsTabInner({
 
   const handleStartSimulation = () => {
     try {
+      console.log('=== STARTING SIMULATION ===');
+      console.log('Questions count:', questions.length);
+      console.log('Paper metadata:', paperMetadata);
+      console.log('Attachments available:', Object.keys(attachments).length);
+
       const dataIssues: string[] = [];
+      const questionValidationErrors: Record<string, string[]> = {};
+
+      // Validate paper metadata first
+      if (!paperMetadata) {
+        console.error('ERROR: Paper metadata is missing');
+        toast.error('Cannot start simulation: Paper metadata is missing. Please go back and check the paper setup.');
+        return;
+      }
+
+      const requiredMetadataFields = ['paper_code', 'subject', 'total_marks'];
+      const missingMetadata = requiredMetadataFields.filter(field => !paperMetadata[field]);
+
+      if (missingMetadata.length > 0) {
+        console.error('ERROR: Missing required metadata fields:', missingMetadata);
+        toast.error(`Cannot start simulation: Missing required paper data (${missingMetadata.join(', ')}). Please complete the metadata tab.`);
+        return;
+      }
+
       // Transform questions data for simulation format with dynamic fields support
       const transformedQuestionsRaw = questions.map((q, qIndex): any | null => {
         const questionLabel = q?.question_number || `Question ${qIndex + 1}`;
+        const questionErrors: string[] = [];
+
+        console.log(`Processing ${questionLabel}:`, {
+          id: q?.id,
+          type: q?.question_type,
+          text: q?.question_text?.substring(0, 50),
+          marks: q?.marks,
+          hasCorrectAnswers: Array.isArray(q?.correct_answers) && q.correct_answers.length > 0,
+          hasOptions: Array.isArray(q?.options) && q.options.length > 0,
+          hasParts: Array.isArray(q?.parts) && q.parts.length > 0
+        });
+
         if (!q || typeof q !== 'object') {
-          console.warn(`Skipping invalid question at index ${qIndex}:`, q);
+          console.warn(`ERROR: Invalid question at index ${qIndex}:`, q);
+          questionErrors.push('Question data is missing or invalid');
           dataIssues.push(`${questionLabel} is missing required fields.`);
+          questionValidationErrors[q?.id || `q${qIndex}`] = questionErrors;
           return null;
+        }
+
+        // Validate required fields
+        if (!q.id) {
+          questionErrors.push('Missing question ID');
+        }
+        if (!q.question_text || q.question_text.trim() === '') {
+          questionErrors.push('Missing question text');
+        }
+        if (!q.question_type) {
+          questionErrors.push('Missing question type');
+        }
+        if (typeof q.marks !== 'number' || q.marks <= 0) {
+          questionErrors.push('Missing or invalid marks value');
+        }
+
+        // Validate answer data based on question type
+        if (q.question_type === 'mcq') {
+          if (!Array.isArray(q.options) || q.options.length === 0) {
+            questionErrors.push('MCQ question missing options');
+          } else {
+            const hasCorrectOption = q.options.some(opt => opt?.is_correct);
+            if (!hasCorrectOption) {
+              questionErrors.push('MCQ question has no correct answer marked');
+            }
+          }
+        } else if (q.question_type === 'tf') {
+          if (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0) {
+            questionErrors.push('True/False question missing correct answer');
+          }
+        } else if (q.question_type === 'descriptive') {
+          if (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0) {
+            questionErrors.push('Descriptive question missing correct answers');
+          }
+        }
+
+        if (questionErrors.length > 0) {
+          console.error(`VALIDATION ERRORS for ${questionLabel}:`, questionErrors);
+          questionValidationErrors[q.id] = questionErrors;
+          dataIssues.push(`${questionLabel}: ${questionErrors.join(', ')}`);
         }
 
         const validQuestionCorrectAnswers = filterValidStructureItems(
@@ -2887,17 +2965,70 @@ function QuestionsTabInner({
         (question): question is Record<string, any> => question !== null
       );
 
+      console.log('=== TRANSFORMATION SUMMARY ===');
+      console.log('Total questions processed:', questions.length);
+      console.log('Valid questions after transformation:', transformedQuestions.length);
+      console.log('Questions with errors:', Object.keys(questionValidationErrors).length);
+      console.log('Data issues found:', dataIssues.length);
+
       if (transformedQuestions.length === 0) {
-        console.error('Simulation aborted: no valid questions after sanitization.', { dataIssues, questions });
-        toast.error('Unable to start the simulation because the question data is incomplete. Please review the imported JSON.');
+        console.error('ERROR: No valid questions after transformation');
+        console.error('Data issues:', dataIssues);
+        console.error('Validation errors:', questionValidationErrors);
+
+        // Create detailed error message
+        const errorSummary = Object.entries(questionValidationErrors)
+          .slice(0, 5)
+          .map(([qId, errors]) => {
+            const q = questions.find(quest => quest.id === qId);
+            const qNum = q?.question_number || qId;
+            return `Q${qNum}: ${errors.join(', ')}`;
+          })
+          .join('\n');
+
+        toast.error(
+          `Cannot start simulation - all questions have validation errors:\n\n${errorSummary}${
+            Object.keys(questionValidationErrors).length > 5
+              ? `\n...and ${Object.keys(questionValidationErrors).length - 5} more errors`
+              : ''
+          }\n\nPlease check the console for detailed error information.`,
+          { duration: 10000 }
+        );
         return;
+      }
+
+      // Check if we have validation errors but some valid questions
+      if (Object.keys(questionValidationErrors).length > 0) {
+        const errorCount = Object.keys(questionValidationErrors).length;
+        const validCount = transformedQuestions.length;
+
+        console.warn(`WARNING: ${errorCount} question(s) have validation errors but ${validCount} are valid`);
+        console.warn('Questions with errors:', questionValidationErrors);
+
+        // Show warning but allow simulation to continue with valid questions
+        const errorSummary = Object.entries(questionValidationErrors)
+          .slice(0, 3)
+          .map(([qId, errors]) => {
+            const q = questions.find(quest => quest.id === qId);
+            const qNum = q?.question_number || qId;
+            return `Q${qNum}: ${errors.join(', ')}`;
+          })
+          .join('\n');
+
+        toast.warning(
+          `${errorCount} question(s) have validation errors and will be skipped:\n\n${errorSummary}${
+            errorCount > 3 ? `\n...and ${errorCount - 3} more` : ''
+          }\n\nSimulation will proceed with ${validCount} valid questions.`,
+          { duration: 8000 }
+        );
       }
 
       if (dataIssues.length > 0) {
         const summary = dataIssues.length === 1
           ? dataIssues[0]
           : `${dataIssues.length} issues detected in the question data. First issue: ${dataIssues[0]}`;
-        toast.warning(`${summary} Check the console for the full list.`);
+        console.warn('Data issues:', dataIssues);
+        toast.info(`${summary} Check the console for the full list.`, { duration: 5000 });
       }
 
       const simulationPaper = {
@@ -2935,11 +3066,43 @@ function QuestionsTabInner({
         issuesFound: dataIssues
       });
 
+      console.log('=== SIMULATION PAPER CREATED SUCCESSFULLY ===');
+      console.log('Simulation paper:', {
+        id: simulationPaper.id,
+        code: simulationPaper.code,
+        subject: simulationPaper.subject,
+        questionCount: simulationPaper.questions.length,
+        totalMarks: simulationPaper.total_marks
+      });
+
+      // Store validation errors for visual indicators
+      setSimulationValidationErrors(questionValidationErrors);
+
       setSimulationPaper(simulationPaper);
       setShowSimulation(true);
-    } catch (error) {
-      console.error('Error starting simulation:', error);
-      toast.error('Failed to start simulation. Please check question data.');
+
+      toast.success(`Simulation ready with ${transformedQuestions.length} question${transformedQuestions.length !== 1 ? 's' : ''}!`);
+    } catch (error: any) {
+      console.error('=== CRITICAL ERROR STARTING SIMULATION ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
+      console.error('Current state:', {
+        questionsCount: questions?.length,
+        paperMetadata: paperMetadata,
+        attachmentsCount: Object.keys(attachments || {}).length
+      });
+
+      // Provide specific error message
+      const errorMessage = error?.message || 'Unknown error occurred';
+      const errorDetail = errorMessage.includes('Cannot')
+        ? errorMessage
+        : `An unexpected error occurred: ${errorMessage}`;
+
+      toast.error(
+        `Failed to start simulation.\n\n${errorDetail}\n\nPlease check the browser console (F12) for detailed error information.`,
+        { duration: 10000 }
+      );
     }
   };
 
@@ -4840,6 +5003,7 @@ function QuestionsTabInner({
         onImportReady={(canImport) => {
           console.log('Import ready status:', canImport);
         }}
+        validationErrors={simulationValidationErrors}
       />
 
       {/* Import Progress */}

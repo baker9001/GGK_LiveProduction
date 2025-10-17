@@ -110,6 +110,7 @@ interface QuestionImportReviewWorkflowProps {
   onRequestSimulation?: () => void;
   simulationResults?: SimulationResults | null;
   simulationCompleted?: boolean;
+  validationErrors?: Record<string, string[]>;
 }
 
 export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflowProps> = ({
@@ -125,7 +126,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   onRequestSnippingTool,
   onRequestSimulation,
   simulationResults: externalSimulationResults,
-  simulationCompleted: externalSimulationCompleted = false
+  simulationCompleted: externalSimulationCompleted = false,
+  validationErrors = {}
 }) => {
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
   const simulationResults = externalSimulationResults;
@@ -1644,7 +1646,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               label: formatOptionLabel(answerRequirementValue),
             });
           }
-          const baseCardClass = status.isReviewed
+          // Check if this question has validation errors
+          const hasValidationErrors = validationErrors[question.id] && validationErrors[question.id].length > 0;
+          const validationErrorMessages = hasValidationErrors ? validationErrors[question.id] : [];
+
+          const baseCardClass = hasValidationErrors
+            ? 'border-red-400 dark:border-red-600 bg-red-50/30 dark:bg-red-900/10 ring-2 ring-red-400/60'
+            : status.isReviewed
             ? 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-900/10'
             : status.hasIssues
             ? 'border-yellow-300 dark:border-yellow-700 bg-yellow-50/30 dark:bg-yellow-900/10'
@@ -1658,7 +1666,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           return (
             <div
               key={question.id}
-              className={cn('rounded-xl transition-all shadow-sm border', baseCardClass, figureHighlightClass)}
+              className={cn('rounded-xl transition-all shadow-sm border', baseCardClass, hasValidationErrors ? '' : figureHighlightClass)}
             >
               <div
                 className="px-6 py-4 flex items-center justify-between gap-6 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
@@ -1681,6 +1689,15 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         Question {question.question_number}
                       </h4>
                       <span className="text-xs text-gray-500 dark:text-gray-400">#{index + 1}</span>
+                      {hasValidationErrors && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200"
+                          title={validationErrorMessages.join('; ')}
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          {validationErrorMessages.length} Validation Error{validationErrorMessages.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
                       {requiresFigure && (
                         <span
                           className={cn(
@@ -1756,6 +1773,31 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
               {isExpanded && (
                 <div className="p-6 space-y-6 animate-in fade-in duration-200">
+                  {hasValidationErrors && (
+                    <div className="rounded-lg border-2 border-red-300 bg-red-50 dark:border-red-600 dark:bg-red-900/20 p-4 space-y-2">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200">
+                          <AlertTriangle className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm font-semibold text-red-900 dark:text-red-100">
+                            Validation Errors Detected
+                          </p>
+                          <p className="text-xs text-red-800 dark:text-red-200">
+                            This question has data quality issues that prevent it from being used in the test simulation. Please review and fix the following:
+                          </p>
+                          <ul className="mt-2 space-y-1 text-xs text-red-800 dark:text-red-200">
+                            {validationErrorMessages.map((error, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                <span>{error}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {requiresFigure && (
                     <div
                       className={cn(
