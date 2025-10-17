@@ -587,7 +587,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     showHints: isQAMode,
     showExplanations: isQAMode,
     showCorrectAnswers: isQAMode,
-    enableTimer: false,
+    enableTimer: true,
     allowAnswerInput: true
   });
   const [showQuestionNavigation, setShowQuestionNavigation] = useState(true);
