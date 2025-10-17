@@ -1,5 +1,5 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/QuestionCard.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -29,6 +29,8 @@ import {
   questionNeedsAttachment,
   subQuestionNeedsAttachment
 } from '../utils/questionHelpers';
+import { EnhancedQuestionDisplay } from '../../../../../../components/shared/EnhancedQuestionDisplay';
+import { mapQuestionToDisplayData } from '../utils/questionMappers';
 
 interface QuestionCardProps {
   question: Question;
@@ -58,10 +60,20 @@ export function QuestionCard({
   const [isExpanded, setIsExpanded] = useState(true); // Expand/collapse entire card
   const [expandedParts, setExpandedParts] = useState(true); // Default to expanded for better UX
   const [showValidationErrors, setShowValidationErrors] = useState(false);
-  
+  const [showEditor, setShowEditor] = useState(false);
+
   const queryClient = useQueryClient();
   const { updateField, updateSubtopics, updateCorrectAnswers } = useQuestionMutations();
   const { validateForConfirmation } = useQuestionValidation();
+
+  const reviewDisplayData = useMemo(() => mapQuestionToDisplayData(question), [question]);
+  const canEdit = !readOnly;
+
+  useEffect(() => {
+    if (!canEdit && showEditor) {
+      setShowEditor(false);
+    }
+  }, [canEdit, showEditor]);
   
   // Get validation status
   const validation = validateForConfirmation(question);
@@ -442,6 +454,19 @@ export function QuestionCard({
                 {question.attachments.length} attachment{question.attachments.length !== 1 ? 's' : ''}
               </span>
             )}
+            {canEdit && (
+              <Button
+                size="sm"
+                variant={showEditor ? 'default' : 'outline'}
+                className="text-xs font-semibold"
+                onClick={event => {
+                  event.stopPropagation();
+                  setShowEditor(prev => !prev);
+                }}
+              >
+                {showEditor ? 'Hide editor' : 'Edit data'}
+              </Button>
+            )}
           </div>
         </div>
         
@@ -465,7 +490,7 @@ export function QuestionCard({
               />
             )}
 
-            {question.parts.length > 0 && (
+            {showEditor && question.parts.length > 0 && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -527,7 +552,38 @@ export function QuestionCard({
         </div>
       )}
 
+      {isExpanded && (
+        <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <EnhancedQuestionDisplay
+            question={reviewDisplayData}
+            showAttachments
+            showAnswers
+            showHints
+            showExplanations
+            highlightCorrect
+            defaultExpandedSections={{ hint: false, explanation: false, markingCriteria: false }}
+          />
+
+          {!showEditor && (
+            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+              {canEdit ? (
+                <>
+                  This read-only view mirrors the structure, metadata, and media confirmed during Paper Setup (Stage 1).
+                  Switch to <span className="font-semibold">Edit data</span> only when a correction is required.
+                </>
+              ) : (
+                <>
+                  This read-only view mirrors the structure, metadata, and media confirmed during Paper Setup (Stage 1).
+                  Editing is disabled for this paper state; please return to Paper Setup to request changes if needed.
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Enhanced Question Metadata */}
+      {showEditor && (
       <div className="bg-gray-50 dark:bg-gray-800 p-6 border-b border-gray-200 dark:border-gray-700">
         <div className="grid grid-cols-6 gap-8">
           <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 shadow-sm">
@@ -626,7 +682,7 @@ export function QuestionCard({
             />
           </div>
         </div>
-        
+
         {/* Answer Format Display */}
         {question.answer_format && (
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -660,6 +716,7 @@ export function QuestionCard({
           </div>
         </div>
       </div>
+      )}
       
       {/* Validation Errors */}
       {isExpanded && showValidationErrors && hasValidationErrors && (
@@ -676,7 +733,7 @@ export function QuestionCard({
       )}
 
       {/* Question Content - Only show when expanded */}
-      {isExpanded && (
+      {isExpanded && showEditor && (
       <div className="p-6 animate-in fade-in duration-200">
         <div className="mb-8">
           <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
@@ -880,7 +937,7 @@ export function QuestionCard({
       )}
 
       {/* Sub-questions */}
-      {question.parts.length > 0 && (
+      {showEditor && question.parts.length > 0 && (
         <div className={cn(
           "border-t border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300",
           expandedParts ? "max-h-[100000px] p-6 bg-gray-50 dark:bg-gray-800/30" : "max-h-0"
