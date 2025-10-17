@@ -1322,8 +1322,23 @@ export const uploadAttachments = async (attachments: any): Promise<any> => {
       }
     }
   }
-  
+
   return uploadedAttachments;
+};
+
+export const generateAttachmentKeyForImport = (
+  questionId: string,
+  partIndex?: number,
+  subpartIndex?: number
+): string => {
+  let key = questionId;
+  if (partIndex !== undefined) {
+    key += `_p${partIndex}`;
+  }
+  if (subpartIndex !== undefined) {
+    key += `_s${subpartIndex}`;
+  }
+  return key;
 };
 
 export const insertSubQuestion = async (
@@ -1333,7 +1348,10 @@ export const insertSubQuestion = async (
   level: number,
   uploadedAttachments: any,
   mapping: any,
-  partType: 'part' | 'subpart' = 'part'
+  partType: 'part' | 'subpart' = 'part',
+  importQuestionId?: string,
+  partIndex?: number,
+  subpartIndex?: number
 ): Promise<void> => {
   try {
     const partMapping = mapping || {};
@@ -1346,7 +1364,9 @@ export const insertSubQuestion = async (
       partLabel = part.subpart || part.part_label || `${romanNumeral(part.order_index + 1 || 1)}`; // i, ii, iii...
     }
     
-    const orderIndex = !isNaN(parseInt(part.order_index)) ? parseInt(part.order_index) : 0;
+    const parsedOrderIndex = parseInt(part.order_index);
+    const hasValidOrderIndex = !isNaN(parsedOrderIndex);
+    const orderIndex = hasValidOrderIndex ? parsedOrderIndex : 0;
     
     // Check for duplicate sub-question
     let duplicateQuery = supabase
@@ -1522,10 +1542,50 @@ export const insertSubQuestion = async (
       }
     }
 
-    // Handle attachments for sub-question
-    const partPath = parentSubId ? `${parentQuestionId}_${parentSubId}_${subQuestionRecord.id}` : `${parentQuestionId}_${subQuestionRecord.id}`;
-    const partAttachments = uploadedAttachments[partPath] || [];
-    
+    const effectivePartIndex = partType === 'part'
+      ? (partIndex ?? (hasValidOrderIndex ? parsedOrderIndex : undefined))
+      : partIndex;
+
+    const effectiveSubpartIndex = partType === 'subpart'
+      ? (subpartIndex ?? (hasValidOrderIndex ? parsedOrderIndex : undefined))
+      : subpartIndex;
+
+    let partAttachments: any[] = [];
+
+    if (importQuestionId) {
+      const primaryAttachmentKey = generateAttachmentKeyForImport(
+        importQuestionId,
+        effectivePartIndex,
+        effectiveSubpartIndex
+      );
+
+      partAttachments = uploadedAttachments[primaryAttachmentKey] || [];
+
+      if (partAttachments.length === 0 && effectivePartIndex !== undefined) {
+        const fallbackKeys = Object.keys(uploadedAttachments).filter(key => {
+          if (!key.startsWith(importQuestionId)) return false;
+          if (!key.includes(`p${effectivePartIndex}`)) return false;
+          if (effectiveSubpartIndex !== undefined) {
+            return key.includes(`s${effectiveSubpartIndex}`);
+          }
+          return !key.includes('_s');
+        });
+
+        if (fallbackKeys.length > 0) {
+          partAttachments = fallbackKeys
+            .flatMap(key => uploadedAttachments[key] || [])
+            .filter(Boolean);
+        }
+      }
+    }
+
+    if (partAttachments.length === 0) {
+      const legacyKey = parentSubId
+        ? `${parentQuestionId}_${parentSubId}_${subQuestionRecord.id}`
+        : `${parentQuestionId}_${subQuestionRecord.id}`;
+      partAttachments = uploadedAttachments[legacyKey] || [];
+    }
+
     if (partAttachments.length > 0) {
       const attachmentsToInsert = partAttachments.map((att: any) => ({
         sub_question_id: subQuestionRecord.id,
@@ -1545,16 +1605,51 @@ export const insertSubQuestion = async (
     }
 
     // Recursively insert nested subparts
+    const childPartIndex = effectivePartIndex ?? partIndex ?? (hasValidOrderIndex ? parsedOrderIndex : undefined);
+
     if (part.subparts && part.subparts.length > 0) {
-      for (const subpart of part.subparts) {
-        await insertSubQuestion(parentQuestionId, subpart, subQuestionRecord.id, level + 1, uploadedAttachments, mapping, 'subpart');
+      for (let subpartIdx = 0; subpartIdx < part.subparts.length; subpartIdx++) {
+        const subpart = part.subparts[subpartIdx];
+        if (!subpart) continue;
+        const subpartOrderIndex = !isNaN(parseInt(subpart?.order_index))
+          ? parseInt(subpart.order_index)
+          : subpartIdx;
+
+        await insertSubQuestion(
+          parentQuestionId,
+          subpart,
+          subQuestionRecord.id,
+          level + 1,
+          uploadedAttachments,
+          mapping,
+          'subpart',
+          importQuestionId,
+          childPartIndex,
+          subpartOrderIndex
+        );
       }
     }
-    
+
     // Also check for 'parts' (for deeper nesting or alternative structure)
     if (part.parts && part.parts.length > 0) {
-      for (const nestedPart of part.parts) {
-        await insertSubQuestion(parentQuestionId, nestedPart, subQuestionRecord.id, level + 1, uploadedAttachments, mapping, 'part');
+      for (let nestedIdx = 0; nestedIdx < part.parts.length; nestedIdx++) {
+        const nestedPart = part.parts[nestedIdx];
+        if (!nestedPart) continue;
+        const nestedOrderIndex = !isNaN(parseInt(nestedPart?.order_index))
+          ? parseInt(nestedPart.order_index)
+          : nestedIdx;
+
+        await insertSubQuestion(
+          parentQuestionId,
+          nestedPart,
+          subQuestionRecord.id,
+          level + 1,
+          uploadedAttachments,
+          mapping,
+          'part',
+          importQuestionId,
+          nestedOrderIndex
+        );
       }
     }
 
@@ -1803,8 +1898,25 @@ export const importQuestions = async (params: {
 
         // Insert sub-questions/parts if they exist
         if (question.parts && question.parts.length > 0) {
-          for (const part of question.parts) {
-            await insertSubQuestion(insertedQuestion.id, part, null, 1, uploadedAttachments, mapping, 'part');
+          for (let partIdx = 0; partIdx < question.parts.length; partIdx++) {
+            const part = question.parts[partIdx];
+            if (!part) continue;
+
+            const partOrderIndex = !isNaN(parseInt(part?.order_index))
+              ? parseInt(part.order_index)
+              : partIdx;
+
+            await insertSubQuestion(
+              insertedQuestion.id,
+              part,
+              null,
+              1,
+              uploadedAttachments,
+              mapping,
+              'part',
+              question.id,
+              partOrderIndex
+            );
           }
         }
 

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "node tests/runQuestionsDataOperationsTests.cjs",
     "preview": "vite preview",
     "seed-test-users": "node scripts/runSeedTestUsers.js"
   },
