@@ -342,6 +342,7 @@ interface ProcessedSubpart {
   marks: number;
   answer_format: string;
   answer_requirement?: string;
+  attachments?: string[];
   correct_answers?: ProcessedAnswer[];
   options?: ProcessedOption[];
   hint?: string;
@@ -1933,6 +1934,7 @@ function QuestionsTabInner({
       marks: parseInt(subpart.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
+      attachments: ensureArray(subpart.attachments),
       correct_answers: subpart.correct_answers ? processAnswers(subpart.correct_answers, answerRequirement) : [],
       options: subpart.options
         ? processOptions(subpart.options, subpart.correct_answers, subpart.correct_answer)
@@ -3466,7 +3468,8 @@ function QuestionsTabInner({
       const questionsNeedingFigures = questions.filter(q => {
         try {
           const questionRequiresFigure = resolveFigureRequirement(q);
-          if (questionRequiresFigure && !attachments[q.id]?.length) {
+          const mergedQuestionAttachments = mergeAttachmentSources(q.attachments, attachments[q.id], q.id);
+          if (questionRequiresFigure && mergedQuestionAttachments.length === 0) {
             return true;
           }
           if (q.parts && Array.isArray(q.parts)) {
@@ -3474,7 +3477,24 @@ function QuestionsTabInner({
               if (!part) return false;
               const partKey = generateAttachmentKey(q.id, index);
               const partRequiresFigure = resolveFigureRequirement(part);
-              return partRequiresFigure && !attachments[partKey]?.length;
+              const mergedPartAttachments = mergeAttachmentSources(part.attachments, attachments[partKey], partKey);
+              if (partRequiresFigure && mergedPartAttachments.length === 0) {
+                return true;
+              }
+              if (Array.isArray(part.subparts)) {
+                return part.subparts.some((subpart: any, subpartIndex: number) => {
+                  if (!subpart) return false;
+                  const subpartKey = generateAttachmentKey(q.id, index, subpartIndex);
+                  const subpartRequiresFigure = resolveFigureRequirement(subpart);
+                  const mergedSubpartAttachments = mergeAttachmentSources(
+                    subpart.attachments,
+                    attachments[subpartKey],
+                    subpartKey
+                  );
+                  return subpartRequiresFigure && mergedSubpartAttachments.length === 0;
+                });
+              }
+              return false;
             });
           }
         } catch (err) {
