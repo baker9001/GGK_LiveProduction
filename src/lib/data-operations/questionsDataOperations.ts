@@ -1813,10 +1813,72 @@ export const importQuestions = async (params: {
   }
 
   try {
-    // Upload all attachments first
-    console.log('Uploading attachments...');
+    // ============================================================================
+    // DIAGNOSTIC LOGGING - Phase 1: Pre-Import Verification
+    // ============================================================================
+    console.log('\n========================================');
+    console.log('🔍 IMPORT DIAGNOSTICS - STARTING');
+    console.log('========================================');
+    console.log('Total questions to import:', totalQuestions);
+    console.log('Paper ID:', paperId);
+    console.log('Data Structure ID:', dataStructureInfo?.id);
+    console.log('Import Session ID:', importSessionId);
+    console.log('Year Override:', yearOverride);
+    console.log('Existing question numbers:', Array.from(existingQuestionNumbers));
+    console.log('Attachments keys:', Object.keys(attachments || {}));
+    console.log('Mappings count:', Object.keys(mappings || {}).length);
+
+    // Verify authentication
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('\n📋 Authentication Status:');
+    console.log('  Session exists:', !!session);
+    console.log('  User ID:', session?.user?.id || 'NONE');
+    console.log('  User email:', session?.user?.email || 'NONE');
+    console.log('  Session error:', sessionError?.message || 'None');
+
+    // Verify database connection and RLS
+    console.log('\n🔐 Testing Database Access:');
+    const { data: testQuery, error: testError } = await supabase
+      .from('questions_master_admin')
+      .select('id')
+      .limit(1);
+    console.log('  Can query questions_master_admin:', !testError);
+    console.log('  Test error:', testError?.message || 'None');
+    console.log('  Test error code:', testError?.code || 'None');
+    console.log('  Test error details:', testError?.details || 'None');
+
+    // Verify paper exists
+    console.log('\n📄 Verifying Paper:');
+    const { data: paperCheck, error: paperError } = await supabase
+      .from('papers_setup')
+      .select('id, paper_code, status')
+      .eq('id', paperId)
+      .maybeSingle();
+    console.log('  Paper exists:', !!paperCheck);
+    console.log('  Paper status:', paperCheck?.status || 'NOT FOUND');
+    console.log('  Paper error:', paperError?.message || 'None');
+
+    // Verify data structure
+    console.log('\n🏗️ Verifying Data Structure:');
+    const { data: dsCheck, error: dsError } = await supabase
+      .from('data_structures')
+      .select('id, region_id, program_id, provider_id, subject_id')
+      .eq('id', dataStructureInfo.id)
+      .maybeSingle();
+    console.log('  Data structure exists:', !!dsCheck);
+    console.log('  Data structure:', dsCheck);
+    console.log('  DS error:', dsError?.message || 'None');
+
+    console.log('\n========================================');
+    console.log('📦 Starting Attachment Upload');
+    console.log('========================================');
     const uploadedAttachments = await uploadAttachments(attachments);
-    console.log('Attachments uploaded successfully');
+    console.log('✅ Attachments uploaded successfully');
+    console.log('   Uploaded attachment keys:', Object.keys(uploadedAttachments));
+
+    console.log('\n========================================');
+    console.log('🔄 Processing Questions');
+    console.log('========================================');
 
     // Process each question
     for (let i = 0; i < questions.length; i++) {
@@ -1825,6 +1887,8 @@ export const importQuestions = async (params: {
 
       try {
         const questionNumber = !isNaN(parseInt(question.question_number)) ? parseInt(question.question_number) : (i + 1);
+
+        console.log(`\n--- Question ${i + 1}/${totalQuestions} (Number: ${questionNumber}) ---`);
         
         // Enhanced duplicate check with detailed logging
         console.log(`Processing question ${questionNumber}, checking against existing questions...`);
@@ -1907,8 +1971,20 @@ export const importQuestions = async (params: {
           correct_answer: ensureString(question.correct_answer) || null
         };
 
-        console.log(`Inserting question ${question.question_number}:`, questionData);
-        
+        console.log('📝 Question data prepared for insertion:');
+        console.log('   Paper ID:', questionData.paper_id);
+        console.log('   Question Number:', questionData.question_number);
+        console.log('   Type:', questionData.type);
+        console.log('   Category:', questionData.category);
+        console.log('   Marks:', questionData.marks);
+        console.log('   Description length:', questionData.question_description?.length || 0);
+        console.log('   Has mapping:', !!mapping);
+        console.log('   Chapter ID:', questionData.chapter_id);
+        console.log('   Topic ID:', questionData.topic_id);
+        console.log('   Subtopic ID:', questionData.subtopic_id);
+        console.log('   Complete question data:', JSON.stringify(questionData, null, 2));
+
+        console.log('💾 Attempting database insert...');
         const { data: insertedQuestion, error: questionError } = await supabase
           .from('questions_master_admin')
           .insert([questionData])
@@ -1916,12 +1992,22 @@ export const importQuestions = async (params: {
           .single();
 
         if (questionError) {
-          console.error(`Error inserting question ${question.question_number}:`, questionError);
+          console.error('❌ ERROR inserting question:', questionError);
+          console.error('   Error message:', questionError.message);
+          console.error('   Error code:', questionError.code);
+          console.error('   Error details:', questionError.details);
+          console.error('   Error hint:', questionError.hint);
+          console.error('   Full error object:', JSON.stringify(questionError, null, 2));
           throw questionError;
         }
 
+        console.log('✅ Question inserted successfully!');
+        console.log('   Inserted question ID:', insertedQuestion?.id);
+        console.log('   Inserted data:', insertedQuestion);
+
         // Insert multiple correct answers if available
         if (question.correct_answers && Array.isArray(question.correct_answers)) {
+          console.log('📋 Inserting correct answers:', question.correct_answers.length);
           const correctAnswersToInsert = question.correct_answers.map((ca: any) => ({
             question_id: insertedQuestion.id,
             answer: ensureString(ca.answer),
@@ -1932,12 +2018,16 @@ export const importQuestions = async (params: {
             context_label: ca.context?.label || null
           }));
 
-          const { error: caError } = await supabase
+          const { data: insertedAnswers, error: caError } = await supabase
             .from('question_correct_answers')
-            .insert(correctAnswersToInsert);
+            .insert(correctAnswersToInsert)
+            .select();
 
           if (caError) {
-            console.error('Error inserting correct answers:', caError);
+            console.error('❌ Error inserting correct answers:', caError);
+            console.error('   Error details:', JSON.stringify(caError, null, 2));
+          } else {
+            console.log('✅ Correct answers inserted:', insertedAnswers?.length || 0);
           }
         }
 
@@ -2042,24 +2132,61 @@ export const importQuestions = async (params: {
         }
 
         importedQuestions.push(insertedQuestion);
-        
+        console.log(`✅ Question ${questionNumber} import completed successfully\n`);
+
       } catch (error: any) {
-        console.error(`Error importing question ${question.question_number}:`, error);
+        console.error(`\n❌ CRITICAL ERROR importing question ${question.question_number}:`);
+        console.error('   Error type:', error?.constructor?.name);
+        console.error('   Error message:', error?.message);
+        console.error('   Error code:', error?.code);
+        console.error('   Error details:', error?.details);
+        console.error('   Error hint:', error?.hint);
+        console.error('   Full error:', JSON.stringify(error, null, 2));
+        console.error('   Stack trace:', error?.stack);
+
         errors.push({
           question: question.question_number,
           error: error.message,
-          details: error.details || error
+          details: error.details || error,
+          code: error.code,
+          hint: error.hint
         });
       } finally {
         onProgress?.(Math.min(i + 1, totalQuestions), totalQuestions);
       }
     }
 
+    // ============================================================================
+    // DIAGNOSTIC LOGGING - Phase 2: Import Summary
+    // ============================================================================
+    console.log('\n========================================');
+    console.log('📊 IMPORT SUMMARY');
+    console.log('========================================');
+    console.log('Total processed:', totalQuestions);
+    console.log('Successfully imported:', importedQuestions.length);
+    console.log('Skipped (duplicates):', skippedQuestions.length);
+    console.log('Errors encountered:', errors.length);
+    console.log('Updated questions:', updatedQuestions.length);
+
+    if (importedQuestions.length > 0) {
+      console.log('\n✅ Imported question IDs:', importedQuestions.map(q => q.id));
+      console.log('✅ Imported question numbers:', importedQuestions.map(q => q.question_number));
+    }
+
+    if (skippedQuestions.length > 0) {
+      console.log('\n⏭️ Skipped questions:', skippedQuestions);
+    }
+
+    if (errors.length > 0) {
+      console.log('\n❌ Errors:', errors);
+    }
+
     // Update import session status
     if (importSessionId) {
-      await supabase
+      console.log('\n📝 Updating import session status...');
+      const { error: sessionUpdateError } = await supabase
         .from('past_paper_import_sessions')
-        .update({ 
+        .update({
           status: errors.length === 0 ? 'completed' : 'completed_with_errors',
           processed_at: new Date().toISOString(),
           metadata: {
@@ -2073,7 +2200,34 @@ export const importQuestions = async (params: {
           }
         })
         .eq('id', importSessionId);
+
+      if (sessionUpdateError) {
+        console.error('❌ Error updating import session:', sessionUpdateError);
+      } else {
+        console.log('✅ Import session updated successfully');
+      }
     }
+
+    // Verify questions were actually inserted
+    console.log('\n🔍 Verifying inserted questions in database...');
+    const { data: verifyQuestions, error: verifyError } = await supabase
+      .from('questions_master_admin')
+      .select('id, question_number, question_description, created_at')
+      .eq('paper_id', paperId)
+      .in('id', importedQuestions.map(q => q.id));
+
+    if (verifyError) {
+      console.error('❌ Error verifying questions:', verifyError);
+    } else {
+      console.log('✅ Verification complete:');
+      console.log('   Questions found in DB:', verifyQuestions?.length || 0);
+      console.log('   Questions expected:', importedQuestions.length);
+      console.log('   Verification data:', verifyQuestions);
+    }
+
+    console.log('\n========================================');
+    console.log('🏁 IMPORT DIAGNOSTICS - COMPLETED');
+    console.log('========================================\n');
 
     return {
       importedQuestions,
@@ -2081,9 +2235,16 @@ export const importQuestions = async (params: {
       skippedQuestions,
       updatedQuestions
     };
-    
-  } catch (error) {
-    console.error('Error in importQuestions:', error);
+
+  } catch (error: any) {
+    console.error('\n========================================');
+    console.error('💥 FATAL ERROR IN IMPORT PROCESS');
+    console.error('========================================');
+    console.error('Error type:', error?.constructor?.name);
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
+    console.error('Full error:', JSON.stringify(error, null, 2));
+    console.error('========================================\n');
     throw error;
   }
 };
