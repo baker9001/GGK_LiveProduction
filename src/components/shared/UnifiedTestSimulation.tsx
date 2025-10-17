@@ -1724,7 +1724,7 @@ export function UnifiedTestSimulation({
                         </div>
                       )}
 
-                      {(isQAMode || features.showCorrectAnswers) && currentQuestion.parts.length === 0 && (
+                      {features.showCorrectAnswers && currentQuestion.parts.length === 0 && (
                         <TeacherInsights
                           correctAnswers={buildNormalisedCorrectAnswers(currentQuestion)}
                           answerRequirement={currentQuestion.answer_requirement}
@@ -1807,7 +1807,7 @@ export function UnifiedTestSimulation({
                                     mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                   />
 
-                                  {(isQAMode || features.showCorrectAnswers) && (
+                                  {features.showCorrectAnswers && (
                                     <TeacherInsights
                                       correctAnswers={buildNormalisedCorrectAnswers(part)}
                                       answerRequirement={part.answer_requirement}
@@ -1872,7 +1872,7 @@ export function UnifiedTestSimulation({
                                                 mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                               />
 
-                                              {(isQAMode || features.showCorrectAnswers) && (
+                                              {features.showCorrectAnswers && (
                                                 <TeacherInsights
                                                   correctAnswers={buildNormalisedCorrectAnswers(subpart)}
                                                   answerRequirement={subpart.answer_requirement}
