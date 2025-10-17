@@ -1022,7 +1022,8 @@ export const checkExistingQuestions = async (paperId: string) => {
     const { data: existingQuestions, error } = await supabase
       .from('questions_master_admin')
       .select('question_number')
-      .eq('paper_id', paperId);
+      .eq('paper_id', paperId)
+      .is('deleted_at', null);
     
     if (error) throw error;
     
@@ -1647,6 +1648,7 @@ export const importQuestions = async (params: {
           .select('id, question_number')
           .eq('paper_id', paperId)
           .eq('question_number', questionNumber)
+          .is('deleted_at', null)
           .maybeSingle();
         
         if (dupError && dupError.code !== 'PGRST116') {
