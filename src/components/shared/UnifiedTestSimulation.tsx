@@ -1702,18 +1702,6 @@ export function UnifiedTestSimulation({
                         </div>
                       )}
 
-                      {features.showHints && currentQuestion.hint && (
-                        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                          <div className="flex items-start space-x-2">
-                            <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                            <div>
-                              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">Hint</h4>
-                              <p className="text-blue-800 dark:text-blue-200">{currentQuestion.hint}</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
                       {currentQuestion.parts.length === 0 && (
                         <div className="mb-6">
                           <DynamicAnswerField
@@ -1736,7 +1724,7 @@ export function UnifiedTestSimulation({
                         </div>
                       )}
 
-                      {isQAMode && currentQuestion.parts.length === 0 && (
+                      {(isQAMode || features.showCorrectAnswers) && currentQuestion.parts.length === 0 && (
                         <TeacherInsights
                           correctAnswers={buildNormalisedCorrectAnswers(currentQuestion)}
                           answerRequirement={currentQuestion.answer_requirement}
@@ -1744,6 +1732,18 @@ export function UnifiedTestSimulation({
                           requiresManualMarking={currentQuestion.requires_manual_marking}
                           label="Main question"
                         />
+                      )}
+
+                      {features.showHints && currentQuestion.hint && (
+                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                            <div>
+                              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">Hint</h4>
+                              <p className="text-blue-800 dark:text-blue-200">{currentQuestion.hint}</p>
+                            </div>
+                          </div>
+                        </div>
                       )}
 
                       {currentQuestion.parts.length > 0 && (
@@ -1789,15 +1789,6 @@ export function UnifiedTestSimulation({
                                     </div>
                                   )}
 
-                                  {features.showHints && part.hint && (
-                                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
-                                      <div className="flex items-start space-x-2">
-                                        <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
-                                        <p className="text-sm text-blue-800 dark:text-blue-200">{part.hint}</p>
-                                      </div>
-                                    </div>
-                                  )}
-
                                   <DynamicAnswerField
                                     question={{
                                       ...part,
@@ -1816,7 +1807,7 @@ export function UnifiedTestSimulation({
                                     mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                   />
 
-                                  {isQAMode && (
+                                  {(isQAMode || features.showCorrectAnswers) && (
                                     <TeacherInsights
                                       correctAnswers={buildNormalisedCorrectAnswers(part)}
                                       answerRequirement={part.answer_requirement}
@@ -1824,6 +1815,15 @@ export function UnifiedTestSimulation({
                                       requiresManualMarking={part.requires_manual_marking}
                                       label={partLabel}
                                     />
+                                  )}
+
+                                  {features.showHints && part.hint && (
+                                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                                      <div className="flex items-start space-x-2">
+                                        <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                        <p className="text-sm text-blue-800 dark:text-blue-200">{part.hint}</p>
+                                      </div>
+                                    </div>
                                   )}
 
                                   {part.subparts && part.subparts.length > 0 && (
@@ -1852,15 +1852,6 @@ export function UnifiedTestSimulation({
                                                 <AttachmentGallery attachments={subpart.attachments} />
                                               )}
 
-                                              {features.showHints && subpart.hint && (
-                                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
-                                                  <div className="flex items-start space-x-2">
-                                                    <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
-                                                    <p className="text-sm text-blue-800 dark:text-blue-200">{subpart.hint}</p>
-                                                  </div>
-                                                </div>
-                                              )}
-
                                               <DynamicAnswerField
                                                 question={{
                                                   ...subpart,
@@ -1881,7 +1872,7 @@ export function UnifiedTestSimulation({
                                                 mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                               />
 
-                                              {isQAMode && (
+                                              {(isQAMode || features.showCorrectAnswers) && (
                                                 <TeacherInsights
                                                   correctAnswers={buildNormalisedCorrectAnswers(subpart)}
                                                   answerRequirement={subpart.answer_requirement}
@@ -1889,6 +1880,15 @@ export function UnifiedTestSimulation({
                                                   requiresManualMarking={subpart.requires_manual_marking}
                                                   label={`${partLabel} ${subpartLabel}`}
                                                 />
+                                              )}
+
+                                              {features.showHints && subpart.hint && (
+                                                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                                                  <div className="flex items-start space-x-2">
+                                                    <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                                    <p className="text-sm text-blue-800 dark:text-blue-200">{subpart.hint}</p>
+                                                  </div>
+                                                </div>
                                               )}
 
                                               {features.showExplanations && subpart.explanation && (
