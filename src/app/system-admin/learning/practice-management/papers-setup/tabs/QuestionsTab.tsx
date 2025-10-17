@@ -29,7 +29,6 @@ import { toast } from '../../../../../../components/shared/Toast';
 import { PDFSnippingTool } from '../../../../../../components/shared/PDFSnippingTool';
 import { ConfirmationDialog } from '../../../../../../components/shared/ConfirmationDialog';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
-import { type ReviewStatus } from '../../../../../../components/shared/QuestionReviewStatus';
 import { DataTableSkeleton } from '../../../../../../components/shared/DataTableSkeleton';
 import { Select } from '../../../../../../components/shared/Select';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
@@ -640,11 +639,23 @@ function QuestionsTabInner({
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationValidationErrors, setSimulationValidationErrors] = useState<Record<string, string[]>>({});
 
-  // Review workflow states
-  const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
-  const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
-  const [reviewLoading, setReviewLoading] = useState(false);
-  const [currentReviewerId, setCurrentReviewerId] = useState<string | null>(null);
+  // Review workflow summary state (managed by QuestionImportReviewWorkflow)
+  const [reviewSummary, setReviewSummary] = useState({
+    total: 0,
+    reviewed: 0,
+    withIssues: 0,
+    allReviewed: false,
+  });
+  const [reviewWorkflowLoading, setReviewWorkflowLoading] = useState<boolean>(questions.length > 0);
+
+  useEffect(() => {
+    if (questions.length > 0) {
+      setReviewWorkflowLoading(true);
+    } else {
+      setReviewWorkflowLoading(false);
+      setReviewSummary({ total: 0, reviewed: 0, withIssues: 0, allReviewed: false });
+    }
+  }, [questions.length]);
 
   const requestInlineConfirmation = useCallback(
     (options: InlineConfirmationOptions) =>
@@ -661,7 +672,6 @@ function QuestionsTabInner({
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionsRef = useRef<Record<string, HTMLDivElement>>({});
-  const reviewSyncPromiseRef = useRef<Promise<void> | null>(null);
 
   const paperTitleForMetadata = useMemo(
     () => savedPaperDetails?.paper_name || paperMetadata.title || '',
@@ -1261,247 +1271,7 @@ function QuestionsTabInner({
     }
   }, [questions, existingPaperId]);
 
-  useEffect(() => {
-    let isCancelled = false;
-
-    const runSync = async () => {
-      if (reviewSyncPromiseRef.current) {
-        try {
-          await reviewSyncPromiseRef.current;
-        } catch (previousError) {
-          console.warn('Previous review sync failed:', previousError);
-        }
-
-        if (isCancelled) {
-          return;
-        }
-      }
-
-      const syncPromise = (async () => {
-        if (!importSession?.id || questions.length === 0) {
-          if (!isCancelled) {
-            setReviewStatuses({});
-            setReviewSessionId(null);
-            setReviewLoading(false);
-          }
-          return;
-        }
-
-        if (!isCancelled) {
-          setReviewLoading(true);
-        }
-
-        try {
-          const {
-            data: { user },
-            error: authError
-          } = await supabase.auth.getUser();
-
-          if (authError) {
-            throw authError;
-          }
-
-          if (!user) {
-            if (!isCancelled) {
-              setReviewStatuses(prev => {
-                const fallback: Record<string, ReviewStatus> = {};
-                questions.forEach(q => {
-                  fallback[q.id] = prev[q.id] || { questionId: q.id, isReviewed: false };
-                });
-                return fallback;
-              });
-              setReviewLoading(false);
-            }
-            return;
-          }
-
-          if (!isCancelled) {
-            setCurrentReviewerId(user.id);
-          }
-
-          let sessionId = reviewSessionId;
-
-          if (!sessionId) {
-            const { data: existingSession, error: sessionError } = await supabase
-              .from('question_import_review_sessions')
-              .select('*')
-              .eq('paper_import_session_id', importSession.id)
-              .eq('user_id', user.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (sessionError) throw sessionError;
-            if (existingSession) {
-              sessionId = existingSession.id;
-            }
-          }
-
-          if (!sessionId) {
-            const { data: newSession, error: createError } = await supabase
-              .from('question_import_review_sessions')
-              .insert({
-                paper_import_session_id: importSession.id,
-                user_id: user.id,
-                paper_id: existingPaperId,
-                total_questions: questions.length,
-                simulation_required: true,
-                metadata: {
-                  paper_title: paperTitleForMetadata,
-                  paper_code: paperCodeForMetadata,
-                  created_from_ui: 'QuestionsTab'
-                }
-              })
-              .select()
-              .single();
-
-            if (createError) throw createError;
-            sessionId = newSession.id;
-          }
-
-          if (!sessionId) return;
-
-          if (!isCancelled) {
-            setReviewSessionId(sessionId);
-          }
-
-          const { data: existingStatuses, error: statusesError } = await supabase
-            .from('question_import_review_status')
-            .select('*')
-            .eq('review_session_id', sessionId);
-
-          if (statusesError) throw statusesError;
-
-          const statusMap: Record<string, ReviewStatus> = {};
-          const missingQuestionIds: string[] = [];
-
-          questions.forEach(q => {
-            const match = existingStatuses?.find(status => status.question_identifier === q.id);
-            if (match) {
-              statusMap[q.id] = {
-                questionId: q.id,
-                isReviewed: match.is_reviewed,
-                reviewedAt: match.reviewed_at || undefined,
-                hasIssues: match.has_issues,
-                issueCount: match.issue_count,
-                needsAttention: match.needs_attention
-              };
-            } else {
-              statusMap[q.id] = { questionId: q.id, isReviewed: false };
-              missingQuestionIds.push(q.id);
-            }
-          });
-
-          if (missingQuestionIds.length > 0) {
-            const rows = missingQuestionIds
-              .map(questionId => {
-                const question = questions.find(q => q.id === questionId);
-                if (!question) return null;
-
-                const sanitizedQuestion = sanitizeQuestionForStorage(question);
-
-                const questionIndex = questions.findIndex(q => q.id === questionId);
-                const fallbackNumber = questionIndex >= 0 ? String(questionIndex + 1) : questionId;
-
-                return {
-                  review_session_id: sessionId,
-                  question_identifier: questionId,
-                  question_number: question.question_number ? String(question.question_number) : fallbackNumber,
-                  question_data: sanitizedQuestion,
-                  is_reviewed: false,
-                  validation_status: 'pending'
-                };
-              })
-              .filter((row): row is {
-                review_session_id: string;
-                question_identifier: string;
-                question_number: string;
-                question_data: any;
-                is_reviewed: boolean;
-                validation_status: string;
-              } => row !== null);
-
-            if (rows.length > 0) {
-              const { error: upsertError } = await supabase
-                .from('question_import_review_status')
-                .upsert(rows, {
-                  onConflict: 'review_session_id,question_identifier',
-                  ignoreDuplicates: true
-                });
-
-              if (upsertError) throw upsertError;
-            }
-          }
-
-          if (!isCancelled) {
-            setReviewStatuses(statusMap);
-          }
-
-          const reviewedCount = Object.values(statusMap).filter(status => status.isReviewed).length;
-
-          const sessionUpdate: Record<string, any> = {
-            total_questions: questions.length,
-            questions_reviewed: reviewedCount,
-            updated_at: new Date().toISOString(),
-            status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress'
-          };
-
-          sessionUpdate.completed_at =
-            sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
-
-          const { error: updateError } = await supabase
-            .from('question_import_review_sessions')
-            .update(sessionUpdate)
-            .eq('id', sessionId);
-
-          if (updateError) throw updateError;
-        } catch (error) {
-          console.error('Failed to synchronize review workflow:', error);
-          if (!isCancelled) {
-            // Provide more specific error messages
-            let errorMessage = 'Unable to sync question review progress.';
-            if (error instanceof Error) {
-              if (error.message.includes('network') || error.message.includes('fetch')) {
-                errorMessage = 'Network error: Unable to connect to database. Working offline.';
-              } else if (error.message.includes('auth')) {
-                errorMessage = 'Authentication error: Please refresh the page and try again.';
-              }
-            }
-            toast.error(errorMessage);
-
-            // Set fallback review statuses to allow continued work
-            setReviewStatuses(prev => {
-              const fallback: Record<string, ReviewStatus> = {};
-              questions.forEach(q => {
-                fallback[q.id] = prev[q.id] || { questionId: q.id, isReviewed: false };
-              });
-              return fallback;
-            });
-          }
-        } finally {
-          if (!isCancelled) {
-            setReviewLoading(false);
-          }
-        }
-      })();
-
-      reviewSyncPromiseRef.current = syncPromise;
-
-      try {
-        await syncPromise;
-      } finally {
-        if (reviewSyncPromiseRef.current === syncPromise) {
-          reviewSyncPromiseRef.current = null;
-        }
-      }
-    };
-
-    runSync();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [importSession?.id, questions, existingPaperId, paperTitleForMetadata, paperCodeForMetadata]);
+  // Review synchronization is now handled inside QuestionImportReviewWorkflow
 
   // Auto-fill mappings from parsed data
   useEffect(() => {
@@ -3359,75 +3129,6 @@ function QuestionsTabInner({
     setSimulationPaper(null);
   };
 
-  const handleToggleReviewStatus = useCallback(async (questionId: string) => {
-    const previousStatuses = reviewStatuses;
-    const currentStatus = previousStatuses[questionId] || { questionId, isReviewed: false };
-    const newState = !currentStatus.isReviewed;
-
-    const updatedStatuses: Record<string, ReviewStatus> = {
-      ...previousStatuses,
-      [questionId]: {
-        ...currentStatus,
-        questionId,
-        isReviewed: newState,
-        reviewedAt: newState ? new Date().toISOString() : undefined,
-      },
-    };
-
-    setReviewStatuses(updatedStatuses);
-
-    const reviewedCount = Object.values(updatedStatuses).filter(status => status.isReviewed).length;
-
-    try {
-      const userId =
-        currentReviewerId ||
-        (await supabase.auth.getUser()).data.user?.id ||
-        null;
-
-      if (reviewSessionId) {
-        const { error: updateError } = await supabase
-          .from('question_import_review_status')
-          .update({
-            is_reviewed: newState,
-            reviewed_at: newState ? new Date().toISOString() : null,
-            reviewed_by: newState ? userId : null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('review_session_id', reviewSessionId)
-          .eq('question_identifier', questionId);
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        const sessionUpdate: Record<string, any> = {
-          questions_reviewed: reviewedCount,
-          total_questions: questions.length,
-          updated_at: new Date().toISOString(),
-          status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress',
-        };
-
-        sessionUpdate.completed_at =
-          sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
-
-        const { error: sessionError } = await supabase
-          .from('question_import_review_sessions')
-          .update(sessionUpdate)
-          .eq('id', reviewSessionId);
-
-        if (sessionError) {
-          throw sessionError;
-        }
-
-      }
-
-      toast.success(newState ? 'Question marked as reviewed' : 'Review status removed');
-    } catch (error) {
-      console.error('Error updating review status:', error);
-      toast.error('Failed to update review status. Please try again.');
-      setReviewStatuses({ ...previousStatuses });
-    }
-  }, [reviewStatuses, currentReviewerId, reviewSessionId, questions.length, importSession?.id]);
 
   // FIXED: Updated validation function with proper error handling and figure_required check
   const validateQuestionsWithAttachments = () => {
@@ -3565,13 +3266,13 @@ function QuestionsTabInner({
 
       console.log('Prerequisites check passed');
 
-      if (reviewLoading) {
+      if (reviewWorkflowLoading) {
         toast.info('Review progress is still syncing. Please wait a moment.');
         return;
       }
 
       if (!allQuestionsReviewed) {
-        toast.error(`Please review all questions before importing. (${reviewedCount}/${questions.length} reviewed)`);
+        toast.error(`Please review all questions before importing. (${reviewedCount}/${totalReviewable} reviewed)`);
         return;
       }
 
@@ -4698,15 +4399,16 @@ function QuestionsTabInner({
     );
   };
 
-  const reviewedCount = useMemo(() => (
-    questions.reduce((count, question) => (
-      reviewStatuses[question.id]?.isReviewed ? count + 1 : count
-    ), 0)
-  ), [questions, reviewStatuses]);
-
-  const allQuestionsReviewed = questions.length > 0 && reviewedCount === questions.length;
+  const totalReviewable = reviewSummary.total || questions.length;
+  const reviewedCount = Math.min(reviewSummary.reviewed, totalReviewable);
+  const allQuestionsReviewed = totalReviewable > 0 && reviewSummary.allReviewed;
   const simulationCompleted = Boolean(simulationResult?.completed);
-  const canImport = !isImporting && !reviewLoading && questions.length > 0 && allQuestionsReviewed && simulationCompleted;
+  const canImport =
+    !isImporting &&
+    !reviewWorkflowLoading &&
+    questions.length > 0 &&
+    allQuestionsReviewed &&
+    simulationCompleted;
 
   // Show initialization error state
   if (initializationError) {
@@ -4997,11 +4699,11 @@ function QuestionsTabInner({
           questionResults: []
         } : null}
         simulationCompleted={simulationCompleted}
-        onAllQuestionsReviewed={() => {
-          console.log('All questions reviewed');
+        onReviewSummaryChange={(summary) => {
+          setReviewSummary(summary);
         }}
-        onImportReady={(canImport) => {
-          console.log('Import ready status:', canImport);
+        onReviewLoadingChange={(isLoading) => {
+          setReviewWorkflowLoading(isLoading);
         }}
         validationErrors={simulationValidationErrors}
       />
@@ -5222,13 +4924,13 @@ function QuestionsTabInner({
           <div className="flex flex-wrap items-center gap-3">
             <StatusBadge
               status={allQuestionsReviewed ? 'success' : 'warning'}
-              text={`Reviewed ${reviewedCount}/${questions.length || 0}`}
+              text={`Reviewed ${reviewedCount}/${totalReviewable || 0}`}
             />
             <StatusBadge
               status={simulationCompleted ? 'success' : 'warning'}
               text={simulationCompleted ? 'Simulation complete' : 'Simulation pending'}
             />
-            {reviewLoading && (
+            {reviewWorkflowLoading && (
               <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Syncing review data…

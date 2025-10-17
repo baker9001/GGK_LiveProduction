@@ -104,6 +104,13 @@ interface QuestionImportReviewWorkflowProps {
   importSessionId?: string;
   onAllQuestionsReviewed?: () => void;
   onImportReady?: (canImport: boolean) => void;
+  onReviewSummaryChange?: (summary: {
+    total: number;
+    reviewed: number;
+    withIssues: number;
+    allReviewed: boolean;
+  }) => void;
+  onReviewLoadingChange?: (isLoading: boolean) => void;
   requireSimulation?: boolean;
   onQuestionUpdate?: (questionId: string, updates: Partial<QuestionDisplayData>) => void;
   onRequestSnippingTool?: (questionId: string) => void;
@@ -121,6 +128,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   importSessionId,
   onAllQuestionsReviewed,
   onImportReady,
+  onReviewSummaryChange,
+  onReviewLoadingChange,
   requireSimulation = false,
   onQuestionUpdate,
   onRequestSnippingTool,
@@ -1091,7 +1100,34 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     if (onImportReady) {
       onImportReady(canImport);
     }
-  }, [reviewStatuses, simulationResults, requireSimulation, onAllQuestionsReviewed, onImportReady]);
+
+    if (onReviewSummaryChange) {
+      const total = memoizedQuestions.length;
+      const reviewed = Object.values(reviewStatuses).filter(status => status.isReviewed).length;
+      const withIssues = Object.values(reviewStatuses).filter(status => status.hasIssues).length;
+
+      onReviewSummaryChange({
+        total,
+        reviewed,
+        withIssues,
+        allReviewed: total > 0 && reviewed === total,
+      });
+    }
+  }, [
+    reviewStatuses,
+    simulationResults,
+    requireSimulation,
+    onAllQuestionsReviewed,
+    onImportReady,
+    onReviewSummaryChange,
+    memoizedQuestions.length,
+  ]);
+
+  useEffect(() => {
+    if (onReviewLoadingChange) {
+      onReviewLoadingChange(isInitializing);
+    }
+  }, [isInitializing, onReviewLoadingChange]);
 
   const initializeReviewSession = useCallback(async () => {
     // Check if already initialized
