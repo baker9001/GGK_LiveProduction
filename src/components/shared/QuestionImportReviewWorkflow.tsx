@@ -1325,17 +1325,79 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     }
   };
 
+  const validateQuestion = (q: QuestionDisplayData): { isValid: boolean; missingFields: string[] } => {
+    const missingFields: string[] = [];
+
+    if (!q.id) missingFields.push('ID');
+    if (!q.question_number || String(q.question_number).trim() === '') missingFields.push('Question Number');
+    if (!q.question_text || String(q.question_text).trim() === '' || String(q.question_text).trim() === '<p></p>') missingFields.push('Question Text');
+    if (q.marks === undefined || q.marks === null || (typeof q.marks === 'string' && q.marks.trim() === '')) missingFields.push('Marks');
+    if (!q.difficulty || String(q.difficulty).trim() === '') missingFields.push('Difficulty');
+    if (!q.topic_id || String(q.topic_id).trim() === '') missingFields.push('Topic');
+    if (!q.hint || String(q.hint).trim() === '' || String(q.hint).trim() === '<p></p>') missingFields.push('Hint');
+    if (!q.explanation || String(q.explanation).trim() === '' || String(q.explanation).trim() === '<p></p>') missingFields.push('Explanation');
+
+    return {
+      isValid: missingFields.length === 0,
+      missingFields
+    };
+  };
+
   const handleStartSimulation = () => {
-    // Validate questions before requesting simulation from parent
-    const invalidQuestions = memoizedQuestions.filter(q =>
-      !q.id || !q.question_number || !q.question_text || q.marks === undefined
-    );
+    // Detailed validation with comprehensive error reporting
+    const validationResults = memoizedQuestions.map((q, index) => ({
+      question: q,
+      index: index + 1,
+      validation: validateQuestion(q)
+    }));
+
+    const invalidQuestions = validationResults.filter(r => !r.validation.isValid);
 
     if (invalidQuestions.length > 0) {
-      toast.error(`${invalidQuestions.length} question(s) have missing required data. Please fix before starting test.`);
-      console.error('Invalid questions:', invalidQuestions);
+      // Log detailed validation report to console
+      console.group('❌ Validation Failed - Question Data Issues');
+      console.log(`Total Questions: ${memoizedQuestions.length}`);
+      console.log(`Valid Questions: ${validationResults.length - invalidQuestions.length}`);
+      console.log(`Invalid Questions: ${invalidQuestions.length}`);
+      console.log('\n=== DETAILED VALIDATION REPORT ===\n');
+
+      invalidQuestions.forEach(({ question, index, validation }) => {
+        console.group(`Question #${index} (${question.question_number || 'NO NUMBER'})`);
+        console.log('Question ID:', question.id || 'MISSING');
+        console.log('Missing Fields:', validation.missingFields.join(', '));
+        console.log('Question Data:', {
+          question_number: question.question_number,
+          question_text: question.question_text?.substring(0, 100) + '...',
+          marks: question.marks,
+          difficulty: question.difficulty,
+          topic_id: question.topic_id,
+          has_hint: !!question.hint,
+          has_explanation: !!question.explanation
+        });
+        console.groupEnd();
+      });
+      console.groupEnd();
+
+      // Create user-friendly error message
+      const errorDetails = invalidQuestions.slice(0, 5).map(({ question, validation }) =>
+        `Question ${question.question_number || 'Unknown'}: Missing ${validation.missingFields.join(', ')}`
+      ).join('\n');
+
+      const moreQuestions = invalidQuestions.length > 5 ? `\n... and ${invalidQuestions.length - 5} more questions` : '';
+
+      toast.error(
+        <div className="space-y-2">
+          <p className="font-semibold">Cannot start simulation - {invalidQuestions.length} question(s) incomplete</p>
+          <p className="text-xs whitespace-pre-line">{errorDetails}{moreQuestions}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Check console for full details. Incomplete questions are marked with red borders.</p>
+        </div>,
+        { duration: 8000 }
+      );
       return;
     }
+
+    // All questions valid - proceed with simulation
+    console.log('✅ All questions validated successfully. Starting simulation...');
 
     // Request parent component to handle simulation
     if (onRequestSimulation) {
@@ -1439,8 +1501,93 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const allReviewed = reviewedCount === memoizedQuestions.length;
   const simulationPassed = simulationResults && simulationResults.percentage >= 70;
 
+  // Calculate validation statistics
+  const validationStats = useMemo(() => {
+    const results = memoizedQuestions.map(q => validateQuestion(q));
+    const valid = results.filter(r => r.isValid).length;
+    const invalid = results.filter(r => !r.isValid).length;
+    return { valid, invalid, total: memoizedQuestions.length };
+  }, [memoizedQuestions]);
+
+  const handleValidateAll = () => {
+    const validationResults = memoizedQuestions.map((q, index) => ({
+      question: q,
+      index: index + 1,
+      validation: validateQuestion(q)
+    }));
+
+    const invalidQuestions = validationResults.filter(r => !r.validation.isValid);
+
+    if (invalidQuestions.length === 0) {
+      toast.success(`All ${memoizedQuestions.length} questions passed validation!`, { duration: 4000 });
+      console.log('✅ Validation passed for all questions');
+      return;
+    }
+
+    // Show detailed validation report
+    console.group('🔍 Validation Report');
+    console.log(`Total Questions: ${memoizedQuestions.length}`);
+    console.log(`Valid: ${validationStats.valid}`);
+    console.log(`Invalid: ${invalidQuestions.length}`);
+    console.log('\\nInvalid Questions:');
+    invalidQuestions.forEach(({ question, index, validation }) => {
+      console.log(`  Q${index} (${question.question_number}): ${validation.missingFields.join(', ')}`);
+    });
+    console.groupEnd();
+
+    toast.error(
+      <div className="space-y-2">
+        <p className="font-semibold">Validation Failed</p>
+        <p className="text-sm">{invalidQuestions.length} of {memoizedQuestions.length} questions have incomplete data</p>
+        <p className="text-xs">Incomplete questions are highlighted with red borders. Check console for details.</p>
+      </div>,
+      { duration: 6000 }
+    );
+  };
+
   return (
     <div className="space-y-6">
+      {/* Validation Summary Banner */}
+      {validationStats.invalid > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-red-900 dark:text-red-100 mb-1">
+                  {validationStats.invalid} Question{validationStats.invalid !== 1 ? 's' : ''} Incomplete
+                </h4>
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {validationStats.valid} of {validationStats.total} questions are complete.
+                  Incomplete questions are marked with red borders and show missing field counts.
+                  All fields marked with <span className="text-red-500 font-semibold">*</span> are mandatory.
+                </p>
+              </div>
+            </div>
+            <Button onClick={handleValidateAll} variant="outline" size="sm" className="flex-shrink-0">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Validate All
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {validationStats.invalid === 0 && validationStats.total > 0 && (
+        <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-300 dark:border-green-700 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-green-900 dark:text-green-100 mb-1">
+                All Questions Complete
+              </h4>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                All {validationStats.total} questions have all required fields filled. Ready to start simulation.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sync Error Banner */}
       {syncError && (
         <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl p-4">
@@ -1644,7 +1791,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               label: formatOptionLabel(answerRequirementValue),
             });
           }
-          const baseCardClass = status.isReviewed
+          // Validate question for visual indicators
+          const questionValidation = validateQuestion(question);
+          const isIncomplete = !questionValidation.isValid;
+
+          const baseCardClass = isIncomplete
+            ? 'border-red-400 dark:border-red-600 border-2 bg-red-50/30 dark:bg-red-900/10'
+            : status.isReviewed
             ? 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-900/10'
             : status.hasIssues
             ? 'border-yellow-300 dark:border-yellow-700 bg-yellow-50/30 dark:bg-yellow-900/10'
@@ -1703,6 +1856,15 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         >
                           <Paperclip className="h-3 w-3" />
                           {attachmentBadgeLabel}
+                        </span>
+                      )}
+                      {isIncomplete && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200"
+                          title={`Missing: ${questionValidation.missingFields.join(', ')}`}
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          {questionValidation.missingFields.length} field{questionValidation.missingFields.length !== 1 ? 's' : ''} missing
                         </span>
                       )}
                     </div>
@@ -1814,7 +1976,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                       <FormField
                         id={`${question.id}-question-text`}
-                        label="Question text"
+                        label={<span>Question text <span className="text-red-500">*</span></span>}
                         className="mb-0 md:col-span-2 lg:col-span-3"
                       >
                         <RichTextEditor
@@ -1829,7 +1991,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
                       <FormField
                         id={`${question.id}-marks`}
-                        label="Marks"
+                        label={<span>Marks <span className="text-red-500">*</span></span>}
                         className="mb-0"
                       >
                         <Input
@@ -1867,7 +2029,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
                       <FormField
                         id={`${question.id}-difficulty`}
-                        label="Difficulty"
+                        label={<span>Difficulty <span className="text-red-500">*</span></span>}
                         className="mb-0"
                       >
                         <Select
@@ -1904,7 +2066,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
                       <FormField
                         id={`${question.id}-topic`}
-                        label="Topic"
+                        label={<span>Topic <span className="text-red-500">*</span></span>}
                         className="mb-0"
                       >
                         <Select
@@ -1984,7 +2146,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
                       <FormField
                         id={`${question.id}-hint`}
-                        label="Hint"
+                        label={<span>Hint <span className="text-red-500">*</span></span>}
                         className="mb-0 md:col-span-2 lg:col-span-3"
                       >
                         <RichTextEditor
@@ -2000,7 +2162,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
                       <FormField
                         id={`${question.id}-explanation`}
-                        label="Explanation"
+                        label={<span>Explanation <span className="text-red-500">*</span></span>}
                         className="mb-0 md:col-span-2 lg:col-span-3"
                       >
                         <RichTextEditor
