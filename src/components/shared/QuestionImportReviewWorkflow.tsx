@@ -20,7 +20,6 @@ import {
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
 import { EnhancedQuestionDisplay, QuestionDisplayData, QuestionPart } from './EnhancedQuestionDisplay';
-import { UnifiedTestSimulation } from './UnifiedTestSimulation';
 import { supabase } from '../../lib/supabase';
 import { toast } from './Toast';
 import { cn } from '../../lib/utils';
@@ -108,6 +107,9 @@ interface QuestionImportReviewWorkflowProps {
   requireSimulation?: boolean;
   onQuestionUpdate?: (questionId: string, updates: Partial<QuestionDisplayData>) => void;
   onRequestSnippingTool?: (questionId: string) => void;
+  onRequestSimulation?: () => void;
+  simulationResults?: SimulationResults | null;
+  simulationCompleted?: boolean;
 }
 
 export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflowProps> = ({
@@ -120,11 +122,14 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   onImportReady,
   requireSimulation = false,
   onQuestionUpdate,
-  onRequestSnippingTool
+  onRequestSnippingTool,
+  onRequestSimulation,
+  simulationResults: externalSimulationResults,
+  simulationCompleted: externalSimulationCompleted = false
 }) => {
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
-  const [showSimulation, setShowSimulation] = useState(false);
-  const [simulationResults, setSimulationResults] = useState<SimulationResults | null>(null);
+  const simulationResults = externalSimulationResults;
+  const simulationCompleted = externalSimulationCompleted;
   const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
@@ -1321,7 +1326,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   };
 
   const handleStartSimulation = () => {
-    // Validate questions before starting simulation
+    // Validate questions before requesting simulation from parent
     const invalidQuestions = memoizedQuestions.filter(q =>
       !q.id || !q.question_number || !q.question_text || q.marks === undefined
     );
@@ -1332,7 +1337,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       return;
     }
 
-    setShowSimulation(true);
+    // Request parent component to handle simulation
+    if (onRequestSimulation) {
+      onRequestSimulation();
+    } else {
+      toast.error('Simulation is not available in this context. Use the main test simulation button.');
+    }
   };
 
   const handleRetrySync = () => {
@@ -1391,9 +1401,6 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     }
   };
 
-  const handleSimulationExit = () => {
-    setShowSimulation(false);
-  };
 
   const toggleQuestionExpansion = (questionId: string) => {
     setExpandedQuestions(prev => {
@@ -1426,58 +1433,6 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     );
   }
 
-  if (showSimulation) {
-    // Transform questions into the UnifiedTestSimulation format
-    const simulationPaper = {
-      id: 'import-preview',
-      code: paperTitle,
-      subject: paperSubject || 'General',
-      duration: paperDuration,
-      total_marks: totalMarks,
-      questions: memoizedQuestions.map((q, index) => ({
-        id: q.id,
-        question_number: q.question_number || `${index + 1}`,
-        question_description: q.question_description || '',
-        marks: q.marks || 0,
-        type: (q.question_type as 'mcq' | 'tf' | 'descriptive') || 'descriptive',
-        difficulty: q.difficulty || 'medium',
-        topic_name: q.topic_name,
-        subtopic_names: q.subtopic_names || [],
-        options: q.options?.map((opt, optIndex) => ({
-          id: opt.id || `opt-${optIndex}`,
-          option_text: opt.text || opt.option_text || '',
-          is_correct: opt.is_correct || false,
-          order: optIndex
-        })),
-        parts: [],
-        answer_format: q.answer_format,
-        answer_requirement: q.answer_requirement,
-        correct_answers: q.correct_answers,
-        correct_answer: q.correct_answer,
-        total_alternatives: q.total_alternatives,
-        hint: q.hint,
-        explanation: q.explanation,
-        requires_manual_marking: q.requires_manual_marking,
-        marking_criteria: q.marking_criteria,
-        attachments: q.attachments?.map((att, attIndex) => ({
-          id: att.id || `att-${attIndex}`,
-          file_url: att.file_url || att.url || att.preview || '',
-          file_name: att.file_name || att.name || `Attachment ${attIndex + 1}`,
-          file_type: att.file_type || att.type || 'image/png'
-        }))
-      }))
-    };
-
-    return (
-      <UnifiedTestSimulation
-        paper={simulationPaper}
-        onExit={handleSimulationExit}
-        isQAMode={false}
-        allowPause={true}
-        showAnswersOnCompletion={true}
-      />
-    );
-  }
 
   const reviewedCount = Object.values(reviewStatuses).filter(s => s.isReviewed).length;
   const questionsWithIssues = Object.values(reviewStatuses).filter(s => s.hasIssues).length;

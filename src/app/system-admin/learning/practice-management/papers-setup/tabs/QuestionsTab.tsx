@@ -4736,6 +4736,20 @@ function QuestionsTabInner({
         requireSimulation={true}
         onQuestionUpdate={handleQuestionUpdateFromReview}
         onRequestSnippingTool={handleRequestSnippingTool}
+        onRequestSimulation={handleStartSimulation}
+        simulationResults={simulationResult ? {
+          totalQuestions: simulationResult.totalQuestions,
+          answeredQuestions: simulationResult.answeredQuestions,
+          correctAnswers: simulationResult.correctAnswers,
+          partiallyCorrect: simulationResult.partiallyCorrect,
+          incorrectAnswers: simulationResult.incorrectAnswers,
+          totalMarks: simulationResult.totalMarks,
+          earnedMarks: simulationResult.earnedMarks,
+          percentage: simulationResult.percentage,
+          timeSpent: simulationResult.timeSpentSeconds,
+          questionResults: []
+        } : null}
+        simulationCompleted={simulationCompleted}
         onAllQuestionsReviewed={() => {
           console.log('All questions reviewed');
         }}
@@ -4994,17 +5008,26 @@ function QuestionsTabInner({
           </Button>
           <div className="flex items-center gap-3">
             <Button
-              variant="outline"
+              variant={simulationCompleted ? 'outline' : 'default'}
               onClick={handleStartSimulation}
               disabled={questions.length === 0 || isImporting}
               leftIcon={<PlayCircle className="h-4 w-4" />}
               className={cn(
-                !simulationCompleted && 'border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                'min-w-[160px]',
+                !simulationCompleted && 'bg-orange-600 hover:bg-orange-700 border-orange-600 text-white shadow-md',
+                simulationCompleted && 'border-green-500 text-green-700 hover:bg-green-50 dark:text-green-400 dark:border-green-600 dark:hover:bg-green-900/20'
               )}
-              aria-label={simulationCompleted ? 'Re-run test simulation' : 'Start test simulation'}
-              title="Run the student test simulation to validate the paper"
+              aria-label={simulationCompleted ? 'Re-run test simulation to validate changes' : 'Start test simulation to validate all questions'}
+              title={simulationCompleted ? 'Re-run simulation to validate any changes' : 'Run student test simulation to validate the paper before import'}
             >
-              {simulationCompleted ? 'Re-run Test' : 'Test & Review'}
+              {simulationCompleted ? (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Re-run Test
+                </>
+              ) : (
+                'Test & Review'
+              )}
             </Button>
             <Button
               onClick={() => {
