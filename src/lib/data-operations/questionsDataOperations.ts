@@ -1668,22 +1668,45 @@ export const insertSubQuestion = async (
       partAttachments = uploadedAttachments[legacyKey] || [];
     }
 
+    // Enhanced attachment insertion with validation and logging
     if (partAttachments.length > 0) {
-      const attachmentsToInsert = partAttachments.map((att: any) => ({
-        sub_question_id: subQuestionRecord.id,
-        file_url: att.file_url,
-        file_name: att.file_name || att.fileName,
-        file_type: att.file_type || 'image/png',
-        file_size: att.file_size || 0
-      }));
+      console.log(`[Attachment] Inserting ${partAttachments.length} attachment(s) for sub-question ${subQuestionRecord.id} (${partLabel})`);
 
-      const { error: attachError } = await supabase
-        .from('questions_attachments')
-        .insert(attachmentsToInsert);
+      const attachmentsToInsert = partAttachments
+        .filter((att: any) => {
+          if (!att.file_url || att.file_url.trim() === '') {
+            console.warn(`[Attachment] Skipping attachment with empty file_url for sub-question ${subQuestionRecord.id}:`, att);
+            return false;
+          }
+          return true;
+        })
+        .map((att: any) => ({
+          sub_question_id: subQuestionRecord.id,
+          file_url: att.file_url.trim(),
+          file_name: att.file_name || att.fileName || 'attachment',
+          file_type: att.file_type || att.fileType || 'image/png',
+          file_size: att.file_size || att.fileSize || 0
+        }));
 
-      if (attachError) {
-        console.error('Error inserting sub-question attachments:', attachError);
+      if (attachmentsToInsert.length > 0) {
+        const { data: insertedAttachments, error: attachError } = await supabase
+          .from('questions_attachments')
+          .insert(attachmentsToInsert)
+          .select();
+
+        if (attachError) {
+          console.error(`[Attachment] Error inserting sub-question attachments for ${subQuestionRecord.id}:`, attachError);
+        } else {
+          console.log(`[Attachment] Successfully inserted ${insertedAttachments?.length || 0} attachment(s) for sub-question ${subQuestionRecord.id}`);
+        }
+      } else {
+        console.warn(`[Attachment] No valid attachments to insert for sub-question ${subQuestionRecord.id} after filtering`);
       }
+    } else {
+      console.log(`[Attachment] No attachments found for sub-question ${subQuestionRecord.id} (${partLabel}). Checked keys:`, {
+        primaryKey: importQuestionId ? generateAttachmentKeyForImport(importQuestionId, effectivePartIndex, effectiveSubpartIndex) : 'N/A',
+        partAttachmentsLength: partAttachments.length
+      });
     }
 
     // Recursively insert nested subparts
