@@ -181,7 +181,14 @@ interface SimulationResults {
   }>;
 }
 
-type ExamMode = 'practice' | 'timed' | 'review';
+// Unified simulation with toggleable features instead of separate modes
+interface SimulationFeatures {
+  showHints: boolean;
+  showExplanations: boolean;
+  showCorrectAnswers: boolean;
+  enableTimer: boolean;
+  allowAnswerInput: boolean;
+}
 type NavigatorSize = 'compact' | 'normal' | 'expanded';
 
 interface UnifiedTestSimulationProps {
@@ -586,9 +593,14 @@ export function UnifiedTestSimulation({
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState<SimulationResults | null>(null);
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<string>>(new Set());
-  const [showHints, setShowHints] = useState(false);
-  const [showExplanations, setShowExplanations] = useState(false);
-  const [examMode, setExamMode] = useState<ExamMode>('practice');
+  // Unified simulation features - all toggleable independently
+  const [features, setFeatures] = useState<SimulationFeatures>({
+    showHints: isQAMode,
+    showExplanations: isQAMode,
+    showCorrectAnswers: isQAMode,
+    enableTimer: false,
+    allowAnswerInput: true
+  });
   const [showQuestionNavigation, setShowQuestionNavigation] = useState(true);
   const [navigatorSize, setNavigatorSize] = useState<NavigatorSize>('normal');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -624,9 +636,13 @@ export function UnifiedTestSimulation({
 
   useEffect(() => {
     if (isQAMode) {
-      setShowHints(true);
-      setShowExplanations(true);
-      setExamMode('review');
+      setFeatures(prev => ({
+        ...prev,
+        showHints: true,
+        showExplanations: true,
+        showCorrectAnswers: true,
+        allowAnswerInput: true
+      }));
     }
   }, [isQAMode]);
 
@@ -657,7 +673,7 @@ export function UnifiedTestSimulation({
   }, [currentQuestion]);
 
   useEffect(() => {
-    if (isRunning && examMode === 'timed') {
+    if (isRunning && features.enableTimer) {
       timerRef.current = setInterval(() => {
         setTimeElapsed(prev => {
           const newTime = prev + 1;
@@ -680,7 +696,7 @@ export function UnifiedTestSimulation({
         clearInterval(timerRef.current);
       }
     };
-  }, [isRunning, examMode, examDuration]);
+  }, [isRunning, features.enableTimer, examDuration]);
 
   useEffect(() => {
     if (currentQuestion && isRunning) {
@@ -1265,14 +1281,14 @@ export function UnifiedTestSimulation({
                     {paper.code} - {paper.subject}
                   </h1>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {examMode === 'practice' ? 'Practice Mode' :
-                     examMode === 'timed' ? 'Timed Exam' : 'Review Mode'}
+                    {isQAMode ? 'QA Review Mode' : 'Simulation Preview'}
+                    {features.enableTimer && ' • Timer Active'}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center space-x-6">
-                {examMode === 'timed' && examDuration > 0 && (
+                {features.enableTimer && examDuration > 0 && (
                   <div className={cn(
                     "flex items-center space-x-2 px-4 py-2 rounded-lg",
                     timeElapsed > examDuration * 0.8 ? "bg-red-100 dark:bg-red-900/20" : "bg-blue-100 dark:bg-blue-900/20"
@@ -1326,7 +1342,7 @@ export function UnifiedTestSimulation({
                   </Tooltip>
                 )}
 
-                {!isRunning && examMode !== 'review' && (
+                {!isRunning && features.allowAnswerInput && (
                   <Button
                     onClick={startExam}
                     leftIcon={<Play className="h-4 w-4" />}
@@ -1354,7 +1370,7 @@ export function UnifiedTestSimulation({
                   </>
                 )}
 
-                {!isRunning && timeElapsed > 0 && examMode !== 'review' && (
+                {!isRunning && timeElapsed > 0 && features.allowAnswerInput && (
                   <Button
                     variant="outline"
                     onClick={resumeExam}
@@ -1437,40 +1453,56 @@ export function UnifiedTestSimulation({
 
                 {navigatorSize !== 'compact' && (
                   <>
-                    <div className="flex items-center space-x-2 mb-4">
-                      <button
-                        onClick={() => setExamMode('practice')}
-                        className={cn(
-                          "px-3 py-1 text-sm rounded-md transition-colors",
-                          examMode === 'practice'
-                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        )}
-                      >
-                        Practice
-                      </button>
-                      <button
-                        onClick={() => setExamMode('timed')}
-                        className={cn(
-                          "px-3 py-1 text-sm rounded-md transition-colors",
-                          examMode === 'timed'
-                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        )}
-                      >
-                        Timed
-                      </button>
-                      <button
-                        onClick={() => setExamMode('review')}
-                        className={cn(
-                          "px-3 py-1 text-sm rounded-md transition-colors",
-                          examMode === 'review'
-                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        )}
-                      >
-                        Review
-                      </button>
+                    {/* Unified Feature Toggles */}
+                    <div className="space-y-3 mb-4">
+                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                        Simulation Features
+                      </div>
+                      <label className="flex items-center justify-between space-x-2 group cursor-pointer">
+                        <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Enable Timer</span>
+                        <input
+                          type="checkbox"
+                          checked={features.enableTimer}
+                          onChange={(e) => setFeatures(prev => ({ ...prev, enableTimer: e.target.checked }))}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between space-x-2 group cursor-pointer">
+                        <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Show Hints</span>
+                        <input
+                          type="checkbox"
+                          checked={features.showHints}
+                          onChange={(e) => setFeatures(prev => ({ ...prev, showHints: e.target.checked }))}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between space-x-2 group cursor-pointer">
+                        <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Show Explanations</span>
+                        <input
+                          type="checkbox"
+                          checked={features.showExplanations}
+                          onChange={(e) => setFeatures(prev => ({ ...prev, showExplanations: e.target.checked }))}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between space-x-2 group cursor-pointer">
+                        <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Show Correct Answers</span>
+                        <input
+                          type="checkbox"
+                          checked={features.showCorrectAnswers}
+                          onChange={(e) => setFeatures(prev => ({ ...prev, showCorrectAnswers: e.target.checked }))}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between space-x-2 group cursor-pointer">
+                        <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Allow Answer Input</span>
+                        <input
+                          type="checkbox"
+                          checked={features.allowAnswerInput}
+                          onChange={(e) => setFeatures(prev => ({ ...prev, allowAnswerInput: e.target.checked }))}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
                     </div>
 
                     {isQAMode && (
@@ -1486,25 +1518,19 @@ export function UnifiedTestSimulation({
                       </div>
                     )}
 
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={showHints}
-                          onChange={(e) => setShowHints(e.target.checked)}
-                          className="rounded border-gray-300 dark:border-gray-600"
-                        />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Show hints</span>
-                      </label>
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={showExplanations}
-                          onChange={(e) => setShowExplanations(e.target.checked)}
-                          className="rounded border-gray-300 dark:border-gray-600"
-                        />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Show explanations</span>
-                      </label>
+                    {/* Feature status summary */}
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                        <p className="font-medium text-gray-700 dark:text-gray-300 mb-2">Active Features:</p>
+                        {features.enableTimer && <p className="flex items-center"><span className="mr-2">•</span> Timer enabled</p>}
+                        {features.showHints && <p className="flex items-center"><span className="mr-2">•</span> Hints visible</p>}
+                        {features.showExplanations && <p className="flex items-center"><span className="mr-2">•</span> Explanations visible</p>}
+                        {features.showCorrectAnswers && <p className="flex items-center"><span className="mr-2">•</span> Correct answers visible</p>}
+                        {features.allowAnswerInput && <p className="flex items-center"><span className="mr-2">•</span> Answer input enabled</p>}
+                        {!features.enableTimer && !features.showHints && !features.showExplanations && !features.showCorrectAnswers && !features.allowAnswerInput && (
+                          <p className="text-gray-400 dark:text-gray-500 italic">All features disabled</p>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
@@ -1676,7 +1702,7 @@ export function UnifiedTestSimulation({
                         </div>
                       )}
 
-                      {showHints && currentQuestion.hint && (
+                      {features.showHints && currentQuestion.hint && (
                         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                           <div className="flex items-start space-x-2">
                             <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
@@ -1702,10 +1728,10 @@ export function UnifiedTestSimulation({
                             }}
                             value={userAnswers[currentQuestion.id]?.answer}
                             onChange={(answer) => handleAnswerChange(currentQuestion.id, undefined, undefined, answer)}
-                            disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
-                            showHints={showHints}
-                            showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                            mode={isQAMode ? 'qa_preview' : examMode}
+                            disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
+                            showHints={features.showHints}
+                            showCorrectAnswer={features.showCorrectAnswers || isQAMode}
+                            mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
                           />
                         </div>
                       )}
@@ -1763,7 +1789,7 @@ export function UnifiedTestSimulation({
                                     </div>
                                   )}
 
-                                  {showHints && part.hint && (
+                                  {features.showHints && part.hint && (
                                     <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
                                       <div className="flex items-start space-x-2">
                                         <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
@@ -1784,10 +1810,10 @@ export function UnifiedTestSimulation({
                                     }}
                                     value={userAnswers[`${currentQuestion.id}-${part.id}`]?.answer}
                                     onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, undefined, answer)}
-                                    disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
-                                    showHints={showHints}
-                                    showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                                    mode={isQAMode ? 'qa_preview' : examMode}
+                                    disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
+                                    showHints={features.showHints}
+                                    showCorrectAnswer={features.showCorrectAnswers || isQAMode}
+                                    mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                   />
 
                                   {isQAMode && (
@@ -1826,7 +1852,7 @@ export function UnifiedTestSimulation({
                                                 <AttachmentGallery attachments={subpart.attachments} />
                                               )}
 
-                                              {showHints && subpart.hint && (
+                                              {features.showHints && subpart.hint && (
                                                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
                                                   <div className="flex items-start space-x-2">
                                                     <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
@@ -1849,10 +1875,10 @@ export function UnifiedTestSimulation({
                                                 }}
                                                 value={userAnswers[answerKey]?.answer}
                                                 onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, subpart.id, answer)}
-                                                disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
-                                                showHints={showHints}
-                                                showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                                                mode={isQAMode ? 'qa_preview' : examMode}
+                                                disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
+                                                showHints={features.showHints}
+                                                showCorrectAnswer={features.showCorrectAnswers || isQAMode}
+                                                mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                               />
 
                                               {isQAMode && (
@@ -1865,7 +1891,7 @@ export function UnifiedTestSimulation({
                                                 />
                                               )}
 
-                                              {showExplanations && subpart.explanation && (
+                                              {features.showExplanations && subpart.explanation && (
                                                 <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
                                                   <div className="flex items-start space-x-2">
                                                     <BookOpen className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5" />
@@ -1885,7 +1911,7 @@ export function UnifiedTestSimulation({
                                     </div>
                                   )}
 
-                                  {showExplanations && part.explanation && (
+                                  {features.showExplanations && part.explanation && (
                                     <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
                                       <div className="flex items-start space-x-2">
                                         <BookOpen className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5" />
@@ -1903,7 +1929,7 @@ export function UnifiedTestSimulation({
                         </div>
                       )}
 
-                      {showExplanations && currentQuestion.explanation && (
+                      {features.showExplanations && currentQuestion.explanation && (
                         <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                           <div className="flex items-start space-x-2">
                             <BookOpen className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
@@ -1939,11 +1965,9 @@ export function UnifiedTestSimulation({
                 Question {currentQuestionIndex + 1} of {paper.questions.length}
               </span>
 
-              {examMode !== 'review' && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Time: {formatTime(timeElapsed)}
-                </div>
-              )}
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Time: {formatTime(timeElapsed)}
+              </div>
             </div>
 
             <Button
