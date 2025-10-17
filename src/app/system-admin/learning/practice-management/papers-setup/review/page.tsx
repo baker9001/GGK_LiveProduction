@@ -38,7 +38,9 @@ export default function PaperSetupReviewPage() {
 
   const loadQuestionsFromSession = async () => {
     if (!sessionId) {
-      toast.error('No session ID provided');
+      toast.error('No session ID provided', {
+        id: 'papers-review-error',
+      });
       navigate('/system-admin/learning/practice-management/papers-setup');
       return;
     }
@@ -87,7 +89,9 @@ export default function PaperSetupReviewPage() {
       }));
     } catch (error) {
       console.error('Error loading questions:', error);
-      toast.error('Failed to load questions for review');
+      toast.error('Failed to load questions for review', {
+        id: 'papers-review-error',
+      });
       setState(prev => ({ ...prev, loading: false }));
     }
   };
@@ -148,7 +152,10 @@ export default function PaperSetupReviewPage() {
       );
 
       if (hasErrors) {
-        toast.error('Some questions have validation errors. Please review before saving.');
+        toast.error('Some questions have validation errors. Please review before saving.', {
+          id: 'papers-review-validation',
+          duration: 6000,
+        });
         setState(prev => ({ ...prev, saving: false }));
         return;
       }
@@ -171,11 +178,16 @@ export default function PaperSetupReviewPage() {
 
       if (updateError) throw updateError;
 
-      toast.success('All questions saved successfully');
+      toast.success('All questions saved successfully', {
+        id: 'papers-review-success',
+        duration: 3500,
+      });
       setState(prev => ({ ...prev, saving: false }));
     } catch (error) {
       console.error('Error saving questions:', error);
-      toast.error('Failed to save questions');
+      toast.error('Failed to save questions', {
+        id: 'papers-review-error',
+      });
       setState(prev => ({ ...prev, saving: false }));
     }
   };
@@ -187,12 +199,18 @@ export default function PaperSetupReviewPage() {
     );
 
     if (allValid) {
-      toast.success('All questions are valid');
+      toast.success('All questions are valid', {
+        id: 'papers-review-success',
+        duration: 3500,
+      });
     } else {
       const errorCount = Object.values(state.validationReports).filter(
         report => !report.isValid
       ).length;
-      toast.error(`${errorCount} question(s) have validation issues`);
+      toast.error(`${errorCount} question(s) have validation issues`, {
+        id: 'papers-review-validation',
+        duration: 6000,
+      });
     }
   };
 

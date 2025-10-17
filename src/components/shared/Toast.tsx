@@ -131,14 +131,60 @@ function renderToast(
   );
 }
 
+const activeTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+function registerAutoDismiss(toastId: string, duration: number) {
+  const existingTimeout = activeTimeouts.get(toastId);
+  if (existingTimeout) {
+    window.clearTimeout(existingTimeout);
+  }
+
+  const timeoutId = window.setTimeout(() => {
+    hotToast.dismiss(toastId);
+    activeTimeouts.delete(toastId);
+  }, duration + 150);
+
+  activeTimeouts.set(toastId, timeoutId);
+}
+
+function normalizeToastId(id: string | number | undefined, fallback: string) {
+  if (id === undefined || id === null) {
+    return fallback;
+  }
+  return String(id);
+}
+
 function showToast(variant: ToastVariant, message: string, options?: ToastShowOptions) {
-  return hotToast.custom(
+  const duration = options?.duration ?? defaultDurations[variant];
+  const toastId = hotToast.custom(
     (t) => renderToast(t, message, variant, options),
     {
       id: options?.id,
-      duration: options?.duration ?? defaultDurations[variant],
+      duration,
     },
   );
+
+  if (typeof window !== 'undefined' && Number.isFinite(duration)) {
+    const key = normalizeToastId(options?.id, toastId);
+    registerAutoDismiss(key, duration);
+  }
+
+  return toastId;
+}
+
+function clearToastTimeout(id?: string | number) {
+  if (id === undefined || id === null) {
+    activeTimeouts.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    activeTimeouts.clear();
+    return;
+  }
+
+  const key = String(id);
+  const timeoutId = activeTimeouts.get(key);
+  if (timeoutId) {
+    window.clearTimeout(timeoutId);
+    activeTimeouts.delete(key);
+  }
 }
 
 export const toast = {
@@ -148,7 +194,12 @@ export const toast = {
   warning: (message: string, options?: ToastShowOptions) => showToast('warning', message, options),
   loading: (message: string, options?: ToastShowOptions) => showToast('loading', message, options),
   promise: hotToast.promise,
-  dismiss: hotToast.dismiss,
+  dismiss: (id?: string | number) => {
+    if (typeof window !== 'undefined') {
+      clearToastTimeout(id);
+    }
+    return hotToast.dismiss(id);
+  },
   custom: hotToast.custom,
 };
 

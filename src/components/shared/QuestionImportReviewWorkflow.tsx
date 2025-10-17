@@ -1320,10 +1320,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
         }
       }));
 
-      toast.success(newReviewedState ? 'Question marked as reviewed' : 'Review status removed');
+      toast.success(
+        newReviewedState ? 'Question marked as reviewed' : 'Review status removed',
+        {
+          id: 'question-review-status',
+          duration: 3500,
+        },
+      );
     } catch (error) {
       console.error('Error updating review status:', error);
-      toast.error('Failed to update review status');
+      toast.error('Failed to update review status', {
+        id: 'question-review-error',
+      });
     }
   };
 
@@ -1334,7 +1342,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     );
 
     if (invalidQuestions.length > 0) {
-      toast.error(`${invalidQuestions.length} question(s) have missing required data. Please fix before starting test.`);
+      toast.error(
+        `${invalidQuestions.length} question(s) have missing required data. Please fix before starting test.`,
+        {
+          id: 'question-validation-error',
+          duration: 6000,
+        },
+      );
       console.error('Invalid questions:', invalidQuestions);
       return;
     }
@@ -1343,7 +1357,9 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     if (onRequestSimulation) {
       onRequestSimulation();
     } else {
-      toast.error('Simulation is not available in this context. Use the main test simulation button.');
+      toast.error('Simulation is not available in this context. Use the main test simulation button.', {
+        id: 'question-simulation-error',
+      });
     }
   };
 
