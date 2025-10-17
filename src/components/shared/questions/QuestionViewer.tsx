@@ -33,6 +33,8 @@ import {
 import { cn } from '../../../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../Tabs';
 import { Button } from '../Button';
+import { RichTextEditor } from '../RichTextEditor';
+import { sanitizeRichText } from '../../../utils/richText';
 import { toast } from '../Toast';
 import { supabase } from '../../../lib/supabase';
 import { MarkingSimulationPanel } from './MarkingSimulationPanel';
@@ -750,9 +752,10 @@ const QuestionBody: React.FC<{
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2">
             <BookOpen className="h-4 w-4" /> Question Stem
           </h4>
-          <p className="text-sm leading-relaxed text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
-            {question.question_text}
-          </p>
+          <div
+            className="text-sm leading-relaxed text-gray-900 dark:text-gray-100 rich-text-display space-y-2"
+            dangerouslySetInnerHTML={{ __html: sanitizeRichText(question.question_text) }}
+          />
         </div>
       )}
 
@@ -773,9 +776,10 @@ const QuestionBody: React.FC<{
                       {part.answer_format.replace('_', ' ')}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
-                    {part.question_text}
-                  </p>
+                  <div
+                    className="mt-2 text-sm text-gray-700 dark:text-gray-200 rich-text-display space-y-2"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.question_text ?? '') }}
+                  />
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold text-blue-600 dark:text-blue-300">{part.marks}</div>
@@ -785,7 +789,10 @@ const QuestionBody: React.FC<{
               {part.hint && (
                 <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
                   <Lightbulb className="mt-0.5 h-4 w-4" />
-                  <span>{part.hint}</span>
+                  <div
+                    className="rich-text-display"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.hint) }}
+                  />
                 </div>
               )}
             </div>
@@ -1414,14 +1421,18 @@ const AnswerArea: React.FC<AnswerAreaProps> = ({
                     <span>{evaluation?.feedback || (evaluation?.correct ? 'Correct' : 'Incorrect')}</span>
                   </div>
                   {showCorrectAnswers && part.explanation && (
-                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                      {part.explanation}
-                    </p>
+                    <div
+                      className="mt-2 text-xs text-gray-600 dark:text-gray-400 rich-text-display"
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.explanation) }}
+                    />
                   )}
                   {showCorrectAnswers && !part.explanation && part.correct_answers?.length > 0 && (
-                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                      Mark scheme: {part.correct_answers[0].answer}
-                    </p>
+                    <div
+                      className="mt-2 text-xs text-gray-600 dark:text-gray-400 rich-text-display"
+                      dangerouslySetInnerHTML={{
+                        __html: `Mark scheme: ${sanitizeRichText(part.correct_answers[0].answer ?? '')}`
+                      }}
+                    />
                   )}
                 </div>
               )}
@@ -1835,13 +1846,13 @@ export const QuestionViewer: React.FC<QuestionViewerProps> = ({
             </div>
           </div>
 
-          <div>
+          <div className="space-y-2">
             <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Question text</label>
-            <textarea
+            <RichTextEditor
               value={localQuestion.question_text || ''}
-              onChange={(event) => handleQuestionFieldChange('question_text', event.target.value)}
-              rows={5}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+              onChange={(content) => handleQuestionFieldChange('question_text', content)}
+              placeholder="Compose the question stem"
+              ariaLabel="Question text editor"
             />
           </div>
         </section>
@@ -1883,13 +1894,13 @@ export const QuestionViewer: React.FC<QuestionViewerProps> = ({
                     />
                   </div>
                 </div>
-                <div className="mt-3">
+                <div className="mt-3 space-y-2">
                   <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Part question</label>
-                  <textarea
-                    value={part.question_text}
-                    onChange={(event) => handlePartFieldChange(index, { question_text: event.target.value })}
-                    rows={3}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                  <RichTextEditor
+                    value={part.question_text ?? ''}
+                    onChange={(content) => handlePartFieldChange(index, { question_text: content })}
+                    placeholder="Write the part prompt"
+                    ariaLabel={`Part ${part.part || index + 1} question editor`}
                   />
                 </div>
               </div>

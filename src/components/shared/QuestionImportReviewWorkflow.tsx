@@ -24,7 +24,8 @@ import { UnifiedTestSimulation } from './UnifiedTestSimulation';
 import { supabase } from '../../lib/supabase';
 import { toast } from './Toast';
 import { cn } from '../../lib/utils';
-import { FormField, Input, Select, Textarea } from './FormField';
+import { FormField, Input, Select } from './FormField';
+import { RichTextEditor } from './RichTextEditor';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -707,11 +708,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                 label="Answer text"
                 className="mb-0"
               >
-                <Textarea
-                  id={`${config.keyPrefix}-answer-${index}-text`}
+                <RichTextEditor
                   value={answer?.answer ?? ''}
-                  onChange={event => config.onChange(index, { answer: event.target.value })}
-                  rows={3}
+                  onChange={(content) => config.onChange(index, { answer: content })}
+                  placeholder="Describe the expected answer or mark scheme"
+                  ariaLabel="Correct answer rich text editor"
+                  className="min-h-[160px]"
                 />
               </FormField>
               <FormField
@@ -868,11 +870,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                 label="Option text"
                 className="mb-0"
               >
-                <Textarea
-                  id={`${config.keyPrefix}-option-${index}-text`}
+                <RichTextEditor
                   value={option?.text ?? ''}
-                  onChange={event => config.onChange(index, { text: event.target.value })}
-                  rows={2}
+                  onChange={(content) => config.onChange(index, { text: content })}
+                  placeholder="Enter the option text"
+                  ariaLabel="Answer option rich text editor"
+                  className="min-h-[140px]"
                 />
               </FormField>
             </div>
@@ -1783,11 +1786,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         label="Question text"
                         className="mb-0 md:col-span-2 lg:col-span-3"
                       >
-                        <Textarea
-                          id={`${question.id}-question-text`}
-                          value={question.question_text}
-                          onChange={(event) => handleQuestionFieldChange(question, 'question_text', event.target.value)}
-                          rows={4}
+                        <RichTextEditor
+                          value={question.question_text ?? ''}
+                          onChange={(content) =>
+                            handleQuestionFieldChange(question, 'question_text', content as QuestionDisplayData['question_text'])
+                          }
+                          placeholder="Compose the full question stem..."
+                          ariaLabel="Question text editor"
                         />
                       </FormField>
 
@@ -1951,11 +1956,14 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         label="Hint"
                         className="mb-0 md:col-span-2 lg:col-span-3"
                       >
-                        <Textarea
-                          id={`${question.id}-hint`}
+                        <RichTextEditor
                           value={question.hint ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'hint', event.target.value)}
-                          rows={2}
+                          onChange={(content) =>
+                            handleQuestionFieldChange(question, 'hint', content as QuestionDisplayData['hint'])
+                          }
+                          placeholder="Add any hints that should appear for learners"
+                          ariaLabel="Hint rich text editor"
+                          className="min-h-[140px]"
                         />
                       </FormField>
 
@@ -1964,11 +1972,17 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         label="Explanation"
                         className="mb-0 md:col-span-2 lg:col-span-3"
                       >
-                        <Textarea
-                          id={`${question.id}-explanation`}
+                        <RichTextEditor
                           value={question.explanation ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'explanation', event.target.value)}
-                          rows={3}
+                          onChange={(content) =>
+                            handleQuestionFieldChange(
+                              question,
+                              'explanation',
+                              content as QuestionDisplayData['explanation']
+                            )
+                          }
+                          placeholder="Describe the full explanation or mark scheme guidance"
+                          ariaLabel="Explanation rich text editor"
                         />
                       </FormField>
 
@@ -2122,11 +2136,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                               label="Part question text"
                               className="mb-0"
                             >
-                              <Textarea
-                                id={`question-${question.id}-part-${partIndex}-text`}
+                              <RichTextEditor
                                 value={part.question_text ?? ''}
-                                onChange={(event) => handlePartFieldChange(question, partIndex, { question_text: event.target.value })}
-                                rows={3}
+                                onChange={(content) =>
+                                  handlePartFieldChange(question, partIndex, { question_text: content })
+                                }
+                                placeholder="Write the content for this part"
+                                ariaLabel="Part question text editor"
                               />
                             </FormField>
                             <div className="grid gap-3 md:grid-cols-2">
@@ -2169,11 +2185,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 label="Hint"
                                 className="mb-0"
                               >
-                                <Textarea
-                                  id={`question-${question.id}-part-${partIndex}-hint`}
+                                <RichTextEditor
                                   value={part.hint ?? ''}
-                                  onChange={(event) => handlePartFieldChange(question, partIndex, { hint: event.target.value })}
-                                  rows={2}
+                                  onChange={(content) => handlePartFieldChange(question, partIndex, { hint: content })}
+                                  placeholder="Optional hint for this part"
+                                  ariaLabel="Part hint editor"
+                                  className="min-h-[140px]"
                                 />
                               </FormField>
                               <FormField
@@ -2181,11 +2198,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 label="Explanation"
                                 className="mb-0"
                               >
-                                <Textarea
-                                  id={`question-${question.id}-part-${partIndex}-explanation`}
+                                <RichTextEditor
                                   value={part.explanation ?? ''}
-                                  onChange={(event) => handlePartFieldChange(question, partIndex, { explanation: event.target.value })}
-                                  rows={2}
+                                  onChange={(content) =>
+                                    handlePartFieldChange(question, partIndex, { explanation: content })
+                                  }
+                                  placeholder="Explain the answer expectations for this part"
+                                  ariaLabel="Part explanation editor"
                                 />
                               </FormField>
                             </div>
@@ -2321,15 +2340,15 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         label="Subpart question text"
                                         className="mb-0"
                                       >
-                                        <Textarea
-                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-text`}
+                                        <RichTextEditor
                                           value={subpart.question_text ?? ''}
-                                          onChange={(event) =>
+                                          onChange={(content) =>
                                             handleSubpartFieldChange(question, partIndex, subIndex, {
-                                              question_text: event.target.value
+                                              question_text: content
                                             })
                                           }
-                                          rows={2}
+                                          placeholder="Detail the prompt for this subpart"
+                                          ariaLabel="Subpart question text editor"
                                         />
                                       </FormField>
                                       <div className="grid gap-3 md:grid-cols-2">
