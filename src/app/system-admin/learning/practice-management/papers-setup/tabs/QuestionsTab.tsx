@@ -452,6 +452,23 @@ const guessMimeTypeFromSource = (source: string): string | undefined => {
   return mimeMap[extension];
 };
 
+const filterValidStructureItems = (items: any, context: string, issues?: string[]): any[] => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.filter((item, index) => {
+    const isValid = item !== null && typeof item === 'object';
+    if (!isValid) {
+      console.warn(`Skipping invalid ${context} at index ${index}:`, item);
+      if (issues) {
+        issues.push(`${context} ${index + 1} is missing or invalid.`);
+      }
+    }
+    return isValid;
+  });
+};
+
 const deriveFileNameFromUrl = (source: string): string | undefined => {
   if (!source || source.startsWith('data:')) {
     return undefined;
@@ -2671,8 +2688,30 @@ function QuestionsTabInner({
 
   const handleStartSimulation = () => {
     try {
+      const dataIssues: string[] = [];
       // Transform questions data for simulation format with dynamic fields support
-      const transformedQuestions = questions.map((q, qIndex) => {
+      const transformedQuestionsRaw = questions.map((q, qIndex): any | null => {
+        const questionLabel = q?.question_number || `Question ${qIndex + 1}`;
+        if (!q || typeof q !== 'object') {
+          console.warn(`Skipping invalid question at index ${qIndex}:`, q);
+          dataIssues.push(`${questionLabel} is missing required fields.`);
+          return null;
+        }
+
+        const validQuestionCorrectAnswers = filterValidStructureItems(
+          q.correct_answers,
+          `correct answer for ${questionLabel}`,
+          dataIssues
+        );
+        const validParts = filterValidStructureItems(
+          q.parts,
+          `part in ${questionLabel}`,
+          dataIssues
+        );
+        const questionOptions = Array.isArray(q.options)
+          ? q.options.filter(Boolean)
+          : [];
+
         const questionAttachments = mergeAttachmentSources(q.attachments, attachments[q.id], q.id);
 
         return {
@@ -2687,7 +2726,7 @@ function QuestionsTabInner({
           // Dynamic answer fields
           answer_format: q.answer_format,
           answer_requirement: q.answer_requirement,
-          correct_answers: q.correct_answers?.map(ans => ({
+          correct_answers: validQuestionCorrectAnswers.map(ans => ({
             answer: ans.answer,
             marks: ans.marks,
             alternative_id: ans.alternative_id,
@@ -2701,22 +2740,36 @@ function QuestionsTabInner({
             answer_requirement: ans.answer_requirement,
             total_alternatives: ans.total_alternatives
           })),
-          correct_answer: q.correct_answers?.[0]?.answer, // For MCQ compatibility
+          correct_answer: validQuestionCorrectAnswers[0]?.answer, // For MCQ compatibility
           total_alternatives: q.total_alternatives,
           subject: paperMetadata.subject, // Question-level subject context
           figure: q.figure, // Figure requirement flag
           unit_name: q.original_unit, // Unit/chapter context
           status: 'pending', // Initialize status
-          options: q.options?.map((opt, index) => ({
+          options: questionOptions.map((opt, index) => ({
             id: `opt_${index}`,
             label: opt.label || opt.option_label || String.fromCharCode(65 + index),
             option_text: opt.text,
             is_correct: opt.is_correct,
             order: index
           })),
-          parts: q.parts?.map((p, pIndex) => {
+          parts: validParts.map((p, pIndex) => {
             const partKey = generateAttachmentKey(q.id, pIndex);
             const partAttachments = mergeAttachmentSources(p.attachments, attachments[partKey], partKey);
+            const partLabel = p.part || `${String.fromCharCode(97 + pIndex)}.`;
+            const validPartCorrectAnswers = filterValidStructureItems(
+              p.correct_answers,
+              `correct answer for ${questionLabel} part ${partLabel}`,
+              dataIssues
+            );
+            const validSubparts = filterValidStructureItems(
+              p.subparts,
+              `subpart in ${questionLabel} part ${partLabel}`,
+              dataIssues
+            );
+            const partOptions = Array.isArray(p.options)
+              ? p.options.filter(Boolean)
+              : [];
 
             return {
               id: `${q.id}_p${pIndex}`,
@@ -2737,7 +2790,7 @@ function QuestionsTabInner({
               // Dynamic answer fields for parts
               answer_format: p.answer_format,
               answer_requirement: p.answer_requirement,
-              correct_answers: p.correct_answers?.map(ans => ({
+              correct_answers: validPartCorrectAnswers.map(ans => ({
                 answer: ans.answer,
                 marks: ans.marks,
                 alternative_id: ans.alternative_id,
@@ -2751,8 +2804,8 @@ function QuestionsTabInner({
                 answer_requirement: ans.answer_requirement,
                 total_alternatives: ans.total_alternatives
               })),
-              correct_answer: p.correct_answers?.[0]?.answer, // For MCQ compatibility
-              options: p.options?.map((opt, index) => ({
+              correct_answer: validPartCorrectAnswers[0]?.answer, // For MCQ compatibility
+              options: partOptions.map((opt, index) => ({
                 id: `opt_${index}`,
                 label: opt.label || opt.option_label || String.fromCharCode(65 + index),
                 option_text: opt.text,
@@ -2760,9 +2813,18 @@ function QuestionsTabInner({
                 order: index
               })),
               // Subparts support for complex questions
-              subparts: p.subparts?.map((sp, spIndex) => {
+              subparts: validSubparts.map((sp, spIndex) => {
                 const subpartKey = generateAttachmentKey(q.id, pIndex, spIndex);
                 const subpartAttachments = mergeAttachmentSources(sp.attachments, attachments[subpartKey], subpartKey);
+                const subpartLabel = sp.subpart || `(${spIndex + 1})`;
+                const validSubpartCorrectAnswers = filterValidStructureItems(
+                  sp.correct_answers,
+                  `correct answer for ${questionLabel} part ${partLabel} subpart ${subpartLabel}`,
+                  dataIssues
+                );
+                const subpartOptions = Array.isArray(sp.options)
+                  ? sp.options.filter(Boolean)
+                  : [];
 
                 return {
                   id: `${q.id}_p${pIndex}_s${spIndex}`,
@@ -2771,7 +2833,7 @@ function QuestionsTabInner({
                   marks: sp.marks,
                   answer_format: sp.answer_format,
                   answer_requirement: sp.answer_requirement,
-                  correct_answers: sp.correct_answers?.map(ans => ({
+                  correct_answers: validSubpartCorrectAnswers.map(ans => ({
                     answer: ans.answer,
                     marks: ans.marks,
                     alternative_id: ans.alternative_id,
@@ -2785,7 +2847,7 @@ function QuestionsTabInner({
                     answer_requirement: ans.answer_requirement,
                     total_alternatives: ans.total_alternatives
                   })),
-                  options: sp.options?.map((opt, index) => ({
+                  options: subpartOptions.map((opt, index) => ({
                     id: `opt_${index}`,
                     label: opt.label || opt.option_label || String.fromCharCode(65 + index),
                     option_text: opt.text || opt.option_text,
@@ -2821,6 +2883,23 @@ function QuestionsTabInner({
         };
       });
 
+      const transformedQuestions = transformedQuestionsRaw.filter(
+        (question): question is Record<string, any> => question !== null
+      );
+
+      if (transformedQuestions.length === 0) {
+        console.error('Simulation aborted: no valid questions after sanitization.', { dataIssues, questions });
+        toast.error('Unable to start the simulation because the question data is incomplete. Please review the imported JSON.');
+        return;
+      }
+
+      if (dataIssues.length > 0) {
+        const summary = dataIssues.length === 1
+          ? dataIssues[0]
+          : `${dataIssues.length} issues detected in the question data. First issue: ${dataIssues[0]}`;
+        toast.warning(`${summary} Check the console for the full list.`);
+      }
+
       const simulationPaper = {
         id: 'preview',
         code: paperMetadata.paper_code,
@@ -2850,7 +2929,12 @@ function QuestionsTabInner({
         questions: transformedQuestions,
 
       };
-      
+
+      console.info('Prepared simulation paper with sanitized data.', {
+        questionCount: transformedQuestions.length,
+        issuesFound: dataIssues
+      });
+
       setSimulationPaper(simulationPaper);
       setShowSimulation(true);
     } catch (error) {
