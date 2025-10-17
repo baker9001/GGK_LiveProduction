@@ -736,12 +736,12 @@ export default function ImportedStructureReview({
       }
 
       if (existingStructure) {
-        console.log('[GGK] Data structure already exists:', existingStructure.id);
+        console.log('[ImportedStructureReview] Data structure already exists:', existingStructure.id);
         setDataStructureId(existingStructure.id);
 
         // Store in metadata if onStructureChange is provided
         if (onStructureChange) {
-          onStructureChange({
+          const structureMetadata = {
             dataStructureId: existingStructure.id,
             program: program.name,
             provider: provider.name,
@@ -751,7 +751,11 @@ export default function ImportedStructureReview({
             providerId: provider.id,
             subjectId: subject.id,
             regionId: selectedRegionId
-          });
+          };
+          console.log('[ImportedStructureReview] Calling onStructureChange with:', structureMetadata);
+          onStructureChange(structureMetadata);
+        } else {
+          console.warn('[ImportedStructureReview] No onStructureChange callback provided');
         }
       } else {
         // Create new data structure
@@ -787,12 +791,12 @@ export default function ImportedStructureReview({
             variant: "error"
           });
         } else {
-          console.log('[GGK] Created new data structure:', newStructure.id);
+          console.log('[ImportedStructureReview] Created new data structure:', newStructure.id);
           setDataStructureId(newStructure.id);
 
           // Store in metadata if onStructureChange is provided
           if (onStructureChange) {
-            onStructureChange({
+            const structureMetadata = {
               dataStructureId: newStructure.id,
               program: program.name,
               provider: provider.name,
@@ -802,7 +806,11 @@ export default function ImportedStructureReview({
               providerId: provider.id,
               subjectId: subject.id,
               regionId: selectedRegionId
-            });
+            };
+            console.log('[ImportedStructureReview] Calling onStructureChange with:', structureMetadata);
+            onStructureChange(structureMetadata);
+          } else {
+            console.warn('[ImportedStructureReview] No onStructureChange callback provided');
           }
 
           showToast({
