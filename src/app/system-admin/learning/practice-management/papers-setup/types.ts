@@ -92,3 +92,91 @@ export interface QuestionSupportSummary {
     acceptsEquivalentPhrasing: boolean;
   };
 }
+
+export interface SimulationIssue {
+  questionId: string;
+  type: 'error' | 'warning' | 'info';
+  message: string;
+}
+
+export interface SimulationSummaryDifficultyStats {
+  total: number;
+  correct: number;
+  partial: number;
+  marks: number;
+  earnedMarks: number;
+}
+
+export interface SimulationSummaryTopicStats {
+  total: number;
+  correct: number;
+  partial: number;
+  marks: number;
+  earnedMarks: number;
+}
+
+export interface SimulationSummaryTypeStats {
+  total: number;
+  correct: number;
+  partial: number;
+}
+
+export interface SimulationSummaryStats {
+  totalQuestions: number;
+  attemptedQuestions: number;
+  unattemptedQuestions: number;
+  correctAnswers: number;
+  partiallyCorrectAnswers: number;
+  incorrectAnswers: number;
+  totalPossibleMarks: number;
+  earnedMarks: number;
+  percentage: number;
+  accuracy: number;
+  completionRate: number;
+  difficultyStats: Record<string, SimulationSummaryDifficultyStats>;
+  topicStats: Record<string, SimulationSummaryTopicStats>;
+  typeStats: Record<string, SimulationSummaryTypeStats>;
+}
+
+export interface SimulationQuestionPerformance {
+  questionId: string;
+  questionNumber?: string;
+  status: 'correct' | 'partial' | 'incorrect' | 'unattempted';
+  earnedMarks: number;
+  totalMarks: number;
+  timeSpent?: number;
+}
+
+export interface SimulationTimeInsights {
+  averagePerQuestion?: number;
+  fastestQuestionId?: string;
+  fastestTime?: number;
+  slowestQuestionId?: string;
+  slowestTime?: number;
+}
+
+export interface SimulationResult {
+  completed: boolean;
+  completedAt?: string;
+  flaggedQuestions: string[];
+  issues: SimulationIssue[];
+  recommendations: string[];
+  overallScore?: number;
+  timeSpent?: number;
+  timeSpentSeconds?: number;
+  summaryStats?: SimulationSummaryStats;
+  questionPerformance?: SimulationQuestionPerformance[];
+  timePerQuestion?: Record<string, number>;
+  timeInsights?: SimulationTimeInsights;
+  averageTimePerQuestion?: number;
+  accuracy?: number;
+  completionRate?: number;
+  totalQuestions?: number;
+  answeredCount?: number;
+  correctAnswers?: number;
+  partiallyCorrect?: number;
+  incorrectAnswers?: number;
+  totalMarks?: number;
+  earnedMarks?: number;
+  percentage?: number;
+}
