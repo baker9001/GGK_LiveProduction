@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../../lib/supabase';
 import { toast } from '../../../../../../components/shared/Toast';
 import type { PaperStatus } from '../../../../../../types/questions';
+import { deriveAnswerRequirement } from '../../../../../../lib/extraction/answerRequirementDeriver';
 
 interface UpdateFieldParams {
   id: string;
@@ -191,28 +192,30 @@ export function useQuestionMutations() {
           console.log(`Inserted ${insertedData?.length || 0} new answers`);
         }
 
-        // Update the answer_requirement and total_alternatives fields
+        // Use the comprehensive auto-fill logic to determine answer requirement
         const table = isSubQuestion ? 'sub_questions' : 'questions_master_admin';
-        let answerRequirement = 'single_choice';
 
-        if (correctAnswers.length > 1) {
-          // Determine answer requirement based on number of answers
-          const uniqueMarks = new Set(correctAnswers.map(ca => ca.marks || 1));
+        // Get the question's type and answer_format to help derive the requirement
+        const { data: questionData } = await supabase
+          .from(table)
+          .select('type, answer_format')
+          .eq('id', questionId)
+          .maybeSingle();
 
-          if (uniqueMarks.size === 1 && uniqueMarks.has(1)) {
-            // All answers have the same mark value of 1
-            if (correctAnswers.length === 2) {
-              answerRequirement = 'both_required';
-            } else if (correctAnswers.length <= 5) {
-              answerRequirement = `any_${Math.min(correctAnswers.length - 1, 3)}_from`;
-            } else {
-              answerRequirement = 'alternative_methods';
-            }
-          } else {
-            // Different mark values or not all 1
-            answerRequirement = 'all_required';
-          }
-        }
+        const derivedResult = deriveAnswerRequirement({
+          questionType: questionData?.type || 'descriptive',
+          answerFormat: questionData?.answer_format,
+          correctAnswers: correctAnswers.map(ca => ({
+            answer: ca.answer,
+            marks: ca.marks,
+            alternative_id: ca.alternative_id,
+            context: ca.context
+          })),
+          totalAlternatives: correctAnswers.length,
+          options: undefined
+        });
+
+        const answerRequirement = derivedResult.answerRequirement || 'single_choice';
 
         const { error: updateError } = await supabase
           .from(table)

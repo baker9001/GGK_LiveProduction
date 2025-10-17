@@ -5,6 +5,7 @@
  */
 
 import { QuestionDisplayData } from '../../components/shared/EnhancedQuestionDisplay';
+import { deriveAnswerRequirement } from './answerRequirementDeriver';
 
 interface ImportedQuestion {
   question_number: string | number;
@@ -108,6 +109,19 @@ export function transformImportedQuestion(
   // Get question text
   const questionText = imported.question_text || imported.question_description || '';
 
+  // Auto-fill answer_requirement if not provided
+  let answerRequirement = imported.answer_requirement;
+  if (!answerRequirement) {
+    const derivedResult = deriveAnswerRequirement({
+      questionType: questionType,
+      answerFormat: imported.answer_format,
+      correctAnswers: correctAnswers,
+      totalAlternatives: imported.total_alternatives,
+      options: options
+    });
+    answerRequirement = derivedResult.answerRequirement;
+  }
+
   return {
     id: `q-${questionNumber}`,
     question_number: questionNumber,
@@ -118,7 +132,7 @@ export function transformImportedQuestion(
     topic: imported.topic,
     subtopic: imported.subtopic,
     answer_format: imported.answer_format,
-    answer_requirement: imported.answer_requirement,
+    answer_requirement: answerRequirement,
     correct_answers: correctAnswers,
     options: options.length > 0 ? options : undefined,
     attachments: attachments.length > 0 ? attachments : undefined,
@@ -150,13 +164,26 @@ function transformQuestionPart(
 
   const attachments = processAttachments(part.attachments || []);
 
+  // Auto-fill answer_requirement if not provided
+  let answerRequirement = part.answer_requirement;
+  if (!answerRequirement) {
+    const derivedResult = deriveAnswerRequirement({
+      questionType: 'descriptive', // Parts are typically descriptive unless they have options
+      answerFormat: part.answer_format,
+      correctAnswers: correctAnswers,
+      totalAlternatives: part.total_alternatives,
+      options: options
+    });
+    answerRequirement = derivedResult.answerRequirement;
+  }
+
   return {
     id: partId,
     part_label: partLabel,
     question_text: part.question_text || part.question_description || '',
     marks: part.marks || 0,
     answer_format: part.answer_format,
-    answer_requirement: part.answer_requirement,
+    answer_requirement: answerRequirement,
     total_alternatives: part.total_alternatives,
     correct_answers: correctAnswers,
     options: options.length > 0 ? options : undefined,

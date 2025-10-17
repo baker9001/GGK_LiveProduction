@@ -26,6 +26,11 @@ import { toast } from './Toast';
 import { cn } from '../../lib/utils';
 import { FormField, Input, Select } from './FormField';
 import { RichTextEditor } from './RichTextEditor';
+import {
+  deriveAnswerRequirement,
+  getAnswerRequirementExplanation,
+  validateAnswerRequirement
+} from '../../lib/extraction/answerRequirementDeriver';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -340,12 +345,38 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     [commitQuestionUpdate, taxonomyMaps.subtopicsById, taxonomyMaps.topicsById, taxonomyMaps.unitsById]
   );
 
+  const autoFillAnswerRequirement = useCallback((question: QuestionDisplayData) => {
+    const result = deriveAnswerRequirement({
+      questionType: question.question_type,
+      answerFormat: question.answer_format,
+      correctAnswers: question.correct_answers,
+      totalAlternatives: question.total_alternatives,
+      options: question.options
+    });
+
+    return result.answerRequirement;
+  }, []);
+
   const handleQuestionFieldChange = <K extends keyof QuestionDisplayData>(
     question: QuestionDisplayData,
     field: K,
     value: QuestionDisplayData[K]
   ) => {
-    commitQuestionUpdate(question, { [field]: value } as Partial<QuestionDisplayData>);
+    const updates: Partial<QuestionDisplayData> = { [field]: value };
+
+    // Auto-fill answer_requirement when question_type or answer_format changes
+    if ((field === 'question_type' || field === 'answer_format') && !question.answer_requirement) {
+      const derivedRequirement = autoFillAnswerRequirement({
+        ...question,
+        ...updates
+      });
+
+      if (derivedRequirement) {
+        updates.answer_requirement = derivedRequirement;
+      }
+    }
+
+    commitQuestionUpdate(question, updates as Partial<QuestionDisplayData>);
   };
 
   const handleCorrectAnswerChange = (
@@ -356,19 +387,64 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     const answers = Array.isArray(question.correct_answers) ? [...question.correct_answers] : [];
     const existing = answers[index] || { answer: '' };
     answers[index] = { ...existing, ...updates };
-    commitQuestionUpdate(question, { correct_answers: answers });
+
+    const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
+
+    // Auto-fill answer_requirement if not set
+    if (!question.answer_requirement) {
+      const derivedRequirement = autoFillAnswerRequirement({
+        ...question,
+        correct_answers: answers
+      });
+
+      if (derivedRequirement) {
+        questionUpdates.answer_requirement = derivedRequirement;
+      }
+    }
+
+    commitQuestionUpdate(question, questionUpdates);
   };
 
   const handleAddCorrectAnswer = (question: QuestionDisplayData) => {
     const answers = Array.isArray(question.correct_answers) ? [...question.correct_answers] : [];
     answers.push({ answer: '', marks: answers.length > 0 ? answers[answers.length - 1]?.marks ?? 1 : 1 });
-    commitQuestionUpdate(question, { correct_answers: answers });
+
+    const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
+
+    // Auto-fill answer_requirement if not set
+    if (!question.answer_requirement) {
+      const derivedRequirement = autoFillAnswerRequirement({
+        ...question,
+        correct_answers: answers
+      });
+
+      if (derivedRequirement) {
+        questionUpdates.answer_requirement = derivedRequirement;
+      }
+    }
+
+    commitQuestionUpdate(question, questionUpdates);
   };
 
   const handleRemoveCorrectAnswer = (question: QuestionDisplayData, index: number) => {
     if (!question.correct_answers) return;
     const answers = question.correct_answers.filter((_, idx) => idx !== index);
-    commitQuestionUpdate(question, { correct_answers: answers });
+
+    const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
+
+    // Auto-fill answer_requirement if not set
+    if (!question.answer_requirement) {
+      const derivedRequirement = autoFillAnswerRequirement({
+        ...question,
+        correct_answers: answers
+      });
+
+      if (derivedRequirement) {
+        questionUpdates.answer_requirement = derivedRequirement;
+      }
+    }
+
+    commitQuestionUpdate(question, questionUpdates);
   };
 
   const handleOptionChange = (
