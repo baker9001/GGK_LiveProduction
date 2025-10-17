@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
+import { sanitizeRichText } from '../../utils/richText';
 
 interface CorrectAnswer {
   answer: string;
@@ -256,9 +257,12 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                 >
                   {option.label}
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900 dark:text-white">{option.text}</p>
-                </div>
+                    <div className="flex-1 rich-text-display text-sm text-gray-900 dark:text-white">
+                      <div
+                        className="space-y-1"
+                        dangerouslySetInnerHTML={{ __html: sanitizeRichText(option.text) }}
+                      />
+                    </div>
                 {showAnswers && option.is_correct && highlightCorrect && (
                   <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                 )}
@@ -310,14 +314,15 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                     <div className="flex items-start gap-3">
                       <Award className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                          {answer.answer}
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <div
+                            className="text-sm font-medium text-green-900 dark:text-green-100 rich-text-display"
+                            dangerouslySetInnerHTML={{ __html: sanitizeRichText(answer.answer) }}
+                          />
                           {answer.unit && (
-                            <span className="ml-2 text-green-700 dark:text-green-300">
-                              ({answer.unit})
-                            </span>
+                            <span className="text-sm text-green-700 dark:text-green-300">({answer.unit})</span>
                           )}
-                        </p>
+                        </div>
                         {answer.marks !== undefined && (
                           <p className="text-xs text-green-700 dark:text-green-300 mt-1">
                             {answer.marks} mark{answer.marks !== 1 ? 's' : ''}
@@ -342,7 +347,13 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                             </p>
                             <ul className="text-xs text-green-600 dark:text-green-400 space-y-0.5">
                               {answer.acceptable_variations.map((variation, vIdx) => (
-                                <li key={vIdx}>• {variation}</li>
+                                <li key={vIdx} className="flex items-start gap-1">
+                                  <span>•</span>
+                                  <div
+                                    className="flex-1 rich-text-display"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(variation) }}
+                                  />
+                                </li>
                               ))}
                             </ul>
                           </div>
@@ -523,9 +534,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                 Part {part.part_label}
               </p>
               {!isExpanded && part.question_text && (
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">
-                  {part.question_text}
-                </p>
+                <div
+                  className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-1 rich-text-display"
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.question_text) }}
+                />
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -547,9 +559,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
             {/* Question Text */}
             {part.question_text && (
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-                  {part.question_text}
-                </p>
+                <div
+                  className="text-sm text-gray-900 dark:text-white rich-text-display space-y-2"
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.question_text) }}
+                />
               </div>
             )}
 
@@ -691,7 +704,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                   <Lightbulb className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-100 mb-1">Hint</p>
-                    <p className="text-xs text-yellow-800 dark:text-yellow-200">{part.hint}</p>
+                    <div
+                      className="text-xs text-yellow-800 dark:text-yellow-200 rich-text-display"
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.hint) }}
+                    />
                   </div>
                 </div>
               </div>
@@ -704,7 +720,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                   <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">Explanation</p>
-                    <p className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">{part.explanation}</p>
+                    <div
+                      className="text-xs text-blue-800 dark:text-blue-200 rich-text-display"
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.explanation) }}
+                    />
                   </div>
                 </div>
               </div>
@@ -772,9 +791,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
       {/* Question Text */}
       <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-        <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-          {question.question_text}
-        </p>
+        <div
+          className="text-sm text-gray-900 dark:text-white rich-text-display space-y-2"
+          dangerouslySetInnerHTML={{ __html: sanitizeRichText(question.question_text) }}
+        />
       </div>
 
       {/* Attachments */}
@@ -818,9 +838,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
           </button>
           {expandedSections.hint && (
             <div className="bg-yellow-50 dark:bg-yellow-900/10 px-4 py-3 border-t border-yellow-200 dark:border-yellow-800">
-              <p className="text-sm text-yellow-900 dark:text-yellow-100">
-                {question.hint}
-              </p>
+              <div
+                className="text-sm text-yellow-900 dark:text-yellow-100 rich-text-display"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(question.hint) }}
+              />
             </div>
           )}
         </div>
@@ -847,9 +868,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
           </button>
           {expandedSections.explanation && (
             <div className="bg-blue-50 dark:bg-blue-900/10 px-4 py-3 border-t border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap">
-                {question.explanation}
-              </p>
+              <div
+                className="text-sm text-blue-900 dark:text-blue-100 rich-text-display"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(question.explanation) }}
+              />
             </div>
           )}
         </div>
@@ -876,9 +898,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
           </button>
           {expandedSections.markingCriteria && (
             <div className="bg-purple-50 dark:bg-purple-900/10 px-4 py-3 border-t border-purple-200 dark:border-purple-800">
-              <p className="text-sm text-purple-900 dark:text-purple-100 whitespace-pre-wrap">
-                {question.marking_criteria}
-              </p>
+              <div
+                className="text-sm text-purple-900 dark:text-purple-100 rich-text-display"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(question.marking_criteria) }}
+              />
             </div>
           )}
         </div>
