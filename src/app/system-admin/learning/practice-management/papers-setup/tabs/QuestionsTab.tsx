@@ -649,6 +649,53 @@ function QuestionsTabInner({
   });
   const [reviewWorkflowLoading, setReviewWorkflowLoading] = useState<boolean>(questions.length > 0);
 
+  const activeSnippingQuestionLabel = useMemo(() => {
+    if (!attachmentTarget) {
+      return null;
+    }
+
+    const question = questions.find(q => q.id === attachmentTarget.questionId);
+    if (!question) {
+      return null;
+    }
+
+    const questionNumber = question.question_number;
+    let label: string;
+
+    if (questionNumber !== undefined && questionNumber !== null && questionNumber !== '') {
+      label = `Question ${questionNumber}`;
+    } else {
+      label = `Question ${attachmentTarget.questionId}`;
+    }
+
+    if (typeof attachmentTarget.partIndex === 'number' && Array.isArray(question.parts)) {
+      const part = question.parts[attachmentTarget.partIndex];
+      if (part) {
+        const partLabelRaw = part.part?.trim();
+        const partLabel = partLabelRaw
+          ? (/^part\s+/i.test(partLabelRaw) ? partLabelRaw : `Part ${partLabelRaw}`)
+          : `Part ${attachmentTarget.partIndex + 1}`;
+        label = `${label} · ${partLabel}`;
+
+        if (
+          typeof attachmentTarget.subpartIndex === 'number' &&
+          Array.isArray(part.subparts)
+        ) {
+          const subpart = part.subparts[attachmentTarget.subpartIndex];
+          if (subpart) {
+            const subpartLabelRaw = subpart.subpart?.trim();
+            const subpartLabel = subpartLabelRaw
+              ? (/^subpart\s+/i.test(subpartLabelRaw) ? subpartLabelRaw : `Subpart ${subpartLabelRaw}`)
+              : `Subpart ${attachmentTarget.subpartIndex + 1}`;
+            label = `${label} · ${subpartLabel}`;
+          }
+        }
+      }
+    }
+
+    return label;
+  }, [attachmentTarget, questions]);
+
   useEffect(() => {
     if (questions.length > 0) {
       setReviewWorkflowLoading(true);
@@ -4771,6 +4818,7 @@ function QuestionsTabInner({
                 setShowSnippingTool(false);
                 setAttachmentTarget(null);
               }}
+              questionLabel={activeSnippingQuestionLabel ?? undefined}
             />
           </div>
         </div>
