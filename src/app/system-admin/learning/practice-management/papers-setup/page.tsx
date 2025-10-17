@@ -1182,7 +1182,10 @@ export default function PapersSetupPage() {
         setTabStatuses(newStatuses);
         
         // Show notification
-        toast.success('Previous import session restored');
+        toast.success('Previous import session restored', {
+          id: 'papers-setup-session-status',
+          duration: 3500,
+        });
         
         // Update subject-specific rules based on parsed data
         if (data.raw_json?.subject) {
@@ -1288,7 +1291,10 @@ export default function PapersSetupPage() {
             : location.pathname;
           navigate(newUrl, { replace: true });
 
-          toast.info('Previous session was closed. Starting a new import.');
+          toast.info('Previous session was closed. Starting a new import.', {
+            id: 'papers-setup-session-status',
+            duration: 4000,
+          });
           setIsLoadingSession(false);
           return;
         }
@@ -1344,7 +1350,9 @@ export default function PapersSetupPage() {
       }
     } catch (error) {
       console.error('Error loading import session:', error);
-      toast.error('Failed to load import session');
+      toast.error('Failed to load import session', {
+        id: 'papers-setup-session-error',
+      });
 
       // Clear URL parameters on error
       const params = new URLSearchParams(location.search);
@@ -1406,7 +1414,10 @@ export default function PapersSetupPage() {
         console.error('JSON transformation error:', transformError);
         // Fall back to original if transformation fails
         setParsedData(jsonData);
-        toast.warning('Some questions may not display correctly');
+        toast.warning('Some questions may not display correctly', {
+          id: 'papers-setup-session-warning',
+          duration: 4500,
+        });
       }
       
       // Generate hash for duplicate detection
@@ -1424,7 +1435,10 @@ export default function PapersSetupPage() {
         if (exactDuplicate) {
           // Silently use existing session for exact duplicate
           setImportSession(exactDuplicate);
-          toast.info('Resuming existing import session with identical content');
+          toast.info('Resuming existing import session with identical content', {
+            id: 'papers-setup-session-status',
+            duration: 4000,
+          });
           
           // Update URL with session ID
           const params = new URLSearchParams(location.search);
@@ -1480,7 +1494,10 @@ export default function PapersSetupPage() {
           if (!createNew) {
             // Use the existing similar session
             setImportSession(similarSession);
-            toast.info('Using existing import session for this paper');
+            toast.info('Using existing import session for this paper', {
+              id: 'papers-setup-session-status',
+              duration: 4000,
+            });
             
             // Update URL with session ID
             const params = new URLSearchParams(location.search);
@@ -1548,7 +1565,10 @@ export default function PapersSetupPage() {
         structure: 'active',
       }));
       
-      toast.success('File uploaded successfully');
+      toast.success('File uploaded successfully', {
+        id: 'papers-setup-upload-status',
+        duration: 3500,
+      });
       
       // Auto-navigate to structure tab
       handleTabChange('structure', { message: 'Preparing academic structure review...' });
@@ -1580,7 +1600,9 @@ export default function PapersSetupPage() {
       }
       
       setError(errorMessage);
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        id: 'papers-setup-upload-error',
+      });
       setTabStatuses(prev => ({
         ...prev,
         upload: 'error',
@@ -1728,7 +1750,9 @@ export default function PapersSetupPage() {
       handleTabChange('questions', { message: 'Preparing questions review...' });
     } catch (error) {
       console.error('Error in handleMetadataSave:', error);
-      toast.error('Failed to save metadata. Please try again.');
+      toast.error('Failed to save metadata. Please try again.', {
+        id: 'papers-setup-metadata-error',
+      });
     }
   };
 
