@@ -92,6 +92,88 @@ export const ensureArray = (value: any): any[] => {
   return [value];
 };
 
+// Attachment validation and normalization
+export interface AttachmentAsset {
+  id: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+  file_size?: number;
+  description?: string;
+}
+
+export const normalizeAttachment = (att: any, index: number = 0): AttachmentAsset | null => {
+  // Handle string attachments (descriptions from JSON)
+  if (typeof att === 'string') {
+    const trimmedDesc = att.trim();
+    if (!trimmedDesc) return null;
+
+    console.warn(`[Attachment Validation] String attachment detected: "${trimmedDesc.substring(0, 50)}..."`);
+
+    // Create placeholder attachment with description
+    return {
+      id: `placeholder_${Date.now()}_${index}`,
+      file_url: '', // Empty URL indicates manual upload needed
+      file_name: `Attachment ${index + 1}: ${trimmedDesc.substring(0, 50)}`,
+      file_type: 'text/description',
+      file_size: 0,
+      description: trimmedDesc
+    };
+  }
+
+  // Handle object attachments
+  if (typeof att === 'object' && att !== null) {
+    // Validate required fields
+    if (!att.file_url || typeof att.file_url !== 'string' || att.file_url.trim() === '') {
+      console.warn('[Attachment Validation] Invalid attachment: missing or empty file_url', att);
+
+      // If there's a description, treat as description-only attachment
+      if (att.description && typeof att.description === 'string') {
+        return {
+          id: att.id || `placeholder_${Date.now()}_${index}`,
+          file_url: '',
+          file_name: att.file_name || `Description ${index + 1}`,
+          file_type: 'text/description',
+          file_size: 0,
+          description: att.description
+        };
+      }
+
+      return null;
+    }
+
+    // Valid attachment object
+    return {
+      id: att.id || `attachment_${Date.now()}_${index}`,
+      file_url: att.file_url.trim(),
+      file_name: att.file_name || att.fileName || `attachment_${index + 1}`,
+      file_type: att.file_type || att.fileType || 'application/octet-stream',
+      file_size: att.file_size || att.fileSize || 0,
+      description: att.description
+    };
+  }
+
+  // Invalid type
+  console.warn('[Attachment Validation] Invalid attachment type:', typeof att, att);
+  return null;
+};
+
+export const normalizeAttachments = (attachments: any): AttachmentAsset[] => {
+  if (!attachments) return [];
+
+  const attachmentArray = ensureArray(attachments);
+  const normalized: AttachmentAsset[] = [];
+
+  attachmentArray.forEach((att, index) => {
+    const normalizedAtt = normalizeAttachment(att, index);
+    if (normalizedAtt) {
+      normalized.push(normalizedAtt);
+    }
+  });
+
+  return normalized;
+};
+
 const normalizeId = (value: any): string => {
   if (value === null || value === undefined) return '';
   return String(value);

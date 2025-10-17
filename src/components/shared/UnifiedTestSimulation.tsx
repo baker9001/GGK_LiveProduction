@@ -23,6 +23,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   AlertCircle,
+  AlertTriangle,
   BarChart3,
   TrendingUp
 } from 'lucide-react';
@@ -300,8 +301,40 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
     <>
       <div className="space-y-6">
         {attachments.map((attachment, index) => {
+          // Check if attachment has valid file_url
+          const hasValidUrl = attachment.file_url && attachment.file_url.trim() !== '';
+          const isDescriptionOnly = !hasValidUrl && attachment.file_type === 'text/description';
           const isImage = attachment.file_type?.startsWith('image/');
-          const id = attachment.id || `${attachment.file_url}-${index}`;
+          const id = attachment.id || `attachment-${index}`;
+
+          // Handle description-only attachments (placeholders)
+          if (isDescriptionOnly || !hasValidUrl) {
+            return (
+              <div
+                key={id}
+                className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-1">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                      {attachment.file_name || 'Attachment Description'}
+                    </h4>
+                    {(attachment as any).description && (
+                      <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">
+                        {(attachment as any).description}
+                      </p>
+                    )}
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      ⚠️ This attachment requires a file to be uploaded. Currently showing description only.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div
@@ -324,6 +357,21 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
                         src={attachment.file_url}
                         alt={attachment.file_name || 'Attachment preview'}
                         className="w-full max-h-[520px] object-contain"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          const parent = target.parentElement;
+                          if (parent) {
+                            target.style.display = 'none';
+                            parent.innerHTML = `
+                              <div class="flex items-center justify-center h-48 bg-red-50 dark:bg-red-900/20">
+                                <div class="text-center p-4">
+                                  <p class="text-sm font-medium text-red-800 dark:text-red-200">Failed to load image</p>
+                                  <p class="text-xs text-red-600 dark:text-red-400 mt-1">${attachment.file_name}</p>
+                                </div>
+                              </div>
+                            `;
+                          }
+                        }}
                       />
 
                       <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/60 p-2 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
