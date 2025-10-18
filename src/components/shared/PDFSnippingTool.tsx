@@ -65,8 +65,7 @@ export function PDFSnippingTool({
   const hasAppliedInitialViewStateRef = useRef(false);
   const lastEmittedViewStateRef = useRef<{ page: number; scale: number } | null>(null);
   const isInternalUpdateRef = useRef(false);
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(false);
+  const lastExternalViewStateRef = useRef<{ page: number; scale: number } | null>(null);
 
   const clampPage = (value: number, total: number) => {
     if (!Number.isFinite(value)) {
@@ -94,8 +93,11 @@ export function PDFSnippingTool({
         setPdfDocument(pdf);
         setTotalPages(pdf.numPages);
         const desiredPage = clampPage(initialViewStateRef.current.page, pdf.numPages);
+        const desiredScale = initialViewStateRef.current.scale;
+
         setCurrentPage(desiredPage);
-        setScale(initialViewStateRef.current.scale);
+        setScale(desiredScale);
+        lastExternalViewStateRef.current = { page: desiredPage, scale: desiredScale };
         hasAppliedInitialViewStateRef.current = true;
 
         onErrorChange?.(false, null);
@@ -167,6 +169,7 @@ export function PDFSnippingTool({
       page: initialPage ?? DEFAULT_PAGE,
       scale: initialScale ?? DEFAULT_SCALE
     };
+    lastExternalViewStateRef.current = null;
     hasAppliedInitialViewStateRef.current = false;
 
     const fetchAndLoadPdf = async () => {
@@ -310,59 +313,33 @@ export function PDFSnippingTool({
     fetchAndLoadPdf();
   }, [pdfUrl]);
 
-  // CONSOLIDATED view state management - prevents circular updates
+  // Sync internal state with external view state updates without causing loops
   useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
-      return;
-    }
-
     if (!pdfDocument || !hasAppliedInitialViewStateRef.current || isInternalUpdateRef.current) {
       return;
     }
 
-    // Clear any pending timeout
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-    }
+    const nextPage = typeof initialPage === 'number'
+      ? clampPage(initialPage, totalPages || initialPage)
+      : currentPage;
+    const nextScale = typeof initialScale === 'number'
+      ? initialScale
+      : scale;
 
-    // Only update if the initial props are significantly different from current state
-    // This prevents circular updates when the component emits its own state changes
-    const pageChanged = typeof initialPage === 'number' && initialPage !== currentPage;
-    const scaleChanged = typeof initialScale === 'number' && Math.abs(initialScale - scale) > 0.001;
-
-    // Don't update if values haven't changed
-    if (!pageChanged && !scaleChanged) {
+    const lastExternal = lastExternalViewStateRef.current;
+    if (
+      lastExternal &&
+      lastExternal.page === nextPage &&
+      Math.abs(lastExternal.scale - nextScale) < 0.001
+    ) {
       return;
     }
 
-    // Debounce external prop changes to prevent rapid updates
-    updateTimeoutRef.current = setTimeout(() => {
-      let needsUpdate = false;
-      let newPage = currentPage;
-      let newScale = scale;
+    lastExternalViewStateRef.current = { page: nextPage, scale: nextScale };
 
-      if (pageChanged) {
-        const clamped = clampPage(initialPage!, totalPages || initialPage!);
-        if (clamped !== currentPage) {
-          newPage = clamped;
-          needsUpdate = true;
-        }
-      }
-
-      if (scaleChanged) {
-        newScale = initialScale!;
-        needsUpdate = true;
-      }
-
-      if (needsUpdate) {
-        if (newPage !== currentPage) setCurrentPage(newPage);
-        if (newScale !== scale) setScale(newScale);
-      }
-
-      updateTimeoutRef.current = null;
-    }, 100);
-  }, [initialPage, initialScale, pdfDocument, totalPages, currentPage, scale]);
+    setCurrentPage(prev => (prev !== nextPage ? nextPage : prev));
+    setScale(prev => (Math.abs(prev - nextScale) > 0.001 ? nextScale : prev));
+  }, [initialPage, initialScale, pdfDocument, totalPages]);
   
   // Render the current page
   useEffect(() => {
@@ -664,15 +641,6 @@ export function PDFSnippingTool({
       return () => clearTimeout(timer);
     }
   }, [currentPage, scale, pdfDocument]);
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const isDefaultView = currentPage === DEFAULT_PAGE && Math.abs(scale - DEFAULT_SCALE) < 0.001;
   
