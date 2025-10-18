@@ -15,7 +15,8 @@ import {
   Wand2,
   RefreshCw,
   Square,
-  Archive
+  Archive,
+  Trash2
 } from 'lucide-react';
 import { Button } from '../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
@@ -28,6 +29,8 @@ import { useQuestionMutations } from '../hooks/useQuestionMutations';
 import { useQuestionBatchOperations } from '../hooks/useQuestionBatchOperations';
 import { toast } from '../../../../../../components/shared/Toast';
 import { FullPageQuestionReview } from './FullPageQuestionReview';
+import { supabase } from '../../../../../../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PaperCardProps {
   paper: GroupedPaper;
@@ -64,6 +67,7 @@ export function PaperCard({
   const [isArchiveConfirmationActive, setIsArchiveConfirmationActive] = useState(false);
   const archiveConfirmationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
+  const queryClient = useQueryClient();
   const { getValidationSummary, canConfirmPaper, validateForConfirmation } = useQuestionValidation();
   const {
     confirmQuestion,
@@ -176,6 +180,45 @@ export function PaperCard({
     await autoAssignDifficulty.mutateAsync(paper.id);
   };
   
+  const handleBatchDelete = async () => {
+    const selectedQuestionsList = paper.questions.filter(q => selectedQuestions.has(q.id));
+
+    if (selectedQuestionsList.length === 0) {
+      toast.error('No questions selected for deletion');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ${selectedQuestionsList.length} question${selectedQuestionsList.length > 1 ? 's' : ''}? This action cannot be undone.`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const deletePromises = selectedQuestionsList.map(question =>
+        supabase
+          .from('questions_master_admin')
+          .delete()
+          .eq('id', question.id)
+      );
+
+      const results = await Promise.all(deletePromises);
+      const errors = results.filter(r => r.error);
+
+      if (errors.length > 0) {
+        console.error('Errors deleting questions:', errors);
+        toast.error(`Failed to delete ${errors.length} question${errors.length > 1 ? 's' : ''}`);
+      } else {
+        toast.success(`Successfully deleted ${selectedQuestionsList.length} question${selectedQuestionsList.length > 1 ? 's' : ''}`);
+        setSelectedQuestions(new Set());
+        queryClient.invalidateQueries({ queryKey: ['questions'] });
+      }
+    } catch (error) {
+      console.error('Error during batch delete:', error);
+      toast.error('Failed to delete questions');
+    }
+  };
+
   const handleAutoFillAllSubtopics = async () => {
     if (isAutoFillingAll) return;
     
@@ -732,6 +775,15 @@ export function PaperCard({
                           className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
                         >
                           Confirm Selected
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleBatchDelete}
+                          leftIcon={<Trash2 className="h-3 w-3" />}
+                          className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+                        >
+                          Delete Selected
                         </Button>
                         <Button
                           size="sm"
