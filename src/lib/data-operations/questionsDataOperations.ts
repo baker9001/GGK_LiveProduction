@@ -2,6 +2,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/shared/Toast';
+import { validateMCQPaper, logValidationResults } from '@/lib/extraction/optionDataValidator';
 
 // ===== TYPES =====
 export interface QuestionMapping {
@@ -1621,13 +1622,21 @@ export const insertSubQuestion = async (
           const optionLabel = option.label || String.fromCharCode(65 + idx); // A, B, C, D...
           const isCorrect = option.is_correct || (part.correct_answer === optionLabel) || false;
 
+          // Enhanced option data capture - populate ALL available fields
           return {
             sub_question_id: subQuestionRecord.id,
             option_text: optionText,
             label: optionLabel,
-            text: optionText,
             is_correct: isCorrect,
-            order: idx
+            order: idx,
+            // NEW: Capture explanation field for learning value
+            explanation: ensureString(option.explanation) || null,
+            // NEW: Capture image reference if option has associated image
+            image_id: option.image_id ? getUUIDFromMapping(option.image_id) : null,
+            // NEW: Capture context metadata for analytics
+            context_type: ensureString(option.context_type || option.context?.type) || null,
+            context_value: ensureString(option.context_value || option.context?.value) || null,
+            context_label: ensureString(option.context_label || option.context?.label) || null
           };
         });
 
@@ -1640,6 +1649,15 @@ export const insertSubQuestion = async (
         console.error(`❌ Error inserting sub-question ${partLabel} options:`, optionsError);
       } else {
         console.log(`✅ Successfully inserted ${insertedOptions?.length || 0} options for sub-question ${partLabel}`);
+        // Log data completeness for quality monitoring
+        const withExplanation = insertedOptions?.filter((opt: any) => opt.explanation).length || 0;
+        const withContext = insertedOptions?.filter((opt: any) => opt.context_type).length || 0;
+        if (withExplanation < insertedOptions?.length!) {
+          console.warn(`⚠️ Sub-question ${partLabel}: ${insertedOptions?.length! - withExplanation} options missing explanations`);
+        }
+        if (withContext < insertedOptions?.length!) {
+          console.warn(`⚠️ Sub-question ${partLabel}: ${insertedOptions?.length! - withContext} options missing context metadata`);
+        }
       }
     }
 
@@ -1853,6 +1871,25 @@ export const importQuestions = async (params: {
     console.log('Existing question numbers:', Array.from(existingQuestionNumbers));
     console.log('Attachments keys:', Object.keys(attachments || {}));
     console.log('Mappings count:', Object.keys(mappings || {}).length);
+
+    // ============================================================================
+    // MCQ OPTION DATA VALIDATION - Prevent Data Loss
+    // ============================================================================
+    console.log('\n========================================');
+    console.log('🔍 VALIDATING MCQ OPTION DATA COMPLETENESS');
+    console.log('========================================');
+
+    const validationSummary = validateMCQPaper({ questions });
+    logValidationResults(validationSummary);
+
+    // Warn if critical data is missing but allow import to continue
+    if (validationSummary.averageCompletenessScore < 70) {
+      console.warn('⚠️ WARNING: MCQ options have low data completeness. Consider enriching JSON with explanations and context metadata.');
+    }
+
+    if (validationSummary.errors.length > 0) {
+      console.error('❌ CRITICAL: Found structural errors in MCQ options. Review errors above before proceeding.');
+    }
 
     // Verify authentication
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -2134,13 +2171,21 @@ export const importQuestions = async (params: {
 
               console.log(`   Option ${optionLabel}: "${optionText.substring(0, 50)}..." (correct: ${isCorrect})`);
 
+              // Enhanced option data capture - populate ALL available fields
               return {
                 question_id: insertedQuestion.id,
                 option_text: optionText,
                 label: optionLabel,
-                text: optionText,
                 is_correct: isCorrect,
-                order: index
+                order: index,
+                // NEW: Capture explanation field for learning value
+                explanation: ensureString(option.explanation) || null,
+                // NEW: Capture image reference if option has associated image
+                image_id: option.image_id ? getUUIDFromMapping(option.image_id) : null,
+                // NEW: Capture context metadata for analytics
+                context_type: ensureString(option.context_type || option.context?.type) || null,
+                context_value: ensureString(option.context_value || option.context?.value) || null,
+                context_label: ensureString(option.context_label || option.context?.label) || null
               };
             });
 
@@ -2154,6 +2199,15 @@ export const importQuestions = async (params: {
               console.error('❌ Error inserting options:', optionsError);
             } else {
               console.log(`✅ Successfully inserted ${insertedOptions?.length || 0} options`);
+              // Log data completeness for quality monitoring
+              const withExplanation = insertedOptions?.filter((opt: any) => opt.explanation).length || 0;
+              const withContext = insertedOptions?.filter((opt: any) => opt.context_type).length || 0;
+              if (withExplanation < insertedOptions?.length!) {
+                console.warn(`⚠️ ${insertedOptions?.length! - withExplanation} options missing explanations (reduced learning value)`);
+              }
+              if (withContext < insertedOptions?.length!) {
+                console.warn(`⚠️ ${insertedOptions?.length! - withContext} options missing context metadata (analytics incomplete)`);
+              }
             }
           }
         } else if (normalizedType === 'mcq') {
