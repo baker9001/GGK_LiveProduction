@@ -1510,7 +1510,9 @@ export const insertSubQuestion = async (
       answer_format: partAnswerFormat,
       answer_requirement: ensureString(part.answer_requirement) || null,
       total_alternatives: part.total_alternatives || null,
-      correct_answer: ensureString(part.correct_answer) || null
+      correct_answer: ensureString(part.correct_answer) || null,
+      // P1 FIX: Populate figure_required field for sub-questions
+      figure_required: requiresFigure(part)
     };
 
     const { data: subQuestionRecord, error: subError } = await supabase
@@ -1689,6 +1691,10 @@ export const insertSubQuestion = async (
     if (partAttachments.length > 0) {
       console.log(`[Attachment] Inserting ${partAttachments.length} attachment(s) for sub-question ${subQuestionRecord.id} (${partLabel})`);
 
+      // Get authenticated user ID for audit fields (once, outside map)
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const attachmentUserId = currentSession?.user?.id || null;
+
       const attachmentsToInsert = partAttachments
         .filter((att: any) => {
           if (!att.file_url || att.file_url.trim() === '') {
@@ -1702,7 +1708,10 @@ export const insertSubQuestion = async (
           file_url: att.file_url.trim(),
           file_name: att.file_name || att.fileName || 'attachment',
           file_type: att.file_type || att.fileType || 'image/png',
-          file_size: att.file_size || att.fileSize || 0
+          file_size: att.file_size || att.fileSize || 0,
+          // P1 FIX: Populate attachment audit fields
+          uploaded_by: attachmentUserId,
+          uploaded_at: new Date().toISOString()
         }));
 
       if (attachmentsToInsert.length > 0) {
@@ -1967,6 +1976,10 @@ export const importQuestions = async (params: {
         console.log('   Normalized type:', normalizedType);
         console.log('   Has options:', question.options ? question.options.length : 0);
 
+        // Get authenticated user ID for audit fields
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const currentUserId = session?.user?.id || null;
+
         const questionData = {
           paper_id: paperId,
           data_structure_id: dataStructureInfo.id,
@@ -1995,7 +2008,13 @@ export const importQuestions = async (params: {
           answer_format: questionAnswerFormat,
           answer_requirement: ensureString(question.answer_requirement) || null,
           total_alternatives: question.total_alternatives || null,
-          correct_answer: ensureString(question.correct_answer) || null
+          correct_answer: ensureString(question.correct_answer) || null,
+          // P1 FIX: Populate figure_required field
+          figure_required: requiresFigure(question),
+          // P1 FIX: Populate audit trail fields
+          created_by: currentUserId,
+          updated_by: currentUserId,
+          updated_at: new Date().toISOString()
         };
 
         console.log('📝 Question data prepared for insertion:');
@@ -2173,12 +2192,34 @@ export const importQuestions = async (params: {
             file_url: att.file_url,
             file_name: att.file_name || att.fileName,
             file_type: att.file_type || 'image/png',
-            file_size: att.file_size || 0
+            file_size: att.file_size || 0,
+            // P1 FIX: Populate attachment audit fields
+            uploaded_by: currentUserId,
+            uploaded_at: new Date().toISOString()
           }));
 
-          await supabase
+          const { data: insertedAttachments, error: attachError } = await supabase
             .from('questions_attachments')
-            .insert(attachmentsToInsert);
+            .insert(attachmentsToInsert)
+            .select();
+
+          if (attachError) {
+            console.error('Error inserting question attachments:', attachError);
+          }
+
+          // P1 FIX: Set figure_file_id to first attachment if question has figure
+          if (insertedAttachments && insertedAttachments.length > 0 && question.figure) {
+            const { error: figureUpdateError } = await supabase
+              .from('questions_master_admin')
+              .update({ figure_file_id: insertedAttachments[0].id })
+              .eq('id', insertedQuestion.id);
+
+            if (figureUpdateError) {
+              console.error('Error setting figure_file_id:', figureUpdateError);
+            } else {
+              console.log(`✅ Set figure_file_id to ${insertedAttachments[0].id} for question ${questionNumber}`);
+            }
+          }
         }
 
         importedQuestions.push(insertedQuestion);
