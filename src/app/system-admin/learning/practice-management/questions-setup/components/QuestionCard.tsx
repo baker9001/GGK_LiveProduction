@@ -14,6 +14,7 @@ import {
 import { Button } from '../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { EditableField, EditableOption } from './EditableField';
+import { RichTextEditorField } from './RichTextEditorField';
 import { AttachmentManager } from './AttachmentManager';
 import { CorrectAnswersDisplay } from './CorrectAnswersDisplay';
 import { Question, SubQuestion } from '../page';
@@ -742,14 +743,16 @@ export function QuestionCard({
           </h4>
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-700 p-6 rounded-xl border border-gray-200 dark:border-gray-600 shadow-sm">
-              <EditableField
+              <RichTextEditorField
                 value={question.question_description}
                 onSave={(value) => handleFieldUpdate('question_description', value)}
-                type="richtext"
                 minLength={10}
                 required
                 disabled={readOnly}
                 className="text-base leading-relaxed text-gray-900 dark:text-white"
+                placeholder="Describe the question..."
+                ariaLabel={`Question ${question.question_number} description editor`}
+                saveLabel="Save description"
               />
             </div>
             
@@ -863,15 +866,16 @@ export function QuestionCard({
               Hint:
             </h4>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
-              <EditableField
+              <RichTextEditorField
                 value={question.hint || ''}
                 onSave={(value) => handleFieldUpdate('hint', value)}
-                type="richtext"
                 placeholder="Add a hint to help students..."
                 minLength={5}
                 required
                 disabled={readOnly}
                 className="text-base leading-relaxed text-gray-900 dark:text-white"
+                ariaLabel={`Question ${question.question_number} hint editor`}
+                saveLabel="Save hint"
               />
             </div>
           </div>
@@ -882,15 +886,16 @@ export function QuestionCard({
               Explanation:
             </h4>
             <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
-              <EditableField
+              <RichTextEditorField
                 value={question.explanation || ''}
                 onSave={(value) => handleFieldUpdate('explanation', value)}
-                type="richtext"
                 placeholder="Explain the correct answer..."
                 minLength={10}
                 required
                 disabled={readOnly}
                 className="text-base leading-relaxed text-gray-900 dark:text-white"
+                ariaLabel={`Question ${question.question_number} explanation editor`}
+                saveLabel="Save explanation"
               />
             </div>
           </div>
@@ -943,7 +948,7 @@ export function QuestionCard({
           expandedParts ? "max-h-[100000px] p-6 bg-gray-50 dark:bg-gray-800/30" : "max-h-0"
         )}>
           <div className="space-y-4">
-            {question.parts.map((subQuestion) => {
+            {question.parts.map((subQuestion, partIndex) => {
               const subNeedsAttachmentWarning = subQuestionNeedsAttachment(subQuestion);
 
               return (
@@ -1003,14 +1008,16 @@ export function QuestionCard({
                 
                 <div className="p-6 space-y-4">
                   <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                    <EditableField
+                    <RichTextEditorField
                       value={subQuestion.question_description}
                       onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'question_description', value)}
-                      type="richtext"
                       minLength={10}
                       required
                       disabled={readOnly}
                       className="text-base leading-relaxed text-gray-900 dark:text-white"
+                      placeholder="Describe this part of the question..."
+                      ariaLabel={`Part ${subQuestion.part_label || partIndex + 1} description editor`}
+                      saveLabel="Save part description"
                     />
                   </div>
                   
@@ -1175,31 +1182,33 @@ export function QuestionCard({
                         Hint
                       </label>
                       <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <EditableField
+                        <RichTextEditorField
                           value={subQuestion.hint || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'hint', value)}
-                          type="richtext"
                           placeholder="Add a hint..."
                           minLength={5}
                           disabled={readOnly}
                           className="text-sm leading-relaxed text-gray-900 dark:text-white"
+                          ariaLabel={`Part ${subQuestion.part_label || partIndex + 1} hint editor`}
+                          saveLabel="Save hint"
                         />
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
                         Explanation
                       </label>
                       <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
-                        <EditableField
+                        <RichTextEditorField
                           value={subQuestion.explanation || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'explanation', value)}
-                          type="richtext"
                           placeholder="Explain the answer..."
                           minLength={10}
                           disabled={readOnly}
                           className="text-sm leading-relaxed text-gray-900 dark:text-white"
+                          ariaLabel={`Part ${subQuestion.part_label || partIndex + 1} explanation editor`}
+                          saveLabel="Save explanation"
                         />
                       </div>
                     </div>
