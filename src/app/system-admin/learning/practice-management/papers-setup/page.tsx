@@ -1655,7 +1655,13 @@ export default function PapersSetupPage() {
     setIsTabTransitioning(true);
     setPendingTab(null);
 
-    navigate('/system-admin/learning/practice-management/questions-setup');
+    try {
+      console.log('Navigating to questions setup page after successful import');
+      navigate('/app/system-admin/learning/practice-management/questions-setup');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      toast.error('Failed to navigate to questions page. Please refresh and try again.');
+    }
   };
 
   const handleTabChange = useCallback((tabId: string, options?: { message?: string }) => {
