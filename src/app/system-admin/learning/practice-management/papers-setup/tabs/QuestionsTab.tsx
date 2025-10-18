@@ -2544,6 +2544,18 @@ function QuestionsTabInner({
       console.log('Questions count:', questions.length);
       console.log('Paper metadata:', paperMetadata);
       console.log('Attachments available:', Object.keys(attachments).length);
+      console.log('Attachment keys:', Object.keys(attachments));
+
+      // Debug: Log attachment details
+      Object.entries(attachments).forEach(([key, atts]) => {
+        console.log(`Attachments for ${key}:`, atts.map(a => ({
+          id: a.id,
+          file_name: a.file_name,
+          file_url_length: a.file_url?.length || 0,
+          file_url_preview: a.file_url?.substring(0, 100) + '...',
+          file_type: a.file_type
+        })));
+      });
 
       const dataIssues: string[] = [];
       const questionValidationErrors: Record<string, string[]> = {};
@@ -2642,6 +2654,17 @@ function QuestionsTabInner({
           : [];
 
         const questionAttachments = mergeAttachmentSources(q.attachments, attachments[q.id], q.id);
+
+        // Debug: Log merged attachments for this question
+        if (questionAttachments.length > 0) {
+          console.log(`Question ${q.question_number} attachments:`, questionAttachments.map(a => ({
+            id: a.id,
+            file_name: a.file_name,
+            file_url_length: a.file_url?.length || 0,
+            file_url_starts_with: a.file_url?.substring(0, 30),
+            file_type: a.file_type
+          })));
+        }
 
         return {
           id: q.id,
@@ -2908,14 +2931,47 @@ function QuestionsTabInner({
             mathematics: paperMetadata.subject?.toLowerCase().includes('math')
           }
         },
-        questions: transformedQuestions,
-
+        questions: transformedQuestions
       };
+
+      // Verify attachments are properly included
+      let totalAttachmentsCount = 0;
+      simulationPaper.questions.forEach(q => {
+        if (q.attachments) totalAttachmentsCount += q.attachments.length;
+        if (q.parts) {
+          q.parts.forEach((p: any) => {
+            if (p.attachments) totalAttachmentsCount += p.attachments.length;
+            if (p.subparts) {
+              p.subparts.forEach((sp: any) => {
+                if (sp.attachments) totalAttachmentsCount += sp.attachments.length;
+              });
+            }
+          });
+        }
+      });
+      console.log('Total attachments in simulation paper:', totalAttachmentsCount);
 
       console.info('Prepared simulation paper with sanitized data.', {
         questionCount: transformedQuestions.length,
-        issuesFound: dataIssues
+        issuesFound: dataIssues,
+        questionsWithAttachments: transformedQuestions.filter(q => q.attachments && q.attachments.length > 0).length
       });
+
+      // Debug: Log first question's attachments in detail
+      const firstQuestionWithAttachments = transformedQuestions.find(q => q.attachments && q.attachments.length > 0);
+      if (firstQuestionWithAttachments) {
+        console.log('First question with attachments:', {
+          question_number: firstQuestionWithAttachments.question_number,
+          attachments: firstQuestionWithAttachments.attachments.map(a => ({
+            id: a.id,
+            file_name: a.file_name,
+            file_type: a.file_type,
+            file_url_length: a.file_url?.length,
+            file_url_is_data_url: a.file_url?.startsWith('data:'),
+            file_url_preview: a.file_url?.substring(0, 100)
+          }))
+        });
+      }
 
       console.log('=== SIMULATION PAPER CREATED SUCCESSFULLY ===');
       console.log('Simulation paper:', {

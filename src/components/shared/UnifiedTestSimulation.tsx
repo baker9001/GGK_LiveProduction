@@ -360,17 +360,35 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           const parent = target.parentElement;
+                          console.error('Failed to load attachment image:', {
+                            file_name: attachment.file_name,
+                            file_url_length: attachment.file_url?.length,
+                            file_url_starts_with: attachment.file_url?.substring(0, 100),
+                            is_data_url: attachment.file_url?.startsWith('data:'),
+                            error: e
+                          });
                           if (parent) {
                             target.style.display = 'none';
+                            const isDataUrl = attachment.file_url?.startsWith('data:');
+                            const urlLength = attachment.file_url?.length || 0;
                             parent.innerHTML = `
-                              <div class="flex items-center justify-center h-48 bg-red-50 dark:bg-red-900/20">
+                              <div class="flex items-center justify-center h-48 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg">
                                 <div class="text-center p-4">
-                                  <p class="text-sm font-medium text-red-800 dark:text-red-200">Failed to load image</p>
+                                  <p class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Failed to load image</p>
                                   <p class="text-xs text-red-600 dark:text-red-400 mt-1">${attachment.file_name}</p>
+                                  <p class="text-[10px] text-red-500 dark:text-red-500 mt-2">Type: ${isDataUrl ? 'Data URL' : 'Remote URL'} • Size: ${urlLength} chars</p>
+                                  <p class="text-[10px] text-red-500 dark:text-red-500 mt-1">Check browser console for details</p>
                                 </div>
                               </div>
                             `;
                           }
+                        }}
+                        onLoad={() => {
+                          console.log('Successfully loaded attachment:', {
+                            file_name: attachment.file_name,
+                            file_url_length: attachment.file_url?.length,
+                            is_data_url: attachment.file_url?.startsWith('data:')
+                          });
                         }}
                       />
 
