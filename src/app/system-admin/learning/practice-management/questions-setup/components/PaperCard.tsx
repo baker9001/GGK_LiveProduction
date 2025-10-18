@@ -23,7 +23,7 @@ import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { QuestionCard } from './QuestionCard';
 import { cn } from '../../../../../../lib/utils';
 import { GroupedPaper, Question, SubQuestion } from '../page';
-import { getPaperStatusLabel, getQuestionStatusLabel, questionNeedsAttachment } from '../utils/questionHelpers';
+import { getPaperStatusLabel, getQuestionStatusLabel, questionNeedsAttachment, naturalSort } from '../utils/questionHelpers';
 import { useQuestionValidation } from '../hooks/useQuestionValidation';
 import { useQuestionMutations } from '../hooks/useQuestionMutations';
 import { useQuestionBatchOperations } from '../hooks/useQuestionBatchOperations';
@@ -933,7 +933,7 @@ export function PaperCard({
             {/* Questions Container */}
             <div className="p-4 space-y-6 max-h-[calc(100vh-280px)] overflow-y-auto bg-gray-50 dark:bg-gray-900/50">
               {paper.questions
-                .sort((a, b) => parseInt(a.question_number) - parseInt(b.question_number))
+                .sort((a, b) => naturalSort(a.question_number, b.question_number))
                 .map((question, questionIndex) => (
                   <div key={question.id} className="relative">
                     {/* Selection Checkbox */}

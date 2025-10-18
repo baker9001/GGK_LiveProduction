@@ -68,3 +68,49 @@ export const getPaperStatusLabel = (status: string) => {
   }
 };
 
+/**
+ * Natural sort function for question numbers
+ * Handles alphanumeric sorting correctly (1, 2, 3, ..., 10, 11 AND 1a, 1b, 2a, 2b)
+ * @param a First question number
+ * @param b Second question number
+ * @returns Sort comparison result
+ */
+export const naturalSort = (a: string, b: string): number => {
+  // Split strings into numeric and text parts
+  const regex = /(\d+)|(\D+)/g;
+  const aParts = a.match(regex) || [];
+  const bParts = b.match(regex) || [];
+
+  const maxLength = Math.max(aParts.length, bParts.length);
+
+  for (let i = 0; i < maxLength; i++) {
+    const aPart = aParts[i] || '';
+    const bPart = bParts[i] || '';
+
+    // If one part is missing, the shorter one comes first
+    if (!aPart) return -1;
+    if (!bPart) return 1;
+
+    const aIsNum = /^\d+$/.test(aPart);
+    const bIsNum = /^\d+$/.test(bPart);
+
+    if (aIsNum && bIsNum) {
+      // Both are numbers, compare numerically
+      const diff = parseInt(aPart, 10) - parseInt(bPart, 10);
+      if (diff !== 0) return diff;
+    } else if (aIsNum) {
+      // Numbers come before text
+      return -1;
+    } else if (bIsNum) {
+      // Text comes after numbers
+      return 1;
+    } else {
+      // Both are text, compare alphabetically
+      const textCompare = aPart.localeCompare(bPart);
+      if (textCompare !== 0) return textCompare;
+    }
+  }
+
+  return 0;
+};
+
