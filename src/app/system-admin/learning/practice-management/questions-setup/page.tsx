@@ -938,7 +938,7 @@ export default function QuestionsSetupPage() {
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         {papers.map((paper) => (
           <PaperCard
             key={paper.id}
@@ -959,19 +959,20 @@ export default function QuestionsSetupPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-full">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2" data-testid="page-title">
-            Questions Setup & QA
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Review and manage exam questions
-            {isQAMode && <span className="ml-2 text-blue-600 dark:text-blue-400">(QA Mode)</span>}
-          </p>
+    <div className="px-4 sm:px-6 lg:px-8 py-6">
+      <div className="space-y-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="page-title flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2" data-testid="page-title">
+              Questions Setup & QA
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Review and manage exam questions
+              {isQAMode && <span className="ml-2 text-blue-600 dark:text-blue-400">(QA Mode)</span>}
+            </p>
+          </div>
         </div>
-      </div>
 
       {/* Progress Overview Card */}
       {filteredPapers.length > 0 && (
@@ -1029,20 +1030,29 @@ export default function QuestionsSetupPage() {
 
       {/* Main Content with Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="analytics" className="flex items-center">
+        <TabsList className="w-full flex-wrap gap-3">
+          <TabsTrigger value="analytics" className="flex-1 min-w-[200px]">
             <BarChart3 className="h-4 w-4 mr-2" />
             Analytics
           </TabsTrigger>
-          <TabsTrigger value="qa" className="flex items-center text-orange-600 dark:text-orange-400">
+          <TabsTrigger
+            value="qa"
+            className="flex-1 min-w-[200px] text-orange-600 dark:text-orange-400"
+          >
             <AlertTriangle className="h-4 w-4 mr-2" />
             Under QA ({underQAPapers.length})
           </TabsTrigger>
-          <TabsTrigger value="published" className="flex items-center text-green-600 dark:text-green-400">
+          <TabsTrigger
+            value="published"
+            className="flex-1 min-w-[200px] text-green-600 dark:text-green-400"
+          >
             <CheckCircle className="h-4 w-4 mr-2" />
             Published Papers ({publishedPapers.length})
           </TabsTrigger>
-          <TabsTrigger value="archived" className="flex items-center text-gray-600 dark:text-gray-400">
+          <TabsTrigger
+            value="archived"
+            className="flex-1 min-w-[200px] text-gray-600 dark:text-gray-400"
+          >
             <Archive className="h-4 w-4 mr-2" />
             Archived ({archivedPapers.length})
           </TabsTrigger>
@@ -1122,14 +1132,15 @@ export default function QuestionsSetupPage() {
         </TabsContent>
       </Tabs>
       
-      {/* Quick Action Toolbar */}
-      <QuickActionToolbar
-        onScrollToTop={handleScrollToTop}
-        onRefresh={() => refetch()}
-        onShowAnalytics={() => setActiveTab('analytics')}
-        onBulkImport={() => toast.info('Bulk import feature coming soon')}
-        onBulkExport={handleBulkExport}
-      />
+        {/* Quick Action Toolbar */}
+        <QuickActionToolbar
+          onScrollToTop={handleScrollToTop}
+          onRefresh={() => refetch()}
+          onShowAnalytics={() => setActiveTab('analytics')}
+          onBulkImport={() => toast.info('Bulk import feature coming soon')}
+          onBulkExport={handleBulkExport}
+        />
+      </div>
     </div>
   );
 }
