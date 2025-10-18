@@ -114,6 +114,7 @@ interface QuestionImportReviewWorkflowProps {
   requireSimulation?: boolean;
   onQuestionUpdate?: (questionId: string, updates: Partial<QuestionDisplayData>) => void;
   onRequestSnippingTool?: (questionId: string) => void;
+  onRequestAttachmentDelete?: (attachmentKey: string, attachmentId: string) => void;
   onRequestSimulation?: () => void;
   simulationResults?: SimulationResults | null;
   simulationCompleted?: boolean;
@@ -133,6 +134,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   requireSimulation = false,
   onQuestionUpdate,
   onRequestSnippingTool,
+  onRequestAttachmentDelete,
   onRequestSimulation,
   simulationResults: externalSimulationResults,
   simulationCompleted: externalSimulationCompleted = false,
@@ -2560,6 +2562,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                       compact={false}
                       highlightCorrect={true}
                       defaultExpandedSections={{ hint: true, explanation: true }}
+                      onAttachmentRemove={onRequestAttachmentDelete}
                     />
                   </section>
                 </div>

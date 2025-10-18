@@ -418,6 +418,10 @@ type SimulationAttachment = {
   file_url: string;
   file_name: string;
   file_type: string;
+  source?: 'primary' | 'secondary';
+  attachmentKey?: string;
+  canDelete?: boolean;
+  originalId?: string;
 };
 
 const guessMimeTypeFromSource = (source: string): string | undefined => {
@@ -485,7 +489,11 @@ const deriveFileNameFromUrl = (source: string): string | undefined => {
 const normalizeAttachmentForSimulation = (
   attachment: any,
   fallbackPrefix: string,
-  index: number
+  index: number,
+  options: {
+    source?: 'primary' | 'secondary';
+    attachmentKey?: string;
+  } = {}
 ): SimulationAttachment | null => {
   if (!attachment) {
     return null;
@@ -504,7 +512,10 @@ const normalizeAttachmentForSimulation = (
       id: `${fallbackPrefix}_att_${index}`,
       file_url: trimmed,
       file_name: fileName,
-      file_type: fileType
+      file_type: fileType,
+      source: options.source,
+      attachmentKey: options.attachmentKey,
+      canDelete: options.source === 'secondary'
     };
   }
 
@@ -543,11 +554,21 @@ const normalizeAttachmentForSimulation = (
   const resolvedType = typeCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)?.trim();
   const fileType = resolvedType || guessMimeTypeFromSource(fileUrl) || 'image/png';
 
+  const originalIdValue = attachment.id ?? attachment.attachmentId;
+  const originalId =
+    typeof originalIdValue === 'string' || typeof originalIdValue === 'number'
+      ? String(originalIdValue)
+      : undefined;
+
   return {
-    id: String(attachment.id ?? `${fallbackPrefix}_att_${index}`),
+    id: originalId ?? `${fallbackPrefix}_att_${index}`,
     file_url: fileUrl,
     file_name: fileName,
-    file_type: fileType
+    file_type: fileType,
+    source: options.source,
+    attachmentKey: options.attachmentKey,
+    canDelete: options.source === 'secondary',
+    originalId
   };
 };
 
@@ -559,19 +580,25 @@ const mergeAttachmentSources = (
   const primaryArray = ensureArray(primary);
   const secondaryArray = ensureArray(secondary);
   const combined = [
-    ...primaryArray.map((item, index) => ({ item, index })),
-    ...secondaryArray.map((item, index) => ({ item, index: index + primaryArray.length }))
+    ...primaryArray.map((item, index) => ({ item, index, source: 'primary' as const })),
+    ...secondaryArray.map((item, index) => ({ item, index: index + primaryArray.length, source: 'secondary' as const }))
   ];
 
   const seen = new Set<string>();
 
-  return combined.reduce<SimulationAttachment[]>((acc, { item, index }) => {
-    const normalized = normalizeAttachmentForSimulation(item, fallbackPrefix, index);
+  return combined.reduce<SimulationAttachment[]>((acc, { item, index, source }) => {
+    const normalized = normalizeAttachmentForSimulation(item, fallbackPrefix, index, {
+      source,
+      attachmentKey: source === 'secondary' ? fallbackPrefix : undefined
+    });
 
     if (normalized) {
       const dedupeKey = `${normalized.file_url}::${normalized.file_name}`;
       if (!seen.has(dedupeKey)) {
         seen.add(dedupeKey);
+        if (normalized.canDelete && !normalized.attachmentKey) {
+          normalized.attachmentKey = fallbackPrefix;
+        }
         acc.push(normalized);
       }
     }
@@ -4767,6 +4794,11 @@ function QuestionsTabInner({
         requireSimulation={true}
         onQuestionUpdate={handleQuestionUpdateFromReview}
         onRequestSnippingTool={handleRequestSnippingTool}
+        onRequestAttachmentDelete={(attachmentKey, attachmentId) => {
+          if (attachmentKey && attachmentId) {
+            setDeleteAttachmentConfirm({ key: attachmentKey, attachmentId });
+          }
+        }}
         onRequestSimulation={handleStartSimulation}
         simulationResults={simulationResult ? {
           totalQuestions: simulationResult.totalQuestions,

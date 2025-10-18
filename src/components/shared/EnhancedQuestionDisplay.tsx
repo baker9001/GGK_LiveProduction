@@ -13,7 +13,8 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
-  Award
+  Award,
+  Trash2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
@@ -48,6 +49,10 @@ interface Attachment {
   data?: string;
   file_name?: string;
   file_type?: string;
+  attachmentKey?: string;
+  canDelete?: boolean;
+  source?: 'primary' | 'secondary';
+  originalId?: string | number;
 }
 
 export interface QuestionPart {
@@ -109,6 +114,7 @@ interface EnhancedQuestionDisplayProps {
   compact?: boolean;
   highlightCorrect?: boolean;
   defaultExpandedSections?: ExpandedSectionsConfig;
+  onAttachmentRemove?: (attachmentKey: string, attachmentId: string) => void;
 }
 
 export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = ({
@@ -119,7 +125,8 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
   showAttachments = true,
   compact = false,
   highlightCorrect = true,
-  defaultExpandedSections
+  defaultExpandedSections,
+  onAttachmentRemove
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     hint: defaultExpandedSections?.hint ?? false,
@@ -130,6 +137,153 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const handleAttachmentPreviewKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    onPreview: () => void
+  ) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onPreview();
+    }
+  };
+
+  const getAttachmentRemovalId = (attachment: Attachment): string | null => {
+    const candidate = attachment.originalId ?? attachment.id;
+    if (candidate === undefined || candidate === null) {
+      return null;
+    }
+    return typeof candidate === 'string' ? candidate : String(candidate);
+  };
+
+  const renderAttachmentCard = (
+    attachment: Attachment,
+    index: number,
+    variant: 'question' | 'part' = 'question'
+  ): React.ReactNode => {
+    const imageSrc = resolveAttachmentSource(attachment);
+    const isImage = isImageAttachment(attachment, imageSrc);
+    const fallbackLabel = attachment.file_name || `Attachment ${index + 1}`;
+    const removalKey = attachment.attachmentKey;
+    const removalId = getAttachmentRemovalId(attachment);
+    const fallbackWidthClass = variant === 'question' ? 'min-w-[200px]' : 'min-w-[160px]';
+    const canRemove = Boolean(
+      onAttachmentRemove &&
+        attachment.canDelete &&
+        removalKey &&
+        removalId
+    );
+
+    const handleRemove = (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+      if (canRemove && removalKey && removalId) {
+        onAttachmentRemove?.(removalKey, removalId);
+      }
+    };
+
+    const commonRemoveButton =
+      canRemove && (
+        <button
+          type="button"
+          onClick={handleRemove}
+          className="absolute top-2 right-2 rounded-full bg-white/95 dark:bg-gray-900/90 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/40 shadow focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800"
+          title="Remove attachment"
+          aria-label="Remove attachment"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      );
+
+    if (!imageSrc || !isImage) {
+      return (
+        <div
+          key={attachment.id || index}
+          className={cn(
+            'relative bg-gray-200 dark:bg-gray-700 rounded-lg text-center flex flex-col items-center justify-center text-xs text-gray-600 dark:text-gray-400',
+            fallbackWidthClass,
+            variant === 'question' ? 'p-4' : 'p-3'
+          )}
+        >
+          {commonRemoveButton}
+          <FileText
+            className={cn(
+              'text-gray-400',
+              variant === 'question' ? 'h-8 w-8 mb-2' : 'h-6 w-6 mb-1'
+            )}
+          />
+          <p className="truncate w-full px-2">{fallbackLabel}</p>
+          {attachment.file_type && (
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
+              {attachment.file_type}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={attachment.id || index}
+        role="button"
+        tabIndex={0}
+        onClick={() => imageSrc && setImagePreview(imageSrc)}
+        onKeyDown={event =>
+          imageSrc &&
+          handleAttachmentPreviewKeyDown(event, () => setImagePreview(imageSrc))
+        }
+        className={cn(
+          'group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden transition-all shadow-sm hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800',
+          variant === 'question'
+            ? 'border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400'
+            : 'border border-gray-200 dark:border-gray-700 hover:border-blue-400/70 dark:hover:border-blue-300/60'
+        )}
+        style={{ maxWidth: '100%' }}
+      >
+        {commonRemoveButton}
+        <div className="relative">
+          <img
+            src={imageSrc}
+            alt={fallbackLabel}
+            className={cn(
+              'max-w-full h-auto object-contain',
+              variant === 'question' ? 'max-h-96' : 'max-h-80'
+            )}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const parent = target.parentElement?.parentElement;
+              if (parent) {
+                parent.innerHTML = `
+                  <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center ${fallbackWidthClass}">
+                    <svg class="h-8 w-8 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">Image not available</p>
+                  </div>
+                `;
+              }
+            }}
+          />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
+            <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </div>
+        {attachment.file_name && (
+          <div
+            className={cn(
+              'bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600',
+              variant === 'question' ? 'px-3 py-2' : 'px-2 py-1'
+            )}
+          >
+            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+              {attachment.file_name}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const resolveAttachmentSource = (attachment: Attachment): string | undefined => {
     const candidates = [
@@ -418,75 +572,9 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         {/* Full width container aligned with question text box */}
         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
           <div className="flex flex-wrap justify-center gap-4">
-            {question.attachments.map((attachment, index) => {
-              const imageSrc = resolveAttachmentSource(attachment);
-              const isImage = isImageAttachment(attachment, imageSrc);
-              const fallbackLabel = attachment.file_name || `Attachment ${index + 1}`;
-
-              if (!imageSrc || !isImage) {
-                return (
-                  <div
-                    key={attachment.id || index}
-                    className="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center min-w-[180px]"
-                  >
-                    <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                      {fallbackLabel}
-                    </p>
-                    {attachment.file_type && (
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
-                        {attachment.file_type}
-                      </p>
-                    )}
-                  </div>
-                );
-              }
-
-              return (
-                <button
-                  key={attachment.id || index}
-                  onClick={() => imageSrc && setImagePreview(imageSrc)}
-                  className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-all shadow-sm hover:shadow-md"
-                  style={{ maxWidth: '100%' }}
-                >
-                  {/* Dynamic image container that adjusts to content */}
-                  <div className="relative">
-                    <img
-                      src={imageSrc}
-                      alt={fallbackLabel}
-                      className="max-w-full h-auto max-h-96 object-contain"
-                      onError={(e) => {
-                        // Handle broken image
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        const parent = target.parentElement?.parentElement;
-                        if (parent) {
-                          parent.innerHTML = `
-                            <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center min-w-[200px]">
-                              <svg class="h-8 w-8 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              <p class="text-xs text-gray-600 dark:text-gray-400">Image not available</p>
-                            </div>
-                          `;
-                        }
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
-                      <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </div>
-                  {/* Optional: Show filename below image */}
-                  {attachment.file_name && (
-                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                        {attachment.file_name}
-                      </p>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+            {question.attachments.map((attachment, index) =>
+              renderAttachmentCard(attachment, index, 'question')
+            )}
           </div>
         </div>
       </div>
@@ -623,75 +711,9 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                 {/* Full width container aligned with part content */}
                 <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                   <div className="flex flex-wrap justify-center gap-3">
-                    {part.attachments.map((attachment, attIdx) => {
-                      const imageSrc = resolveAttachmentSource(attachment);
-                      const isImage = isImageAttachment(attachment, imageSrc);
-                      const fallbackLabel = attachment.file_name || `Attachment ${attIdx + 1}`;
-
-                      if (!imageSrc || !isImage) {
-                        return (
-                          <div
-                            key={attIdx}
-                            className="bg-gray-200 dark:bg-gray-700 rounded-lg p-3 text-center min-w-[160px]"
-                          >
-                            <FileText className="h-6 w-6 mx-auto mb-1 text-gray-400" />
-                            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                              {fallbackLabel}
-                            </p>
-                            {attachment.file_type && (
-                              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
-                                {attachment.file_type}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <button
-                          key={attIdx}
-                          onClick={() => imageSrc && setImagePreview(imageSrc)}
-                          className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-all shadow-sm hover:shadow-md"
-                          style={{ maxWidth: '100%' }}
-                        >
-                          {/* Dynamic image container that adjusts to content */}
-                          <div className="relative">
-                            <img
-                              src={imageSrc}
-                              alt={fallbackLabel}
-                              className="max-w-full h-auto max-h-80 object-contain"
-                              onError={(e) => {
-                                // Handle broken image
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const parent = target.parentElement?.parentElement;
-                                if (parent) {
-                                  parent.innerHTML = `
-                                    <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-3 text-center min-w-[180px]">
-                                      <svg class="h-6 w-6 mx-auto mb-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                      </svg>
-                                      <p class="text-xs text-gray-600 dark:text-gray-400">Image not available</p>
-                                    </div>
-                                  `;
-                                }
-                              }}
-                            />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
-                              <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </div>
-                          {/* Optional: Show filename below image */}
-                          {attachment.file_name && (
-                            <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
-                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                                {attachment.file_name}
-                              </p>
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                    {part.attachments.map((attachment, attIdx) =>
+                      renderAttachmentCard(attachment, attIdx, 'part')
+                    )}
                   </div>
                 </div>
               </div>
