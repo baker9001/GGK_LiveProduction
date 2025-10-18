@@ -123,6 +123,8 @@ const answerFormatConfig = {
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
 };
 
+const DEFAULT_SNIPPING_VIEW_STATE = { page: 1, scale: 1.5 } as const;
+
 const manualAnswerFormats = new Set([
   'diagram',
   'chemical_structure',
@@ -617,6 +619,9 @@ function QuestionsTabInner({
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmationState | null>(null);
   const [pdfFile, setPdfFile] = useState<any>(null);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
+  const snippingViewStateRef = useRef<{ page: number; scale: number }>({
+    ...DEFAULT_SNIPPING_VIEW_STATE
+  });
   const [attachments, setAttachments] = useState<Record<string, any[]>>({});
   const [deleteAttachmentConfirm, setDeleteAttachmentConfirm] = useState<any>(null);
   const [showValidation, setShowValidation] = useState(false);
@@ -3780,6 +3785,7 @@ function QuestionsTabInner({
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
+      snippingViewStateRef.current = { ...DEFAULT_SNIPPING_VIEW_STATE };
       setPdfFile(file);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -3892,7 +3898,7 @@ function QuestionsTabInner({
 
   const handleSnippingComplete = (snippedData: any) => {
     if (!attachmentTarget) return;
-    
+
     const { questionId, partIndex, subpartIndex } = attachmentTarget;
     const attachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
     
@@ -3943,6 +3949,10 @@ function QuestionsTabInner({
     setAttachmentTarget(null);
     toast.success('Attachment added');
   };
+
+  const handleSnippingViewStateChange = useCallback((state: { page: number; scale: number }) => {
+    snippingViewStateRef.current = { page: state.page, scale: state.scale };
+  }, [snippingViewStateRef]);
 
   const handleDeleteAttachment = (attachmentKey: string, attachmentId: string) => {
     console.log('🗑️ Deleting attachment:', { attachmentKey, attachmentId });
@@ -4818,6 +4828,9 @@ function QuestionsTabInner({
                 setShowSnippingTool(false);
                 setAttachmentTarget(null);
               }}
+              initialPage={snippingViewStateRef.current.page}
+              initialScale={snippingViewStateRef.current.scale}
+              onViewStateChange={handleSnippingViewStateChange}
               questionLabel={activeSnippingQuestionLabel ?? undefined}
             />
           </div>
