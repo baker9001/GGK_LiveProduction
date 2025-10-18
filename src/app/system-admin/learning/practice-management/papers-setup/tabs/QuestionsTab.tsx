@@ -3951,7 +3951,12 @@ function QuestionsTabInner({
   };
 
   const handleSnippingViewStateChange = useCallback((state: { page: number; scale: number }) => {
-    setSnippingViewState(state);
+    setSnippingViewState(prev => {
+      if (prev.page === state.page && prev.scale === state.scale) {
+        return prev;
+      }
+      return state;
+    });
   }, []);
 
   const handleDeleteAttachment = (attachmentKey: string, attachmentId: string) => {

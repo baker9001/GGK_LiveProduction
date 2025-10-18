@@ -326,22 +326,32 @@ export function PDFSnippingTool({
       clearTimeout(updateTimeoutRef.current);
     }
 
+    // Only update if the initial props are significantly different from current state
+    // This prevents circular updates when the component emits its own state changes
+    const pageChanged = typeof initialPage === 'number' && initialPage !== currentPage;
+    const scaleChanged = typeof initialScale === 'number' && Math.abs(initialScale - scale) > 0.001;
+
+    // Don't update if values haven't changed
+    if (!pageChanged && !scaleChanged) {
+      return;
+    }
+
     // Debounce external prop changes to prevent rapid updates
     updateTimeoutRef.current = setTimeout(() => {
       let needsUpdate = false;
       let newPage = currentPage;
       let newScale = scale;
 
-      if (typeof initialPage === 'number' && initialPage !== currentPage) {
-        const clamped = clampPage(initialPage, totalPages || initialPage);
+      if (pageChanged) {
+        const clamped = clampPage(initialPage!, totalPages || initialPage!);
         if (clamped !== currentPage) {
           newPage = clamped;
           needsUpdate = true;
         }
       }
 
-      if (typeof initialScale === 'number' && Math.abs(initialScale - scale) > 0.001) {
-        newScale = initialScale;
+      if (scaleChanged) {
+        newScale = initialScale!;
         needsUpdate = true;
       }
 
