@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { QuestionViewer, QuestionData, UserResponse, ValidationReport, UploadedAttachment } from '../../../../../../components/shared/questions/QuestionViewer';
+import { supabase } from '../../../../../../lib/supabase';
 import { Button } from '../../../../../../components/shared/Button';
 import { supabase } from '../../../../../../lib/supabase';
 import { toast } from '../../../../../../components/shared/Toast';
@@ -15,6 +16,11 @@ interface ReviewPageState {
   saving: boolean;
   validationReports: Record<string, ValidationReport>;
   sessionId?: string;
+  // Academic structure data for editing
+  units: Array<{ id: string; name: string }>;
+  chapters: Array<{ id: string; name: string }>;
+  topics: Array<{ id: string; name: string }>;
+  subtopics: Array<{ id: string; name: string }>;
 }
 
 export default function PaperSetupReviewPage() {
@@ -28,13 +34,68 @@ export default function PaperSetupReviewPage() {
     loading: true,
     saving: false,
     validationReports: {},
-    sessionId
+    sessionId,
+    units: [],
+    chapters: [],
+    topics: [],
+    subtopics: []
   });
 
-  // Load questions from import session
+  // Load questions and academic structure from import session
   useEffect(() => {
     loadQuestionsFromSession();
+    loadAcademicStructure();
   }, [sessionId]);
+
+  const loadAcademicStructure = async () => {
+    if (!sessionId) return;
+
+    try {
+      // Get import session metadata to find data structure ID
+      const { data: session, error: sessionError } = await supabase
+        .from('past_paper_import_sessions')
+        .select('metadata')
+        .eq('id', sessionId)
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      const dataStructureId = session?.metadata?.entity_ids?.data_structure_id;
+      if (!dataStructureId) {
+        console.warn('No data structure ID found in session metadata');
+        return;
+      }
+
+      // Load units
+      const { data: unitsData } = await supabase
+        .from('units')
+        .select('id, name')
+        .eq('data_structure_id', dataStructureId)
+        .order('name');
+
+      // Load topics
+      const { data: topicsData } = await supabase
+        .from('topics')
+        .select('id, name')
+        .eq('data_structure_id', dataStructureId)
+        .order('name');
+
+      // Load subtopics
+      const { data: subtopicsData } = await supabase
+        .from('subtopics')
+        .select('id, name')
+        .order('name');
+
+      setState(prev => ({
+        ...prev,
+        units: unitsData || [],
+        topics: topicsData || [],
+        subtopics: subtopicsData || []
+      }));
+    } catch (error) {
+      console.error('Error loading academic structure:', error);
+    }
+  };
 
   const loadQuestionsFromSession = async () => {
     if (!sessionId) {
@@ -60,25 +121,78 @@ export default function PaperSetupReviewPage() {
       // Extract questions from raw_json
       const rawQuestions = session.raw_json?.questions || [];
 
-      // Transform to QuestionData format
+      // Transform to QuestionData format with ALL fields
       const questions: QuestionData[] = rawQuestions.map((q: any, index: number) => ({
         id: q.id || `q-${index + 1}`,
         question_number: q.question_number || `${index + 1}`,
-        type: mapQuestionType(q.question_type),
+        type: mapQuestionType(q.question_type || q.type),
+        category: q.category,
+        question_text: q.question_text || q.question_description || '',
+        marks: q.marks || q.total_marks || 0,
+        difficulty: q.difficulty,
+        status: q.status || 'draft',
+
+        // Academic hierarchy - preserve ALL fields
         subject: q.subject,
+        subject_id: q.subject_id,
+        unit: q.unit,
+        unit_id: q.unit_id || q.chapter_id,
+        chapter: q.chapter,
+        chapter_id: q.chapter_id,
         topic: q.topic,
-        subtopic: q.subtopic,
-        exam_board: session.metadata?.exam_board || q.exam_board,
-        paper_code: session.metadata?.paper_code,
-        year: session.metadata?.year,
-        marks: q.marks || q.total_marks,
-        question_text: q.question_text,
-        correct_answers: q.correct_answers || [],
-        options: q.options || [],
-        attachments: q.attachments || [],
-        parts: q.parts || [],
+        topic_id: q.topic_id,
+        subtopic: q.subtopic || q.subtopics?.[0],
+        subtopic_id: q.subtopic_id,
+
+        // Answer configuration
+        answer_format: q.answer_format,
+        answer_requirement: q.answer_requirement,
+        total_alternatives: q.total_alternatives,
+
+        // Educational content
         hint: q.hint,
         explanation: q.explanation,
+
+        // Nested structures
+        correct_answers: (q.correct_answers || []).map((ans: any) => ({
+          answer: ans.answer || ans.text || '',
+          marks: ans.marks,
+          alternative_id: ans.alternative_id,
+          context_type: ans.context_type,
+          context_value: ans.context_value,
+          context_label: ans.context_label
+        })),
+        options: (q.options || []).map((opt: any) => ({
+          label: opt.label || opt.id || '',
+          text: opt.text || opt.option_text || '',
+          is_correct: opt.is_correct || false,
+          explanation: opt.explanation
+        })),
+        parts: (q.parts || []).map((part: any) => ({
+          part: part.part || part.part_label || '',
+          question_text: part.question_text || part.description || '',
+          marks: part.marks || 0,
+          answer_format: part.answer_format,
+          answer_requirement: part.answer_requirement,
+          hint: part.hint,
+          explanation: part.explanation,
+          correct_answers: part.correct_answers || [],
+          options: part.options || [],
+          subparts: part.subparts || [],
+          attachments: part.attachments || []
+        })),
+        attachments: (q.attachments || []).map((att: any) => ({
+          id: att.id || `att-${Math.random().toString(36).substr(2, 9)}`,
+          name: att.file_name || att.name || 'Attachment',
+          url: att.file_url || att.url || '',
+          type: att.file_type || att.type || 'image/png',
+          size: att.file_size || att.size
+        })),
+
+        // Metadata
+        exam_board: session.metadata?.exam_board || q.exam_board,
+        paper_code: session.metadata?.paper_code || q.paper_code,
+        year: session.metadata?.year || q.year,
         meta: q.meta || {}
       }));
 
@@ -314,9 +428,14 @@ export default function PaperSetupReviewPage() {
                 subject={question.subject}
                 examBoard={question.exam_board}
                 editable={true}
+                showValidation={true}
                 onUpdate={(updated) => handleQuestionUpdate(question.id!, updated)}
                 onValidate={(report) => handleValidation(question.id!, report)}
                 onAttachmentsChange={(attachments) => handleAttachmentsChange(question.id!, attachments)}
+                units={state.units}
+                chapters={state.chapters}
+                topics={state.topics}
+                subtopics={state.subtopics}
               />
             </div>
           ))}
