@@ -81,7 +81,7 @@ interface TabsListProps {
 export function TabsList({ children, className, activeTab, onTabChange }: TabsListProps) {
   return (
     <div className={cn(
-      'inline-flex items-center gap-2 p-2 rounded-2xl bg-gradient-to-r from-white via-gray-50 to-white dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 backdrop-blur-md border border-gray-200 dark:border-gray-600 shadow-lg dark:shadow-gray-900/30 transition-all duration-300 hover:shadow-xl',
+      'flex items-center gap-2 p-2 rounded-2xl bg-gradient-to-r from-white via-gray-50 to-white dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 backdrop-blur-md border border-gray-200 dark:border-gray-600 shadow-lg dark:shadow-gray-900/30 transition-all duration-300 hover:shadow-xl',
       className
     )}>
       {React.Children.map(children, child => {
