@@ -26,6 +26,7 @@ const TEST_USER_KEY = 'test_mode_user';
 const AUTH_TOKEN_KEY = 'ggk_auth_token';
 const REMEMBER_SESSION_KEY = 'ggk_remember_session';
 const SESSION_EXPIRED_NOTICE_KEY = 'ggk_session_expired_notice';
+export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
 // Session durations
 const DEFAULT_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -199,6 +200,13 @@ export function markUserLogout(): void {
 export function markSessionExpired(message: string = 'Your session has expired. Please sign in again to continue.'): void {
   try {
     localStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      const sessionExpiredEvent = new CustomEvent<{ message: string }>(SESSION_EXPIRED_EVENT, {
+        detail: { message }
+      });
+      window.dispatchEvent(sessionExpiredEvent);
+    }
   } catch (error) {
     console.warn('[Auth] Unable to persist session expiration notice:', error);
   }
@@ -472,8 +480,7 @@ export function startSessionMonitoring(): void {
           sessionCheckInterval = null;
         }
 
-        // Use replace to prevent back button issues
-        window.location.replace('/signin');
+        console.log('[SessionMonitoring] Session expired notice dispatched. Awaiting user acknowledgement.');
       } else if (isSessionExpiringSoon()) {
         // Optional: Show warning to user
         console.warn('[SessionMonitoring] Session expiring soon. Consider extending.');
