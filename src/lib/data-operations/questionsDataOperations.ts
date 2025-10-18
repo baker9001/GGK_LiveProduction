@@ -1486,13 +1486,17 @@ export const insertSubQuestion = async (
     );
     
     const partAnswerFormat = part.answer_format || detectAnswerFormat(part.question_description || part.question_text || '');
-    
+
+    // Determine sub-question type - preserve 'mcq' and 'tf' types, default to 'descriptive'
+    const rawPartType = ensureString(part.type);
+    const normalizedPartType = rawPartType === 'mcq' || rawPartType === 'tf' ? rawPartType : 'descriptive';
+
     const subQuestionData = {
       question_id: parentQuestionId,
       parent_id: parentSubId || null, // Fix: Ensure it's JS null, not empty string
       level: !isNaN(parseInt(level)) ? parseInt(level) : 1,
       order_index: orderIndex,
-      type: ensureString(part.type) || 'descriptive',
+      type: normalizedPartType,
       topic_id: primaryTopicId,
       subtopic_id: primarySubtopicId,
       part_label: partLabel,
@@ -1605,22 +1609,35 @@ export const insertSubQuestion = async (
     }
 
     // Insert options for sub-question if MCQ
-    if (part.type === 'mcq' && part.options && part.options.length > 0) {
+    if (normalizedPartType === 'mcq' && part.options && Array.isArray(part.options) && part.options.length > 0) {
+      console.log(`📋 Inserting ${part.options.length} options for MCQ sub-question ${partLabel}`);
+
       const optionsToInsert = part.options
         .filter((opt: any) => opt !== null && opt !== undefined)
-        .map((option: any, idx: number) => ({
-          sub_question_id: subQuestionRecord.id,
-          option_text: ensureString(option.text || option.option_text) || '',
-          is_correct: option.is_correct || (part.correct_answer === option.label) || false,
-          order: !isNaN(parseInt(idx)) ? idx : 0
-        }));
+        .map((option: any, idx: number) => {
+          const optionText = ensureString(option.text || option.option_text) || '';
+          const optionLabel = option.label || String.fromCharCode(65 + idx); // A, B, C, D...
+          const isCorrect = option.is_correct || (part.correct_answer === optionLabel) || false;
 
-      const { error: optionsError } = await supabase
+          return {
+            sub_question_id: subQuestionRecord.id,
+            option_text: optionText,
+            label: optionLabel,
+            text: optionText,
+            is_correct: isCorrect,
+            order: idx
+          };
+        });
+
+      const { data: insertedOptions, error: optionsError } = await supabase
         .from('question_options')
-        .insert(optionsToInsert);
+        .insert(optionsToInsert)
+        .select();
 
       if (optionsError) {
-        console.error('Error inserting sub-question options:', optionsError);
+        console.error(`❌ Error inserting sub-question ${partLabel} options:`, optionsError);
+      } else {
+        console.log(`✅ Successfully inserted ${insertedOptions?.length || 0} options for sub-question ${partLabel}`);
       }
     }
 
@@ -1940,6 +1957,16 @@ export const importQuestions = async (params: {
         const questionDescription = getQuestionDescription(question);
         const questionAnswerFormat = question.answer_format || detectAnswerFormat(questionDescription);
         
+        // Determine question type - preserve 'mcq' and 'tf' types, default to 'descriptive'
+        const questionType = ensureString(question.type);
+        const normalizedType = questionType === 'mcq' || questionType === 'tf' ? questionType : 'descriptive';
+
+        console.log('🔍 Question type detection:');
+        console.log('   Raw question.type:', question.type);
+        console.log('   ensureString result:', questionType);
+        console.log('   Normalized type:', normalizedType);
+        console.log('   Has options:', question.options ? question.options.length : 0);
+
         const questionData = {
           paper_id: paperId,
           data_structure_id: dataStructureInfo.id,
@@ -1951,12 +1978,12 @@ export const importQuestions = async (params: {
           topic_id: primaryTopicId,
           subtopic_id: primarySubtopicId,
           category: question.type === 'complex' ? 'complex' : 'direct',
-          type: ensureString(question.type) || 'descriptive',
+          type: normalizedType,
           question_number: questionNumber,
           question_header: ensureString(question.question_header) || null,
           question_description: ensureString(questionDescription),
-          question_content_type: question.figure ? 
-                                (questionDescription && questionDescription !== '[See parts below]' ? 'text_and_figure' : 'figure') : 
+          question_content_type: question.figure ?
+                                (questionDescription && questionDescription !== '[See parts below]' ? 'text_and_figure' : 'figure') :
                                 (question.parts && question.parts.length > 0 && questionDescription === '[See parts below]' ? 'parts_only' : 'text'),
           explanation: ensureString(question.explanation) || null,
           hint: ensureString(question.hint) || null,
@@ -2076,19 +2103,42 @@ export const importQuestions = async (params: {
         }
 
         // Insert options for MCQ questions
-        if (question.type === 'mcq' && question.options) {
-          const optionPromises = question.options
+        if (normalizedType === 'mcq' && question.options && Array.isArray(question.options)) {
+          console.log(`📋 Inserting ${question.options.length} options for MCQ question ${questionNumber}`);
+
+          const optionsToInsert = question.options
             .filter((opt: any) => opt !== null && opt !== undefined)
-            .map((option: any, index: number) => 
-              supabase.from('question_options').insert({
+            .map((option: any, index: number) => {
+              const optionText = ensureString(option.text || option.option_text) || '';
+              const optionLabel = option.label || String.fromCharCode(65 + index); // A, B, C, D...
+              const isCorrect = option.is_correct || (question.correct_answer === optionLabel) || false;
+
+              console.log(`   Option ${optionLabel}: "${optionText.substring(0, 50)}..." (correct: ${isCorrect})`);
+
+              return {
                 question_id: insertedQuestion.id,
-                option_text: ensureString(option.text || option.option_text) || '',
-                is_correct: option.is_correct || (question.correct_answer === option.label) || false,
-                order: !isNaN(parseInt(index)) ? index : 0
-              })
-            );
-          
-          await Promise.all(optionPromises);
+                option_text: optionText,
+                label: optionLabel,
+                text: optionText,
+                is_correct: isCorrect,
+                order: index
+              };
+            });
+
+          if (optionsToInsert.length > 0) {
+            const { data: insertedOptions, error: optionsError } = await supabase
+              .from('question_options')
+              .insert(optionsToInsert)
+              .select();
+
+            if (optionsError) {
+              console.error('❌ Error inserting options:', optionsError);
+            } else {
+              console.log(`✅ Successfully inserted ${insertedOptions?.length || 0} options`);
+            }
+          }
+        } else if (normalizedType === 'mcq') {
+          console.warn(`⚠️ MCQ question ${questionNumber} has no options array!`);
         }
 
         // Insert sub-questions/parts if they exist
