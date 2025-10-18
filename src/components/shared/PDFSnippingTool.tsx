@@ -58,8 +58,15 @@ export function PDFSnippingTool({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const renderTaskRef = useRef<any>(null);
   const lastPdfUrlRef = useRef<string | null>(null);
-  const isEmittingViewStateRef = useRef(false);
-  const viewStateEmitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initialViewStateRef = useRef<{ page: number; scale: number }>({
+    page: initialPage ?? DEFAULT_PAGE,
+    scale: initialScale ?? DEFAULT_SCALE
+  });
+  const hasAppliedInitialViewStateRef = useRef(false);
+  const lastEmittedViewStateRef = useRef<{ page: number; scale: number } | null>(null);
+  const isInternalUpdateRef = useRef(false);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(false);
 
   const clampPage = (value: number, total: number) => {
     if (!Number.isFinite(value)) {
@@ -78,7 +85,7 @@ export function PDFSnippingTool({
       setSelectionRect(null);
       setPdfLoadingError(false);
       setErrorMessage(null);
-
+      
       // Load the PDF document
       try {
         const loadingTask = pdfjsLib.getDocument(source);
@@ -86,12 +93,10 @@ export function PDFSnippingTool({
 
         setPdfDocument(pdf);
         setTotalPages(pdf.numPages);
-
-        const desiredPage = initialPage ? clampPage(initialPage, pdf.numPages) : DEFAULT_PAGE;
-        const desiredScale = initialScale ?? DEFAULT_SCALE;
-
+        const desiredPage = clampPage(initialViewStateRef.current.page, pdf.numPages);
         setCurrentPage(desiredPage);
-        setScale(desiredScale);
+        setScale(initialViewStateRef.current.scale);
+        hasAppliedInitialViewStateRef.current = true;
 
         onErrorChange?.(false, null);
         setIsLoading(false);
@@ -158,6 +163,11 @@ export function PDFSnippingTool({
     }
 
     lastPdfUrlRef.current = pdfUrl;
+    initialViewStateRef.current = {
+      page: initialPage ?? DEFAULT_PAGE,
+      scale: initialScale ?? DEFAULT_SCALE
+    };
+    hasAppliedInitialViewStateRef.current = false;
 
     const fetchAndLoadPdf = async () => {
       try {
@@ -299,6 +309,60 @@ export function PDFSnippingTool({
 
     fetchAndLoadPdf();
   }, [pdfUrl]);
+
+  // CONSOLIDATED view state management - prevents circular updates
+  useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
+
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current || isInternalUpdateRef.current) {
+      return;
+    }
+
+    // Clear any pending timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+
+    // Only update if the initial props are significantly different from current state
+    // This prevents circular updates when the component emits its own state changes
+    const pageChanged = typeof initialPage === 'number' && initialPage !== currentPage;
+    const scaleChanged = typeof initialScale === 'number' && Math.abs(initialScale - scale) > 0.001;
+
+    // Don't update if values haven't changed
+    if (!pageChanged && !scaleChanged) {
+      return;
+    }
+
+    // Debounce external prop changes to prevent rapid updates
+    updateTimeoutRef.current = setTimeout(() => {
+      let needsUpdate = false;
+      let newPage = currentPage;
+      let newScale = scale;
+
+      if (pageChanged) {
+        const clamped = clampPage(initialPage!, totalPages || initialPage!);
+        if (clamped !== currentPage) {
+          newPage = clamped;
+          needsUpdate = true;
+        }
+      }
+
+      if (scaleChanged) {
+        newScale = initialScale!;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        if (newPage !== currentPage) setCurrentPage(newPage);
+        if (newScale !== scale) setScale(newScale);
+      }
+
+      updateTimeoutRef.current = null;
+    }, 100);
+  }, [initialPage, initialScale, pdfDocument, totalPages, currentPage, scale]);
   
   // Render the current page
   useEffect(() => {
@@ -374,6 +438,8 @@ export function PDFSnippingTool({
     if (!file) return;
 
     onLoadingChange?.(true);
+    initialViewStateRef.current = { page: DEFAULT_PAGE, scale: DEFAULT_SCALE };
+    hasAppliedInitialViewStateRef.current = false;
     // Reset error states
     setPdfLoadingError(false);
     setErrorMessage(null);
@@ -490,27 +556,6 @@ export function PDFSnippingTool({
     }
   };
   
-  // Emit view state changes to parent (debounced to prevent loops)
-  const emitViewStateChange = useCallback((page: number, newScale: number) => {
-    if (!onViewStateChange || isEmittingViewStateRef.current) return;
-
-    // Clear any pending emit
-    if (viewStateEmitTimeoutRef.current) {
-      clearTimeout(viewStateEmitTimeoutRef.current);
-    }
-
-    // Debounce the emit to prevent rapid updates
-    viewStateEmitTimeoutRef.current = setTimeout(() => {
-      isEmittingViewStateRef.current = true;
-      onViewStateChange({ page, scale: newScale });
-
-      // Reset the flag after a delay to allow new updates
-      setTimeout(() => {
-        isEmittingViewStateRef.current = false;
-      }, 200);
-    }, 150);
-  }, [onViewStateChange]);
-
   // Handle page navigation
   const goToPreviousPage = () => {
     setCurrentPage(prev => {
@@ -518,9 +563,7 @@ export function PDFSnippingTool({
         return prev;
       }
       setSelectionRect(null);
-      const newPage = prev - 1;
-      emitViewStateChange(newPage, scale);
-      return newPage;
+      return prev - 1;
     });
   };
 
@@ -530,9 +573,7 @@ export function PDFSnippingTool({
         return prev;
       }
       setSelectionRect(null);
-      const newPage = prev + 1;
-      emitViewStateChange(newPage, scale);
-      return newPage;
+      return prev + 1;
     });
   };
 
@@ -562,7 +603,6 @@ export function PDFSnippingTool({
     setCurrentPage(pageNum);
     setSelectionRect(null);
     setPageInputValue('');
-    emitViewStateChange(pageNum, scale);
     toast.success(`Navigated to page ${pageNum}`);
   };
 
@@ -574,37 +614,62 @@ export function PDFSnippingTool({
 
   // Handle zoom
   const zoomIn = () => {
-    setScale(prev => {
-      const newScale = Math.min(prev + 0.25, 3);
-      emitViewStateChange(currentPage, newScale);
-      return newScale;
-    });
+    setScale(prev => Math.min(prev + 0.25, 3));
   };
 
   const zoomOut = () => {
-    setScale(prev => {
-      const newScale = Math.max(prev - 0.25, 0.5);
-      emitViewStateChange(currentPage, newScale);
-      return newScale;
-    });
+    setScale(prev => Math.max(prev - 0.25, 0.5));
   };
 
   const resetView = () => {
     setSelectionRect(null);
     setScale(DEFAULT_SCALE);
     setCurrentPage(DEFAULT_PAGE);
-    emitViewStateChange(DEFAULT_PAGE, DEFAULT_SCALE);
     if (containerRef.current) {
       containerRef.current.scrollTop = 0;
       containerRef.current.scrollLeft = 0;
     }
   };
 
+  // OPTIMIZED view state change emission - prevents circular updates
+  useEffect(() => {
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current) {
+      return;
+    }
+
+    const nextState = { page: currentPage, scale };
+
+    // Only emit if values actually changed
+    if (
+      !lastEmittedViewStateRef.current ||
+      lastEmittedViewStateRef.current.page !== nextState.page ||
+      Math.abs(lastEmittedViewStateRef.current.scale - nextState.scale) > 0.001
+    ) {
+      // Mark this as an internal update
+      isInternalUpdateRef.current = true;
+
+      lastEmittedViewStateRef.current = nextState;
+      initialViewStateRef.current = nextState;
+
+      // Emit the change
+      if (onViewStateChange) {
+        onViewStateChange(nextState);
+      }
+
+      // Reset the internal update flag after a brief delay
+      const timer = setTimeout(() => {
+        isInternalUpdateRef.current = false;
+      }, 150);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentPage, scale, pdfDocument]);
+
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
-      if (viewStateEmitTimeoutRef.current) {
-        clearTimeout(viewStateEmitTimeoutRef.current);
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
       }
     };
   }, []);
