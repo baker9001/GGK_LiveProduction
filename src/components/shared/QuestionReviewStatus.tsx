@@ -38,7 +38,8 @@ export const QuestionReviewStatus: React.FC<QuestionReviewStatusProps> = ({
     lg: 'px-4 py-2 text-base'
   };
 
-  const handleClick = () => {
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     if (!disabled) {
       onToggleReview(status.questionId);
     }
