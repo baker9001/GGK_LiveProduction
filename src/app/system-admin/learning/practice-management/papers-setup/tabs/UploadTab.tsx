@@ -143,11 +143,11 @@ export function UploadTab({
             <CircleCheck className="h-5 w-5 text-blue-500 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
             <div className="flex-1">
               <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                Import Session In Progress
+                Your Import Session In Progress
               </h3>
               <p className="mt-1 text-sm text-blue-700 dark:text-blue-400">
-                You have an active import session for <strong>{uploadedFile.name}</strong>. 
-                You can continue from where you left off or start a new import.
+                You have an active import session for <strong>{uploadedFile.name}</strong>.
+                You can continue from where you left off or start a new import. Other users can work on their own imports simultaneously.
               </p>
               
               {/* Show session details */}

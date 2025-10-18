@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../../lib/supabase';
+import { useUser } from '../../../../../../contexts/UserContext';
 import { DataTable } from '../../../../../../components/shared/DataTable';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { Button } from '../../../../../../components/shared/Button';
@@ -34,6 +35,7 @@ interface PreviousSessionsTableProps {
 }
 
 export function PreviousSessionsTable({ onSelectSession, currentSessionId }: PreviousSessionsTableProps) {
+  const { user } = useUser();
   const navigate = useNavigate();
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [jsonToView, setJsonToView] = useState<any>(null);
@@ -45,9 +47,13 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
     isFetching,
     refetch,
   } = useQuery<ImportSession[]>(
-    ['previous-import-sessions'],
+    ['previous-import-sessions', user?.id],
     async () => {
-      // Try with json_hash first
+      if (!user?.id) {
+        return [];
+      }
+
+      // Fetch only the current user's sessions
       let { data, error } = await supabase
         .from('past_paper_import_sessions')
         .select(
@@ -67,6 +73,7 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
           papers_setup(paper_code)
         `
         )
+        .eq('created_by', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -90,9 +97,10 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
             papers_setup(paper_code)
           `
           )
+          .eq('created_by', user.id)
           .order('created_at', { ascending: false })
           .limit(20);
-        
+
         data = fallbackResult.data;
         error = fallbackResult.error;
       }
@@ -110,6 +118,7 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
       }));
     },
     {
+      enabled: !!user?.id,
       staleTime: 2 * 60 * 1000, // 2 minutes
       refetchOnWindowFocus: false,
     }
@@ -333,7 +342,7 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Recent import sessions. Identical files automatically use existing sessions.
+            Your recent import sessions. Each user has their own isolated workspace.
           </p>
           <Button
             size="sm"
@@ -361,7 +370,7 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
         {sessions.length >= 20 && (
           <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              Only showing the most recent 20 sessions. Older sessions are still available in the database.
+              Only showing your most recent 20 sessions. Older sessions are still available in the database.
             </p>
           </div>
         )}

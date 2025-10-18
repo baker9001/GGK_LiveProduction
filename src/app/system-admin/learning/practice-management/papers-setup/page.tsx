@@ -1138,11 +1138,12 @@ export default function PapersSetupPage() {
   const checkForExistingSession = async () => {
     setIsLoadingSession(true);
     try {
-      // Get the most recent in-progress session
+      // Get the most recent in-progress session for the current user
       const { data, error } = await supabase
         .from('past_paper_import_sessions')
         .select('*')
         .eq('status', 'in_progress')
+        .eq('created_by', user?.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1423,13 +1424,14 @@ export default function PapersSetupPage() {
       // Generate hash for duplicate detection
       const jsonHash = await generateJsonHash(jsonData);
       
-      // Check for exact duplicate (same hash)
+      // Check for exact duplicate (same hash) within user's own sessions
       try {
         const { data: exactDuplicate } = await supabase
           .from('past_paper_import_sessions')
           .select('*')
           .eq('json_hash', jsonHash)
           .eq('status', 'in_progress')
+          .eq('created_by', user?.id)
           .maybeSingle();
         
         if (exactDuplicate) {
@@ -1472,6 +1474,7 @@ export default function PapersSetupPage() {
           .from('past_paper_import_sessions')
           .select('*')
           .eq('status', 'in_progress')
+          .eq('created_by', user?.id)
           .order('created_at', { ascending: false });
         
         // Check if we have a session with the same paper code and year but different content
@@ -1485,10 +1488,10 @@ export default function PapersSetupPage() {
         if (similarSession) {
           // Ask user about similar but different content
           const createNew = confirm(
-            `An import session for ${paperCode} (${examYear}) already exists, but with different content. ` +
+            `You have an existing import session for ${paperCode} (${examYear}), but with different content. ` +
             `This might be a corrected version or different variant.\n\n` +
             `Would you like to create a new session for this version?\n\n` +
-            `Click OK to create new session, or Cancel to use the existing one.`
+            `Click OK to create new session, or Cancel to resume the existing one.`
           );
           
           if (!createNew) {
@@ -1526,6 +1529,7 @@ export default function PapersSetupPage() {
         json_file_name: file.name,
         raw_json: jsonData,
         status: 'in_progress',
+        created_by: user?.id,
         metadata: {
           upload_timestamp: new Date().toISOString(),
           file_size: file.size,
