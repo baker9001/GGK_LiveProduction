@@ -35,6 +35,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionProvider } from './contexts/PermissionContext';
 import { Toast } from './components/shared/Toast';
+import { SessionExpiredNotice } from './components/shared/SessionExpiredNotice';
 import { ReactQueryProvider } from './providers/ReactQueryProvider';
 import { TestModeBar } from './components/admin/TestModeBar';
 import { isInTestMode, getCurrentUser } from './lib/auth';
@@ -116,6 +117,7 @@ function App() {
         <UserProvider>
           <PermissionProvider>
             <Toast />
+            <SessionExpiredNotice />
             {/* PRESERVED: Test Mode Bar - Shows only when in test mode */}
             <TestModeBar />
             
