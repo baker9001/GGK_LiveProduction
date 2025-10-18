@@ -90,10 +90,32 @@ interface SimulationResults {
     isCorrect: boolean;
     earnedMarks: number;
     totalMarks: number;
-    userAnswer: any;
+    userAnswer?: any;
     correctAnswers: any[];
     feedback: string;
+    attempted?: boolean;
+    accuracy?: number;
+    timeSpent?: number;
+    difficulty?: string;
+    topics?: string[];
+    units?: string[];
+    subtopics?: string[];
+    questionType?: string;
+    partBreakdown?: Array<{
+      id: string;
+      label: string;
+      earnedMarks: number;
+      totalMarks: number;
+      attempted: boolean;
+      accuracy: number;
+      timeSpent: number;
+      topic?: string;
+      unit?: string;
+      subtopics?: string[];
+      difficulty?: string;
+    }>;
   }>;
+  unattemptedQuestions?: number;
 }
 
 interface QuestionImportReviewWorkflowProps {

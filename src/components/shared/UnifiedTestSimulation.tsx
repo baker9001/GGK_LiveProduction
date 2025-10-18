@@ -25,7 +25,12 @@ import {
   AlertCircle,
   AlertTriangle,
   BarChart3,
-  TrendingUp
+  TrendingUp,
+  Layers,
+  PieChart,
+  Activity,
+  Lightbulb,
+  TimerReset
 } from 'lucide-react';
 import { Button } from './Button';
 import { StatusBadge } from './StatusBadge';
@@ -176,10 +181,47 @@ interface SimulationResults {
     isCorrect: boolean;
     earnedMarks: number;
     totalMarks: number;
-    userAnswer: unknown;
+    userAnswer?: unknown;
     correctAnswers: CorrectAnswer[];
     feedback: string;
+    attempted?: boolean;
+    accuracy?: number;
+    timeSpent?: number;
+    difficulty?: string;
+    topics?: string[];
+    units?: string[];
+    subtopics?: string[];
+    questionType?: string;
+    partBreakdown?: Array<{
+      id: string;
+      label: string;
+      earnedMarks: number;
+      totalMarks: number;
+      attempted: boolean;
+      accuracy: number;
+      timeSpent: number;
+      topic?: string;
+      unit?: string;
+      subtopics?: string[];
+      difficulty?: string;
+    }>;
   }>;
+  unattemptedQuestions?: number;
+}
+
+interface PerformanceBreakdownEntry {
+  name: string;
+  totalQuestions: number;
+  attempted: number;
+  unattempted: number;
+  correct: number;
+  partial: number;
+  incorrect: number;
+  earnedMarks: number;
+  totalMarks: number;
+  timeSpent: number;
+  accuracy: number;
+  averageTime: number;
 }
 
 // Unified simulation with toggleable features instead of separate modes
@@ -668,9 +710,243 @@ export function UnifiedTestSimulation({
 
   const currentQuestion = paper.questions[currentQuestionIndex];
   const totalQuestions = paper.questions.length;
-  const examDuration = paper.duration ? parseInt(paper.duration) * 60 : 0;
+  const examDuration = parseDurationToSeconds(paper.duration) ?? 0;
   const visitedCount = visitedQuestions.size;
   const allQuestionsVisited = totalQuestions > 0 && visitedCount === totalQuestions;
+
+  const analytics = useMemo(() => {
+    if (!results) {
+      return null;
+    }
+
+    const unattempted = results.unattemptedQuestions ?? Math.max(0, results.totalQuestions - results.answeredQuestions);
+    const accuracy = results.answeredQuestions > 0
+      ? Number(((results.correctAnswers / results.answeredQuestions) * 100).toFixed(1))
+      : 0;
+    const averageTimePerQuestion = results.totalQuestions > 0 ? results.timeSpent / results.totalQuestions : 0;
+    const averageTimePerAttempted = results.answeredQuestions > 0 ? results.timeSpent / results.answeredQuestions : 0;
+
+    const buildBreakdown = (
+      extractor: (item: SimulationResults['questionResults'][number]) => Array<string | undefined> | undefined
+    ) => {
+      const map = new Map<string, {
+        name: string;
+        totalQuestions: number;
+        attempted: number;
+        unattempted: number;
+        correct: number;
+        partial: number;
+        incorrect: number;
+        earnedMarks: number;
+        totalMarks: number;
+        timeSpent: number;
+      }>();
+
+      results.questionResults.forEach(result => {
+        const keys = extractor(result)?.filter(Boolean) as string[] | undefined;
+        if (!keys || keys.length === 0) {
+          return;
+        }
+
+        keys.forEach(key => {
+          if (!key) return;
+
+          const existing = map.get(key) || {
+            name: key,
+            totalQuestions: 0,
+            attempted: 0,
+            unattempted: 0,
+            correct: 0,
+            partial: 0,
+            incorrect: 0,
+            earnedMarks: 0,
+            totalMarks: 0,
+            timeSpent: 0
+          };
+
+          existing.totalQuestions += 1;
+          existing.totalMarks += result.totalMarks;
+
+          if (result.attempted) {
+            existing.attempted += 1;
+            existing.earnedMarks += result.earnedMarks;
+            existing.timeSpent += result.timeSpent || 0;
+
+            if (result.isCorrect) {
+              existing.correct += 1;
+            } else if ((result.earnedMarks || 0) > 0) {
+              existing.partial += 1;
+            } else {
+              existing.incorrect += 1;
+            }
+          } else {
+            existing.unattempted += 1;
+          }
+
+          map.set(key, existing);
+        });
+      });
+
+      return Array.from(map.values()).map(entry => ({
+        ...entry,
+        accuracy: entry.attempted > 0 && entry.totalMarks > 0
+          ? Number(((entry.earnedMarks / entry.totalMarks) * 100).toFixed(1))
+          : 0,
+        averageTime: entry.attempted > 0 ? entry.timeSpent / entry.attempted : 0
+      })).sort((a, b) => b.accuracy - a.accuracy);
+    };
+
+    const unitBreakdown = buildBreakdown(result => result.units);
+    const topicBreakdown = buildBreakdown(result => result.topics);
+    const subtopicBreakdown = buildBreakdown(result => result.subtopics);
+    const difficultyBreakdown = buildBreakdown(result => (result.difficulty ? [result.difficulty] : []));
+    const typeBreakdown = buildBreakdown(result => (result.questionType ? [result.questionType] : []));
+
+    const attemptedQuestions = results.questionResults.filter(result => result.attempted);
+    const slowestQuestions = [...attemptedQuestions]
+      .sort((a, b) => (b.timeSpent || 0) - (a.timeSpent || 0))
+      .slice(0, 5);
+    const fastestWins = [...attemptedQuestions.filter(result => result.isCorrect)]
+      .sort((a, b) => (a.timeSpent || 0) - (b.timeSpent || 0))
+      .slice(0, 5);
+
+    const gradeBoundaries = [
+      { grade: 'A*', threshold: 90, description: 'Outstanding mastery of the syllabus content.' },
+      { grade: 'A', threshold: 80, description: 'Excellent understanding with only minor gaps.' },
+      { grade: 'B', threshold: 70, description: 'Very good grasp with room to deepen mastery.' },
+      { grade: 'C', threshold: 60, description: 'Secure understanding of core concepts.' },
+      { grade: 'D', threshold: 50, description: 'Developing understanding – target consolidation.' },
+      { grade: 'E', threshold: 40, description: 'Basic grasp – prioritise targeted revision.' },
+      { grade: 'F', threshold: 30, description: 'Emerging understanding – strengthen foundations.' },
+      { grade: 'G', threshold: 20, description: 'High support needed – revisit fundamentals.' },
+      { grade: 'U', threshold: 0, description: 'Unclassified – significant re-teaching recommended.' }
+    ];
+
+    let gradeIndex = gradeBoundaries.findIndex(boundary => results.percentage >= boundary.threshold);
+    if (gradeIndex === -1) {
+      gradeIndex = gradeBoundaries.length - 1;
+    }
+
+    const gradeInfo = gradeBoundaries[gradeIndex];
+    const nextGrade = gradeIndex > 0 ? gradeBoundaries[gradeIndex - 1] : null;
+    const marksToNextGrade = nextGrade
+      ? Math.max(0, Math.ceil(((nextGrade.threshold / 100) * paper.total_marks) - results.earnedMarks))
+      : 0;
+
+    const distribution = [
+      { label: 'Correct', value: results.correctAnswers, color: 'from-green-500 to-emerald-500' },
+      { label: 'Partial', value: results.partiallyCorrect, color: 'from-amber-400 to-orange-500' },
+      { label: 'Incorrect', value: results.incorrectAnswers, color: 'from-red-500 to-rose-500' },
+      { label: 'Unattempted', value: unattempted, color: 'from-slate-400 to-slate-500' }
+    ];
+    const distributionTotal = distribution.reduce((sum, item) => sum + item.value, 0);
+
+    const paceAllocation = examDuration > 0
+      ? {
+          allocated: examDuration,
+          actual: results.timeSpent,
+          delta: results.timeSpent - examDuration
+        }
+      : null;
+
+    const insights: Array<{ title: string; detail: string }> = [];
+
+    if (gradeInfo) {
+      insights.push({
+        title: `Current IGCSE grade: ${gradeInfo.grade}`,
+        detail: gradeInfo.description
+      });
+    }
+
+    if (nextGrade && marksToNextGrade > 0) {
+      insights.push({
+        title: `Reach grade ${nextGrade.grade}`,
+        detail: `Secure approximately ${marksToNextGrade} more mark${marksToNextGrade === 1 ? '' : 's'} to reach the ${nextGrade.grade} boundary.`
+      });
+    }
+
+    if (unattempted > 0) {
+      insights.push({
+        title: 'Complete full coverage',
+        detail: `${unattempted} question${unattempted === 1 ? '' : 's'} were left unanswered. Plan targeted review sessions to close the gaps.`
+      });
+    }
+
+    const attemptedTopics = topicBreakdown.filter(topic => topic.attempted > 0);
+    if (attemptedTopics.length > 0) {
+      const weakestTopic = [...attemptedTopics].sort((a, b) => a.accuracy - b.accuracy)[0];
+      const strongestTopic = [...attemptedTopics].sort((a, b) => b.accuracy - a.accuracy)[0];
+
+      if (weakestTopic && weakestTopic.accuracy < 75) {
+        insights.push({
+          title: `Focus topic: ${weakestTopic.name}`,
+          detail: `Accuracy is ${weakestTopic.accuracy}% with ${weakestTopic.incorrect + weakestTopic.partial} improvement opportunities. Schedule scaffolded practice to strengthen this area.`
+        });
+      }
+
+      if (strongestTopic && strongestTopic.accuracy >= 85) {
+        insights.push({
+          title: `Leverage strength: ${strongestTopic.name}`,
+          detail: `Maintain momentum – ${strongestTopic.accuracy}% accuracy demonstrates exam-ready mastery. Use this confidence to model exemplar solutions.`
+        });
+      }
+    }
+
+    const difficultBand = difficultyBreakdown.find(diff => diff.name?.toLowerCase() === 'hard' || diff.name?.toLowerCase() === 'higher');
+    if (difficultBand && difficultBand.attempted > 0 && difficultBand.accuracy < 60) {
+      insights.push({
+        title: 'Challenge-level practice',
+        detail: `Higher difficulty questions averaged ${difficultBand.accuracy}% accuracy. Build resilience with timed drills and worked solutions.`
+      });
+    }
+
+    if (paceAllocation) {
+      insights.push({
+        title: 'Time management',
+        detail:
+          paceAllocation.delta > 0
+            ? `Exceeded the scheduled duration by ${formatTime(Math.abs(paceAllocation.delta))}. Introduce pacing checkpoints every 10 minutes.`
+            : `Finished ${formatTime(Math.abs(paceAllocation.delta))} ahead of the allocated time. Reinvest spare time in structured review.`
+      });
+    }
+
+    const slowest = slowestQuestions[0];
+    if (slowest && (slowest.timeSpent || 0) > averageTimePerAttempted * 1.4) {
+      insights.push({
+        title: `Deep dive: Question ${slowest.questionNumber}`,
+        detail: `Consumed ${formatTime(Math.round(slowest.timeSpent || 0))}. Revisit the marking scheme and streamline method marks for efficiency.`
+      });
+    }
+
+    return {
+      unattempted,
+      accuracy,
+      averageTimePerQuestion,
+      averageTimePerAttempted,
+      unitBreakdown,
+      topicBreakdown,
+      subtopicBreakdown,
+      difficultyBreakdown,
+      typeBreakdown,
+      slowestQuestions,
+      fastestWins,
+      gradeInfo,
+      nextGrade,
+      marksToNextGrade,
+      distribution,
+      distributionTotal,
+      paceAllocation,
+      insights
+    };
+  }, [results, examDuration, paper.total_marks]);
+
+  const questionMap = useMemo(() => {
+    const map = new Map<string, Question>();
+    paper.questions.forEach(question => {
+      map.set(question.id, question);
+    });
+    return map;
+  }, [paper.questions]);
 
   const resetVisitedQuestions = useCallback(() => {
     setVisitedQuestions(() => {
@@ -812,6 +1088,62 @@ export function UnifiedTestSimulation({
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const hasProvidedAnswer = (answer: unknown) => {
+    if (answer === null || answer === undefined) return false;
+    if (typeof answer === 'string') return answer.trim().length > 0;
+    if (typeof answer === 'number' || typeof answer === 'boolean') return true;
+    if (Array.isArray(answer)) return answer.length > 0;
+    if (typeof answer === 'object') return Object.keys(answer as Record<string, unknown>).length > 0;
+    return false;
+  };
+
+  const parseDurationToSeconds = (duration?: string | number | null) => {
+    if (duration === null || duration === undefined) return null;
+    if (typeof duration === 'number') {
+      return duration > 3600 ? duration : duration * 60;
+    }
+
+    const trimmed = duration.trim();
+    if (!trimmed) return null;
+
+    if (/^\d+$/.test(trimmed)) {
+      const numericValue = Number(trimmed);
+      return numericValue > 3600 ? numericValue : numericValue * 60;
+    }
+
+    if (trimmed.includes(':')) {
+      const parts = trimmed.split(':').map(part => Number(part));
+      if (parts.every(part => !Number.isNaN(part))) {
+        if (parts.length === 3) {
+          const [hours, minutes, seconds] = parts;
+          return hours * 3600 + minutes * 60 + seconds;
+        }
+        if (parts.length === 2) {
+          const [minutes, seconds] = parts;
+          return minutes * 60 + seconds;
+        }
+      }
+    }
+
+    const hoursMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*h/);
+    const minutesMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*m/);
+    const secondsMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*s/);
+
+    if (hoursMatch || minutesMatch || secondsMatch) {
+      const hours = hoursMatch ? parseFloat(hoursMatch[1]) : 0;
+      const minutes = minutesMatch ? parseFloat(minutesMatch[1]) : 0;
+      const seconds = secondsMatch ? parseFloat(secondsMatch[1]) : 0;
+      return Math.round(hours * 3600 + minutes * 60 + seconds);
+    }
+
+    return null;
+  };
+
+  const formatLabel = (value?: string | null) => {
+    if (!value) return '';
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  };
+
   const startExam = () => {
     setIsRunning(true);
     setTimeElapsed(0);
@@ -905,69 +1237,205 @@ export function UnifiedTestSimulation({
     setIsRunning(false);
 
     const questionResults = paper.questions.map(q => {
-      const getQuestionMarks = (question: Question): { earned: number; total: number } => {
-        if (question.parts.length === 0) {
-          const answer = userAnswers[question.id];
-          return {
-            earned: answer?.marksAwarded || 0,
-            total: question.marks
-          };
+      const partBreakdown: Array<{
+        id: string;
+        label: string;
+        earnedMarks: number;
+        totalMarks: number;
+        attempted: boolean;
+        accuracy: number;
+        timeSpent: number;
+        topic?: string;
+        unit?: string;
+        subtopics?: string[];
+        difficulty?: string;
+      }> = [];
+
+      const topicSet = new Set<string>();
+      const unitSet = new Set<string>();
+      const subtopicSet = new Set<string>();
+
+      if (q.topic_name) {
+        topicSet.add(q.topic_name);
+      }
+      q.subtopic_names?.forEach(name => {
+        if (name) {
+          subtopicSet.add(name);
         }
+      });
 
-        let totalEarned = 0;
-        let totalPossible = 0;
+      const questionUnit = (q as unknown as { unit_name?: string }).unit_name;
+      if (questionUnit) {
+        unitSet.add(questionUnit);
+      }
 
-        question.parts.forEach(part => {
+      let totalEarned = 0;
+      let totalPossible = 0;
+      let totalTimeSpent = 0;
+      let attempted = false;
+
+      if (q.parts.length === 0) {
+        const answer = userAnswers[q.id];
+        const earned = answer?.marksAwarded || 0;
+        const timeSpent = answer?.timeSpent || 0;
+        const answered = hasProvidedAnswer(answer?.answer);
+
+        totalEarned = earned;
+        totalPossible = q.marks;
+        totalTimeSpent = timeSpent;
+        attempted = answered;
+
+        partBreakdown.push({
+          id: q.id,
+          label: 'Whole Question',
+          earnedMarks: earned,
+          totalMarks: q.marks,
+          attempted: answered,
+          accuracy: q.marks ? (earned / q.marks) * 100 : 0,
+          timeSpent,
+          topic: q.topic_name,
+          unit: questionUnit,
+          subtopics: q.subtopic_names,
+          difficulty: q.difficulty
+        });
+      } else {
+        q.parts.forEach((part, partIndex) => {
+          const partLabel = part.part_label || `Part ${String.fromCharCode(65 + partIndex)}`;
+
+          if (part.topic_name) {
+            topicSet.add(part.topic_name);
+          }
+          if (part.unit_name) {
+            unitSet.add(part.unit_name);
+          }
+          part.subtopics?.forEach(subtopic => {
+            if (subtopic?.name) {
+              subtopicSet.add(subtopic.name);
+            }
+          });
+
           if (part.subparts && part.subparts.length > 0) {
-            part.subparts.forEach(subpart => {
-              const key = `${question.id}-${part.id}-${subpart.id}`;
+            part.subparts.forEach((subpart, subIndex) => {
+              const key = `${q.id}-${part.id}-${subpart.id}`;
               const answer = userAnswers[key];
-              totalEarned += answer?.marksAwarded || 0;
+              const earned = answer?.marksAwarded || 0;
+              const timeSpent = answer?.timeSpent || 0;
+              const answered = hasProvidedAnswer(answer?.answer);
+              const label = subpart.subpart_label
+                ? `${partLabel} - ${subpart.subpart_label}`
+                : `${partLabel}.${subIndex + 1}`;
+
+              totalEarned += earned;
               totalPossible += subpart.marks;
+              totalTimeSpent += timeSpent;
+
+              if (answered) {
+                attempted = true;
+              }
+
+              partBreakdown.push({
+                id: key,
+                label,
+                earnedMarks: earned,
+                totalMarks: subpart.marks,
+                attempted: answered,
+                accuracy: subpart.marks ? (earned / subpart.marks) * 100 : 0,
+                timeSpent,
+                topic: part.topic_name || q.topic_name,
+                unit: part.unit_name,
+                subtopics: part.subtopics?.map(s => s.name) || q.subtopic_names,
+                difficulty: part.difficulty || q.difficulty
+              });
             });
           } else {
-            const key = `${question.id}-${part.id}`;
+            const key = `${q.id}-${part.id}`;
             const answer = userAnswers[key];
-            totalEarned += answer?.marksAwarded || 0;
+            const earned = answer?.marksAwarded || 0;
+            const timeSpent = answer?.timeSpent || 0;
+            const answered = hasProvidedAnswer(answer?.answer);
+
+            totalEarned += earned;
             totalPossible += part.marks;
+            totalTimeSpent += timeSpent;
+
+            if (answered) {
+              attempted = true;
+            }
+
+            partBreakdown.push({
+              id: key,
+              label: partLabel,
+              earnedMarks: earned,
+              totalMarks: part.marks,
+              attempted: answered,
+              accuracy: part.marks ? (earned / part.marks) * 100 : 0,
+              timeSpent,
+              topic: part.topic_name || q.topic_name,
+              unit: part.unit_name,
+              subtopics: part.subtopics?.map(s => s.name),
+              difficulty: part.difficulty || q.difficulty
+            });
           }
         });
+      }
 
-        return { earned: totalEarned, total: totalPossible };
-      };
+      if (partBreakdown.length === 0) {
+        totalPossible = q.marks;
+      }
 
-      const marks = getQuestionMarks(q);
-      const isCorrect = marks.earned === marks.total && marks.total > 0;
+      const accuracy = totalPossible > 0 ? (totalEarned / totalPossible) * 100 : 0;
+      const isCorrect = totalPossible > 0 && totalEarned === totalPossible;
+
+      const feedback = !attempted
+        ? 'Not attempted - revisit during QA review.'
+        : isCorrect
+        ? 'Excellent - full marks secured.'
+        : totalEarned > 0
+        ? 'Partial credit earned - review marking guidance to capture remaining marks.'
+        : 'Attempted but incorrect - revisit the concept and marking scheme.';
 
       return {
         questionId: q.id,
         questionNumber: q.question_number,
         isCorrect,
-        earnedMarks: marks.earned,
-        totalMarks: marks.total,
+        earnedMarks: totalEarned,
+        totalMarks: totalPossible,
         userAnswer: userAnswers[q.id]?.answer,
         correctAnswers: buildNormalisedCorrectAnswers(q),
-        feedback: isCorrect ? 'Correct answer!' : marks.earned > 0 ? 'Partially correct' : 'Incorrect answer'
+        feedback,
+        attempted,
+        accuracy,
+        timeSpent: totalTimeSpent,
+        difficulty: q.difficulty,
+        topics: Array.from(topicSet),
+        units: Array.from(unitSet),
+        subtopics: Array.from(subtopicSet),
+        questionType: q.type,
+        partBreakdown
       };
     });
 
     const totalCorrect = questionResults.filter(r => r.isCorrect).length;
-    const totalPartial = questionResults.filter(r => !r.isCorrect && r.earnedMarks > 0).length;
-    const totalIncorrect = questionResults.filter(r => r.earnedMarks === 0).length;
+    const totalPartial = questionResults.filter(r => r.attempted && !r.isCorrect && r.earnedMarks > 0).length;
+    const totalIncorrect = questionResults.filter(r => r.attempted && r.earnedMarks === 0).length;
+    const totalAttempted = questionResults.filter(r => r.attempted).length;
+    const unattempted = questionResults.filter(r => !r.attempted).length;
     const earnedMarks = questionResults.reduce((sum, r) => sum + r.earnedMarks, 0);
-    const answeredCount = Object.values(userAnswers).filter(a => a.answer !== undefined && a.answer !== '').length;
+    const totalMarks = questionResults.reduce((sum, r) => sum + r.totalMarks, 0) || paper.total_marks;
+    const percentage = totalMarks > 0 ? Number(((earnedMarks / totalMarks) * 100).toFixed(1)) : 0;
 
     const simulationResults: SimulationResults = {
       totalQuestions: paper.questions.length,
-      answeredQuestions: answeredCount,
+      answeredQuestions: totalAttempted,
       correctAnswers: totalCorrect,
       partiallyCorrect: totalPartial,
       incorrectAnswers: totalIncorrect,
       totalMarks: paper.total_marks,
-      earnedMarks: earnedMarks,
-      percentage: Math.round((earnedMarks / paper.total_marks) * 100),
+      earnedMarks,
+      percentage,
       timeSpent: timeElapsed,
-      questionResults
+      questionResults,
+      unattemptedQuestions: unattempted
     };
 
     setResults(simulationResults);
@@ -1151,6 +1619,140 @@ export function UnifiedTestSimulation({
   };
 
   if (showResults && results) {
+    const unattempted = analytics?.unattempted ?? Math.max(0, results.totalQuestions - results.answeredQuestions);
+    const accuracy = analytics?.accuracy ?? (
+      results.answeredQuestions > 0
+        ? Number(((results.correctAnswers / results.answeredQuestions) * 100).toFixed(1))
+        : 0
+    );
+    const averageTimePerQuestion = analytics?.averageTimePerQuestion ?? (
+      results.totalQuestions > 0 ? results.timeSpent / results.totalQuestions : 0
+    );
+    const averageTimePerAttempted = analytics?.averageTimePerAttempted ?? (
+      results.answeredQuestions > 0 ? results.timeSpent / results.answeredQuestions : 0
+    );
+    const gradeInfo = analytics?.gradeInfo;
+    const nextGrade = analytics?.nextGrade;
+    const marksToNextGrade = analytics?.marksToNextGrade ?? 0;
+    const distribution = analytics?.distribution ?? [];
+    const distributionTotal = analytics?.distributionTotal ?? results.totalQuestions;
+    const paceAllocation = analytics?.paceAllocation;
+    const insights = analytics?.insights ?? [];
+    const unitBreakdown: PerformanceBreakdownEntry[] = analytics?.unitBreakdown ?? [];
+    const topicBreakdown: PerformanceBreakdownEntry[] = analytics?.topicBreakdown ?? [];
+    const subtopicBreakdown: PerformanceBreakdownEntry[] = analytics?.subtopicBreakdown ?? [];
+    const difficultyBreakdown: PerformanceBreakdownEntry[] = analytics?.difficultyBreakdown ?? [];
+    const typeBreakdown: PerformanceBreakdownEntry[] = analytics?.typeBreakdown ?? [];
+    const slowestQuestions = analytics?.slowestQuestions ?? [];
+    const fastestWins = analytics?.fastestWins ?? [];
+    const attempted = results.answeredQuestions;
+
+    const formatPercent = (value: number) => `${value.toFixed(1)}%`;
+    const summarise = (values?: string[]) => (values && values.length > 0 ? values.slice(0, 2).join(', ') : 'General');
+
+    const renderDomainCard = (
+      title: string,
+      icon: React.ReactNode,
+      data: PerformanceBreakdownEntry[],
+      emptyMessage: string,
+      limit = 4
+    ) => {
+      const items = data.slice(0, limit);
+      return (
+        <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300">
+              {icon}
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Ranked by accuracy</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {items.length > 0 ? (
+              items.map(item => (
+                <div
+                  key={item.name}
+                  className="rounded-xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/40 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{item.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {item.attempted} attempted • {item.unattempted} pending
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatPercent(item.accuracy)}</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        Avg {formatTime(Math.round(item.averageTime || 0))}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"
+                      style={{ width: `${Math.min(100, item.accuracy)}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                    <span>
+                      {item.earnedMarks.toFixed(1)}/{item.totalMarks.toFixed(1)} marks
+                    </span>
+                    <span>
+                      {item.correct} ✔ • {item.partial} △ • {item.incorrect} ✖
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{emptyMessage}</p>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const renderQuestionTimeList = (
+      title: string,
+      data: typeof slowestQuestions,
+      emptyMessage: string
+    ) => (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-gray-900 dark:text-white">{title}</p>
+        {data.length > 0 ? (
+          data.map(item => {
+            const question = questionMap.get(item.questionId);
+            const label = summarise(item.topics ?? question?.subtopic_names);
+            const itemAccuracy = item.accuracy ?? (
+              item.totalMarks ? (item.earnedMarks / item.totalMarks) * 100 : 0
+            );
+
+            return (
+              <div
+                key={`${item.questionId}-${title}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/40 p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Question {item.questionNumber}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {formatTime(Math.round(item.timeSpent || 0))}
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">{formatPercent(itemAccuracy)}</p>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{emptyMessage}</p>
+        )}
+      </div>
+    );
+
     return (
       <div className={cn(
         "min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col",
@@ -1167,11 +1769,9 @@ export function UnifiedTestSimulation({
                 <X className="h-5 w-5" />
               </Button>
               <div>
-                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Test Results
-                </h1>
+                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Test Results</h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {paper.code} - {paper.subject}
+                  {paper.code} • {paper.subject}
                 </p>
               </div>
             </div>
@@ -1179,108 +1779,446 @@ export function UnifiedTestSimulation({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto p-6">
-            <div className="mb-8 text-center">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+          <div className="max-w-6xl mx-auto p-6 space-y-10">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30">
                 <Award className="h-10 w-10 text-green-600 dark:text-green-400" />
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                Test Completed!
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                {paper.code}
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Test Completed!</h1>
+              <p className="text-gray-600 dark:text-gray-400">{paper.code}</p>
+              {gradeInfo && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Current grade {gradeInfo.grade} • {gradeInfo.description}
+                </p>
+              )}
             </div>
 
-            <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-8 mb-8">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-                    {results.percentage}%
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Overall Score</p>
+                    <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{results.percentage}%</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {results.earnedMarks}/{results.totalMarks} marks
+                    </p>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Score</div>
+                  <div className="rounded-full bg-blue-100 dark:bg-blue-900/40 p-3 text-blue-600 dark:text-blue-300">
+                    <Award className="h-6 w-6" />
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                    {results.earnedMarks}/{results.totalMarks}
+                {gradeInfo && (
+                  <div className="mt-4 flex items-start gap-3 rounded-xl bg-blue-50/80 dark:bg-blue-900/20 p-3">
+                    <GraduationCap className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-700 dark:text-blue-200">{gradeInfo.grade} band</p>
+                      <p className="text-xs text-blue-600/80 dark:text-blue-200/80">{gradeInfo.description}</p>
+                      {nextGrade && marksToNextGrade > 0 && (
+                        <p className="mt-1 text-xs text-blue-700 dark:text-blue-200">
+                          {marksToNextGrade} additional mark{marksToNextGrade === 1 ? '' : 's'} needed for grade {nextGrade.grade}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Marks</div>
+                )}
+              </div>
+
+              <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Question Coverage</p>
+                    <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{attempted}/{results.totalQuestions}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Attempted questions</p>
+                  </div>
+                  <div className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 p-3 text-emerald-600 dark:text-emerald-300">
+                    <ListChecks className="h-6 w-6" />
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">
-                    {results.correctAnswers}
+                <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center justify-between">
+                    <span>Full marks</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{results.correctAnswers}</span>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Correct</div>
+                  <div className="flex items-center justify-between">
+                    <span>Partial credit</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{results.partiallyCorrect}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Zero marks</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{results.incorrectAnswers}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Unattempted</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{unattempted}</span>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-gray-600 dark:text-gray-400 mb-2">
-                    {formatTime(results.timeSpent)}
+              </div>
+
+              <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Answer Accuracy</p>
+                    <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{formatPercent(accuracy)}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Across attempted questions</p>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Time Spent</div>
+                  <div className="rounded-full bg-purple-100 dark:bg-purple-900/30 p-3 text-purple-600 dark:text-purple-300">
+                    <Target className="h-6 w-6" />
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <div className="flex h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                    {distribution.map(item => {
+                      const width = distributionTotal > 0 ? (item.value / distributionTotal) * 100 : 0;
+                      return (
+                        <div
+                          key={item.label}
+                          className={cn('bg-gradient-to-r', item.color)}
+                          style={{ width: `${width}%` }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    {distribution.map(item => (
+                      <div key={`${item.label}-legend`} className="flex items-center justify-between">
+                        <span>{item.label}</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time Management</p>
+                    <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{formatTime(results.timeSpent)}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total time invested</p>
+                  </div>
+                  <div className="rounded-full bg-amber-100 dark:bg-amber-900/30 p-3 text-amber-600 dark:text-amber-300">
+                    <Clock className="h-6 w-6" />
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center justify-between">
+                    <span>Average / question</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {formatTime(Math.round(averageTimePerQuestion || 0))}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Average / attempted</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {formatTime(Math.round(averageTimePerAttempted || 0))}
+                    </span>
+                  </div>
+                  {paceAllocation && (
+                    <div
+                      className={cn(
+                        'mt-3 flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold',
+                        paceAllocation.delta > 0
+                          ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-200'
+                          : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200'
+                      )}
+                    >
+                      <span>Pacing delta</span>
+                      <span>
+                        {paceAllocation.delta > 0 ? '+' : '-'}{formatTime(Math.abs(paceAllocation.delta))}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
+            <div className="grid gap-6 lg:grid-cols-3">
+              {renderDomainCard(
+                'Unit mastery snapshot',
+                <Layers className="h-5 w-5" />,
+                unitBreakdown,
+                'Units are not tagged for this paper.'
+              )}
+              {renderDomainCard(
+                'Topic strengths & priorities',
+                <BookOpen className="h-5 w-5" />,
+                topicBreakdown,
+                'Topics are not available for this dataset.'
+              )}
+              {renderDomainCard(
+                'Subtopic drill-down',
+                <ListChecks className="h-5 w-5" />,
+                subtopicBreakdown,
+                'Subtopic metadata is not linked to these questions.',
+                6
+              )}
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Performance by difficulty</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Understand where challenge levels impact scores</p>
+                  </div>
+                </div>
+                {difficultyBreakdown.length > 0 ? (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800">
+                    <div className="grid grid-cols-5 gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <span className="text-left">Band</span>
+                      <span className="text-center">Attempted</span>
+                      <span className="text-center">Accuracy</span>
+                      <span className="text-center">Avg time</span>
+                      <span className="text-right">Marks</span>
+                    </div>
+                    {difficultyBreakdown.slice(0, 6).map(item => (
+                      <div key={item.name} className="grid grid-cols-5 gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 border-t border-gray-100 dark:border-gray-800/60">
+                        <span className="font-medium text-gray-900 dark:text-white">{formatLabel(item.name)}</span>
+                        <span className="text-center">{item.attempted}</span>
+                        <span className="text-center">{formatPercent(item.accuracy)}</span>
+                        <span className="text-center">{formatTime(Math.round(item.averageTime || 0))}</span>
+                        <span className="text-right">
+                          {item.earnedMarks.toFixed(1)}/{item.totalMarks.toFixed(1)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No difficulty metadata is available for these questions.</p>
+                )}
+              </div>
+
+              <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">
+                    <PieChart className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Question type effectiveness</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Balance objective and descriptive proficiency</p>
+                  </div>
+                </div>
+                {typeBreakdown.length > 0 ? (
+                  <div className="space-y-3">
+                    {typeBreakdown.slice(0, 6).map(item => (
+                      <div key={item.name} className="rounded-xl border border-gray-100 dark:border-gray-800 bg-white/80 dark:bg-gray-900/40 p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">{formatLabel(item.name)}</span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatPercent(item.accuracy)}</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                          <span>{item.attempted} attempted</span>
+                          <span>{formatTime(Math.round(item.averageTime || 0))} avg</span>
+                        </div>
+                        <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-500"
+                            style={{ width: `${Math.min(100, item.accuracy)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Question type tags are unavailable for this simulation.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300">
+                  <TimerReset className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Time management highlights</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Spot questions that need pacing strategies</p>
+                </div>
+              </div>
+              <div className="grid gap-6 md:grid-cols-2">
+                {renderQuestionTimeList('Most time-intensive questions', slowestQuestions, 'No questions significantly exceeded the average pace.')}
+                {renderQuestionTimeList('Fastest accurate responses', fastestWins, 'No fully correct responses recorded yet.')}
+              </div>
+            </div>
+
+            {insights.length > 0 && (
+              <div className="bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-full bg-yellow-100 dark:bg-yellow-900/30 p-3 text-yellow-600 dark:text-yellow-300">
+                    <Lightbulb className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Strategic insights</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Tailored recommendations to inform your import decision and teaching plan
+                    </p>
+                    <ul className="mt-4 space-y-3">
+                      {insights.map((insight, index) => (
+                        <li
+                          key={index}
+                          className="rounded-xl border border-gray-100 dark:border-gray-800 bg-white/90 dark:bg-gray-900/50 p-3"
+                        >
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{insight.title}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">{insight.detail}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {showAnswersOnCompletion && (
-              <div className="space-y-4 mb-8">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Question-by-Question Results
-                </h2>
-                {results.questionResults.map((result, index) => {
-                  const question = paper.questions.find(q => q.id === result.questionId);
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Detailed question review
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Analyse each response with topic, difficulty and time insights to validate data quality before importing.
+                  </p>
+                </div>
+                {results.questionResults.map(result => {
+                  const question = questionMap.get(result.questionId);
                   if (!question) return null;
+                  const questionAccuracy = result.accuracy ?? (
+                    result.totalMarks ? (result.earnedMarks / result.totalMarks) * 100 : 0
+                  );
+                  const timeSpent = Math.round(result.timeSpent || 0);
+                  const partBreakdown = result.partBreakdown ?? [];
+                  const statusClass = result.attempted
+                    ? result.isCorrect
+                      ? 'border-green-200 bg-green-50/60 dark:border-green-700/50 dark:bg-green-900/10'
+                      : result.earnedMarks > 0
+                      ? 'border-amber-200 bg-amber-50/70 dark:border-amber-700/40 dark:bg-amber-900/10'
+                      : 'border-red-200 bg-red-50/70 dark:border-red-700/40 dark:bg-red-900/10'
+                    : 'border-gray-200 bg-gray-50/70 dark:border-gray-800/60 dark:bg-gray-900/20';
 
                   return (
                     <div
                       key={result.questionId}
-                      className={cn(
-                        'border-2 rounded-lg p-4',
-                        result.isCorrect
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                          : result.earnedMarks > 0
-                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
-                      )}
+                      className={cn('rounded-2xl border p-5 shadow-sm transition-colors', statusClass)}
                     >
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="flex items-start gap-3">
                           {result.isCorrect ? (
-                            <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                            <CheckCircle className="mt-1 h-6 w-6 text-green-600 dark:text-green-400" />
+                          ) : result.earnedMarks > 0 ? (
+                            <Target className="mt-1 h-6 w-6 text-amber-600 dark:text-amber-300" />
                           ) : (
-                            <X className="h-6 w-6 text-red-600 dark:text-red-400" />
+                            <X className="mt-1 h-6 w-6 text-red-600 dark:text-red-300" />
                           )}
                           <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                               Question {result.questionNumber}
                             </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {result.feedback}
-                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">{result.feedback}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {result.difficulty && (
+                                <span className="inline-flex items-center rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-900/60 dark:text-gray-300">
+                                  Difficulty: {formatLabel(result.difficulty)}
+                                </span>
+                              )}
+                              {result.questionType && (
+                                <span className="inline-flex items-center rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-900/60 dark:text-gray-300">
+                                  Type: {formatLabel(result.questionType)}
+                                </span>
+                              )}
+                              {(result.topics ?? []).map(topic => (
+                                <span
+                                  key={`topic-${topic}`}
+                                  className="inline-flex items-center rounded-full bg-blue-100/80 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                                >
+                                  Topic: {topic}
+                                </span>
+                              ))}
+                              {(result.units ?? []).map(unit => (
+                                <span
+                                  key={`unit-${unit}`}
+                                  className="inline-flex items-center rounded-full bg-green-100/80 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-200"
+                                >
+                                  Unit: {unit}
+                                </span>
+                              ))}
+                              {(result.subtopics ?? []).map(subtopic => (
+                                <span
+                                  key={`subtopic-${subtopic}`}
+                                  className="inline-flex items-center rounded-full bg-purple-100/70 px-2.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-200"
+                                >
+                                  Subtopic: {subtopic}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-gray-900 dark:text-white">
+                        <div className="rounded-xl bg-white/70 px-4 py-3 text-right text-sm shadow-sm dark:bg-gray-900/40">
+                          <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Marks awarded</p>
+                          <p className="text-lg font-semibold text-gray-900 dark:text-white">
                             {result.earnedMarks}/{result.totalMarks}
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">marks</div>
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Accuracy {formatPercent(questionAccuracy)}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Time {formatTime(timeSpent)}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {result.attempted ? (result.isCorrect ? 'Fully correct' : result.earnedMarks > 0 ? 'Partially correct' : 'Attempted') : 'Not attempted'}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                          {question.question_description}
-                        </p>
+                      <div className="mt-4 space-y-4">
+                        <div className="rounded-xl bg-white/80 p-4 dark:bg-gray-900/50">
+                          <p className="text-sm text-gray-700 dark:text-gray-200">{question.question_description}</p>
+                        </div>
+
+                        {partBreakdown.length > 0 && (
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">Part-by-part performance</p>
+                            <div className="mt-2 grid gap-2 md:grid-cols-2">
+                              {partBreakdown.map(part => (
+                                <div
+                                  key={part.id}
+                                  className="rounded-xl border border-gray-100 dark:border-gray-800 bg-white/80 p-3 text-sm dark:bg-gray-900/40"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <p className="font-medium text-gray-900 dark:text-white">{part.label}</p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {part.topic ? part.topic : summarise(part.subtopics)}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-semibold text-gray-900 dark:text-white">
+                                        {part.earnedMarks}/{part.totalMarks}
+                                      </p>
+                                      <p className="text-[11px] text-gray-500 dark:text-gray-400">{formatPercent(part.accuracy)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {result.correctAnswers.length > 0 && (
-                          <div className="mt-2 p-2 bg-white/60 dark:bg-gray-800/60 rounded">
-                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Correct Answer(s):
-                            </p>
-                            <ul className="text-sm text-gray-900 dark:text-white space-y-1">
+                          <div className="rounded-xl bg-white/80 p-4 dark:bg-gray-900/50">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">Mark scheme guidance</p>
+                            <ul className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
                               {result.correctAnswers.map((ans, idx) => (
                                 <li key={idx}>• {ans.answer}</li>
                               ))}
                             </ul>
+                          </div>
+                        )}
+
+                        {!result.isCorrect && result.attempted && (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
+                            <p className="font-semibold">Recommendation</p>
+                            <p>
+                              Revisit the examiner commentary and marking scheme for {summarise(result.topics)} to close the remaining gap.
+                            </p>
                           </div>
                         )}
                       </div>
@@ -1290,12 +2228,12 @@ export function UnifiedTestSimulation({
               </div>
             )}
 
-            <div className="flex justify-center gap-4">
+            <div className="flex justify-center gap-4 pt-4">
               <Button onClick={handleRetakeExam} variant="outline" size="lg">
-                Retake Test
+                Retake test
               </Button>
               <Button onClick={handleExit} variant="default" size="lg">
-                Close Review
+                Close review
               </Button>
             </div>
           </div>
