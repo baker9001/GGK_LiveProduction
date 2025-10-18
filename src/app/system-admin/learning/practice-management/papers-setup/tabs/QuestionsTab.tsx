@@ -3928,7 +3928,7 @@ function QuestionsTabInner({
 
     const { questionId, partIndex, subpartIndex } = attachmentTarget;
     const attachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
-    
+
     const newAttachment = {
       id: `att_${Date.now()}`,
       type: 'image',
@@ -3939,7 +3939,10 @@ function QuestionsTabInner({
       fileName: `Figure_${questionId}${partIndex !== undefined ? `_p${partIndex}` : ''}${subpartIndex !== undefined ? `_s${subpartIndex}` : ''}.png`,
       file_name: `Figure_${questionId}${partIndex !== undefined ? `_p${partIndex}` : ''}${subpartIndex !== undefined ? `_s${subpartIndex}` : ''}.png`,
       file_type: 'image/png',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      canDelete: true,
+      attachmentKey: attachmentKey,
+      originalId: `att_${Date.now()}`
     };
     
     // Store with primary key
