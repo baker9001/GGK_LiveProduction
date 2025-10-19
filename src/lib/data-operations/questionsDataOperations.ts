@@ -2161,9 +2161,19 @@ export const importQuestions = async (params: {
         // Insert options for MCQ questions
         if (normalizedType === 'mcq' && question.options && Array.isArray(question.options)) {
           console.log(`📋 Inserting ${question.options.length} options for MCQ question ${questionNumber}`);
+          console.log('   Question type:', normalizedType);
+          console.log('   Has options array:', !!question.options);
+          console.log('   Options array length:', question.options.length);
+          console.log('   Question correct_answer:', question.correct_answer);
 
           const optionsToInsert = question.options
-            .filter((opt: any) => opt !== null && opt !== undefined)
+            .filter((opt: any) => {
+              const isValid = opt !== null && opt !== undefined;
+              if (!isValid) {
+                console.warn('   ⚠️ Filtered out null/undefined option');
+              }
+              return isValid;
+            })
             .map((option: any, index: number) => {
               const optionText = ensureString(option.text || option.option_text) || '';
               const optionLabel = option.label || String.fromCharCode(65 + index); // A, B, C, D...
@@ -2189,7 +2199,10 @@ export const importQuestions = async (params: {
               };
             });
 
+          console.log(`   Prepared ${optionsToInsert.length} options for insertion`);
+
           if (optionsToInsert.length > 0) {
+            console.log('   💾 Attempting to insert options into database...');
             const { data: insertedOptions, error: optionsError } = await supabase
               .from('question_options')
               .insert(optionsToInsert)
@@ -2197,8 +2210,14 @@ export const importQuestions = async (params: {
 
             if (optionsError) {
               console.error('❌ Error inserting options:', optionsError);
+              console.error('   Error message:', optionsError.message);
+              console.error('   Error code:', optionsError.code);
+              console.error('   Error details:', optionsError.details);
+              console.error('   Error hint:', optionsError.hint);
+              console.error('   Full error:', JSON.stringify(optionsError, null, 2));
             } else {
-              console.log(`✅ Successfully inserted ${insertedOptions?.length || 0} options`);
+              console.log(`✅ Successfully inserted ${insertedOptions?.length || 0} options into question_options table`);
+              console.log('   Inserted option IDs:', insertedOptions?.map((opt: any) => opt.id).join(', '));
               // Log data completeness for quality monitoring
               const withExplanation = insertedOptions?.filter((opt: any) => opt.explanation).length || 0;
               const withContext = insertedOptions?.filter((opt: any) => opt.context_type).length || 0;
@@ -2209,9 +2228,17 @@ export const importQuestions = async (params: {
                 console.warn(`⚠️ ${insertedOptions?.length! - withContext} options missing context metadata (analytics incomplete)`);
               }
             }
+          } else {
+            console.warn(`⚠️ No options to insert after filtering (optionsToInsert.length = 0)`);
           }
-        } else if (normalizedType === 'mcq') {
-          console.warn(`⚠️ MCQ question ${questionNumber} has no options array!`);
+        } else {
+          if (normalizedType === 'mcq') {
+            console.error(`❌ CRITICAL: MCQ question ${questionNumber} has no options array!`);
+            console.error('   question.options:', question.options);
+            console.error('   Array.isArray(question.options):', Array.isArray(question.options));
+          } else {
+            console.log(`ℹ️ Question ${questionNumber} is not MCQ (type: ${normalizedType}), skipping options`);
+          }
         }
 
         // Insert sub-questions/parts if they exist
