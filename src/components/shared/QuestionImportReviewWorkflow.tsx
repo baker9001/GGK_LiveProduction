@@ -153,6 +153,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [subtopics, setSubtopics] = useState<SubtopicRecord[]>([]);
   const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(false);
   const taxonomyErrorNotifiedRef = useRef(false);
+  const [isBulkReviewing, setIsBulkReviewing] = useState(false);
 
   const isInitializedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1373,6 +1374,70 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     }
   };
 
+  const handleMarkAllReviewed = useCallback(async () => {
+    if (!reviewSessionId) {
+      return;
+    }
+
+    const unreviewedQuestionIds = memoizedQuestions
+      .map(question => question.id)
+      .filter((id): id is string => Boolean(id) && !reviewStatuses[id]?.isReviewed);
+
+    if (unreviewedQuestionIds.length === 0) {
+      toast.info('All questions are already marked as reviewed.', {
+        id: 'question-bulk-review-info',
+      });
+      return;
+    }
+
+    setIsBulkReviewing(true);
+
+    try {
+      const now = new Date().toISOString();
+      const { data: userData } = await supabase.auth.getUser();
+      const reviewerId = userData?.user?.id ?? null;
+
+      const { error } = await supabase
+        .from('question_import_review_status')
+        .update({
+          is_reviewed: true,
+          reviewed_at: now,
+          reviewed_by: reviewerId,
+        })
+        .eq('review_session_id', reviewSessionId)
+        .in('question_identifier', unreviewedQuestionIds);
+
+      if (error) {
+        throw error;
+      }
+
+      setReviewStatuses(prev => {
+        const updated = { ...prev };
+        unreviewedQuestionIds.forEach(id => {
+          const existing = updated[id];
+          updated[id] = {
+            ...(existing ?? { questionId: id }),
+            isReviewed: true,
+            reviewedAt: now,
+          };
+        });
+        return updated;
+      });
+
+      toast.success(`Marked ${unreviewedQuestionIds.length} question${unreviewedQuestionIds.length === 1 ? '' : 's'} as reviewed.`, {
+        id: 'question-bulk-review-success',
+        duration: 4000,
+      });
+    } catch (error) {
+      console.error('Failed to mark all questions as reviewed:', error);
+      toast.error('Unable to mark all questions as reviewed. Please try again.', {
+        id: 'question-bulk-review-error',
+      });
+    } finally {
+      setIsBulkReviewing(false);
+    }
+  }, [memoizedQuestions, reviewSessionId, reviewStatuses]);
+
   const handleStartSimulation = () => {
     // Validate questions before requesting simulation from parent
     const invalidQuestions = memoizedQuestions.filter(q =>
@@ -1532,12 +1597,24 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               Click any question card to expand/collapse. Review each question carefully before importing to the question bank.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             <Button onClick={expandAll} variant="outline" size="sm">
               Expand All
             </Button>
             <Button onClick={collapseAll} variant="outline" size="sm">
               Collapse All
+            </Button>
+            <Button
+              onClick={handleMarkAllReviewed}
+              variant="success"
+              size="sm"
+              leftIcon={<CheckCircle className="h-4 w-4" />}
+              loading={isBulkReviewing}
+              loadingText="Confirming..."
+              disabled={memoizedQuestions.length === 0 || reviewedCount === memoizedQuestions.length}
+              tooltip="Mark every question in this import as reviewed"
+            >
+              Confirm All
             </Button>
           </div>
         </div>
