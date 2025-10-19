@@ -1887,6 +1887,57 @@ export const importQuestions = async (params: {
     console.log('Mappings count:', Object.keys(mappings || {}).length);
 
     // ============================================================================
+    // PRE-FLIGHT VALIDATION - Check authentication and permissions
+    // ============================================================================
+    console.log('\n========================================');
+    console.log('🔐 PRE-FLIGHT VALIDATION');
+    console.log('========================================');
+
+    // Check 1: Verify authentication session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (!session || sessionError) {
+      const errorMsg = 'Authentication session is invalid or expired. Please sign in again.';
+      console.error('❌ Authentication check failed:', sessionError?.message || 'No session');
+      throw new Error(errorMsg);
+    }
+    console.log('✅ Authentication session valid:', session.user.email);
+
+    // Check 2: Test if user can insert questions
+    console.log('🔍 Checking insert permissions...');
+    const { data: permissionCheck, error: permCheckError } = await supabase
+      .rpc('can_insert_questions');
+
+    if (permCheckError) {
+      console.error('❌ Permission check function failed:', permCheckError);
+      console.log('ℹ️ Continuing with import (function may not exist in older schemas)');
+    } else if (permissionCheck && !permissionCheck.can_insert) {
+      const errorMsg = `Cannot insert questions: ${permissionCheck.reason || 'Insufficient permissions'}`;
+      console.error('❌ Permission check failed:', permissionCheck);
+      throw new Error(errorMsg);
+    } else {
+      console.log('✅ User has permission to insert questions:', permissionCheck);
+    }
+
+    // Check 3: Validate paper and data structure prerequisites
+    console.log('🔍 Validating prerequisites...');
+    const { data: validationResult, error: validationError } = await supabase
+      .rpc('validate_question_import_prerequisites', {
+        p_paper_id: paperId,
+        p_data_structure_id: dataStructureInfo.id
+      });
+
+    if (validationError) {
+      console.error('❌ Prerequisite validation function failed:', validationError);
+      console.log('ℹ️ Continuing with import (function may not exist in older schemas)');
+    } else if (validationResult && !validationResult.valid) {
+      const errorMsg = `Prerequisite validation failed: ${JSON.stringify(validationResult.errors)}`;
+      console.error('❌ Validation failed:', validationResult);
+      throw new Error(errorMsg);
+    } else {
+      console.log('✅ Prerequisites validated successfully');
+    }
+
+    // ============================================================================
     // MCQ OPTION DATA VALIDATION - Prevent Data Loss
     // ============================================================================
     console.log('\n========================================');
@@ -1905,13 +1956,11 @@ export const importQuestions = async (params: {
       console.error('❌ CRITICAL: Found structural errors in MCQ options. Review errors above before proceeding.');
     }
 
-    // Verify authentication
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('\n📋 Authentication Status:');
+    // Authentication status already logged in pre-flight validation section above
+    console.log('\n📋 Authentication Status (from pre-flight validation):');
     console.log('  Session exists:', !!session);
     console.log('  User ID:', session?.user?.id || 'NONE');
     console.log('  User email:', session?.user?.email || 'NONE');
-    console.log('  Session error:', sessionError?.message || 'None');
 
     // Verify database connection and RLS
     console.log('\n🔐 Testing Database Access:');
@@ -2034,8 +2083,7 @@ export const importQuestions = async (params: {
         console.log('   Normalized type:', normalizedType);
         console.log('   Has options:', question.options ? question.options.length : 0);
 
-        // Get authenticated user ID for audit fields
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Get authenticated user ID for audit fields (reuse session from pre-flight validation)
         const currentUserId = session?.user?.id || null;
 
         const questionData = {
@@ -2406,21 +2454,86 @@ export const importQuestions = async (params: {
       }
     }
 
-    // Verify questions were actually inserted
-    console.log('\n🔍 Verifying inserted questions in database...');
-    const { data: verifyQuestions, error: verifyError } = await supabase
-      .from('questions_master_admin')
-      .select('id, question_number, question_description, created_at')
-      .eq('paper_id', paperId)
-      .in('id', importedQuestions.map(q => q.id));
+    // ============================================================================
+    // POST-IMPORT VERIFICATION - Critical check to ensure data actually persisted
+    // ============================================================================
+    console.log('\n========================================');
+    console.log('🔍 POST-IMPORT VERIFICATION');
+    console.log('========================================');
 
-    if (verifyError) {
-      console.error('❌ Error verifying questions:', verifyError);
+    if (importedQuestions.length > 0) {
+      console.log('Verifying', importedQuestions.length, 'questions were actually saved to database...');
+
+      const { data: verifyQuestions, error: verifyError } = await supabase
+        .from('questions_master_admin')
+        .select('id, question_number, question_description, created_at, type')
+        .eq('paper_id', paperId)
+        .in('id', importedQuestions.map(q => q.id));
+
+      if (verifyError) {
+        console.error('❌ CRITICAL: Error verifying questions in database:', verifyError);
+        console.error('   Error code:', verifyError.code);
+        console.error('   Error message:', verifyError.message);
+        console.error('   Error details:', verifyError.details);
+
+        // This is a critical failure - data may not have been saved
+        throw new Error(`Verification failed: ${verifyError.message}. Data may not have been saved to database.`);
+      }
+
+      const verifiedCount = verifyQuestions?.length || 0;
+      const expectedCount = importedQuestions.length;
+
+      console.log('✅ Verification query successful');
+      console.log('   Questions expected:', expectedCount);
+      console.log('   Questions found in DB:', verifiedCount);
+
+      if (verifiedCount !== expectedCount) {
+        console.error('❌ CRITICAL MISMATCH: Not all questions were saved!');
+        console.error('   Expected:', expectedCount);
+        console.error('   Found:', verifiedCount);
+        console.error('   Missing:', expectedCount - verifiedCount);
+
+        // Find which questions are missing
+        const verifiedIds = new Set(verifyQuestions?.map(q => q.id) || []);
+        const missingQuestions = importedQuestions.filter(q => !verifiedIds.has(q.id));
+        console.error('   Missing question IDs:', missingQuestions.map(q => q.id));
+        console.error('   Missing question numbers:', missingQuestions.map(q => q.question_number));
+
+        // This is a critical failure - some data was not saved
+        throw new Error(`Verification failed: Only ${verifiedCount} out of ${expectedCount} questions were found in database. Import rolled back or partially failed.`);
+      }
+
+      console.log('✅ All questions verified successfully in database');
+
+      // Additional verification for MCQ questions with options
+      const mcqQuestions = verifyQuestions?.filter(q => q.type === 'mcq') || [];
+      if (mcqQuestions.length > 0) {
+        console.log('\n🔍 Verifying MCQ options for', mcqQuestions.length, 'MCQ questions...');
+
+        const { data: optionsCount, error: optionsError } = await supabase
+          .from('question_options')
+          .select('question_id, count')
+          .in('question_id', mcqQuestions.map(q => q.id))
+          .select('question_id');
+
+        if (optionsError) {
+          console.warn('⚠️ Could not verify MCQ options:', optionsError.message);
+        } else {
+          const questionsWithOptions = new Set(optionsCount?.map((o: any) => o.question_id) || []);
+          const mcqQuestionsWithoutOptions = mcqQuestions.filter(q => !questionsWithOptions.has(q.id));
+
+          if (mcqQuestionsWithoutOptions.length > 0) {
+            console.warn('⚠️ WARNING:', mcqQuestionsWithoutOptions.length, 'MCQ questions have no options saved');
+            console.warn('   Question IDs without options:', mcqQuestionsWithoutOptions.map(q => q.id));
+          } else {
+            console.log('✅ All MCQ questions have options saved');
+          }
+        }
+      }
+
+      console.log('✅ Post-import verification passed');
     } else {
-      console.log('✅ Verification complete:');
-      console.log('   Questions found in DB:', verifyQuestions?.length || 0);
-      console.log('   Questions expected:', importedQuestions.length);
-      console.log('   Verification data:', verifyQuestions);
+      console.log('ℹ️ No questions to verify (none were imported)');
     }
 
     console.log('\n========================================');
