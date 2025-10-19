@@ -1692,16 +1692,43 @@ export default function PapersSetupPage() {
   const handleStructureComplete = async () => {
     if (structureCompleteCalled) return;
     setStructureCompleteCalled(true);
-    
-    setStructureComplete(true);
-    setTabStatuses(prev => ({
-      ...prev,
-      structure: 'completed',
-      metadata: 'active',
-    }));
-    
-    // Auto-navigate to metadata tab
-    handleTabChange('metadata', { message: 'Configuring paper metadata workspace...' });
+
+    try {
+      // Refresh import session from database to get updated entity_ids
+      if (importSession?.id) {
+        const { data: refreshedSession, error: refreshError } = await supabase
+          .from('question_import_sessions')
+          .select('*')
+          .eq('id', importSession.id)
+          .single();
+
+        if (refreshError) {
+          console.error('[handleStructureComplete] Error refreshing import session:', refreshError);
+          toast.error('Failed to refresh import session data');
+          setStructureCompleteCalled(false);
+          return;
+        }
+
+        if (refreshedSession) {
+          console.log('[handleStructureComplete] Refreshed import session with entity_ids:', refreshedSession.metadata?.entity_ids);
+          setImportSession(refreshedSession);
+        }
+      }
+
+      setStructureComplete(true);
+      setTabStatuses(prev => ({
+        ...prev,
+        structure: 'completed',
+        metadata: 'active',
+      }));
+
+      // Auto-navigate to metadata tab
+      handleTabChange('metadata', { message: 'Configuring paper metadata workspace...' });
+    } catch (error) {
+      console.error('[handleStructureComplete] Unexpected error:', error);
+      toast.error('An error occurred while completing structure configuration');
+      setStructureCompleteCalled(false);
+    }
   };
 
   const handleMetadataSave = async (paperId: string, paperDetails: any) => {
