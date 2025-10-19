@@ -1694,11 +1694,12 @@ export default function PapersSetupPage() {
     setStructureCompleteCalled(true);
 
     try {
-      // Refresh import session from database to get updated entity_ids
+      // Refresh import session metadata from database to get updated entity_ids
+      // Only fetch the fields we need for better performance
       if (importSession?.id) {
         const { data: refreshedSession, error: refreshError } = await supabase
           .from('past_paper_import_sessions')
-          .select('*')
+          .select('id, metadata, updated_at')
           .eq('id', importSession.id)
           .single();
 
@@ -1711,7 +1712,11 @@ export default function PapersSetupPage() {
 
         if (refreshedSession) {
           console.log('[handleStructureComplete] Refreshed import session with entity_ids:', refreshedSession.metadata?.entity_ids);
-          setImportSession(refreshedSession);
+          // Merge with existing session to preserve all other fields
+          setImportSession(prev => ({
+            ...prev,
+            ...refreshedSession
+          }));
         }
       }
 

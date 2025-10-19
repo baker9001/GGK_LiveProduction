@@ -541,10 +541,7 @@ export default function StructureTab({
 
       toast.success('Academic structure configured successfully');
 
-      // Small delay to ensure database write completes
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Navigate to metadata tab
+      // Navigate to metadata tab immediately (database write is already complete)
       console.log('[StructureTab] Proceeding to next step');
       onNext();
     } catch (error: any) {
