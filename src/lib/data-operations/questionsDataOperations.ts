@@ -302,6 +302,14 @@ export const detectAnswerFormat = (questionText: string): string | null => {
 };
 
 export const getQuestionDescription = (question: any): string => {
+  const typeValue = ensureString(
+    question?.question_type ??
+    question?.type ??
+    question?.questionType ??
+    question?.question_category ??
+    null
+  )?.toLowerCase();
+
   if (question.question_description && question.question_description.trim()) {
     return question.question_description.trim();
   }
@@ -314,7 +322,7 @@ export const getQuestionDescription = (question: any): string => {
     return question.question_header.trim();
   }
   
-  if (question.type === 'complex' && question.parts && question.parts.length > 0) {
+  if (typeValue === 'complex' && question.parts && question.parts.length > 0) {
     if (question.description && question.description.trim()) {
       return question.description.trim();
     }
@@ -332,7 +340,7 @@ export const getQuestionDescription = (question: any): string => {
     }
   }
   
-  if (question.type === 'mcq' && question.figure) {
+  if (typeValue === 'mcq' && question.figure) {
     return '[Figure-based question]';
   }
   
@@ -1489,7 +1497,13 @@ export const insertSubQuestion = async (
     const partAnswerFormat = part.answer_format || detectAnswerFormat(part.question_description || part.question_text || '');
 
     // Determine sub-question type - preserve 'mcq' and 'tf' types, default to 'descriptive'
-    const rawPartType = ensureString(part.type);
+    const partTypeSource =
+      part?.question_type ??
+      part?.type ??
+      part?.questionType ??
+      part?.question_category ??
+      null;
+    const rawPartType = ensureString(partTypeSource)?.toLowerCase() || null;
     const normalizedPartType = rawPartType === 'mcq' || rawPartType === 'tf' ? rawPartType : 'descriptive';
 
     const subQuestionData = {
@@ -2004,12 +2018,19 @@ export const importQuestions = async (params: {
         const questionAnswerFormat = question.answer_format || detectAnswerFormat(questionDescription);
         
         // Determine question type - preserve 'mcq' and 'tf' types, default to 'descriptive'
-        const questionType = ensureString(question.type);
+        const questionTypeSource =
+          question?.question_type ??
+          question?.type ??
+          question?.questionType ??
+          question?.questionCategory ??
+          null;
+        const questionType = ensureString(questionTypeSource)?.toLowerCase() || null;
         const normalizedType = questionType === 'mcq' || questionType === 'tf' ? questionType : 'descriptive';
 
         console.log('🔍 Question type detection:');
         console.log('   Raw question.type:', question.type);
-        console.log('   ensureString result:', questionType);
+        console.log('   question.question_type:', question?.question_type);
+        console.log('   Normalized source value:', questionType);
         console.log('   Normalized type:', normalizedType);
         console.log('   Has options:', question.options ? question.options.length : 0);
 
@@ -2027,7 +2048,12 @@ export const importQuestions = async (params: {
           chapter_id: getUUIDFromMapping(mapping.chapter_id) || null,
           topic_id: primaryTopicId,
           subtopic_id: primarySubtopicId,
-          category: question.type === 'complex' ? 'complex' : 'direct',
+          category:
+            (ensureString(
+              question?.category ?? question?.question_category ?? question?.type ?? questionTypeSource
+            )?.toLowerCase() === 'complex')
+              ? 'complex'
+              : 'direct',
           type: normalizedType,
           question_number: questionNumber,
           question_header: ensureString(question.question_header) || null,
@@ -2917,6 +2943,13 @@ export const validateQuestionsForImport = (
   questions.forEach((question: any) => {
     const questionErrors: string[] = [];
     const questionId = question.id || `q_${question.question_number}`;
+    const questionTypeValue = ensureString(
+      question?.question_type ??
+      question?.type ??
+      question?.questionType ??
+      question?.question_category ??
+      null
+    )?.toLowerCase();
     
     // Skip validation for already imported questions
     const questionNumber = parseInt(question.question_number) || parseInt(questionId.replace('q_', ''));
@@ -2930,7 +2963,7 @@ export const validateQuestionsForImport = (
       question.question_text || 
       question.question_header ||
       question.description ||
-      (question.figure && question.type === 'mcq') ||
+      (question.figure && questionTypeValue === 'mcq') ||
       (question.parts && question.parts.length > 0);
     
     if (!hasQuestionContent) {
@@ -2949,7 +2982,7 @@ export const validateQuestionsForImport = (
     }
     
     // For MCQ questions, check if correct answer is set
-    if (question.type === 'mcq' && question.options) {
+    if (questionTypeValue === 'mcq' && question.options) {
       const hasCorrectAnswer = question.options.some((opt: any) => opt?.is_correct) || 
                               question.correct_answer !== null;
       if (!hasCorrectAnswer) {
@@ -2983,6 +3016,13 @@ export const validateQuestionMapping = (
   mapping: QuestionMapping | undefined | null
 ): { isValid: boolean; errors: string[] } => {
   const errors: string[] = [];
+  const questionTypeValue = ensureString(
+    question?.question_type ??
+    question?.type ??
+    question?.questionType ??
+    question?.question_category ??
+    null
+  )?.toLowerCase();
   
   // Ensure mapping exists
   const safeMapping = mapping || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
@@ -3005,7 +3045,7 @@ export const validateQuestionMapping = (
     errors.push('Question marks are required');
   }
   
-  if (!question.type) {
+  if (!questionTypeValue) {
     errors.push('Question type is required');
   }
   
