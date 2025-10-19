@@ -1697,7 +1697,7 @@ export default function PapersSetupPage() {
       // Refresh import session from database to get updated entity_ids
       if (importSession?.id) {
         const { data: refreshedSession, error: refreshError } = await supabase
-          .from('question_import_sessions')
+          .from('past_paper_import_sessions')
           .select('*')
           .eq('id', importSession.id)
           .single();
@@ -2044,7 +2044,12 @@ export default function PapersSetupPage() {
               importSession={importSession}
               parsedData={parsedData}
               onSave={handleMetadataSave}
-              onPrevious={() => handleTabChange('structure', { message: 'Going back to academic structure...' })}
+              onPrevious={() => {
+                // Reset structure completion flags when going back
+                setStructureCompleteCalled(false);
+                setStructureComplete(false);
+                handleTabChange('structure', { message: 'Going back to academic structure...' });
+              }}
             />
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
