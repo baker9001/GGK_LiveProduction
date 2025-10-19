@@ -412,10 +412,11 @@ export default function StructureTab({
     try {
       let entityIds: any = {};
 
-      // Check if we have all the entity IDs we need
+      // Always fetch entity IDs to ensure we have the most up-to-date data
+      // Check if we have all the entity IDs we need in structureMetadata
       if (structureMetadata?.programId && structureMetadata?.providerId && structureMetadata?.subjectId) {
         // Use existing IDs from structureMetadata (fast path)
-        console.log('[GGK] Using existing entity IDs from metadata');
+        console.log('[StructureTab] Using existing entity IDs from metadata');
         entityIds = {
           program_id: structureMetadata.programId,
           provider_id: structureMetadata.providerId,
@@ -424,8 +425,8 @@ export default function StructureTab({
           data_structure_id: structureMetadata.dataStructureId
         };
       } else if (structureMetadata?.dataStructureId) {
-        // Fetch entity IDs from the data structure (slow path - only as fallback)
-        console.log('[GGK] Fetching entity IDs from data structure...');
+        // Fetch entity IDs from the data structure (fallback path)
+        console.log('[StructureTab] Fetching entity IDs from data structure...');
         const fetchedIds = await fetchEntityIds(structureMetadata.dataStructureId);
 
         entityIds = {
@@ -436,7 +437,8 @@ export default function StructureTab({
           data_structure_id: structureMetadata.dataStructureId
         };
 
-        // Update local state with fetched IDs
+        // Update local state with fetched IDs for future clicks
+        // Note: This update is async and won't affect this execution
         setStructureMetadata(prev => ({
           ...prev,
           programId: fetchedIds.program_id,
@@ -457,6 +459,8 @@ export default function StructureTab({
       if (!entityIds.program_id || !entityIds.provider_id || !entityIds.subject_id) {
         throw new Error('Missing required entity IDs. Please ensure all entities are created.');
       }
+
+      console.log('[StructureTab] Proceeding with entity IDs:', entityIds);
 
       // Update import session with entity IDs
       await updateImportSession(entityIds);
