@@ -118,6 +118,9 @@ export interface GroupedPaper {
   program_id?: string;
   region_id?: string;
   data_structure_id?: string;
+  exam_year?: number;
+  exam_session?: string;
+  title?: string;
   questions: Question[];
 }
 
@@ -252,7 +255,10 @@ export default function QuestionsSetupPage() {
             provider_id,
             status,
             duration,
-            data_structure_id
+            data_structure_id,
+            exam_year,
+            exam_session,
+            title
           ),
           question_subtopics(
             subtopic_id,
@@ -470,6 +476,9 @@ export default function QuestionsSetupPage() {
             program_id: dataStructure?.programs?.id,
             region_id: dataStructure?.regions?.id,
             data_structure_id: dataStructure?.id || paperDetail?.data_structure_id,
+            exam_year: paper.exam_year,
+            exam_session: paper.exam_session,
+            title: paper.title,
             questions: []
           };
         }

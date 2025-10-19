@@ -424,7 +424,26 @@ export function PaperCard({
             </div>
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{paper.code}</h3>
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{paper.code}</h3>
+                    {paper.title && (
+                      <p className="text-sm font-medium text-blue-600 dark:text-blue-400">{paper.title}</p>
+                    )}
+                    {(paper.exam_year || paper.exam_session) && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                        {paper.exam_year && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-indigo-100 dark:bg-indigo-900/30 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                            {paper.exam_year}
+                          </span>
+                        )}
+                        {paper.exam_session && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-xs font-medium text-purple-700 dark:text-purple-300">
+                            {paper.exam_session === 'M/J' ? 'May/June' : paper.exam_session === 'O/N' ? 'Oct/Nov' : paper.exam_session}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <StatusBadge
                     status={paper.status}
                     label={getPaperStatusLabel(paper.status)}
