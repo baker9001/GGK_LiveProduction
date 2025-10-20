@@ -414,6 +414,11 @@ export default function ImportedStructureReview({
             // Also store by name+code combination for exact matching
             subjects.set(normalize(`${x.name} - ${x.code}`), { id: x.id, exists: true, name: x.name });
             subjects.set(normalize(`${x.name} (${x.code})`), { id: x.id, exists: true, name: x.name });
+
+            // Extract subject name without code and store separately for matching
+            // This allows "Chemistry" from JSON to match "Chemistry - 0620" from database
+            const subjectNameWithoutCode = extractSubjectName(x.name);
+            subjects.set(normalize(subjectNameWithoutCode), { id: x.id, exists: true, name: x.name });
           }
         });
         
