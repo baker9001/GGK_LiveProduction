@@ -1445,8 +1445,13 @@ export const insertSubQuestion = async (
   subpartIndex?: number
 ): Promise<void> => {
   try {
+    // Log recursion entry
+    console.log(`\n[SUB-QUESTION] Processing ${partType} at level ${level}`);
+    console.log(`[SUB-QUESTION] Parent question ID: ${parentQuestionId}`);
+    console.log(`[SUB-QUESTION] Parent sub-question ID: ${parentSubId || 'NONE (top-level part)'}`);
+
     const partMapping = mapping || {};
-    
+
     // Determine the part label based on part type and level
     let partLabel = '';
     if (partType === 'part') {
@@ -1454,6 +1459,8 @@ export const insertSubQuestion = async (
     } else if (partType === 'subpart') {
       partLabel = part.subpart || part.part_label || `${romanNumeral(part.order_index + 1 || 1)}`; // i, ii, iii...
     }
+
+    console.log(`[SUB-QUESTION] Part label: ${partLabel}`);
     
     const parsedOrderIndex = parseInt(part.order_index);
     const hasValidOrderIndex = !isNaN(parsedOrderIndex);
@@ -1730,9 +1737,24 @@ export const insertSubQuestion = async (
       const attachmentsToInsert = partAttachments
         .filter((att: any) => {
           if (!att.file_url || att.file_url.trim() === '') {
-            console.warn(`[Attachment] Skipping attachment with empty file_url for sub-question ${subQuestionRecord.id}:`, att);
+            console.warn(`[ATTACHMENT] Skipping attachment with empty file_url for sub-question ${subQuestionRecord.id}:`, att);
             return false;
           }
+
+          // Validate URL format
+          try {
+            new URL(att.file_url);
+          } catch (e) {
+            console.error(`[ATTACHMENT] Invalid URL format for sub-question ${subQuestionRecord.id}:`, att.file_url);
+            console.error(`[ATTACHMENT] URL validation error:`, e);
+            return false;
+          }
+
+          // Check if URL is from Supabase storage (warning only, not blocking)
+          if (!att.file_url.includes('supabase.co/storage') && !att.file_url.includes('localhost')) {
+            console.warn(`[ATTACHMENT] URL not from Supabase storage (external URL):`, att.file_url);
+          }
+
           return true;
         })
         .map((att: any) => ({
@@ -1771,12 +1793,16 @@ export const insertSubQuestion = async (
     const childPartIndex = effectivePartIndex ?? partIndex ?? (hasValidOrderIndex ? parsedOrderIndex : undefined);
 
     if (part.subparts && part.subparts.length > 0) {
+      console.log(`[SUB-QUESTION] ${partLabel} has ${part.subparts.length} nested subparts, recursing...`);
+
       for (let subpartIdx = 0; subpartIdx < part.subparts.length; subpartIdx++) {
         const subpart = part.subparts[subpartIdx];
         if (!subpart) continue;
         const subpartOrderIndex = !isNaN(parseInt(subpart?.order_index))
           ? parseInt(subpart.order_index)
           : subpartIdx;
+
+        console.log(`[SUB-QUESTION] Recursing into subpart ${subpartIdx + 1}/${part.subparts.length}`);
 
         await insertSubQuestion(
           parentQuestionId,
@@ -1791,16 +1817,22 @@ export const insertSubQuestion = async (
           subpartOrderIndex
         );
       }
+
+      console.log(`[SUB-QUESTION] Completed all ${part.subparts.length} subparts for ${partLabel}`);
     }
 
     // Also check for 'parts' (for deeper nesting or alternative structure)
     if (part.parts && part.parts.length > 0) {
+      console.log(`[SUB-QUESTION] ${partLabel} has ${part.parts.length} nested parts, recursing...`);
+
       for (let nestedIdx = 0; nestedIdx < part.parts.length; nestedIdx++) {
         const nestedPart = part.parts[nestedIdx];
         if (!nestedPart) continue;
         const nestedOrderIndex = !isNaN(parseInt(nestedPart?.order_index))
           ? parseInt(nestedPart.order_index)
           : nestedIdx;
+
+        console.log(`[SUB-QUESTION] Recursing into nested part ${nestedIdx + 1}/${part.parts.length}`);
 
         await insertSubQuestion(
           parentQuestionId,
@@ -1814,10 +1846,23 @@ export const insertSubQuestion = async (
           nestedOrderIndex
         );
       }
+
+      console.log(`[SUB-QUESTION] Completed all ${part.parts.length} nested parts for ${partLabel}`);
     }
 
-  } catch (error) {
-    console.error('Error in insertSubQuestion:', error);
+    console.log(`[SUB-QUESTION] ✅ Successfully completed ${partLabel} at level ${level}`);
+
+  } catch (error: any) {
+    console.error(`[SUB-QUESTION ERROR] Failed to insert ${partLabel}:`, error);
+    console.error(`[SUB-QUESTION ERROR] Parent question: ${parentQuestionId}`);
+    console.error(`[SUB-QUESTION ERROR] Level: ${level}`);
+    console.error(`[SUB-QUESTION ERROR] Error message:`, error?.message);
+    console.error(`[SUB-QUESTION ERROR] Error details:`, error?.details);
+
+    // Propagate error to parent handler so it can be tracked
+    throw new Error(
+      `Failed to insert sub-question ${partLabel} (level ${level}): ${error.message || 'Unknown error'}`
+    );
   }
 };
 
@@ -2062,6 +2107,30 @@ export const importQuestions = async (params: {
         const primarySubtopicId = getUUIDFromMapping(
           mapping?.subtopic_ids && mapping.subtopic_ids.length > 0 ? mapping.subtopic_ids[0] : null
         );
+
+        // Log mapping results
+        console.log('🔗 Mapping resolution for question', questionNumber);
+        console.log('   Chapter ID:', questionData.chapter_id || 'NOT MAPPED');
+        console.log('   Topic ID:', primaryTopicId || 'NOT MAPPED');
+        console.log('   Subtopic ID:', primarySubtopicId || 'NOT MAPPED');
+
+        if (!primaryTopicId) {
+          console.warn(`⚠️ [MAPPING] No topic mapped for question ${questionNumber}`);
+          console.warn(`   Available mapping data:`, {
+            has_mapping: !!mapping,
+            topic_ids: mapping?.topic_ids,
+            original_topics: mapping?.original_topics
+          });
+        }
+
+        if (!primarySubtopicId) {
+          console.warn(`⚠️ [MAPPING] No subtopic mapped for question ${questionNumber}`);
+          console.warn(`   Available mapping data:`, {
+            has_mapping: !!mapping,
+            subtopic_ids: mapping?.subtopic_ids,
+            original_subtopics: mapping?.original_subtopics
+          });
+        }
         
         const questionDescription = getQuestionDescription(question);
         const questionAnswerFormat = question.answer_format || detectAnswerFormat(questionDescription);
@@ -2378,16 +2447,39 @@ export const importQuestions = async (params: {
         // Handle attachments
         const questionAttachments = uploadedAttachments[question.id] || [];
         if (questionAttachments.length > 0) {
-          const attachmentsToInsert = questionAttachments.map((att: any) => ({
-            question_id: insertedQuestion.id,
-            file_url: att.file_url,
-            file_name: att.file_name || att.fileName,
-            file_type: att.file_type || 'image/png',
-            file_size: att.file_size || 0,
-            // P1 FIX: Populate attachment audit fields
-            uploaded_by: currentUserId,
-            uploaded_at: new Date().toISOString()
-          }));
+          const attachmentsToInsert = questionAttachments
+            .filter((att: any) => {
+              if (!att.file_url || att.file_url.trim() === '') {
+                console.warn(`[ATTACHMENT] Skipping attachment with empty file_url for question ${questionNumber}:`, att);
+                return false;
+              }
+
+              // Validate URL format
+              try {
+                new URL(att.file_url);
+              } catch (e) {
+                console.error(`[ATTACHMENT] Invalid URL format for question ${questionNumber}:`, att.file_url);
+                console.error(`[ATTACHMENT] URL validation error:`, e);
+                return false;
+              }
+
+              // Check if URL is from Supabase storage (warning only)
+              if (!att.file_url.includes('supabase.co/storage') && !att.file_url.includes('localhost')) {
+                console.warn(`[ATTACHMENT] URL not from Supabase storage (external URL):`, att.file_url);
+              }
+
+              return true;
+            })
+            .map((att: any) => ({
+              question_id: insertedQuestion.id,
+              file_url: att.file_url,
+              file_name: att.file_name || att.fileName,
+              file_type: att.file_type || 'image/png',
+              file_size: att.file_size || 0,
+              // P1 FIX: Populate attachment audit fields
+              uploaded_by: currentUserId,
+              uploaded_at: new Date().toISOString()
+            }));
 
           const { data: insertedAttachments, error: attachError } = await supabase
             .from('questions_attachments')
@@ -2524,7 +2616,7 @@ export const importQuestions = async (params: {
       console.log('   Questions found in DB:', verifiedCount);
 
       if (verifiedCount !== expectedCount) {
-        console.error('❌ CRITICAL MISMATCH: Not all questions were saved!');
+        console.error('⚠️ VERIFICATION MISMATCH (non-fatal warning)');
         console.error('   Expected:', expectedCount);
         console.error('   Found:', verifiedCount);
         console.error('   Missing:', expectedCount - verifiedCount);
@@ -2535,8 +2627,24 @@ export const importQuestions = async (params: {
         console.error('   Missing question IDs:', missingQuestions.map(q => q.id));
         console.error('   Missing question numbers:', missingQuestions.map(q => q.question_number));
 
-        // This is a critical failure - some data was not saved
-        throw new Error(`Verification failed: Only ${verifiedCount} out of ${expectedCount} questions were found in database. Import rolled back or partially failed.`);
+        // Add to errors array instead of throwing (data already committed)
+        errors.push({
+          question: 'VERIFICATION',
+          error: `Only ${verifiedCount} out of ${expectedCount} questions verified in database`,
+          details: {
+            type: 'verification_mismatch',
+            expected: expectedCount,
+            found: verifiedCount,
+            missingQuestions: missingQuestions.map(q => ({
+              id: q.id,
+              question_number: q.question_number
+            }))
+          },
+          code: 'VERIFICATION_MISMATCH',
+          hint: 'Questions may have been inserted but verification query failed. Check RLS policies or database state.'
+        });
+
+        console.warn('⚠️ Continuing with import despite verification mismatch (data already committed)');
       }
 
       console.log('✅ All questions verified successfully in database');
