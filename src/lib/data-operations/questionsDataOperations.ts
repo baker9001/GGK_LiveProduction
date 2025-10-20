@@ -2158,11 +2158,6 @@ export const importQuestions = async (params: {
           throw questionError;
         }
 
-        if (!insertedQuestion) {
-          console.error('❌ Insert operation returned no question record. This usually indicates RLS prevented the insert.');
-          throw new Error('Question insert returned no data. Please verify that your account has permission to add questions.');
-        }
-
         console.log('✅ Question inserted successfully!');
         console.log('   Inserted question ID:', insertedQuestion?.id);
         console.log('   Inserted data:', insertedQuestion);
@@ -2190,37 +2185,6 @@ export const importQuestions = async (params: {
             console.error('   Error details:', JSON.stringify(caError, null, 2));
           } else {
             console.log('✅ Correct answers inserted:', insertedAnswers?.length || 0);
-          }
-        } else if (ensureString(question.correct_answer)) {
-          const normalizedCorrectAnswer = ensureString(question.correct_answer);
-          const matchingOption = Array.isArray(question.options)
-            ? question.options.find((option: any, index: number) => {
-                const optionLabel = option?.label || String.fromCharCode(65 + index);
-                return optionLabel === normalizedCorrectAnswer;
-              })
-            : null;
-
-          const correctAnswerPayload = {
-            question_id: insertedQuestion.id,
-            answer: ensureString(
-              matchingOption?.text || matchingOption?.option_text || normalizedCorrectAnswer
-            ),
-            marks: questionData.marks || null,
-            alternative_id: null,
-            context_type: null,
-            context_value: null,
-            context_label: null
-          };
-
-          const { error: fallbackAnswerError } = await supabase
-            .from('question_correct_answers')
-            .insert([correctAnswerPayload]);
-
-          if (fallbackAnswerError) {
-            console.error('❌ Error inserting fallback correct answer:', fallbackAnswerError);
-            console.error('   Error details:', JSON.stringify(fallbackAnswerError, null, 2));
-          } else {
-            console.log('✅ Fallback correct answer inserted for question', questionNumber);
           }
         }
 
