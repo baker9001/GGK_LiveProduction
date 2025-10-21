@@ -12,11 +12,19 @@ import {
   clearAuthenticatedUser,
   markSessionExpired,
   getSessionRemainingTime as getSessionRemainingTimeFromAuth,
+  getSupabaseSessionRemainingMinutes,
+  isSupabaseSessionActive,
+  isSupabaseSessionRequired,
   type User
 } from './auth';
+import { supabase } from './supabase';
 
 // Re-export for convenience
-export { getSessionRemainingTimeFromAuth as getSessionRemainingTime };
+export {
+  getSessionRemainingTimeFromAuth as getSessionRemainingTime,
+  getSupabaseSessionRemainingMinutes,
+  isSupabaseSessionRequired
+};
 
 // Session configuration constants
 const WARNING_THRESHOLD_MINUTES = 5; // Warn user 5 minutes before expiration
@@ -42,6 +50,7 @@ let sessionCheckInterval: NodeJS.Timeout | null = null;
 let activityCheckInterval: NodeJS.Timeout | null = null;
 let warningShown = false;
 let isRedirecting = false;
+let storageListener: ((event: StorageEvent) => void) | null = null;
 
 // BroadcastChannel for cross-tab communication
 let broadcastChannel: BroadcastChannel | null = null;
@@ -75,6 +84,28 @@ export function initializeSessionManager(): void {
     lastActivityTime = parseInt(savedActivity, 10);
   }
 
+  // Listen for Supabase session changes (cross-tab or automatic refresh failures)
+  if (typeof window !== 'undefined') {
+    storageListener = (event: StorageEvent) => {
+      if (!event) return;
+      if (event.key !== 'supabase.auth.token') return;
+      if (!isSupabaseSessionRequired()) return;
+
+      const supabaseRemaining = getSupabaseSessionRemainingMinutes();
+
+      if (!event.newValue || supabaseRemaining === null || supabaseRemaining === 0) {
+        handleSessionExpired('Your secure session has ended. Please sign in again.');
+        return;
+      }
+
+      if (!warningShown && supabaseRemaining > 0 && supabaseRemaining <= WARNING_THRESHOLD_MINUTES) {
+        showSessionWarning(supabaseRemaining);
+      }
+    };
+
+    window.addEventListener('storage', storageListener);
+  }
+
   console.log('[SessionManager] Initialization complete');
 }
 
@@ -88,6 +119,11 @@ export function cleanupSessionManager(): void {
   if (broadcastChannel) {
     broadcastChannel.close();
     broadcastChannel = null;
+  }
+
+  if (typeof window !== 'undefined' && storageListener) {
+    window.removeEventListener('storage', storageListener);
+    storageListener = null;
   }
 
   console.log('[SessionManager] Cleanup complete');
@@ -201,6 +237,11 @@ export function extendSession(): void {
   // Regenerate token with updated expiration
   setAuthenticatedUser(user);
 
+  // Attempt to refresh the Supabase session token to keep parity with backend auth
+  void supabase.auth.refreshSession().catch(error => {
+    console.warn('[SessionManager] Failed to refresh Supabase session during extend:', error);
+  });
+
   const now = Date.now();
   localStorage.setItem(LAST_AUTO_EXTEND_KEY, now.toString());
 
@@ -265,7 +306,26 @@ function checkSessionStatus(): void {
     return;
   }
 
-  const remainingMinutes = getSessionRemainingTimeFromAuth();
+  // Ensure Supabase session is also valid (for backend auth parity)
+  if (isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
+    handleSessionExpired('Your secure session has expired. Please sign in again to continue.');
+    return;
+  }
+
+  const localRemainingMinutes = getSessionRemainingTimeFromAuth();
+  const supabaseRemainingMinutes = isSupabaseSessionRequired()
+    ? getSupabaseSessionRemainingMinutes()
+    : null;
+
+  // Determine the most restrictive remaining time for warnings
+  const activeRemainingCandidates = [
+    localRemainingMinutes,
+    supabaseRemainingMinutes !== null ? supabaseRemainingMinutes : undefined
+  ].filter((value): value is number => typeof value === 'number' && value > 0);
+
+  const remainingMinutes = activeRemainingCandidates.length > 0
+    ? Math.min(...activeRemainingCandidates)
+    : localRemainingMinutes;
 
   // Check if session is about to expire (within 5 minutes)
   if (remainingMinutes > 0 && remainingMinutes <= WARNING_THRESHOLD_MINUTES && !warningShown) {
@@ -274,7 +334,10 @@ function checkSessionStatus(): void {
   }
 
   // Check if session has expired (with grace period)
-  if (remainingMinutes === 0) {
+  const localExpired = localRemainingMinutes === 0;
+  const supabaseExpired = supabaseRemainingMinutes !== null && supabaseRemainingMinutes === 0;
+
+  if (localExpired || supabaseExpired) {
     // Add grace period for pending operations
     setTimeout(() => {
       const recheckUser = getAuthenticatedUser();

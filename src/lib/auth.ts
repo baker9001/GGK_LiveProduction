@@ -26,6 +26,8 @@ const TEST_USER_KEY = 'test_mode_user';
 const AUTH_TOKEN_KEY = 'ggk_auth_token';
 const REMEMBER_SESSION_KEY = 'ggk_remember_session';
 const SESSION_EXPIRED_NOTICE_KEY = 'ggk_session_expired_notice';
+const SUPABASE_SESSION_STORAGE_KEY = 'supabase.auth.token';
+const SUPABASE_SESSION_REQUIRED_KEY = 'ggk_supabase_session_required';
 export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
 // Session durations
@@ -75,6 +77,11 @@ export function setAuthenticatedUser(user: User): void {
   const token = generateAuthToken(user, rememberMe);
   localStorage.setItem(AUTH_TOKEN_KEY, token);
 
+  // Ensure future checks validate the Supabase session (skip in test mode)
+  if (!isInTestMode()) {
+    localStorage.setItem(SUPABASE_SESSION_REQUIRED_KEY, 'true');
+  }
+
   // CRITICAL FIX: Record login time to prevent session monitoring from interfering
   lastLoginTime = Date.now();
 
@@ -93,7 +100,7 @@ export function getAuthenticatedUser(): User | null {
     // Don't call clearAuthenticatedUser here to avoid loops
     return null;
   }
-  
+
   try {
     const payload = JSON.parse(atob(token));
     if (payload.exp && payload.exp < Date.now()) {
@@ -106,7 +113,15 @@ export function getAuthenticatedUser(): User | null {
   } catch {
     return null;
   }
-  
+
+  // Ensure the Supabase auth session is still valid when required
+  if (isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
+    console.warn('[Auth] Supabase session is missing or expired. Clearing local auth state.');
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    return null;
+  }
+
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
   return storedUser ? JSON.parse(storedUser) : null;
 }
@@ -167,7 +182,8 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(TEST_USER_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(REMEMBER_SESSION_KEY);
-  
+  localStorage.removeItem(SUPABASE_SESSION_REQUIRED_KEY);
+
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
   localStorage.removeItem('last_user_id');
@@ -210,6 +226,109 @@ export function markSessionExpired(message: string = 'Your session has expired. 
   } catch (error) {
     console.warn('[Auth] Unable to persist session expiration notice:', error);
   }
+}
+
+// Determine if Supabase session validation is required for the current user
+export function isSupabaseSessionRequired(): boolean {
+  try {
+    return localStorage.getItem(SUPABASE_SESSION_REQUIRED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+type SupabaseStoredSession = {
+  currentSession?: {
+    expires_at?: number | string;
+    expiresAt?: number | string;
+    expires_in?: number;
+  } | null;
+  expires_at?: number | string;
+  expiresAt?: number | string;
+};
+
+function normalizeSupabaseExpiry(value: unknown): number | null {
+  if (!value) return null;
+
+  if (typeof value === 'number') {
+    // Supabase stores seconds; convert if necessary
+    return value > 1e12 ? value : value * 1000;
+  }
+
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric) && numeric !== 0) {
+      return numeric > 1e12 ? numeric : numeric * 1000;
+    }
+
+    const parsedDate = Date.parse(value);
+    if (!Number.isNaN(parsedDate)) {
+      return parsedDate;
+    }
+  }
+
+  return null;
+}
+
+function getSupabaseSessionPayload(): SupabaseStoredSession | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const stored = localStorage.getItem(SUPABASE_SESSION_STORAGE_KEY);
+    if (!stored) return null;
+
+    return JSON.parse(stored) as SupabaseStoredSession;
+  } catch (error) {
+    console.warn('[Auth] Unable to parse Supabase session storage:', error);
+    return null;
+  }
+}
+
+export function getSupabaseSessionExpiry(): number | null {
+  const payload = getSupabaseSessionPayload();
+  if (!payload) return null;
+
+  const candidates: Array<number | null> = [
+    normalizeSupabaseExpiry(payload.expiresAt),
+    normalizeSupabaseExpiry(payload.expires_at)
+  ];
+
+  if (payload.currentSession) {
+    candidates.push(
+      normalizeSupabaseExpiry(payload.currentSession.expiresAt),
+      normalizeSupabaseExpiry(payload.currentSession.expires_at)
+    );
+
+    if (typeof payload.currentSession.expires_in === 'number') {
+      candidates.push(Date.now() + payload.currentSession.expires_in * 1000);
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && candidate > 0) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+export function getSupabaseSessionRemainingMinutes(): number | null {
+  const expiry = getSupabaseSessionExpiry();
+  if (expiry === null) return null;
+
+  const remainingMs = expiry - Date.now();
+  return Math.max(0, Math.floor(remainingMs / 60000));
+}
+
+export function isSupabaseSessionActive(gracePeriodMs = 0): boolean {
+  const expiry = getSupabaseSessionExpiry();
+  if (expiry === null) {
+    // Treat missing session as inactive only when monitoring is required
+    return !isSupabaseSessionRequired();
+  }
+
+  return expiry - Date.now() > gracePeriodMs;
 }
 
 // Consume (read and clear) the stored session expiration notice
