@@ -36,9 +36,21 @@ import { UserProvider } from './contexts/UserContext';
 import { PermissionProvider } from './contexts/PermissionContext';
 import { Toast } from './components/shared/Toast';
 import { SessionExpiredNotice } from './components/shared/SessionExpiredNotice';
+import { SessionWarningBanner } from './components/shared/SessionWarningBanner';
+import { ActivityConfirmationDialog } from './components/shared/ActivityConfirmationDialog';
 import { ReactQueryProvider } from './providers/ReactQueryProvider';
 import { TestModeBar } from './components/admin/TestModeBar';
 import { isInTestMode, getCurrentUser } from './lib/auth';
+import {
+  initializeSessionManager,
+  cleanupSessionManager
+} from './lib/sessionManager';
+import {
+  getCurrentOperation,
+  confirmActivity,
+  cancelOperation,
+  LONG_OPERATION_CONFIRMATION_EVENT as LONG_OP_EVENT
+} from './lib/longOperationManager';
 
 // Import existing page components - PRESERVED all original imports
 import SystemAdminPage from './app/system-admin/page';
@@ -102,6 +114,10 @@ function ModuleRoute({
 }
 
 function App() {
+  // Session management state
+  const [showActivityDialog, setShowActivityDialog] = React.useState(false);
+  const [activityDialogData, setActivityDialogData] = React.useState<any>(null);
+
   // PRESERVED: Add class to body when in test mode for visual styling
   React.useEffect(() => {
     if (isInTestMode()) {
@@ -111,6 +127,53 @@ function App() {
     }
   }, []);
 
+  // Initialize session manager
+  React.useEffect(() => {
+    console.log('[App] Initializing session management system');
+    initializeSessionManager();
+
+    // Handle long operation confirmation requests
+    const handleLongOperationConfirmation = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { operationId, operationName, progress } = customEvent.detail || {};
+
+      console.log('[App] Long operation confirmation requested:', operationName);
+
+      setActivityDialogData({
+        operationId,
+        operationName,
+        progress
+      });
+      setShowActivityDialog(true);
+    };
+
+    window.addEventListener(LONG_OP_EVENT, handleLongOperationConfirmation as EventListener);
+
+    return () => {
+      console.log('[App] Cleaning up session management system');
+      window.removeEventListener(LONG_OP_EVENT, handleLongOperationConfirmation as EventListener);
+      cleanupSessionManager();
+    };
+  }, []);
+
+  // Handle activity confirmation
+  const handleActivityConfirm = () => {
+    if (activityDialogData?.operationId) {
+      confirmActivity(activityDialogData.operationId);
+    }
+    setShowActivityDialog(false);
+    setActivityDialogData(null);
+  };
+
+  // Handle activity cancel
+  const handleActivityCancel = () => {
+    if (activityDialogData?.operationId) {
+      cancelOperation(activityDialogData.operationId);
+    }
+    setShowActivityDialog(false);
+    setActivityDialogData(null);
+  };
+
   return (
     <ReactQueryProvider>
       <BrowserRouter>
@@ -118,6 +181,14 @@ function App() {
           <PermissionProvider>
             <Toast />
             <SessionExpiredNotice />
+            <SessionWarningBanner />
+            <ActivityConfirmationDialog
+              isOpen={showActivityDialog}
+              onConfirm={handleActivityConfirm}
+              onCancel={handleActivityCancel}
+              operationName={activityDialogData?.operationName || 'Operation'}
+              operationProgress={activityDialogData?.progress || 0}
+            />
             {/* PRESERVED: Test Mode Bar - Shows only when in test mode */}
             <TestModeBar />
             

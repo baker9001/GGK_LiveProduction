@@ -203,14 +203,14 @@ export const handleSupabaseError = (error: any, context?: string) => {
 
   // Check for authentication errors
   if (errorCode === 'PGRST000' || errorMessage.includes('JWT') ||
-      errorMessage.includes('authentication')) {
+      errorMessage.includes('authentication') || errorMessage.includes('expired')) {
     console.error(`🔐 Authentication Error${context ? ` in ${context}` : ''}:`, errorMessage);
-    console.error('DIAGNOSIS: No valid authentication session found.');
+    console.error('DIAGNOSIS: No valid authentication session found or session expired.');
 
     // Clear authentication and redirect to login
     import('./auth').then(({ clearAuthenticatedUser, markSessionExpired }) => {
       clearAuthenticatedUser();
-      markSessionExpired();
+      markSessionExpired('Your session has expired. Please sign in again to continue.');
 
       // Only redirect if not already on signin page
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/signin')) {
@@ -218,7 +218,7 @@ export const handleSupabaseError = (error: any, context?: string) => {
       }
     });
 
-    throw new Error('Authentication required. Please sign in to continue.');
+    throw new Error('Session expired. Please sign in to continue.');
   }
 
   // Check for Supabase backend errors
@@ -258,6 +258,58 @@ export async function supabaseQuery<T>(
   } catch (error) {
     handleSupabaseError(error, context);
     return null;
+  }
+}
+
+// Enhanced query wrapper with session awareness
+export async function supabaseAuthQuery<T>(
+  queryFn: () => Promise<{ data: T | null; error: any }>,
+  context?: string
+): Promise<{ data: T | null; error: any }> {
+  try {
+    // Check session before query
+    const token = localStorage.getItem('ggk_auth_token');
+    if (!token) {
+      return {
+        data: null,
+        error: {
+          message: 'No authentication token found',
+          code: 'AUTH_ERROR'
+        }
+      };
+    }
+
+    const result = await queryFn();
+
+    // Check for session expiration in response
+    if (result.error) {
+      const errorCode = result.error.code || '';
+      const errorMessage = result.error.message || '';
+
+      // Detect session expiration
+      if (
+        errorCode === 'PGRST000' ||
+        errorCode === 'PGRST301' ||
+        errorCode === '42501' ||
+        errorMessage.includes('JWT') ||
+        errorMessage.includes('expired') ||
+        errorMessage.includes('authentication')
+      ) {
+        console.error('[supabaseAuthQuery] Session expired detected in query');
+        handleSupabaseError(result.error, context);
+      }
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('[supabaseAuthQuery] Query failed:', error);
+    return {
+      data: null,
+      error: {
+        message: error?.message || 'Query failed',
+        code: error?.code || 'UNKNOWN_ERROR'
+      }
+    };
   }
 }
 

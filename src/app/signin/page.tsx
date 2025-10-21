@@ -44,9 +44,6 @@ export default function SignInPage() {
   const [verificationNeeded, setVerificationNeeded] = useState(false);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
   
-  // Redirect path
-  const from = location.state?.from?.pathname || '/app/dashboard';
-  
   // Clear session on mount
   useEffect(() => {
     console.log('[Auth] Clearing session on sign-in page load');

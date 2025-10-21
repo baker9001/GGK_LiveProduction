@@ -512,25 +512,9 @@ export function setupSessionRefresh(): void {
   }, 30 * 60 * 1000); // 30 minutes
 }
 
-// Initialize on app start - but with delay
-if (typeof window !== 'undefined') {
-  // Wait for app to fully load before starting session management
-  // CRITICAL FIX: Increased delay to prevent interference with initial auth state
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => {
-        setupSessionRefresh();
-        startSessionMonitoring();
-      }, 5000); // CRITICAL FIX: Wait 5 seconds after DOM load
-    });
-  } else {
-    // DOM already loaded
-    setTimeout(() => {
-      setupSessionRefresh();
-      startSessionMonitoring();
-    }, 5000); // CRITICAL FIX: Wait 5 seconds (was 1 second)
-  }
-}
+// NOTE: Session monitoring is now handled by sessionManager.ts
+// The old monitoring system is disabled to prevent conflicts
+// Keeping these functions for backward compatibility but not auto-starting them
 
 // Helper to map user types to roles
 export function mapUserTypeToRole(userType: string): UserRole {

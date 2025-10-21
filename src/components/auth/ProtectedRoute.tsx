@@ -45,7 +45,8 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
         markSessionExpired('Please sign in to access this page.');
       });
     }
-    return <Navigate to="/signin" state={{ from: location }} replace />;
+    // Don't pass location state - always redirect to dashboard after login
+    return <Navigate to="/signin" replace />;
   }
   
   // Additional role-based check if requiredRoles are specified
