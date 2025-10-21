@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Clock, X } from 'lucide-react';
 import { Button } from './Button';
-import { SESSION_WARNING_EVENT, SESSION_EXTENDED_EVENT, extendSession, getSessionRemainingTime } from '../../lib/sessionManager';
+import {
+  SESSION_WARNING_EVENT,
+  SESSION_EXTENDED_EVENT,
+  extendSession,
+  getSessionRemainingTime,
+  getSupabaseSessionRemainingMinutes,
+  isSupabaseSessionRequired
+} from '../../lib/sessionManager';
 
 export function SessionWarningBanner() {
   const [isVisible, setIsVisible] = useState(false);
@@ -9,11 +16,31 @@ export function SessionWarningBanner() {
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
+    const resolveRemainingMinutes = () => {
+      const localRemaining = getSessionRemainingTime();
+
+      if (!isSupabaseSessionRequired()) {
+        return localRemaining;
+      }
+
+      const supabaseRemaining = getSupabaseSessionRemainingMinutes();
+
+      if (supabaseRemaining === null) {
+        return localRemaining;
+      }
+
+      if (supabaseRemaining === 0) {
+        return 0;
+      }
+
+      return Math.min(localRemaining, supabaseRemaining);
+    };
+
     const handleWarning = (event: Event) => {
       const customEvent = event as CustomEvent<{ remainingMinutes: number }>;
       const minutes = customEvent.detail?.remainingMinutes || 0;
 
-      setRemainingMinutes(minutes);
+      setRemainingMinutes(minutes || resolveRemainingMinutes());
       setIsVisible(true);
       setIsDismissed(false);
     };
@@ -29,7 +56,7 @@ export function SessionWarningBanner() {
     // Update countdown every 10 seconds
     const countdownInterval = setInterval(() => {
       if (isVisible && !isDismissed) {
-        const current = getSessionRemainingTime();
+        const current = resolveRemainingMinutes();
         setRemainingMinutes(current);
 
         // Hide if session was extended or expired

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { Button } from './Button';
-import { SESSION_EXPIRED_EVENT } from '../../lib/auth';
+import { SESSION_EXPIRED_EVENT, consumeSessionExpiredNotice } from '../../lib/auth';
 
 const DEFAULT_MESSAGE = 'Your session has expired. Please sign in again to continue.';
 const ILLUSTRATION_SRC = '/image.png';
@@ -27,6 +27,11 @@ export function SessionExpiredNotice() {
 
     if (typeof window !== 'undefined') {
       window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired as EventListener);
+      const storedMessage = consumeSessionExpiredNotice();
+      if (storedMessage) {
+        setMessage(storedMessage);
+        setIsVisible(true);
+      }
     }
 
     return () => {
