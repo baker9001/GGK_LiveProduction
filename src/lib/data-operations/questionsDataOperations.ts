@@ -18,6 +18,11 @@ export interface ImportResult {
   errors: any[];
   skippedQuestions: any[];
   updatedQuestions: any[];
+  warnings?: Array<{
+    type: string;
+    message: string;
+    details?: Record<string, any>;
+  }>;
 }
 
 export interface DataStructureInfo {
@@ -1911,6 +1916,7 @@ export const importQuestions = async (params: {
   const errors = [];
   const skippedQuestions = [];
   const updatedQuestions = [];
+  const warnings: NonNullable<ImportResult['warnings']> = [];
   const totalQuestions = questions.length;
 
   if (totalQuestions === 0) {
@@ -2396,27 +2402,69 @@ export const importQuestions = async (params: {
               console.error('   Error details:', optionsError.details);
               console.error('   Error hint:', optionsError.hint);
               console.error('   Full error:', JSON.stringify(optionsError, null, 2));
+              warnings.push({
+                type: 'mcq_options_insert_failed',
+                message: `Could not save options for question ${questionNumber}. Check console for Supabase error details.`,
+                details: {
+                  questionNumber,
+                  supabaseError: {
+                    message: optionsError.message,
+                    code: optionsError.code,
+                    details: optionsError.details,
+                    hint: optionsError.hint,
+                  },
+                },
+              });
             } else {
-              console.log(`✅ Successfully inserted ${insertedOptions?.length || 0} options into question_options table`);
+              const insertedCount = insertedOptions?.length || 0;
+              console.log(`✅ Successfully inserted ${insertedCount} options into question_options table`);
               console.log('   Inserted option IDs:', insertedOptions?.map((opt: any) => opt.id).join(', '));
               // Log data completeness for quality monitoring
               const withExplanation = insertedOptions?.filter((opt: any) => opt.explanation).length || 0;
               const withContext = insertedOptions?.filter((opt: any) => opt.context_type).length || 0;
-              if (withExplanation < insertedOptions?.length!) {
-                console.warn(`⚠️ ${insertedOptions?.length! - withExplanation} options missing explanations (reduced learning value)`);
+              if (withExplanation < insertedCount) {
+                console.warn(`⚠️ ${insertedCount - withExplanation} options missing explanations (reduced learning value)`);
               }
-              if (withContext < insertedOptions?.length!) {
-                console.warn(`⚠️ ${insertedOptions?.length! - withContext} options missing context metadata (analytics incomplete)`);
+              if (withContext < insertedCount) {
+                console.warn(`⚠️ ${insertedCount - withContext} options missing context metadata (analytics incomplete)`);
+              }
+              if (insertedCount === 0) {
+                warnings.push({
+                  type: 'mcq_options_empty',
+                  message: `No options were stored for MCQ question ${questionNumber}.`,
+                  details: {
+                    questionNumber,
+                    normalizedType,
+                    preparedOptions: optionsToInsert.length,
+                  },
+                });
               }
             }
           } else {
             console.warn(`⚠️ No options to insert after filtering (optionsToInsert.length = 0)`);
+            warnings.push({
+              type: 'mcq_options_missing',
+              message: `MCQ question ${questionNumber} did not include any valid options in the JSON payload.`,
+              details: {
+                questionNumber,
+                normalizedType,
+                originalOptionCount: question.options?.length ?? 0,
+              },
+            });
           }
         } else {
           if (normalizedType === 'mcq') {
             console.error(`❌ CRITICAL: MCQ question ${questionNumber} has no options array!`);
             console.error('   question.options:', question.options);
             console.error('   Array.isArray(question.options):', Array.isArray(question.options));
+            warnings.push({
+              type: 'mcq_options_absent',
+              message: `MCQ question ${questionNumber} is missing an options array and will require manual fixing after import.`,
+              details: {
+                questionNumber,
+                questionId: insertedQuestion.id,
+              },
+            });
           } else {
             console.log(`ℹ️ Question ${questionNumber} is not MCQ (type: ${normalizedType}), skipping options`);
           }
@@ -2656,23 +2704,62 @@ export const importQuestions = async (params: {
       if (mcqQuestions.length > 0) {
         console.log('\n🔍 Verifying MCQ options for', mcqQuestions.length, 'MCQ questions...');
 
-        const { data: optionsCount, error: optionsError } = await supabase
+        const mcqQuestionIds = mcqQuestions.map(q => q.id);
+        const { data: optionRows, error: optionsError } = await supabase
           .from('question_options')
-          .select('question_id, count')
-          .in('question_id', mcqQuestions.map(q => q.id))
-          .select('question_id');
+          .select('question_id')
+          .in('question_id', mcqQuestionIds);
 
         if (optionsError) {
           console.warn('⚠️ Could not verify MCQ options:', optionsError.message);
+          warnings.push({
+            type: 'mcq_options_verification_failed',
+            message: 'Supabase verification query for MCQ options failed.',
+            details: {
+              supabaseError: {
+                message: optionsError.message,
+                code: optionsError.code,
+                details: optionsError.details,
+                hint: optionsError.hint,
+              },
+              questionIds: mcqQuestionIds,
+            },
+          });
         } else {
-          const questionsWithOptions = new Set(optionsCount?.map((o: any) => o.question_id) || []);
-          const mcqQuestionsWithoutOptions = mcqQuestions.filter(q => !questionsWithOptions.has(q.id));
+          const optionsByQuestion = new Map<string, number>();
+          optionRows?.forEach((row: any) => {
+            const current = optionsByQuestion.get(row.question_id) ?? 0;
+            optionsByQuestion.set(row.question_id, current + 1);
+          });
+
+          const mcqQuestionsWithoutOptions = mcqQuestions.filter(q => !optionsByQuestion.has(q.id));
 
           if (mcqQuestionsWithoutOptions.length > 0) {
             console.warn('⚠️ WARNING:', mcqQuestionsWithoutOptions.length, 'MCQ questions have no options saved');
             console.warn('   Question IDs without options:', mcqQuestionsWithoutOptions.map(q => q.id));
+            warnings.push({
+              type: 'mcq_options_not_found',
+              message: `${mcqQuestionsWithoutOptions.length} MCQ question(s) were imported without any options saved.`,
+              details: {
+                missingQuestionIds: mcqQuestionsWithoutOptions.map(q => q.id),
+                missingQuestionNumbers: mcqQuestionsWithoutOptions.map(q => q.question_number),
+              },
+            });
           } else {
             console.log('✅ All MCQ questions have options saved');
+
+            const sparseOptions = mcqQuestions.filter(q => (optionsByQuestion.get(q.id) ?? 0) < 4);
+            if (sparseOptions.length > 0) {
+              warnings.push({
+                type: 'mcq_options_sparse',
+                message: `${sparseOptions.length} MCQ question(s) have fewer than four answer choices saved.`,
+                details: {
+                  questionIds: sparseOptions.map(q => q.id),
+                  questionNumbers: sparseOptions.map(q => q.question_number),
+                  optionCounts: sparseOptions.map(q => optionsByQuestion.get(q.id) ?? 0),
+                },
+              });
+            }
           }
         }
       }
@@ -2690,7 +2777,8 @@ export const importQuestions = async (params: {
       importedQuestions,
       errors,
       skippedQuestions,
-      updatedQuestions
+      updatedQuestions,
+      warnings
     };
 
   } catch (error: any) {
