@@ -1,7 +1,9 @@
 // Path: src/lib/data-operations/questionsDataOperations.ts
 
 import { supabase } from '@/lib/supabase';
-import { toast } from '@/components/shared/Toast';
+// REMOVED: import { toast } from '@/components/shared/Toast';
+// Toast import caused "Cannot access 'Rt' before initialization" error
+// All toast notifications moved to UI layer (QuestionsTab.tsx)
 import { validateMCQPaper, logValidationResults } from '@/lib/extraction/optionDataValidator';
 
 // ===== TYPES =====
