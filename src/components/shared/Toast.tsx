@@ -193,14 +193,16 @@ export const toast = {
   info: (message: string, options?: ToastShowOptions) => showToast('info', message, options),
   warning: (message: string, options?: ToastShowOptions) => showToast('warning', message, options),
   loading: (message: string, options?: ToastShowOptions) => showToast('loading', message, options),
-  promise: hotToast.promise,
+  // Fix: Wrap in arrow function to avoid "Cannot access 'Rt' before initialization" error
+  promise: (...args: Parameters<typeof hotToast.promise>) => hotToast.promise(...args),
   dismiss: (id?: string | number) => {
     if (typeof window !== 'undefined') {
       clearToastTimeout(id);
     }
     return hotToast.dismiss(id);
   },
-  custom: hotToast.custom,
+  // Fix: Wrap in arrow function to avoid "Cannot access 'Rt' before initialization" error
+  custom: (...args: Parameters<typeof hotToast.custom>) => hotToast.custom(...args),
 };
 
 export function Toast() {
