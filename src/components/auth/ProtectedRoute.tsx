@@ -38,6 +38,13 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
 
   if (!isAuthorized) {
     console.log('[ProtectedRoute] No authenticated user, redirecting to signin');
+    // Clear any stale auth data before redirecting
+    if (typeof window !== 'undefined') {
+      import('../../lib/auth').then(({ clearAuthenticatedUser, markSessionExpired }) => {
+        clearAuthenticatedUser();
+        markSessionExpired('Please sign in to access this page.');
+      });
+    }
     return <Navigate to="/signin" state={{ from: location }} replace />;
   }
   
