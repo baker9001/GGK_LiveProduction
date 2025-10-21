@@ -465,14 +465,11 @@ export function startSessionMonitoring(): void {
       const user = getAuthenticatedUser();
       if (!user) {
         // Session expired or no user
-        console.log('[SessionMonitoring] Session expired. Redirecting to login.');
+        console.log('[SessionMonitoring] Session expired. Clearing auth and redirecting to login.');
 
         // Set flags to prevent loops
         isMonitoringActive = false;
         isRedirecting = true;
-
-        // Store a friendly notice so the sign-in page can surface the message inline
-        markSessionExpired();
 
         // Stop the interval
         if (sessionCheckInterval) {
@@ -480,7 +477,14 @@ export function startSessionMonitoring(): void {
           sessionCheckInterval = null;
         }
 
-        console.log('[SessionMonitoring] Session expired notice dispatched. Awaiting user acknowledgement.');
+        // Clear all authentication data
+        clearAuthenticatedUser();
+
+        // Store a friendly notice so the sign-in page can show the message
+        markSessionExpired();
+
+        // Redirect to login
+        window.location.replace('/signin');
       } else if (isSessionExpiringSoon()) {
         // Optional: Show warning to user
         console.warn('[SessionMonitoring] Session expiring soon. Consider extending.');

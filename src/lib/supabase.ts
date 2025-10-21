@@ -207,8 +207,16 @@ export const handleSupabaseError = (error: any, context?: string) => {
     console.error(`🔐 Authentication Error${context ? ` in ${context}` : ''}:`, errorMessage);
     console.error('DIAGNOSIS: No valid authentication session found.');
 
-    // Ensure the UI can show an inline notice prompting the user to sign in again
-    markSessionExpired();
+    // Clear authentication and redirect to login
+    import('./auth').then(({ clearAuthenticatedUser, markSessionExpired }) => {
+      clearAuthenticatedUser();
+      markSessionExpired();
+
+      // Only redirect if not already on signin page
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/signin')) {
+        window.location.replace('/signin');
+      }
+    });
 
     throw new Error('Authentication required. Please sign in to continue.');
   }
@@ -289,6 +297,46 @@ export async function syncSupabaseAuth(): Promise<boolean> {
     console.error('❌ Error syncing Supabase auth:', error);
     return false;
   }
+}
+
+// Monitor Supabase auth state changes
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    console.log('[Supabase Auth] State changed:', event);
+
+    // Handle SIGNED_OUT event
+    if (event === 'SIGNED_OUT') {
+      console.log('[Supabase Auth] User signed out, clearing local auth');
+      import('./auth').then(({ clearAuthenticatedUser, markSessionExpired }) => {
+        clearAuthenticatedUser();
+        markSessionExpired('Your session has ended. Please sign in again to continue.');
+
+        // Redirect to signin if not already there
+        if (!window.location.pathname.startsWith('/signin')) {
+          window.location.replace('/signin');
+        }
+      });
+    }
+
+    // Handle TOKEN_REFRESHED event
+    if (event === 'TOKEN_REFRESHED') {
+      console.log('[Supabase Auth] Token refreshed successfully');
+    }
+
+    // Handle session expiry
+    if (event === 'USER_UPDATED' && !session) {
+      console.log('[Supabase Auth] Session expired, no active session');
+      import('./auth').then(({ clearAuthenticatedUser, markSessionExpired }) => {
+        clearAuthenticatedUser();
+        markSessionExpired();
+
+        // Redirect to signin if not already there
+        if (!window.location.pathname.startsWith('/signin')) {
+          window.location.replace('/signin');
+        }
+      });
+    }
+  });
 }
 
 // Initialize connection check on load (development only)
