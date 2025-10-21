@@ -827,43 +827,43 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   }), [getCurrentStructuredValue]);
 
   // MCQ Handler
-  const handleMCQSelection = (option: string) => {
+  const handleMCQSelection = (optionLabel: string) => {
     if (hasAnswered && mode === 'practice' && showCorrectAnswer) {
       return;
     }
 
     let newSelection: string[];
-    
+
     // Check answer requirement for multiple selection
-    const requiresMultiple = question.answer_requirement?.includes('any_two') || 
+    const requiresMultiple = question.answer_requirement?.includes('any_two') ||
                            question.answer_requirement?.includes('any_three') ||
                            question.answer_requirement?.includes('both_required') ||
                            question.answer_requirement?.includes('all_required');
-    
+
     if (requiresMultiple) {
       // Handle multiple selection
       const match = question.answer_requirement?.match(/any_(\w+)_from/);
-      const maxSelections = match ? 
-        (match[1] === 'two' ? 2 : match[1] === 'three' ? 3 : parseInt(match[1]) || 1) 
+      const maxSelections = match ?
+        (match[1] === 'two' ? 2 : match[1] === 'three' ? 3 : parseInt(match[1]) || 1)
         : getAllCorrectAnswers().length;
-      
-      if (selectedOptions.includes(option)) {
-        newSelection = selectedOptions.filter(o => o !== option);
+
+      if (selectedOptions.includes(optionLabel)) {
+        newSelection = selectedOptions.filter(o => o !== optionLabel);
       } else if (selectedOptions.length < maxSelections) {
-        newSelection = [...selectedOptions, option];
+        newSelection = [...selectedOptions, optionLabel];
       } else {
         // Replace oldest selection
-        newSelection = [...selectedOptions.slice(1), option];
+        newSelection = [...selectedOptions.slice(1), optionLabel];
       }
     } else {
       // Default MCQ behavior - single selection only
-      newSelection = [option];
+      newSelection = [optionLabel];
     }
-    
+
     setSelectedOptions(newSelection);
     setHasAnswered(true);
-    
-    // Return appropriate value format
+
+    // Return appropriate value format - always return just the label for consistent validation
     const valueToReturn = requiresMultiple ? newSelection : newSelection[0];
     onChange(valueToReturn);
   };
@@ -906,9 +906,22 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
   // Check if an option is correct
   const isOptionCorrect = (optionLabel: string) => {
-    return question.correct_answer === optionLabel ||
-           question.correct_answers?.some(ca => ca.answer === optionLabel) ||
-           question.options?.find(o => o.label === optionLabel)?.is_correct;
+    // First check if the option itself is marked as correct
+    const option = question.options?.find(o => o.label === optionLabel);
+    if (option?.is_correct) {
+      return true;
+    }
+
+    // Fallback: check if the label matches correct_answer or correct_answers
+    if (question.correct_answer === optionLabel) {
+      return true;
+    }
+
+    if (question.correct_answers?.some(ca => ca.answer === optionLabel)) {
+      return true;
+    }
+
+    return false;
   };
 
   // Render Contextual Input

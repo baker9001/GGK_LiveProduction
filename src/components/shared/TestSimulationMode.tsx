@@ -276,19 +276,22 @@ export const TestSimulationMode: React.FC<TestSimulationModeProps> = ({
 
     const userAnswerNormalized = normalizeAnswer(userAnswer);
 
-    // For MCQ questions
+    // For MCQ questions - match by option label
     if (question.question_type === 'mcq' && question.options) {
+      // Find the selected option by matching the label
       const selectedOption = question.options.find(opt =>
-        normalizeAnswer(opt.label) === userAnswerNormalized ||
-        normalizeAnswer(opt.text) === userAnswerNormalized
+        normalizeAnswer(opt.label) === userAnswerNormalized
       );
 
-      if (selectedOption && selectedOption.is_correct) {
-        return {
-          isCorrect: true,
-          earnedMarks: question.marks,
-          feedback: 'Correct answer!'
-        };
+      if (selectedOption) {
+        // Check if the selected option is marked as correct
+        if (selectedOption.is_correct) {
+          return {
+            isCorrect: true,
+            earnedMarks: question.marks,
+            feedback: 'Correct answer!'
+          };
+        }
       }
 
       return {
