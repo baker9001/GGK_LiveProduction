@@ -1046,12 +1046,57 @@ function QuestionsTabInner({
     [questions]
   );
 
+  const questionTypeEntries = useMemo(() => {
+    const entries = Object.entries(questionSupportSummary.questionTypeCounts || {});
+    return entries.sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+  }, [questionSupportSummary]);
+
+  const structuralHighlights = useMemo(() => {
+    const highlights: string[] = [];
+    if (questionSupportSummary.structureFlags.hasParts) {
+      highlights.push('Contains multipart questions');
+    }
+    if (questionSupportSummary.structureFlags.hasSubparts) {
+      highlights.push('Includes nested subparts');
+    }
+    if (questionSupportSummary.structureFlags.hasFigures) {
+      highlights.push('Requires figure review');
+    }
+    if (questionSupportSummary.structureFlags.hasAttachments) {
+      highlights.push('Attachments to upload or verify');
+    }
+    if (questionSupportSummary.structureFlags.hasContext) {
+      highlights.push('Context metadata captured');
+    }
+    if (questionSupportSummary.logicFlags.manualMarking) {
+      highlights.push('Manual marking required for some responses');
+    }
+    if (questionSupportSummary.logicFlags.alternativeLinking) {
+      highlights.push('Answer alternatives linked in mark scheme');
+    }
+    if (questionSupportSummary.logicFlags.partialCredit) {
+      highlights.push('Partial credit rules detected');
+    }
+    return highlights;
+  }, [questionSupportSummary]);
+
   // Calculate average marks for display
   const averageMarks = useMemo(() => {
     if (questions.length === 0) return 0;
     const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 0), 0);
     return totalMarks / questions.length;
   }, [questions]);
+
+  const totalQuestionMarks = useMemo(() => {
+    return questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0);
+  }, [questions]);
+
+  const totalAttachments = useMemo(() => {
+    return Object.values(attachments || {}).reduce((sum, list) => {
+      if (!Array.isArray(list)) return sum;
+      return sum + list.length;
+    }, 0);
+  }, [attachments]);
 
   // Add global error handler for debugging - MUST BE AFTER STATE DECLARATIONS
   useEffect(() => {
@@ -3710,6 +3755,13 @@ function QuestionsTabInner({
       console.log('Import result:', result);
       
       // Handle the result
+      if (result.warnings && result.warnings.length > 0) {
+        console.warn('Import completed with warnings:', result.warnings);
+        result.warnings.forEach(warning => {
+          toast.warning(warning.message, { duration: 6000 });
+        });
+      }
+
       if (result.importedQuestions.length > 0) {
         // Update import session status
         if (importSession?.id) {
@@ -4962,43 +5014,134 @@ function QuestionsTabInner({
         onCancel={() => setShowConfirmDialog(false)}
         onConfirm={confirmImport}
         title="Import Questions"
+        tone="warning"
         message={
-          <div className="space-y-3">
-            <p>Are you sure you want to import {questions.length} questions?</p>
+          <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
+            <p className="leading-6">
+              Are you sure you want to import {questions.length} question{questions.length === 1 ? '' : 's'}
+              {paperTitleForMetadata ? (
+                <>
+                  {' '}into <span className="font-semibold text-gray-900 dark:text-gray-100">{paperTitleForMetadata}</span>
+                </>
+              ) : null}?
+            </p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 p-3">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <span>Question mix</span>
+                  <span>{questions.length} total</span>
+                </div>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {questionTypeEntries.length > 0 ? (
+                    questionTypeEntries.map(([type, count]) => (
+                      <li key={type} className="flex items-center justify-between gap-2 capitalize">
+                        <span className="text-gray-700 dark:text-gray-200">{type.replace('_', ' ')}</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{count}</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-gray-500 dark:text-gray-400">No question type metadata detected</li>
+                  )}
+                </ul>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 p-3">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <span>Import metrics</span>
+                  <span className="text-gray-400">Preview</span>
+                </div>
+                <dl className="mt-2 space-y-1 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <BarChart3 className="h-4 w-4 text-blue-500" /> Total marks
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{totalQuestionMarks}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <Clock className="h-4 w-4 text-purple-500" /> Avg marks/question
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{averageMarks.toFixed(1)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <Paperclip className="h-4 w-4 text-emerald-500" /> Attachments queued
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{totalAttachments}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" /> Existing duplicates
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{existingQuestionNumbers.size}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            {structuralHighlights.length > 0 && (
+              <div className="rounded-lg border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-900/20 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-sky-800 dark:text-sky-200">
+                  <Lightbulb className="h-4 w-4" /> Key things to review
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-sky-800 dark:text-sky-100">
+                  {structuralHighlights.map((highlight) => (
+                    <span
+                      key={highlight}
+                      className="rounded-full bg-white/70 px-2 py-1 dark:bg-sky-900/60"
+                    >
+                      {highlight}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {simulationResult?.completed && (
-              <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm text-green-700 dark:text-green-300">
-                  Exam simulation completed successfully
-                </span>
+              <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900/40 dark:bg-green-900/20">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-green-600 dark:text-green-400" />
+                <div>
+                  <p className="font-medium text-green-700 dark:text-green-300">Exam simulation completed successfully</p>
+                  {simulationResult?.issues?.length ? (
+                    <p className="mt-1 text-xs text-green-700/80 dark:text-green-200/80">
+                      {simulationResult.issues.length} issue{simulationResult.issues.length === 1 ? '' : 's'} flagged during simulation.
+                    </p>
+                  ) : null}
+                </div>
               </div>
             )}
+
             {simulationResult?.issues && simulationResult.issues.length > 0 && (
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  Note: {simulationResult.issues.length} issues were found during simulation but can be addressed later.
-                </p>
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-900/50 dark:bg-yellow-900/20 dark:text-yellow-200">
+                {simulationResult.issues.length} simulation issue{simulationResult.issues.length === 1 ? '' : 's'} detected. You can address them during QA.
               </div>
             )}
+
             {simulationResult?.recommendations && simulationResult.recommendations.length > 0 && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
-                  View recommendations ({simulationResult.recommendations.length})
-                </summary>
-                <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+              <details className="rounded-lg border border-gray-200 bg-white/80 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-200">
+                <summary className="cursor-pointer font-medium">View recommendations ({simulationResult.recommendations.length})</summary>
+                <ul className="mt-2 space-y-1 text-xs leading-5">
                   {simulationResult.recommendations.map((rec, idx) => (
                     <li key={idx} className="pl-4">• {rec}</li>
                   ))}
                 </ul>
               </details>
             )}
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              This action cannot be undone.
+
+            {existingQuestionNumbers.size > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+                {existingQuestionNumbers.size} question number{existingQuestionNumbers.size === 1 ? '' : 's'} already exist in the bank and will be skipped automatically.
+              </div>
+            )}
+
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              This action cannot be undone once the questions are imported.
             </p>
           </div>
         }
         confirmText="Import"
-        confirmVariant="default"
+        confirmVariant="primary"
       />
 
       {/* Delete Attachment Confirmation */}

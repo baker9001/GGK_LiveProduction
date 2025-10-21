@@ -453,6 +453,11 @@ export interface ImportResult {
   errors: any[];
   skippedQuestions: any[];
   updatedQuestions: any[];
+  warnings?: Array<{
+    type: string;
+    message: string;
+    details?: Record<string, any>;
+  }>;
 }
 
 export interface DataStructureInfo {
