@@ -102,6 +102,7 @@ interface QuestionImportReviewWorkflowProps {
   paperDuration?: string;
   totalMarks: number;
   importSessionId?: string;
+  subjectId?: string;
   onAllQuestionsReviewed?: () => void;
   onImportReady?: (canImport: boolean) => void;
   onReviewSummaryChange?: (summary: {
@@ -127,6 +128,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   paperDuration,
   totalMarks,
   importSessionId,
+  subjectId,
   onAllQuestionsReviewed,
   onImportReady,
   onReviewSummaryChange,
@@ -164,24 +166,75 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     const fetchTaxonomy = async () => {
       setIsLoadingTaxonomy(true);
       try {
-        const [unitsRes, topicsRes, subtopicsRes] = await Promise.all([
-          supabase.from('edu_units').select('id, name').order('name', { ascending: true }),
-          supabase.from('edu_topics').select('id, name, unit_id').order('name', { ascending: true }),
-          supabase.from('edu_subtopics').select('id, name, topic_id').order('name', { ascending: true })
-        ]);
+        let unitsRes, topicsRes, subtopicsRes;
+
+        if (subjectId) {
+          unitsRes = await supabase
+            .from('edu_units')
+            .select('id, name')
+            .eq('subject_id', subjectId)
+            .eq('status', 'active')
+            .order('name', { ascending: true });
+
+          if (unitsRes.error) throw unitsRes.error;
+
+          const unitIds = (unitsRes.data ?? []).map(u => u.id);
+
+          if (unitIds.length > 0) {
+            topicsRes = await supabase
+              .from('edu_topics')
+              .select('id, name, unit_id')
+              .in('unit_id', unitIds)
+              .eq('status', 'active')
+              .order('name', { ascending: true });
+
+            if (topicsRes.error) throw topicsRes.error;
+
+            const topicIds = (topicsRes.data ?? []).map(t => t.id);
+
+            if (topicIds.length > 0) {
+              subtopicsRes = await supabase
+                .from('edu_subtopics')
+                .select('id, name, topic_id')
+                .in('topic_id', topicIds)
+                .eq('status', 'active')
+                .order('name', { ascending: true });
+
+              if (subtopicsRes.error) throw subtopicsRes.error;
+            } else {
+              subtopicsRes = { data: [], error: null };
+            }
+          } else {
+            topicsRes = { data: [], error: null };
+            subtopicsRes = { data: [], error: null };
+          }
+        } else {
+          [unitsRes, topicsRes, subtopicsRes] = await Promise.all([
+            supabase.from('edu_units').select('id, name').order('name', { ascending: true }),
+            supabase.from('edu_topics').select('id, name, unit_id').order('name', { ascending: true }),
+            supabase.from('edu_subtopics').select('id, name, topic_id').order('name', { ascending: true })
+          ]);
+
+          if (unitsRes.error || topicsRes.error || subtopicsRes.error) {
+            throw unitsRes.error || topicsRes.error || subtopicsRes.error;
+          }
+        }
 
         if (!isMounted) {
           return;
-        }
-
-        if (unitsRes.error || topicsRes.error || subtopicsRes.error) {
-          throw unitsRes.error || topicsRes.error || subtopicsRes.error;
         }
 
         setUnits(unitsRes.data ?? []);
         setTopics(topicsRes.data ?? []);
         setSubtopics(subtopicsRes.data ?? []);
         taxonomyErrorNotifiedRef.current = false;
+
+        console.log('✅ Taxonomy loaded (filtered by subject):', {
+          subjectId,
+          unitsCount: unitsRes.data?.length ?? 0,
+          topicsCount: topicsRes.data?.length ?? 0,
+          subtopicsCount: subtopicsRes.data?.length ?? 0
+        });
       } catch (error) {
         console.error('Failed to load academic taxonomy data', error);
         if (!taxonomyErrorNotifiedRef.current) {
@@ -200,7 +253,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [subjectId]);
 
   const commitQuestionUpdate = useCallback(
     (question: QuestionDisplayData, updates: Partial<QuestionDisplayData>) => {

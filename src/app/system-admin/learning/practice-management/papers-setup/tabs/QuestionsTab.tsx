@@ -4850,6 +4850,7 @@ function QuestionsTabInner({
         paperDuration={paperMetadata?.paper_duration}
         totalMarks={paperMetadata?.total_marks || questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
         importSessionId={importSession?.id}
+        subjectId={dataStructureInfo?.subject_id}
         requireSimulation={true}
         onQuestionUpdate={handleQuestionUpdateFromReview}
         onRequestSnippingTool={handleRequestSnippingTool}
