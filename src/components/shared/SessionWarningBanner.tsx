@@ -10,12 +10,50 @@ import {
   isSupabaseSessionRequired
 } from '../../lib/sessionManager';
 
+/**
+ * Check if current page is a public page
+ */
+function isPublicPage(path: string): boolean {
+  const publicPaths = [
+    '/',
+    '/landing',
+    '/signin',
+    '/login',
+    '/forgot-password',
+    '/reset-password',
+    '/about',
+    '/contact',
+    '/subjects',
+    '/resources',
+    '/pricing',
+    '/privacy',
+    '/terms',
+    '/cookies',
+    '/cambridge-igcse',
+    '/cambridge-o-level',
+    '/cambridge-a-level',
+    '/edexcel-igcse',
+    '/edexcel-a-level',
+    '/mock-exams',
+    '/video-lessons'
+  ];
+
+  return publicPaths.some(publicPath =>
+    path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
+  );
+}
+
 export function SessionWarningBanner() {
   const [isVisible, setIsVisible] = useState(false);
   const [remainingMinutes, setRemainingMinutes] = useState(0);
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
+    // CRITICAL FIX: Don't show warning on public pages
+    if (typeof window !== 'undefined' && isPublicPage(window.location.pathname)) {
+      console.log('[SessionWarningBanner] On public page, skipping');
+      return;
+    }
     const resolveRemainingMinutes = () => {
       const localRemaining = getSessionRemainingTime();
 
@@ -37,6 +75,12 @@ export function SessionWarningBanner() {
     };
 
     const handleWarning = (event: Event) => {
+      // Double-check we're not on a public page
+      if (typeof window !== 'undefined' && isPublicPage(window.location.pathname)) {
+        console.log('[SessionWarningBanner] Warning event on public page, ignoring');
+        return;
+      }
+
       const customEvent = event as CustomEvent<{ remainingMinutes: number }>;
       const minutes = customEvent.detail?.remainingMinutes || 0;
 

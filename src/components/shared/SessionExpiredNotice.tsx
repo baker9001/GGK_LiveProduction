@@ -6,15 +6,61 @@ import { SESSION_EXPIRED_EVENT, consumeSessionExpiredNotice } from '../../lib/au
 const DEFAULT_MESSAGE = 'Your session has expired. Please sign in again to continue.';
 const ILLUSTRATION_SRC = '/image.png';
 
+/**
+ * Check if current page is a public page that doesn't require authentication
+ */
+function isPublicPage(path: string): boolean {
+  const publicPaths = [
+    '/',
+    '/landing',
+    '/signin',
+    '/login',
+    '/forgot-password',
+    '/reset-password',
+    '/about',
+    '/contact',
+    '/subjects',
+    '/resources',
+    '/pricing',
+    '/privacy',
+    '/terms',
+    '/cookies',
+    '/cambridge-igcse',
+    '/cambridge-o-level',
+    '/cambridge-a-level',
+    '/edexcel-igcse',
+    '/edexcel-a-level',
+    '/mock-exams',
+    '/video-lessons'
+  ];
+
+  return publicPaths.some(publicPath =>
+    path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
+  );
+}
+
 export function SessionExpiredNotice() {
   const [isVisible, setIsVisible] = useState(false);
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
 
   useEffect(() => {
+    // CRITICAL FIX: Don't show session expired notice on public pages
+    if (typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+      if (isPublicPage(currentPath)) {
+        console.log('[SessionExpiredNotice] On public page, clearing any stale session data');
+        // Clear any stale session expiration data
+        consumeSessionExpiredNotice();
+        return; // Exit early, don't set up listeners
+      }
+    }
+
     const handleSessionExpired = (event: Event) => {
       if (typeof window !== 'undefined') {
         const path = window.location.pathname;
-        if (path === '/signin' || path.startsWith('/signin')) {
+        // Double-check we're not on a public page
+        if (isPublicPage(path)) {
+          console.log('[SessionExpiredNotice] Session expired event on public page, ignoring');
           return;
         }
       }
@@ -27,8 +73,11 @@ export function SessionExpiredNotice() {
 
     if (typeof window !== 'undefined') {
       window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired as EventListener);
+
+      // Check for stored expiration message (from previous session)
       const storedMessage = consumeSessionExpiredNotice();
       if (storedMessage) {
+        console.log('[SessionExpiredNotice] Found stored session expiration message');
         setMessage(storedMessage);
         setIsVisible(true);
       }

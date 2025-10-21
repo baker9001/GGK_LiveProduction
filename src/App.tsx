@@ -127,10 +127,49 @@ function App() {
     }
   }, []);
 
-  // Initialize session manager
+  // Initialize session manager (only on protected pages)
   React.useEffect(() => {
-    console.log('[App] Initializing session management system');
-    initializeSessionManager();
+    // CRITICAL FIX: Only initialize session management on non-public pages
+    const isPublicPath = (path: string): boolean => {
+      const publicPaths = [
+        '/',
+        '/landing',
+        '/signin',
+        '/login',
+        '/forgot-password',
+        '/reset-password',
+        '/about',
+        '/contact',
+        '/subjects',
+        '/resources',
+        '/pricing',
+        '/privacy',
+        '/terms',
+        '/cookies',
+        '/cambridge-igcse',
+        '/cambridge-o-level',
+        '/cambridge-a-level',
+        '/edexcel-igcse',
+        '/edexcel-a-level',
+        '/mock-exams',
+        '/video-lessons'
+      ];
+
+      return publicPaths.some(publicPath =>
+        path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
+      );
+    };
+
+    const currentPath = window.location.pathname;
+    const isPublic = isPublicPath(currentPath);
+
+    // Only initialize session manager on protected pages
+    if (!isPublic) {
+      console.log('[App] Initializing session management system on protected page');
+      initializeSessionManager();
+    } else {
+      console.log('[App] Skipping session management on public page:', currentPath);
+    }
 
     // Handle long operation confirmation requests
     const handleLongOperationConfirmation = (event: Event) => {
@@ -150,9 +189,11 @@ function App() {
     window.addEventListener(LONG_OP_EVENT, handleLongOperationConfirmation as EventListener);
 
     return () => {
-      console.log('[App] Cleaning up session management system');
+      if (!isPublic) {
+        console.log('[App] Cleaning up session management system');
+        cleanupSessionManager();
+      }
       window.removeEventListener(LONG_OP_EVENT, handleLongOperationConfirmation as EventListener);
-      cleanupSessionManager();
     };
   }, []);
 
