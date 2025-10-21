@@ -390,7 +390,10 @@ function handleSessionExpired(message: string): void {
   broadcastMessage({ type: 'expired' });
 
   // Redirect to login (always go to dashboard after re-auth)
-  if (!window.location.pathname.startsWith('/signin')) {
+  if (
+    !window.location.pathname.startsWith('/signin') &&
+    !window.location.pathname.startsWith('/login')
+  ) {
     window.location.replace('/signin');
   }
 }
@@ -403,6 +406,7 @@ function isPublicPage(path: string): boolean {
     '/',
     '/landing',
     '/signin',
+    '/login',
     '/forgot-password',
     '/reset-password',
     '/about',
