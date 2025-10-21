@@ -154,7 +154,8 @@ export function ResultsDashboard({
                 }
               }
 
-              const subDifficulty = part.difficulty || question.difficulty || 'medium';
+              const rawSubDifficulty = part.difficulty || question.difficulty || 'medium';
+              const subDifficulty = String(rawSubDifficulty).toLowerCase();
               if (subDifficulty in difficultyStats) {
                 difficultyStats[subDifficulty as keyof typeof difficultyStats].total++;
                 difficultyStats[subDifficulty as keyof typeof difficultyStats].marks += subpart.marks;
@@ -200,7 +201,8 @@ export function ResultsDashboard({
           }
 
           // Update difficulty stats
-          const difficulty = part.difficulty || question.difficulty || 'medium';
+          const rawDifficulty = part.difficulty || question.difficulty || 'medium';
+          const difficulty = String(rawDifficulty).toLowerCase();
           if (difficulty in difficultyStats) {
             difficultyStats[difficulty as keyof typeof difficultyStats].total++;
             difficultyStats[difficulty as keyof typeof difficultyStats].marks += part.marks;
@@ -242,7 +244,8 @@ export function ResultsDashboard({
         }
         
         // Update difficulty stats
-        const difficulty = question.difficulty || 'medium';
+        const rawDifficulty = question.difficulty || 'medium';
+        const difficulty = String(rawDifficulty).toLowerCase();
         if (difficulty in difficultyStats) {
           difficultyStats[difficulty as keyof typeof difficultyStats].total++;
           difficultyStats[difficulty as keyof typeof difficultyStats].marks += question.marks;

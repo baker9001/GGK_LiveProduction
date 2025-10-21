@@ -383,16 +383,22 @@ function computeUnitPerformance(questions: QuestionWithMetadata[]): UnitPerforma
     unit.averageTime = (unit.averageTime * (unit.questionsTotal - 1) + q.timeSpent) / unit.questionsTotal;
 
     // Update difficulty breakdown
-    const difficulty = (q.question?.difficulty ?? 'Medium').toLowerCase();
-    if (difficulty === 'easy') {
+    const rawDifficulty = q.question?.difficulty ?? 'medium';
+    const normalizedDifficulty = String(rawDifficulty).toLowerCase().trim();
+
+    if (normalizedDifficulty === 'easy') {
       unit.difficultyBreakdown.easy.total++;
       if (q.is_correct) unit.difficultyBreakdown.easy.correct++;
-    } else if (difficulty === 'medium') {
+    } else if (normalizedDifficulty === 'medium') {
       unit.difficultyBreakdown.medium.total++;
       if (q.is_correct) unit.difficultyBreakdown.medium.correct++;
-    } else if (difficulty === 'hard') {
+    } else if (normalizedDifficulty === 'hard') {
       unit.difficultyBreakdown.hard.total++;
       if (q.is_correct) unit.difficultyBreakdown.hard.correct++;
+    } else {
+      // Default unknown difficulties to medium
+      unit.difficultyBreakdown.medium.total++;
+      if (q.is_correct) unit.difficultyBreakdown.medium.correct++;
     }
   });
 
@@ -545,8 +551,26 @@ function computeDifficultyAnalysis(questions: QuestionWithMetadata[]): Difficult
   };
 
   questions.forEach((q) => {
-    const difficulty = (q.question?.difficulty ?? 'Medium').toLowerCase() as 'easy' | 'medium' | 'hard';
+    // Normalize difficulty to lowercase and handle various formats
+    const rawDifficulty = q.question?.difficulty ?? 'medium';
+    const normalizedDifficulty = String(rawDifficulty).toLowerCase().trim();
+
+    // Map to valid difficulty level, defaulting to medium for invalid values
+    let difficulty: 'easy' | 'medium' | 'hard';
+    if (normalizedDifficulty === 'easy') {
+      difficulty = 'easy';
+    } else if (normalizedDifficulty === 'hard') {
+      difficulty = 'hard';
+    } else {
+      difficulty = 'medium';
+    }
+
     const level = analysis[difficulty];
+
+    if (!level) {
+      console.warn(`Invalid difficulty level: ${rawDifficulty}, defaulting to medium`);
+      return;
+    }
 
     level.total++;
     if (q.is_correct) level.correct++;
