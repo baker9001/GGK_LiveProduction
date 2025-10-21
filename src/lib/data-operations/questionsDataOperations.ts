@@ -2048,6 +2048,108 @@ export const importQuestions = async (params: {
     console.log('  Data structure:', dsCheck);
     console.log('  DS error:', dsError?.message || 'None');
 
+    // ============================================================================
+    // ENHANCED PRE-IMPORT VALIDATION - Catch Issues Before Processing
+    // ============================================================================
+    console.log('\n========================================');
+    console.log('🔍 ENHANCED PRE-IMPORT VALIDATION');
+    console.log('========================================');
+
+    // Check 1: Validate questions array
+    if (!questions || questions.length === 0) {
+      throw new Error('No questions provided for import');
+    }
+    console.log('✅ Questions array valid:', questions.length, 'questions');
+
+    // Check 2: Validate required parameters
+    if (!paperId) {
+      throw new Error('Paper ID is required');
+    }
+    if (!dataStructureInfo || !dataStructureInfo.id) {
+      throw new Error('Data structure information is required');
+    }
+    console.log('✅ Required parameters validated');
+
+    // Check 3: Validate at least one question has proper structure
+    const sampleQuestion = questions[0];
+    if (!sampleQuestion) {
+      throw new Error('First question is undefined');
+    }
+
+    const hasQuestionNumber = sampleQuestion.question_number !== undefined && sampleQuestion.question_number !== null;
+    const hasContent = sampleQuestion.question_description || sampleQuestion.description || sampleQuestion.parts;
+
+    if (!hasQuestionNumber) {
+      console.warn('⚠️ WARNING: First question missing question_number. Will use index-based numbering.');
+    }
+    if (!hasContent) {
+      console.warn('⚠️ WARNING: First question appears to have no content. This may indicate data structure issues.');
+    }
+    console.log('✅ Question structure validation passed');
+
+    // Check 4: Validate mappings structure if provided
+    if (mappings) {
+      const mappingKeys = Object.keys(mappings);
+      console.log('  Mappings provided for', mappingKeys.length, 'questions');
+
+      // Check if at least some questions have mappings
+      const questionsWithMappings = questions.filter(q => mappings[q.id]);
+      const mappingCoverage = (questionsWithMappings.length / questions.length) * 100;
+      console.log(`  Mapping coverage: ${mappingCoverage.toFixed(1)}%`);
+
+      if (mappingCoverage < 50) {
+        console.warn(`⚠️ WARNING: Only ${mappingCoverage.toFixed(1)}% of questions have mappings. This may affect categorization.`);
+      } else {
+        console.log('✅ Mapping coverage acceptable');
+      }
+    } else {
+      console.warn('⚠️ WARNING: No mappings provided. Questions will be imported without topic/subtopic links.');
+    }
+
+    // Check 5: Test database write permissions with a dry-run query
+    console.log('\n🧪 Testing database write capability...');
+    const testQuestionData = {
+      paper_id: paperId,
+      data_structure_id: dataStructureInfo.id,
+      question_number: -1, // Use negative number to identify test records
+      question_description: '__TEST_RECORD_DO_NOT_USE__',
+      marks: 0,
+      type: 'descriptive',
+      status: 'inactive',
+      year: new Date().getFullYear()
+    };
+
+    const { error: dryRunError } = await supabase
+      .from('questions_master_admin')
+      .insert([testQuestionData])
+      .select();
+
+    if (dryRunError) {
+      // If we can't insert, check if it's a permissions issue
+      if (dryRunError.code === 'PGRST301' || dryRunError.code === '42501') {
+        throw new Error(`Database permission error: ${dryRunError.message}. You may not have permission to insert questions.`);
+      } else if (dryRunError.code === '23505') {
+        // Duplicate key error means we CAN write but record exists
+        console.log('✅ Write test passed (duplicate key indicates write capability)');
+      } else {
+        console.warn('⚠️ Dry-run insert failed:', dryRunError.message);
+        console.warn('   This may indicate a permissions or schema issue.');
+        console.warn('   Code:', dryRunError.code);
+        console.warn('   Proceeding with import attempt...');
+      }
+    } else {
+      // Clean up test record immediately
+      await supabase
+        .from('questions_master_admin')
+        .delete()
+        .eq('question_description', '__TEST_RECORD_DO_NOT_USE__')
+        .eq('question_number', -1);
+      console.log('✅ Database write capability confirmed (test record cleaned up)');
+    }
+
+    console.log('\n✅ All pre-import validations passed');
+    console.log('========================================');
+
     console.log('\n========================================');
     console.log('📦 Starting Attachment Upload');
     console.log('========================================');
@@ -2108,7 +2210,8 @@ export const importQuestions = async (params: {
           continue;
         }
         
-        // Get primary topic and subtopic
+        // Get primary chapter, topic and subtopic
+        const primaryChapterId = getUUIDFromMapping(mapping?.chapter_id) || null;
         const primaryTopicId = getUUIDFromMapping(
           mapping?.topic_ids && mapping.topic_ids.length > 0 ? mapping.topic_ids[0] : null
         );
@@ -2118,7 +2221,7 @@ export const importQuestions = async (params: {
 
         // Log mapping results
         console.log('🔗 Mapping resolution for question', questionNumber);
-        console.log('   Chapter ID:', questionData.chapter_id || 'NOT MAPPED');
+        console.log('   Chapter ID:', primaryChapterId || 'NOT MAPPED');
         console.log('   Topic ID:', primaryTopicId || 'NOT MAPPED');
         console.log('   Subtopic ID:', primarySubtopicId || 'NOT MAPPED');
 
@@ -2170,7 +2273,7 @@ export const importQuestions = async (params: {
           program_id: dataStructureInfo.program_id,
           provider_id: dataStructureInfo.provider_id,
           subject_id: dataStructureInfo.subject_id,
-          chapter_id: getUUIDFromMapping(mapping.chapter_id) || null,
+          chapter_id: primaryChapterId,
           topic_id: primaryTopicId,
           subtopic_id: primarySubtopicId,
           category:

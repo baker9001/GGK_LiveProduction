@@ -3833,15 +3833,38 @@ function QuestionsTabInner({
           { duration: 5000 }
         );
       } else if (result.errors.length > 0) {
-        // Show detailed error information
-        const errorDetails = result.errors.slice(0, 3).map((err: any) => 
-          `Question ${err.question}: ${err.error}`
-        ).join('\n');
-        
-        toast.error(
-          `Failed to import questions:\n${errorDetails}${result.errors.length > 3 ? '\n...and more errors' : ''}`,
-          { duration: 7000 }
-        );
+        // Group errors by error message for better reporting
+        const errorGroups = result.errors.reduce((acc: Record<string, any[]>, err: any) => {
+          const key = err.error || 'Unknown error';
+          if (!acc[key]) {
+            acc[key] = [];
+          }
+          acc[key].push(err);
+          return acc;
+        }, {});
+
+        const uniqueErrors = Object.keys(errorGroups);
+
+        // If all questions failed with the same error, show a consolidated message
+        if (uniqueErrors.length === 1 && result.errors.length === questions.length) {
+          const errorMsg = uniqueErrors[0];
+          toast.error(
+            `All ${result.errors.length} questions failed with the same error:\n\n${errorMsg}\n\nPlease check the browser console for detailed diagnostic information.`,
+            { duration: 10000 }
+          );
+        } else {
+          // Show grouped error summary
+          const errorSummary = uniqueErrors.slice(0, 3).map(errMsg => {
+            const count = errorGroups[errMsg].length;
+            const examples = errorGroups[errMsg].slice(0, 2).map((e: any) => e.question).join(', ');
+            return `• ${count} question${count > 1 ? 's' : ''} (e.g., Q${examples}): ${errMsg.substring(0, 60)}${errMsg.length > 60 ? '...' : ''}`;
+          }).join('\n');
+
+          toast.error(
+            `Failed to import ${result.errors.length} of ${questions.length} questions:\n\n${errorSummary}${uniqueErrors.length > 3 ? '\n\n...and more error types' : ''}`,
+            { duration: 10000 }
+          );
+        }
       } else {
         toast.warning('No questions were imported. Please check the console for details.');
       }
