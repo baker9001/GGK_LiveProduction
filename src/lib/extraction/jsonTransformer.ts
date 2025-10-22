@@ -89,12 +89,19 @@ export function transformImportedQuestion(
     questionType = 'mcq';
   } else if (imported.type === 'tf' || imported.type === 'true_false') {
     questionType = 'tf';
+  } else if (imported.type === 'complex') {
+    questionType = 'complex';
   } else if (imported.type === 'calculation' || imported.answer_format === 'calculation') {
     questionType = 'calculation';
   } else if (imported.type === 'diagram' || imported.answer_format === 'diagram') {
     questionType = 'diagram';
   } else if (imported.type === 'essay' || imported.type === 'extended_response') {
     questionType = 'essay';
+  }
+
+  // Auto-detect complex questions if they have parts/subparts
+  if ((imported.parts || imported.subparts) && questionType === 'descriptive') {
+    questionType = 'complex';
   }
 
   // Process correct answers
@@ -198,25 +205,52 @@ function transformQuestionPart(
 }
 
 /**
- * Process correct answers array with alternative grouping
+ * Process correct answers array with alternative grouping and enhanced metadata
  */
 function processCorrectAnswers(answers: ImportedCorrectAnswer[]): Array<any> {
   if (!answers || answers.length === 0) return [];
 
-  return answers.map((answer, index) => ({
-    answer: answer.answer,
-    marks: answer.marks ?? 1,
-    alternative_id: answer.alternative_id ?? index + 1,
-    linked_alternatives: answer.linked_alternatives || [],
-    alternative_type: answer.alternative_type || 'standalone',
-    context: answer.context,
-    unit: answer.unit,
-    acceptable_variations: answer.acceptable_variations || [],
-    accepts_equivalent_phrasing: answer.accepts_equivalent_phrasing || false,
-    accepts_reverse_argument: answer.accepts_reverse_argument || false,
-    error_carried_forward: answer.error_carried_forward || false,
-    marking_criteria: answer.marking_criteria
-  }));
+  return answers.map((answer, index) => {
+    const processedAnswer: any = {
+      answer: answer.answer,
+      marks: answer.marks ?? 1,
+      alternative_id: answer.alternative_id ?? index + 1,
+      linked_alternatives: answer.linked_alternatives || [],
+      alternative_type: answer.alternative_type || 'standalone',
+      unit: answer.unit,
+      acceptable_variations: answer.acceptable_variations || [],
+      accepts_equivalent_phrasing: answer.accepts_equivalent_phrasing || false,
+      accepts_reverse_argument: answer.accepts_reverse_argument || false,
+      error_carried_forward: answer.error_carried_forward || false,
+      marking_criteria: answer.marking_criteria
+    };
+
+    // Process context object
+    if (answer.context) {
+      processedAnswer.context = answer.context;
+      processedAnswer.context_type = answer.context.type;
+      processedAnswer.context_value = answer.context.value;
+      processedAnswer.context_label = answer.context.label;
+    }
+
+    // Add working/explanation if present
+    if ('working' in answer) {
+      processedAnswer.working = (answer as any).working;
+    }
+
+    // Add marking flags
+    processedAnswer.marking_flags = {
+      accepts_reverse_argument: answer.accepts_reverse_argument || false,
+      accepts_equivalent_phrasing: answer.accepts_equivalent_phrasing || false,
+      accepts_mathematical_notation: false,
+      case_insensitive: true,
+      accepts_abbreviated_forms: false,
+      ignore_articles: false,
+      accepts_symbolic_notation: false
+    };
+
+    return processedAnswer;
+  });
 }
 
 function mapOptionsWithCorrectAnswers(

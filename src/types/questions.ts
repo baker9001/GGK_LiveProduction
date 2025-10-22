@@ -41,6 +41,7 @@ export type AnswerFormat =
   | 'structural_diagram'
   | 'diagram'
   | 'table'
+  | 'table_completion'
   | 'graph'
   | 'code'
   | 'audio'
@@ -49,10 +50,20 @@ export type AnswerFormat =
 export type AnswerRequirement =
   | 'single_choice'
   | 'both_required'
+  | 'any_one_from'
   | 'any_2_from'
   | 'any_3_from'
   | 'all_required'
-  | 'alternative_methods';
+  | 'alternative_methods'
+  | 'acceptable_variations';
+
+export type AlternativeType =
+  | 'standalone'
+  | 'one_required'
+  | 'all_required'
+  | 'structure_function_pair'
+  | 'two_required'
+  | 'three_required';
 
 // ==========================================
 // Context Types
@@ -240,9 +251,25 @@ export interface QuestionCorrectAnswer {
   answer: string;
   marks: number | null;
   alternative_id: number | null;
+  linked_alternatives?: number[];
+  alternative_type?: AlternativeType;
   context_type: string | null;
   context_value: string | null;
   context_label: string | null;
+  unit?: string | null;
+  accepts_equivalent_phrasing?: boolean;
+  accepts_reverse_argument?: boolean;
+  error_carried_forward?: boolean;
+  acceptable_variations?: string[];
+  marking_flags?: {
+    accepts_reverse_argument?: boolean;
+    accepts_equivalent_phrasing?: boolean;
+    accepts_mathematical_notation?: boolean;
+    case_insensitive?: boolean;
+    accepts_abbreviated_forms?: boolean;
+    ignore_articles?: boolean;
+    accepts_symbolic_notation?: boolean;
+  };
   created_at: string;
 }
 
@@ -470,4 +497,98 @@ export interface DataStructureInfo {
   programs?: { id: string; name: string };
   providers?: { id: string; name: string };
   edu_subjects?: { id: string; name: string; code: string };
+}
+
+// ==========================================
+// Complex Question Types
+// ==========================================
+
+export interface ComplexQuestionPart {
+  id: string;
+  part_label: string;
+  question_text: string;
+  marks: number;
+  answer_format?: AnswerFormat;
+  answer_requirement?: AnswerRequirement;
+  correct_answers: QuestionCorrectAnswer[];
+  options?: QuestionOption[];
+  attachments?: QuestionAttachment[];
+  hint?: string;
+  explanation?: string;
+  subparts?: ComplexQuestionSubpart[];
+  figure?: boolean;
+  context_metadata?: Record<string, any>;
+}
+
+export interface ComplexQuestionSubpart {
+  id: string;
+  subpart_label: string;
+  question_text: string;
+  marks: number;
+  answer_format?: AnswerFormat;
+  answer_requirement?: AnswerRequirement;
+  correct_answers: QuestionCorrectAnswer[];
+  options?: QuestionOption[];
+  attachments?: QuestionAttachment[];
+  hint?: string;
+  explanation?: string;
+  figure?: boolean;
+  context_metadata?: Record<string, any>;
+}
+
+export interface ComplexQuestionDisplay extends QuestionDisplay {
+  type: 'complex';
+  parts: ComplexQuestionPartDisplay[];
+}
+
+export interface ComplexQuestionPartDisplay extends ComplexQuestionPart {
+  subparts?: ComplexQuestionSubpartDisplay[];
+  topic_name?: string;
+  subtopic_names?: string[];
+}
+
+export interface ComplexQuestionSubpartDisplay extends ComplexQuestionSubpart {
+  topic_name?: string;
+  subtopic_names?: string[];
+}
+
+// ==========================================
+// Answer Input Types for Complex Questions
+// ==========================================
+
+export interface ComplexQuestionAnswer {
+  question_id: string;
+  parts: ComplexPartAnswer[];
+}
+
+export interface ComplexPartAnswer {
+  part_id: string;
+  part_label: string;
+  answer?: string | string[] | Record<string, any>;
+  subparts?: ComplexSubpartAnswer[];
+}
+
+export interface ComplexSubpartAnswer {
+  subpart_id: string;
+  subpart_label: string;
+  answer: string | string[] | Record<string, any>;
+}
+
+// ==========================================
+// Validation Types for Complex Questions
+// ==========================================
+
+export interface ComplexQuestionValidationResult extends ValidationResult {
+  partValidations: {
+    part_id: string;
+    part_label: string;
+    isValid: boolean;
+    errors: ValidationError[];
+    subpartValidations?: {
+      subpart_id: string;
+      subpart_label: string;
+      isValid: boolean;
+      errors: ValidationError[];
+    }[];
+  }[];
 }
