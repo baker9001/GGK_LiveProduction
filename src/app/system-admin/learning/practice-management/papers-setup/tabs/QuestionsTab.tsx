@@ -1696,14 +1696,78 @@ function QuestionsTabInner({
     }
   };
 
+  // Pre-validation function to check question structure
+  const validateQuestionStructure = (question: any, index: number): { valid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    const questionNum = question.question_number || index + 1;
+
+    // Check for basic structure
+    if (!question || typeof question !== 'object') {
+      errors.push('Question must be an object');
+      return { valid: false, errors };
+    }
+
+    // Check for parts structure if complex
+    if (question.type === 'complex' || (question.parts && Array.isArray(question.parts))) {
+      if (!Array.isArray(question.parts)) {
+        errors.push('Complex question must have parts array');
+      } else {
+        question.parts.forEach((part: any, partIdx: number) => {
+          if (!part || typeof part !== 'object') {
+            errors.push(`Part ${partIdx + 1} is invalid`);
+          } else if (!part.marks && part.marks !== 0) {
+            errors.push(`Part ${partIdx + 1} is missing marks`);
+          }
+
+          // Check subparts if they exist
+          if (part.subparts && Array.isArray(part.subparts)) {
+            part.subparts.forEach((subpart: any, subIdx: number) => {
+              if (!subpart || typeof subpart !== 'object') {
+                errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is invalid`);
+              } else if (!subpart.marks && subpart.marks !== 0) {
+                errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is missing marks`);
+              }
+            });
+          }
+        });
+      }
+    }
+
+    return { valid: errors.length === 0, errors };
+  };
+
   const processQuestions = (rawQuestions: any[], paperContext: { subject?: string }): ProcessedQuestion[] => {
     // Validate input
     if (!Array.isArray(rawQuestions)) {
       throw new Error('rawQuestions must be an array');
     }
 
+    console.log(`========== STARTING QUESTIONS PROCESSING ==========`);
+    console.log(`Total questions to process: ${rawQuestions.length}`);
+    console.log(`Paper context:`, paperContext);
+
     const normalizedSubject = paperContext.subject?.toLowerCase() || '';
     const processedQuestions: ProcessedQuestion[] = [];
+    const validationWarnings: Array<{ question: number; errors: string[] }> = [];
+
+    // Pre-validate all questions
+    console.log(`\n[Pre-Validation] Checking question structures...`);
+    rawQuestions.forEach((q, idx) => {
+      const validation = validateQuestionStructure(q, idx);
+      if (!validation.valid) {
+        const questionNum = q?.question_number || idx + 1;
+        console.warn(`[Pre-Validation] Question ${questionNum} has structural issues:`, validation.errors);
+        validationWarnings.push({ question: questionNum, errors: validation.errors });
+      }
+    });
+
+    if (validationWarnings.length > 0) {
+      console.warn(`[Pre-Validation] Found ${validationWarnings.length} questions with structural issues`);
+      console.warn(`[Pre-Validation] Detailed warnings:`, validationWarnings);
+      toast.error(`Warning: ${validationWarnings.length} question(s) have structural issues. Check console for details.`, { duration: 6000 });
+    } else {
+      console.log(`[Pre-Validation] All questions passed structural validation`);
+    }
 
     for (let index = 0; index < rawQuestions.length; index++) {
       try {
@@ -1712,8 +1776,13 @@ function QuestionsTabInner({
         // Skip invalid questions
         if (!q || typeof q !== 'object') {
           console.warn(`Skipping invalid question at index ${index}:`, q);
+          toast.error(`Warning: Question ${index + 1} has invalid structure`);
           continue;
         }
+
+        // Validate critical fields early
+        const questionNumber = q.question_number || index + 1;
+        console.log(`[Question ${questionNumber}] Starting processing...`);
 
         const questionId = `q_${index + 1}`;
 
@@ -1880,9 +1949,21 @@ function QuestionsTabInner({
 
         // Process parts if available
         if (Array.isArray(q.parts) && q.parts.length > 0) {
-          processedQuestion.parts = q.parts.map((part: any, partIndex: number) =>
-            processPart(part, partIndex, questionId, paperContext)
-          );
+          console.log(`[Question ${questionNumber}] Processing ${q.parts.length} parts...`);
+          try {
+            processedQuestion.parts = q.parts.map((part: any, partIndex: number) => {
+              try {
+                return processPart(part, partIndex, questionId, paperContext);
+              } catch (partError) {
+                console.error(`[Question ${questionNumber}] Error processing part ${partIndex + 1}:`, partError);
+                throw new Error(`Failed to process part ${partIndex + 1}: ${partError instanceof Error ? partError.message : String(partError)}`);
+              }
+            });
+            console.log(`[Question ${questionNumber}] Successfully processed ${processedQuestion.parts.length} parts`);
+          } catch (partsError) {
+            console.error(`[Question ${questionNumber}] Critical error in parts processing:`, partsError);
+            throw partsError;
+          }
         }
 
         // Process direct answers if no parts
@@ -1907,11 +1988,23 @@ function QuestionsTabInner({
           }
         }
 
+        console.log(`[Question ${questionNumber}] Processing complete - pushing to array`);
         processedQuestions.push(processedQuestion);
       } catch (error) {
-        console.error(`Error processing question ${index + 1}:`, error);
+        const questionNumber = rawQuestions[index]?.question_number || index + 1;
+        console.error(`[Question ${questionNumber}] ========== PROCESSING FAILED ==========`);
+        console.error(`[Question ${questionNumber}] Error details:`, error);
+        console.error(`[Question ${questionNumber}] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+        console.error(`[Question ${questionNumber}] Question data:`, JSON.stringify(rawQuestions[index], null, 2));
+
+        // Provide detailed error message
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const detailedMessage = `Question ${questionNumber} failed: ${errorMessage}`;
+
+        console.error(`[Question ${questionNumber}] ========================================`);
+        toast.error(detailedMessage, { duration: 5000 });
+
         // Continue processing other questions instead of failing entirely
-        toast.error(`Warning: Question ${index + 1} could not be processed completely`);
       }
     }
 
@@ -1938,12 +2031,24 @@ function QuestionsTabInner({
     parentId: string,
     paperContext: { subject?: string }
   ): ProcessedPart => {
+    // Validate part structure
+    if (!part || typeof part !== 'object') {
+      throw new Error(`Part ${partIndex + 1} has invalid structure`);
+    }
+
     // FIXED: Ensure parts have IDs for consistent key generation
     const partId = part.id || `p${partIndex}`;
+    const partLabel = part.part || String.fromCharCode(97 + partIndex);
+
+    console.log(`  [Part ${partLabel}] Processing part ${partIndex + 1}...`);
 
     // Enhanced answer format detection
     const questionText = ensureString(part.question_text || part.text || part.question || '');
     let answerFormat = part.answer_format;
+
+    if (!questionText && !answerFormat) {
+      console.warn(`  [Part ${partLabel}] Warning: No question text or answer format specified`);
+    }
 
     if (!answerFormat && questionText) {
       // First try auto-detection
@@ -2007,25 +2112,50 @@ function QuestionsTabInner({
 
     // Process subparts if available
     if (part.subparts && Array.isArray(part.subparts)) {
-      processedPart.subparts = part.subparts.map((subpart: any, subpartIndex: number) =>
-        processSubpart(subpart, subpartIndex, parentId, paperContext)
-      );
+      console.log(`  [Part ${partLabel}] Processing ${part.subparts.length} subparts...`);
+      try {
+        processedPart.subparts = part.subparts.map((subpart: any, subpartIndex: number) => {
+          try {
+            return processSubpart(subpart, subpartIndex, parentId, paperContext);
+          } catch (subpartError) {
+            console.error(`  [Part ${partLabel}] Error in subpart ${subpartIndex + 1}:`, subpartError);
+            throw new Error(`Subpart ${subpartIndex + 1} failed: ${subpartError instanceof Error ? subpartError.message : String(subpartError)}`);
+          }
+        });
+        console.log(`  [Part ${partLabel}] Successfully processed ${processedPart.subparts.length} subparts`);
+      } catch (subpartsError) {
+        console.error(`  [Part ${partLabel}] Critical error in subparts:`, subpartsError);
+        throw subpartsError;
+      }
     }
 
     // Process answers
     if (part.correct_answers) {
-      processedPart.correct_answers = processAnswers(part.correct_answers, answerRequirement);
+      try {
+        console.log(`  [Part ${partLabel}] Processing ${Array.isArray(part.correct_answers) ? part.correct_answers.length : 0} answers...`);
+        processedPart.correct_answers = processAnswers(part.correct_answers, answerRequirement);
+      } catch (answersError) {
+        console.error(`  [Part ${partLabel}] Error processing answers:`, answersError);
+        throw new Error(`Failed to process answers: ${answersError instanceof Error ? answersError.message : String(answersError)}`);
+      }
     }
 
     // Process options for MCQ
     if (part.options) {
-      processedPart.options = processOptions(
-        part.options,
-        part.correct_answers,
-        part.correct_answer
-      );
+      try {
+        console.log(`  [Part ${partLabel}] Processing ${Array.isArray(part.options) ? part.options.length : 0} options...`);
+        processedPart.options = processOptions(
+          part.options,
+          part.correct_answers,
+          part.correct_answer
+        );
+      } catch (optionsError) {
+        console.error(`  [Part ${partLabel}] Error processing options:`, optionsError);
+        throw new Error(`Failed to process options: ${optionsError instanceof Error ? optionsError.message : String(optionsError)}`);
+      }
     }
 
+    console.log(`  [Part ${partLabel}] Part processing complete`);
     return processedPart;
   };
 
@@ -2081,11 +2211,31 @@ function QuestionsTabInner({
   };
 
   const processAnswers = (answers: any[], answerRequirement?: string): ProcessedAnswer[] => {
-    if (!Array.isArray(answers)) return [];
+    if (!Array.isArray(answers)) {
+      console.warn('processAnswers called with non-array:', answers);
+      return [];
+    }
 
     return answers.map((ans, index) => {
-      const answerText = ensureString(ans.answer) || '';
-      const context = ans.context;
+      try {
+        // Validate answer structure
+        if (!ans || typeof ans !== 'object') {
+          console.warn(`Answer ${index + 1} has invalid structure:`, ans);
+          return {
+            answer: String(ans || ''),
+            marks: 1,
+            alternative_id: index + 1,
+            alternative_type: 'standalone',
+            answer_requirement: answerRequirement
+          };
+        }
+
+        const answerText = ensureString(ans.answer) || '';
+        if (!answerText) {
+          console.warn(`Answer ${index + 1} has no text content:`, ans);
+        }
+
+        const context = ans.context;
 
       let processedAnswer: ProcessedAnswer = {
         answer: answerText,
@@ -2156,7 +2306,20 @@ function QuestionsTabInner({
       }
 
       return processedAnswer;
-    });
+      } catch (answerError) {
+        console.error(`Error processing answer ${index + 1}:`, answerError);
+        console.error(`Answer data:`, ans);
+        // Return minimal valid answer structure
+        return {
+          answer: String(ans?.answer || ''),
+          marks: 1,
+          alternative_id: index + 1,
+          alternative_type: 'standalone',
+          answer_requirement: answerRequirement,
+          validation_issues: [`Processing error: ${answerError instanceof Error ? answerError.message : String(answerError)}`]
+        };
+      }
+    }).filter(Boolean); // Filter out any null/undefined results
   };
 
   const buildNormalizedOptionValue = (value: unknown): string[] => {
