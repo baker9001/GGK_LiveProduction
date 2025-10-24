@@ -30,6 +30,12 @@ import {
   questionNeedsAttachment,
   subQuestionNeedsAttachment
 } from '../utils/questionHelpers';
+import {
+  ANSWER_FORMAT_OPTIONS,
+  ANSWER_REQUIREMENT_OPTIONS,
+  getAnswerFormatLabel as getAnswerFormatLabelFromOptions,
+  getAnswerRequirementLabel as getAnswerRequirementLabelFromOptions
+} from '../../../../../../lib/constants/answerOptions';
 import { EnhancedQuestionDisplay } from '../../../../../../components/shared/EnhancedQuestionDisplay';
 import { mapQuestionToDisplayData } from '../utils/questionMappers';
 
@@ -109,6 +115,14 @@ export function QuestionCard({
       complete: Boolean(question.topic_id) && currentSubtopicIds.length > 0
     },
     {
+      label: 'Answer format specified',
+      complete: question.type === 'descriptive' ? Boolean(question.answer_format) : true
+    },
+    {
+      label: 'Answer requirement specified',
+      complete: question.type === 'descriptive' ? Boolean(question.answer_requirement) : true
+    },
+    {
       label: 'Hint provided',
       complete: Boolean(question.hint?.trim())
     },
@@ -126,20 +140,12 @@ export function QuestionCard({
   const qaProgress = Math.round((completedChecklistItems / qaChecklist.length) * 100);
   const confirmBlocked = hasValidationErrors || needsAttachmentWarning;
   
-  const getAnswerFormatLabel = (format: string) => {
-    const formats: Record<string, string> = {
-      'single_word': 'Single Word',
-      'single_line': 'Single Line',
-      'two_items': 'Two Items',
-      'two_items_connected': 'Two Connected Items',
-      'multi_line': 'Multiple Lines',
-      'multi_line_labeled': 'Multiple Labeled Lines',
-      'calculation': 'Calculation',
-      'equation': 'Equation',
-      'diagram': 'Diagram',
-      'structural_diagram': 'Structural Diagram'
-    };
-    return formats[format] || format;
+  const getAnswerFormatLabel = (format: string | null | undefined) => {
+    return getAnswerFormatLabelFromOptions(format);
+  };
+
+  const getAnswerRequirementLabel = (requirement: string | null | undefined) => {
+    return getAnswerRequirementLabelFromOptions(requirement);
   };
   
   const handleFieldUpdate = async (field: string, value: any) => {
@@ -684,19 +690,64 @@ export function QuestionCard({
           </div>
         </div>
 
-        {/* Answer Format Display */}
-        {question.answer_format && (
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+        {/* Answer Format and Requirement Section */}
+        <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Answer Format */}
             <div className="bg-white dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600 shadow-sm">
               <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
                 Answer Format
               </label>
-              <span className="block text-base font-medium text-gray-900 dark:text-white">
-                {getAnswerFormatLabel(question.answer_format)}
-              </span>
+              {question.type === 'descriptive' ? (
+                <EditableField
+                  value={question.answer_format || ''}
+                  onSave={(value) => handleFieldUpdate('answer_format', value)}
+                  type="select"
+                  options={ANSWER_FORMAT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+                  displayValue={
+                    <span className="text-base font-medium text-gray-900 dark:text-white">
+                      {getAnswerFormatLabel(question.answer_format)}
+                    </span>
+                  }
+                  placeholder="Select answer format..."
+                  disabled={readOnly}
+                  className="text-base text-gray-900 dark:text-white"
+                />
+              ) : (
+                <span className="block text-base font-medium text-gray-500 dark:text-gray-400 italic">
+                  Not applicable for {question.type.toUpperCase()} questions
+                </span>
+              )}
+            </div>
+
+            {/* Answer Requirement */}
+            <div className="bg-white dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600 shadow-sm">
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
+                Answer Requirement
+              </label>
+              {question.type === 'descriptive' || (question.correct_answers && question.correct_answers.length > 1) ? (
+                <EditableField
+                  value={question.answer_requirement || ''}
+                  onSave={(value) => handleFieldUpdate('answer_requirement', value)}
+                  type="select"
+                  options={ANSWER_REQUIREMENT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+                  displayValue={
+                    <span className="text-base font-medium text-gray-900 dark:text-white">
+                      {getAnswerRequirementLabel(question.answer_requirement)}
+                    </span>
+                  }
+                  placeholder="Select answer requirement..."
+                  disabled={readOnly}
+                  className="text-base text-gray-900 dark:text-white"
+                />
+              ) : (
+                <span className="block text-base font-medium text-gray-500 dark:text-gray-400">
+                  {question.type === 'mcq' || question.type === 'tf' ? 'Single choice (automatic)' : 'Not set'}
+                </span>
+              )}
             </div>
           </div>
-        )}
+        </div>
         
         {/* Subtopics Section */}
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -1092,6 +1143,62 @@ export function QuestionCard({
                           }
                           disabled={readOnly}
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sub-question Answer Format and Requirement */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
+                        Answer Format
+                      </label>
+                      <div className="bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600">
+                        {subQuestion.type === 'descriptive' ? (
+                          <EditableField
+                            value={subQuestion.answer_format || ''}
+                            onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_format', value)}
+                            type="select"
+                            options={ANSWER_FORMAT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+                            displayValue={
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {getAnswerFormatLabel(subQuestion.answer_format)}
+                              </span>
+                            }
+                            placeholder="Select format..."
+                            disabled={readOnly}
+                          />
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 italic">
+                            N/A for {subQuestion.type}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
+                        Answer Requirement
+                      </label>
+                      <div className="bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600">
+                        {subQuestion.type === 'descriptive' ? (
+                          <EditableField
+                            value={subQuestion.answer_requirement || ''}
+                            onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_requirement', value)}
+                            type="select"
+                            options={ANSWER_REQUIREMENT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+                            displayValue={
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {getAnswerRequirementLabel(subQuestion.answer_requirement)}
+                              </span>
+                            }
+                            placeholder="Select requirement..."
+                            disabled={readOnly}
+                          />
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            Single choice
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
