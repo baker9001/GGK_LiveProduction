@@ -702,7 +702,37 @@ export function UnifiedTestSimulation({
 
   const currentQuestion = paper.questions[currentQuestionIndex];
   const totalQuestions = paper.questions.length;
-  const examDuration = paper.duration ? parseInt(paper.duration) * 60 : 0;
+
+  // Parse duration string (e.g., "1 hour 15 minutes" or "75" or "75 minutes")
+  const parseDuration = (durationStr: string | undefined): number => {
+    if (!durationStr) return 0;
+
+    const str = durationStr.toLowerCase().trim();
+    let totalMinutes = 0;
+
+    // Match patterns like "1 hour 15 minutes", "2 hours 30 minutes", etc.
+    const hourMatch = str.match(/(\d+)\s*hour/);
+    const minuteMatch = str.match(/(\d+)\s*minute/);
+
+    if (hourMatch) {
+      totalMinutes += parseInt(hourMatch[1]) * 60;
+    }
+    if (minuteMatch) {
+      totalMinutes += parseInt(minuteMatch[1]);
+    }
+
+    // If no "hour" or "minute" keywords found, treat as minutes
+    if (!hourMatch && !minuteMatch) {
+      const numMatch = str.match(/^\d+$/);
+      if (numMatch) {
+        totalMinutes = parseInt(str);
+      }
+    }
+
+    return totalMinutes * 60; // Convert to seconds
+  };
+
+  const examDuration = parseDuration(paper.duration);
   const visitedCount = visitedQuestions.size;
   const allQuestionsVisited = totalQuestions > 0 && visitedCount === totalQuestions;
 
