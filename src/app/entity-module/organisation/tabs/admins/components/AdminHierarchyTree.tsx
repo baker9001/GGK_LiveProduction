@@ -1,5 +1,3 @@
-///home/project/src/app/entity-module/organisation/tabs/admins/components/AdminHierarchyTree.tsx
-
 import React, { useState, useMemo } from 'react';
 import { 
   ChevronRight, 

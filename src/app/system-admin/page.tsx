@@ -1,11 +1,8 @@
-// /src/app/system-admin/page.tsx
-// SECURITY ENHANCED VERSION with module access control
+// src/app/system-admin/page.tsx
 
-import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
-import { getCurrentUser } from '../../lib/auth';
-import { useModuleSecurity } from '../../hooks/useModuleSecurity';
 import DashboardPage from './dashboard/page';
 import AdminUsersPage from './admin-users/page';
 import TenantsPage from './tenants/page';
@@ -24,53 +21,6 @@ interface SystemAdminPageProps {
 }
 
 export default function SystemAdminPage({ moduleKey }: SystemAdminPageProps) {
-  const navigate = useNavigate();
-  const currentUser = getCurrentUser();
-  
-  // SECURITY: Use the module security hook
-  useModuleSecurity('system-admin');
-  
-  // SECURITY: Additional role check
-  useEffect(() => {
-    const allowedRoles = ['SSA', 'SUPPORT', 'VIEWER'];
-    
-    if (currentUser && !allowedRoles.includes(currentUser.role)) {
-      console.error(`[Security] Unauthorized access to System Admin by ${currentUser.email} (${currentUser.role})`);
-      
-      // Log security event
-      const securityEvent = {
-        type: 'SYSTEM_ADMIN_ACCESS_VIOLATION',
-        timestamp: new Date().toISOString(),
-        user: {
-          id: currentUser.id,
-          email: currentUser.email,
-          role: currentUser.role
-        },
-        module: 'system-admin',
-        action: 'ACCESS_BLOCKED'
-      };
-      
-      console.error('[SECURITY EVENT]', securityEvent);
-      
-      // Store violation
-      const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
-      violations.push(securityEvent);
-      localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
-      
-      // Redirect based on user role
-      const roleRedirects: Record<string, string> = {
-        'ENTITY_ADMIN': '/app/entity-module/dashboard',
-        'STUDENT': '/app/student-module/dashboard',
-        'TEACHER': '/app/teachers-module/dashboard',
-        'SSA': '/app/system-admin/dashboard',
-        'SUPPORT': '/app/system-admin/dashboard',
-        'VIEWER': '/app/system-admin/dashboard'
-      };
-      
-      navigate(roleRedirects[currentUser.role] || '/signin', { replace: true });
-    }
-  }, [currentUser, navigate]);
-  
   return (
     <AdminLayout moduleKey="system-admin">
       <Routes>

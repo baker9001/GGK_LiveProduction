@@ -5,8 +5,8 @@
  *   - ../types/admin.types
  *   - ./scopeService
  * 
- * Updated: School Admin can now access Admins tab to manage Branch Admins
- * - School Admin: Full access to assigned schools and can create/edit branch admins
+ * Updated: Corrected permissions for School Admin and Branch Admin
+ * - School Admin: Full access to assigned schools
  * - Branch Admin: Full access to assigned branches
  * - Entity Admin: Full access to everything
  * - Sub-Entity Admin: Can create/edit users lower than their level
@@ -191,12 +191,6 @@ export const permissionService = {
         view_all_branches: true,
         manage_departments: true,
       },
-      licenses: {
-        assign_license: true,
-        revoke_license: true,
-        view_licenses: true,
-        manage_license_assignments: true,
-      },
       settings: {
         manage_company_settings: true,
         manage_school_settings: true,
@@ -239,12 +233,6 @@ export const permissionService = {
         view_all_branches: true,
         manage_departments: true,
       },
-      licenses: {
-        assign_license: true,
-        revoke_license: true,
-        view_licenses: true,
-        manage_license_assignments: true,
-      },
       settings: {
         manage_company_settings: false, // Limited company settings access
         manage_school_settings: true,
@@ -256,7 +244,7 @@ export const permissionService = {
   },
 
   /**
-   * School Admin - Full access to their assigned schools, can create/edit branch admins
+   * School Admin - Full access to their assigned schools
    */
   getSchoolAdminPermissions(): AdminPermissions {
     return {
@@ -264,13 +252,13 @@ export const permissionService = {
         create_entity_admin: false,
         create_sub_admin: false,
         create_school_admin: false, // Cannot create same level
-        create_branch_admin: true, // Can create branch admins (lower level)
+        create_branch_admin: true, // Can create branch admins
         create_teacher: true,
         create_student: true,
         modify_entity_admin: false,
         modify_sub_admin: false,
         modify_school_admin: false, // Cannot modify same or higher level
-        modify_branch_admin: true, // Can modify branch admins (lower level)
+        modify_branch_admin: true, // Can modify branch admins
         modify_teacher: true,
         modify_student: true,
         delete_users: false, // Limited delete permissions
@@ -278,7 +266,7 @@ export const permissionService = {
       },
       organization: {
         create_school: false, // Cannot create new schools
-        modify_school: true, // Can modify their assigned schools
+        modify_school: true, // UPDATED: Can modify their assigned schools
         delete_school: false, // Cannot delete schools
         create_branch: true, // Can create branches in their schools
         modify_branch: true,
@@ -286,12 +274,6 @@ export const permissionService = {
         view_all_schools: true, // Can view their assigned schools
         view_all_branches: true, // Branches in their schools
         manage_departments: true,
-      },
-      licenses: {
-        assign_license: true,
-        revoke_license: true,
-        view_licenses: true,
-        manage_license_assignments: true,
       },
       settings: {
         manage_company_settings: false,
@@ -304,7 +286,7 @@ export const permissionService = {
   },
 
   /**
-   * Branch Admin - Full access to their assigned branches only
+   * Branch Admin - Full access to their assigned branches
    */
   getBranchAdminPermissions(): AdminPermissions {
     return {
@@ -329,17 +311,11 @@ export const permissionService = {
         modify_school: false,
         delete_school: false,
         create_branch: false, // Cannot create new branches
-        modify_branch: true, // Can modify their assigned branches
+        modify_branch: true, // UPDATED: Can modify their assigned branches
         delete_branch: false, // Cannot delete branches
         view_all_schools: false,
         view_all_branches: true, // Can view their assigned branches
         manage_departments: false,
-      },
-      licenses: {
-        assign_license: false, // Branch admins cannot assign licenses
-        revoke_license: false, // Branch admins cannot revoke licenses
-        view_licenses: true, // Can view licenses for their branches
-        manage_license_assignments: false,
       },
       settings: {
         manage_company_settings: false,
@@ -383,12 +359,6 @@ export const permissionService = {
         view_all_branches: false,
         manage_departments: false,
       },
-      licenses: {
-        assign_license: false,
-        revoke_license: false,
-        view_licenses: false,
-        manage_license_assignments: false,
-      },
       settings: {
         manage_company_settings: false,
         manage_school_settings: false,
@@ -408,7 +378,6 @@ export const permissionService = {
 
   /**
    * Check if user can access a specific tab based on their permissions
-   * UPDATED: School Admin can now access Admins tab to manage Branch Admins
    */
   canAccessTab(tabId: string, permissions: AdminPermissions): boolean {
     switch (tabId) {
@@ -434,16 +403,16 @@ export const permissionService = {
                permissions.organization.delete_branch;
                
       case 'admins':
-        // UPDATED: School admins can access to manage branch admins
+        // Admins tab requires ability to view or manage any type of admin
         return permissions.users.view_all_users ||
                permissions.users.create_entity_admin ||
                permissions.users.create_sub_admin ||
                permissions.users.create_school_admin ||
-               permissions.users.create_branch_admin || // School admin can create branch admins
+               permissions.users.create_branch_admin ||
                permissions.users.modify_entity_admin ||
                permissions.users.modify_sub_admin ||
                permissions.users.modify_school_admin ||
-               permissions.users.modify_branch_admin; // School admin can modify branch admins
+               permissions.users.modify_branch_admin;
                
       case 'teachers':
         // Teachers tab requires any teacher-related permission
@@ -456,13 +425,6 @@ export const permissionService = {
         return permissions.users.create_student ||
                permissions.users.modify_student ||
                permissions.users.view_all_users;
-               
-      case 'license-management':
-        // License management tab requires license permissions
-        return permissions.licenses.view_licenses ||
-               permissions.licenses.assign_license ||
-               permissions.licenses.revoke_license ||
-               permissions.licenses.manage_license_assignments;
                
       default:
         return false;

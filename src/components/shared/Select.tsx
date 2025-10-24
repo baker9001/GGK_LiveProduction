@@ -1,8 +1,3 @@
-/**
- * File: /src/components/shared/Select.tsx
- * Updated to support green theme (#8CC63F) instead of blue
- */
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ChevronDown, X } from 'lucide-react';
@@ -11,8 +6,6 @@ import { cn } from '../../lib/utils';
 interface SelectOption {
   value: string;
   label: string;
-  disabled?: boolean;
-  comingSoon?: boolean;
 }
 
 interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
@@ -48,9 +41,6 @@ export function Select({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const unregisterPortalRef = useRef<(() => void) | null>(null);
-
-  // Always use green theme for consistency
-  const isGreenTheme = true;
 
   // Update selectedOption when value or defaultValue changes
   useEffect(() => {
@@ -195,12 +185,10 @@ export function Select({
   };
 
   const handleSelect = (option: SelectOption) => {
-    if (option.disabled) return;
-
     setSelectedOption(option);
     setIsOpen(false);
     setSearchTerm('');
-
+    
     if (onChange) {
       onChange(option.value);
     }
@@ -253,13 +241,7 @@ export function Select({
               <input
                 ref={searchInputRef}
                 type="text"
-                className={cn(
-                  "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
-                  "focus:outline-none focus:ring-2",
-                  isGreenTheme 
-                    ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                    : "focus:ring-blue-500 focus:border-blue-500"
-                )}
+                className="w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -279,38 +261,22 @@ export function Select({
                   type="button"
                   role="option"
                   aria-selected={value === option.value}
-                  disabled={option.disabled}
                   className={cn(
-                    'w-full px-4 py-2 text-left transition-colors relative',
-                    !option.disabled && 'hover:bg-gray-100 dark:hover:bg-gray-700',
-                    option.disabled && 'opacity-60 cursor-not-allowed',
-                    value === option.value && !option.disabled && (
-                      isGreenTheme
-                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20'
-                        : 'bg-blue-50 dark:bg-blue-900/20'
-                    )
+                    'w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                    value === option.value && 'bg-blue-50 dark:bg-blue-900/20'
                   )}
-                  onClick={() => !option.disabled && handleSelect(option)}
+                  onClick={() => handleSelect(option)}
                 >
                   {renderOption ? (
                     renderOption(option)
                   ) : (
-                    <div className="flex items-center justify-between">
-                      <span className={cn(
-                        value === option.value && !option.disabled
-                          ? isGreenTheme
-                            ? "text-[#8CC63F] font-medium"
-                            : "text-blue-600 dark:text-blue-400"
-                          : "text-gray-900 dark:text-white"
-                      )}>
-                        {option.label}
-                      </span>
-                      {option.comingSoon && (
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                          Coming Soon
-                        </span>
-                      )}
-                    </div>
+                    <span className={cn(
+                      value === option.value 
+                        ? "text-blue-600 dark:text-blue-400" 
+                        : "text-gray-900 dark:text-white"
+                    )}>
+                      {option.label}
+                    </span>
                   )}
                 </button>
               ))}
@@ -334,12 +300,8 @@ export function Select({
       <select
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm appearance-none transition-colors duration-200',
-          'focus:outline-none focus:ring-2',
-          isGreenTheme
-            ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
-            : 'focus:ring-blue-500 focus:border-blue-500',
+          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
           'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
-          disabled && 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
           className
         )}
@@ -366,18 +328,10 @@ export function Select({
         type="button"
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm text-left transition-colors duration-200',
-          'focus:outline-none focus:ring-2',
-          isGreenTheme
-            ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
-            : 'focus:ring-blue-500 focus:border-blue-500',
+          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
           'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
-          disabled && 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
-          isOpen && !disabled && (
-            isGreenTheme
-              ? 'ring-2 ring-[#8CC63F] border-[#8CC63F]'
-              : 'ring-2 ring-blue-500 border-blue-500'
-          ),
+          disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed',
           className
         )}
         onClick={handleOpen}
@@ -391,15 +345,22 @@ export function Select({
         </span>
         <span className="absolute inset-y-0 right-0 flex items-center pr-2">
           {selectedOption ? (
-            <button
+            <div
               type="button"
+              role="button"
+              tabIndex={0}
               className="text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400"
               onClick={handleClear}
               aria-label="Clear selection"
-              tabIndex={-1}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleClear(e as any);
+                }
+              }}
             >
               <X className="h-4 w-4" />
-            </button>
+            </div>
           ) : (
             <ChevronDown className={cn(
               "h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform",
@@ -419,7 +380,7 @@ export function Select({
         onChange={(e) => onChange?.(e.target.value)}
         className="hidden"
         tabIndex={-1}
-        >
+      >
         <option value="">{placeholder}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>

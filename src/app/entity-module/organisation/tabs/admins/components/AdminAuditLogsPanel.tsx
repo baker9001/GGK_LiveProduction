@@ -1,5 +1,3 @@
-///home/project/src/app/entity-module/organisation/tabs/admins/components/AdminAuditLogsPanel.tsx
-
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 

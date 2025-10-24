@@ -1,8 +1,4 @@
-// /src/components/layout/AdminLayout.tsx
-// SECURITY ENHANCED VERSION with module access validation
-
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
@@ -11,7 +7,7 @@ import {
   X,
   Bell,
   User,
-  Accessibility,
+  Globe,
   Sun,
   Moon,
   LogOut,
@@ -34,26 +30,13 @@ import {
   Calendar,
   Circle,
   ClipboardList,
-  UserCircle,
   type LucideIcon
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { getDyslexiaPreference, setDyslexiaPreference } from '../../lib/accessibility';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
-import { WelcomeBanner } from '../shared/WelcomeBanner';
-import {
-  clearAuthenticatedUser,
-  clearSessionExpiredNotice,
-  getCurrentUser,
-  getRealAdminUser,
-  isInTestMode,
-  markUserLogout
-} from '../../lib/auth';
+import { clearAuthenticatedUser } from '../../lib/auth';
 import { useUser } from '../../contexts/UserContext';
 import { getSubmenusForModule, type SubMenuItem } from '../../lib/constants/moduleSubmenus';
-import { supabase } from '../../lib/supabase';
-import { getPublicUrl } from '../../lib/storageHelpers';
-import { clearWelcomeNotice, loadWelcomeNotice, type WelcomeNotice } from '../../lib/welcomeNotice';
 
 // Icon mapping
 const iconMap: Record<string, LucideIcon> = {
@@ -74,19 +57,12 @@ const iconMap: Record<string, LucideIcon> = {
   TrendingUp,
   Route,
   Calendar,
-  ClipboardList,
-  UserCircle
+  ClipboardList
 };
 
 interface AdminLayoutProps {
   children: React.ReactNode;
   moduleKey: string;
-}
-
-interface SidebarProfileData {
-  avatarPath: string | null;
-  name: string | null;
-  email: string | null;
 }
 
 export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
@@ -98,217 +74,28 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     const saved = localStorage.getItem('darkMode');
     return saved ? JSON.parse(saved) : false;
   });
-  const [isDyslexiaEnabled, setIsDyslexiaEnabled] = useState(() => getDyslexiaPreference());
+  const [language, setLanguage] = useState<'EN' | 'AR'>('EN');
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [welcomeNotice, setWelcomeNotice] = useState<WelcomeNotice | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleDyslexiaChange = (event: Event) => {
-      const customEvent = event as CustomEvent<{ enabled: boolean }>;
-      setIsDyslexiaEnabled(customEvent.detail.enabled);
-    };
-
-    window.addEventListener('dyslexia-support-change', handleDyslexiaChange);
-    return () => window.removeEventListener('dyslexia-support-change', handleDyslexiaChange);
-  }, []);
-
-  useEffect(() => {
-    setDyslexiaPreference(isDyslexiaEnabled);
-  }, [isDyslexiaEnabled]);
-
-  useEffect(() => {
-    const notice = loadWelcomeNotice();
-    if (notice) {
-      setWelcomeNotice(notice);
-      clearWelcomeNotice();
-    }
-  }, []);
-
-  const handleDismissWelcome = () => {
-    setWelcomeNotice(null);
-  };
-
-  const { data: sidebarProfile } = useQuery<SidebarProfileData>(
-    ['userSidebarProfile', user?.id],
-    async () => {
-      if (!user?.id) {
-        return {
-          avatarPath: user?.avatarUrl ?? null,
-          name: user?.name ?? null,
-          email: user?.email ?? null
-        };
-      }
-
-      let avatarPath: string | null = user?.avatarUrl ?? null;
-      let name: string | null = user?.name ?? null;
-      let email: string | null = user?.email ?? null;
-
-      try {
-        const { data: adminUser, error: adminError } = await supabase
-          .from('admin_users')
-          .select('avatar_url, name, email')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (adminError && adminError.code !== 'PGRST116') {
-          console.warn('[AdminLayout] Failed to load admin user profile:', adminError);
-        }
-
-        if (adminUser) {
-          avatarPath = adminUser.avatar_url ?? avatarPath;
-          name = adminUser.name ?? name;
-          email = adminUser.email ?? email;
-        }
-      } catch (error) {
-        console.warn('[AdminLayout] Unexpected error loading admin user profile:', error);
-      }
-
-      if (!avatarPath || !name || !email) {
-        try {
-          const { data: userRecord, error: userError } = await supabase
-            .from('users')
-            .select('raw_user_meta_data, email')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          if (userError && userError.code !== 'PGRST116') {
-            console.warn('[AdminLayout] Failed to load base user profile:', userError);
-          }
-
-          if (userRecord) {
-            const metadata = (userRecord.raw_user_meta_data ?? {}) as { avatar_url?: string; name?: string };
-            avatarPath = metadata.avatar_url ?? avatarPath;
-            name = metadata.name ?? name;
-            email = (userRecord as { email?: string }).email ?? email;
-          }
-        } catch (error) {
-          console.warn('[AdminLayout] Unexpected error loading base user profile:', error);
-        }
-      }
-
-      return {
-        avatarPath,
-        name,
-        email
-      };
-    },
-    {
-      enabled: !!user?.id
-    }
-  );
-
-  const displayName = sidebarProfile?.name ?? user?.name ?? 'User';
-  const displayEmail = sidebarProfile?.email ?? user?.email ?? 'user@example.com';
-  const avatarPath = sidebarProfile?.avatarPath ?? user?.avatarUrl ?? null;
-  const sidebarAvatarUrl = useMemo(() => {
-    return avatarPath ? getPublicUrl('avatars', avatarPath) : null;
-  }, [avatarPath]);
-  const displayInitial = displayName?.charAt(0)?.toUpperCase() || 'U';
-
-  // SECURITY: Get current user for validation
-  const currentUser = getCurrentUser();
-  const inTestMode = isInTestMode();
-  const realAdmin = getRealAdminUser();
-
-  // SECURITY: Validate module access on mount, when moduleKey changes, or when test mode changes
-  useEffect(() => {
-    const validateModuleAccess = () => {
-      if (!currentUser) {
-        console.error('[AdminLayout] No authenticated user');
-        navigate('/signin', { replace: true });
-        return;
-      }
-
-      const modulePermissions: Record<string, string[]> = {
-        'system-admin': ['SSA', 'SUPPORT', 'VIEWER'],
-        'entity-module': ['SSA', 'ENTITY_ADMIN'],
-        'student-module': ['SSA', 'STUDENT'],
-        'teachers-module': ['SSA', 'TEACHER']
-      };
-
-      const allowedRoles = modulePermissions[moduleKey];
-
-      if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
-        // Check if this is test mode - don't log as violation if SSA is testing
-        const isTestModeViolation = inTestMode && realAdmin?.role === 'SSA';
-
-        if (isTestModeViolation) {
-          console.log(`[TestMode] AdminLayout: SSA testing as ${currentUser.email} (${currentUser.role}) - access denied to ${moduleKey}`);
-        } else {
-          console.error(`[Security Violation] AdminLayout: User ${currentUser.email} (${currentUser.role}) attempted unauthorized access to ${moduleKey}`);
-
-          // Log security event only for real violations
-          const securityEvent = {
-            type: 'UNAUTHORIZED_MODULE_ACCESS',
-            userId: currentUser.id,
-            userEmail: currentUser.email,
-            userRole: currentUser.role,
-            attemptedModule: moduleKey,
-            attemptedPath: location.pathname,
-            timestamp: new Date().toISOString()
-          };
-
-          console.error('[SECURITY EVENT]', securityEvent);
-
-          // Store violation for audit
-          const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
-          violations.push(securityEvent);
-          localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
-        }
-
-        // Redirect to appropriate module
-        const redirectMap: Record<string, string> = {
-          'ENTITY_ADMIN': '/app/entity-module/dashboard',
-          'STUDENT': '/app/student-module/dashboard',
-          'TEACHER': '/app/teachers-module/dashboard',
-          'SSA': '/app/system-admin/dashboard',
-          'SUPPORT': '/app/system-admin/dashboard',
-          'VIEWER': '/app/system-admin/dashboard'
-        };
-
-        navigate(redirectMap[currentUser.role] || '/signin', { replace: true });
-      }
-    };
-
-    validateModuleAccess();
-
-    // Listen for test mode changes
-    const handleTestModeChange = () => {
-      console.log('[AdminLayout] Test mode changed, re-validating access');
-      validateModuleAccess();
-    };
-
-    window.addEventListener('test-mode-change', handleTestModeChange);
-    window.addEventListener('auth-change', handleTestModeChange);
-
-    return () => {
-      window.removeEventListener('test-mode-change', handleTestModeChange);
-      window.removeEventListener('auth-change', handleTestModeChange);
-    };
-  }, [currentUser, moduleKey, navigate, location.pathname, inTestMode, realAdmin]);
-
   // Get navigation items
   const navigationItems = getSubmenusForModule(moduleKey);
 
-  // Generate the profile path based on the user's role
+  // Generate the profile path based on the current module
   const getProfilePath = () => {
-    if (!currentUser) return '/signin';
-
-    // Map user roles to their profile paths
+    // Map module keys to their profile paths
     const profilePaths: Record<string, string> = {
-      'SSA': '/app/system-admin/profile',
-      'SUPPORT': '/app/system-admin/profile',
-      'VIEWER': '/app/system-admin/profile',
-      'ENTITY_ADMIN': '/app/entity-module/profile',
-      'TEACHER': '/app/teachers-module/profile',
-      'STUDENT': '/app/student-module/profile'
+      'entity-module': '/app/entity-module/profile',
+      'system-admin': '/app/system-admin/profile',
+      'teacher-module': '/app/teacher-module/profile',
+      'student-module': '/app/student-module/profile',
+      // Add other modules as needed
     };
-
-    return profilePaths[currentUser.role] || '/app/system-admin/profile';
+    
+    return profilePaths[moduleKey] || '/app/entity-module/profile'; // Default to entity module profile
   };
 
   // Handle dark mode
@@ -368,8 +155,6 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   }, [isProfileDropdownOpen]);
 
   const handleLogout = () => {
-    markUserLogout();
-    clearSessionExpiredNotice();
     clearAuthenticatedUser();
     navigate('/signin');
   };
@@ -493,10 +278,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       {/* Mobile menu button */}
-      <div className={cn(
-        "lg:hidden fixed top-4 z-50 transition-all duration-300",
-        sidebarOpen ? "left-4" : "left-20"
-      )}>
+      <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="p-2 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800"
@@ -523,10 +305,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           </span>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={cn(
-              "p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-300",
-              !sidebarOpen && "absolute top-4 left-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700"
-            )}
+            className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -558,26 +337,12 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         {sidebarOpen && (
           <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center">
-              <div
-                className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden border border-gray-200 dark:border-gray-700',
-                  sidebarAvatarUrl ? 'bg-gray-100 dark:bg-gray-700' : 'bg-[#64BC46] text-white'
-                )}
-              >
-                {sidebarAvatarUrl ? (
-                  <img
-                    src={sidebarAvatarUrl}
-                    alt={`${displayName}'s avatar`}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span>{displayInitial}</span>
-                )}
+              <div className="w-8 h-8 rounded-full bg-[#64BC46] text-white flex items-center justify-center font-semibold text-sm">
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{displayName}</p>
-                <p className="text-xs text-gray-500">{displayEmail}</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name || 'User'}</p>
+                <p className="text-xs text-gray-500">{user?.email || 'user@example.com'}</p>
               </div>
             </div>
           </div>
@@ -604,20 +369,12 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                   </span>
                 </button>
 
-                {/* Dyslexia Support Toggle */}
-                <button
-                  className={cn(
-                    'p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700',
-                    'text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
-                    isDyslexiaEnabled && 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-600'
-                  )}
-                  onClick={() => setIsDyslexiaEnabled((prev) => !prev)}
-                  aria-pressed={isDyslexiaEnabled}
-                  type="button"
-                  title={isDyslexiaEnabled ? 'Disable dyslexia-friendly font' : 'Enable dyslexia-friendly font'}
+                {/* Language Toggle */}
+                <button 
+                  className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
+                  onClick={() => setLanguage(language === 'EN' ? 'AR' : 'EN')}
                 >
-                  <span className="sr-only">Toggle dyslexia-friendly font</span>
-                  <Accessibility className="h-5 w-5" />
+                  <Globe className="h-5 w-5" />
                 </button>
 
                 {/* Theme Toggle */}
@@ -666,11 +423,6 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         </header>
 
         <main className="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-900">
-          {welcomeNotice && (
-            <div className="px-6 pb-2 pt-6">
-              <WelcomeBanner notice={welcomeNotice} onDismiss={handleDismissWelcome} />
-            </div>
-          )}
           {children}
         </main>
       </div>

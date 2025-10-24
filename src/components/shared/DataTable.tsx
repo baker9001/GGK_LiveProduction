@@ -12,7 +12,6 @@ import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, Arrow
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
 import { DataTableSkeleton } from './DataTableSkeleton';
-import { PaginationControls } from './PaginationControls';
 
 export interface Column<T> {
   id: string;
@@ -88,14 +87,6 @@ export function DataTable<T>({
   const startIndex = pagination ? 0 : (page - 1) * rowsPerPage;
   const endIndex = pagination ? data.length : startIndex + rowsPerPage;
   const paginatedData = pagination ? data : data.slice(startIndex, endIndex);
-
-  const displayTotal = pagination?.totalCount ?? data.length;
-  const displayStart = data.length > 0 ? (pagination ? (page - 1) * rowsPerPage + 1 : startIndex + 1) : 0;
-  const displayEnd = data.length > 0
-    ? (pagination
-      ? Math.min((page - 1) * rowsPerPage + data.length, displayTotal)
-      : Math.min(endIndex, displayTotal))
-    : 0;
   
   // Row selection
   const allRowsSelected = 
@@ -371,48 +362,91 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-
+      
       {/* Pagination */}
-      <PaginationControls
-        page={page}
-        rowsPerPage={rowsPerPage}
-        totalCount={displayTotal}
-        totalPages={totalPages}
-        onPageChange={(newPage) => {
-          if (pagination) {
-            pagination.goToPage(newPage);
-          } else {
-            setInternalPage(newPage);
-          }
-        }}
-        onNextPage={() => {
-          if (pagination) {
-            pagination.nextPage();
-          } else {
-            setInternalPage(prev => Math.min(prev + 1, totalPages));
-          }
-        }}
-        onPreviousPage={() => {
-          if (pagination) {
-            pagination.previousPage();
-          } else {
-            setInternalPage(prev => Math.max(prev - 1, 1));
-          }
-        }}
-        onRowsPerPageChange={(newRowsPerPage) => {
-          if (pagination) {
-            pagination.changeRowsPerPage(newRowsPerPage);
-          } else {
-            setInternalRowsPerPage(newRowsPerPage);
-            setInternalPage(1);
-          }
-        }}
-        showingRange={{
-          start: displayStart,
-          end: displayEnd,
-        }}
-        ariaLabel={pagination?.ariaLabel || "Table pagination"}
-      />
+      <div 
+        className="px-4 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 sm:px-6 flex items-center justify-between"
+        role="navigation"
+        aria-label={pagination?.ariaLabel || "Table pagination"}
+      >
+        <div className="flex items-center">
+          <label htmlFor="table-select" className="sr-only">
+            Items per page
+          </label>
+          <select
+            id="table-select"
+            name="table-select"
+            className="block w-full py-1 pl-3 pr-8 text-sm border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            value={rowsPerPage}
+            aria-label="Rows per page"
+            onChange={(e) => {
+              const newRowsPerPage = Number(e.target.value);
+              if (pagination) {
+                pagination.changeRowsPerPage(newRowsPerPage);
+              } else {
+                setInternalRowsPerPage(newRowsPerPage);
+                setInternalPage(1);
+              }
+            }}
+          >
+            {[10, 25, 50, 100].map(value => (
+              <option key={value} value={value}>
+                {value} rows
+              </option>
+            ))}
+          </select>
+          
+          <div className="hidden sm:block ml-4">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              Showing <span className="font-medium">{data.length > 0 ? startIndex + 1 : 0}</span> to{' '}
+              <span className="font-medium">
+                {Math.min(pagination ? startIndex + data.length : endIndex, data.length)}
+              </span>{' '}
+              of <span className="font-medium">{pagination?.totalCount || data.length}</span> results
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            className="inline-flex items-center px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Go to previous page"
+            title="Previous page"
+            onClick={() => {
+              if (pagination) {
+                pagination.previousPage();
+              } else {
+                setInternalPage(prev => Math.max(prev - 1, 1));
+              }
+            }}
+            disabled={page === 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            Page {page} of {Math.max(1, totalPages)}
+          </div>
+          
+          <button
+            type="button"
+            className="inline-flex items-center px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Go to next page"
+            title="Next page"
+            onClick={() => {
+              if (pagination) {
+                pagination.nextPage();
+              } else {
+                setInternalPage(prev => Math.min(prev + 1, totalPages));
+              }
+            }}
+            disabled={page === totalPages || totalPages === 0}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

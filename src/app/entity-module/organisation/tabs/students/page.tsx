@@ -23,8 +23,13 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard, CreditCard as Edit2, Eye, MoreVertical, User } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { 
+  GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter,
+  Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle,
+  CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings,
+  MapPin, Phone, Mail, Home, Edit, Eye, MoreVertical, User
+} from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useAccessControl } from '../../../../../hooks/useAccessControl';
@@ -33,10 +38,6 @@ import { Button } from '../../../../../components/shared/Button';
 import { FormField, Input, Select } from '../../../../../components/shared/FormField';
 import { StatusBadge } from '../../../../../components/shared/StatusBadge';
 import { toast } from '../../../../../components/shared/Toast';
-import StudentForm from '../../../../../components/forms/StudentForm';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs';
-import { PaginationControls } from '@/components/shared/PaginationControls';
-import { usePagination } from '@/hooks/usePagination';
 
 // Student data interface
 interface StudentData {
@@ -69,31 +70,6 @@ export interface StudentsTabProps {
   refreshData?: () => void;
 }
 
-type StudentsTabKey = 'overview' | 'list' | 'analytics';
-
-interface FeatureCardProps {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  color: string;
-}
-
-function FeatureCard({ icon: Icon, title, description, color }: FeatureCardProps) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-      <div className={`w-10 h-10 bg-${color}-100 dark:bg-${color}-900/30 rounded-lg flex items-center justify-center mb-3`}>
-        <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
-      </div>
-      <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">
-        {title}
-      </h4>
-      <p className="text-xs text-gray-600 dark:text-gray-400">
-        {description}
-      </p>
-    </div>
-  );
-}
-
 export default function StudentsTab({ companyId, refreshData }: StudentsTabProps) {
   const { user } = useUser();
   const {
@@ -111,20 +87,13 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   } = useAccessControl();
 
   // Local state
-  const [activeTab, setActiveTab] = useState<StudentsTabKey>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'list' | 'analytics'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  const [showStudentForm, setShowStudentForm] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<StudentData | null>(null);
-
-  const handleTabChange = (value: string) => {
-    if (value === 'overview' || value === 'list' || value === 'analytics') {
-      setActiveTab(value);
-    }
-  };
+  const [showDemoFeatures, setShowDemoFeatures] = useState(false);
 
   // PHASE 5 RULE 1: ACCESS CHECK
   React.useEffect(() => {
@@ -184,8 +153,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           return [];
         }
 
-        // First, get students data
-        let studentsQuery = supabase
+        // FIXED: Base query without 'name' column (doesn't exist in students table)
+        let query = supabase
           .from('students')
           .select(`
             id,
@@ -199,6 +168,13 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             branch_id,
             created_at,
             updated_at,
+            users!students_user_id_fkey (
+              id,
+              email,
+              is_active,
+              raw_user_meta_data,
+              last_login_at
+            ),
             schools (
               id,
               name,
@@ -211,6 +187,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             )
           `)
           .eq('company_id', companyId)
+          .eq('users.is_active', true)  // FIXED: Filter through users table
           .order('created_at', { ascending: false });
 
         // Apply scope-based filtering for non-entity admins
@@ -226,11 +203,11 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           }
           
           if (orConditions.length > 0) {
-            studentsQuery = studentsQuery.or(orConditions.join(','));
+            query = query.or(orConditions.join(','));
           }
         }
 
-        const { data: studentsData, error: studentsError } = await studentsQuery;
+        const { data: studentsData, error: studentsError } = await query;
 
         if (studentsError) {
           console.error('Students query error:', studentsError);
@@ -241,47 +218,18 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           return [];
         }
 
-        // Get user IDs from students
-        const userIds = studentsData.map(s => s.user_id).filter(Boolean);
-        
-        // Fetch users data separately
-        const { data: usersData, error: usersError } = await supabase
-          .from('users')
-          .select('id, email, is_active, raw_user_meta_data, last_login_at')
-          .in('id', userIds)
-          .eq('is_active', true);
-
-        if (usersError) {
-          console.error('Users query error:', usersError);
-          throw new Error(`Failed to fetch user data: ${usersError.message}`);
-        }
-
-        // Create a map of users by ID for quick lookup
-        const usersMap = new Map();
-        (usersData || []).forEach(user => {
-          usersMap.set(user.id, user);
-        });
-
-        // Filter students to only include those with active users
-        const studentsWithActiveUsers = studentsData.filter(student => 
-          student.user_id && usersMap.has(student.user_id)
-        );
-
-        // Transform and enrich data
-        return studentsWithActiveUsers.map(student => {
-          const userData = usersMap.get(student.user_id);
-          return {
+        // FIXED: Transform and enrich data - name derived from users table
+        return studentsData.map(student => ({
           ...student,
-          name: userData?.raw_user_meta_data?.name || 
-                userData?.email?.split('@')[0] || 
+          name: student.users?.raw_user_meta_data?.name || 
+                student.users?.email?.split('@')[0] || 
                 'Unknown Student',
-          email: userData?.email || '',
-          is_active: userData?.is_active ?? true,
+          email: student.users?.email || '',
+          is_active: student.users?.is_active ?? true,
           school_name: student.schools?.name || 'No School Assigned',
           branch_name: student.branches?.name || 'No Branch Assigned',
-          user_data: userData
-          };
-        }) as StudentData[];
+          user_data: student.users
+        })) as StudentData[];
 
       } catch (error) {
         console.error('Error fetching students:', error);
@@ -345,71 +293,20 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   // Apply client-side filtering
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
-      const matchesSearch = !searchTerm ||
+      const matchesSearch = !searchTerm || 
         student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.student_code?.toLowerCase().includes(searchTerm.toLowerCase());
-
+      
       const matchesGrade = filterGrade === 'all' || student.grade_level === filterGrade;
       const matchesSchool = filterSchool === 'all' || student.school_id === filterSchool;
-      const matchesStatus = filterStatus === 'all' ||
+      const matchesStatus = filterStatus === 'all' || 
         (filterStatus === 'active' && student.is_active) ||
         (filterStatus === 'inactive' && !student.is_active);
-
+      
       return matchesSearch && matchesGrade && matchesSchool && matchesStatus;
     });
   }, [students, searchTerm, filterGrade, filterSchool, filterStatus]);
-
-  const {
-    page: studentsPage,
-    rowsPerPage: studentsRowsPerPage,
-    totalPages: studentsTotalPages,
-    totalCount: studentsTotalCount,
-    paginatedItems: paginatedStudents,
-    start: studentsStart,
-    end: studentsEnd,
-    goToPage: goToStudentsPage,
-    nextPage: nextStudentsPage,
-    previousPage: previousStudentsPage,
-    changeRowsPerPage: changeStudentsRowsPerPage,
-  } = usePagination(filteredStudents);
-
-  const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
-
-  const currentPageStudentIds = useMemo(() => paginatedStudents.map(student => student.id), [paginatedStudents]);
-  const areAllCurrentStudentsSelected = currentPageStudentIds.length > 0 &&
-    currentPageStudentIds.every(id => selectedStudents.includes(id));
-  const isSomeCurrentStudentsSelected = currentPageStudentIds.some(id => selectedStudents.includes(id));
-
-  useEffect(() => {
-    if (!headerCheckboxRef.current) return;
-    headerCheckboxRef.current.indeterminate = isSomeCurrentStudentsSelected && !areAllCurrentStudentsSelected;
-  }, [areAllCurrentStudentsSelected, isSomeCurrentStudentsSelected]);
-
-  const handleSelectStudent = (studentId: string, checked: boolean) => {
-    setSelectedStudents(prev => {
-      if (checked) {
-        if (prev.includes(studentId)) {
-          return prev;
-        }
-        return [...prev, studentId];
-      }
-      return prev.filter(id => id !== studentId);
-    });
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedStudents(prev => {
-        const next = new Set(prev);
-        currentPageStudentIds.forEach(id => next.add(id));
-        return Array.from(next);
-      });
-      return;
-    }
-
-    setSelectedStudents(prev => prev.filter(id => !currentPageStudentIds.includes(id)));
-  };
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
@@ -446,8 +343,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
       toast.error('You do not have permission to create students');
       return;
     }
-    setEditingStudent(null);
-    setShowStudentForm(true);
+    console.log('Create student - TODO: Implement student creation form');
+    toast.info('Student creation form will be implemented soon');
   };
 
   // Handle student editing
@@ -456,8 +353,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
       toast.error('You do not have permission to edit students');
       return;
     }
-    setEditingStudent(student);
-    setShowStudentForm(true);
+    console.log('Edit student:', student);
+    toast.info('Student editing will be implemented soon');
   };
 
   // Handle student details view
@@ -532,16 +429,6 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
         break;
       default:
         toast.info(`${action} feature will be available soon!`);
-    }
-  };
-
-  // Handle student form success
-  const handleStudentFormSuccess = () => {
-    setShowStudentForm(false);
-    setEditingStudent(null);
-    // Refresh the students list
-    if (refreshData) {
-      refreshData();
     }
   };
 
@@ -658,373 +545,437 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           </div>
         </div>
 
-        <Tabs
-          defaultValue="overview"
-          value={activeTab}
-          onValueChange={handleTabChange}
-          className="w-full"
-        >
-          {/* Tab Navigation */}
-          <TabsList className="w-full justify-between gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg mb-4">
-            <TabsTrigger value="overview" className="flex-1">
-              <span className="flex items-center justify-center gap-2">
-                <Award className="w-4 h-4" />
-                Overview
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="list" className="flex-1">
-              <span className="flex items-center justify-center gap-2">
-                <Users className="w-4 h-4" />
-                Student List
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex-1">
-              <span className="flex items-center justify-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Analytics
-              </span>
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Tab Content */}
-          <TabsContent value="overview">
-            <div className="space-y-6">
-              {/* Statistics Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-                    {summaryStats.total}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Total Students</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-                  <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
-                    {summaryStats.active}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Active Students</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-                  <div className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">
-                    {summaryStats.recentAdmissions}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">New This Month</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
-                    {availableGrades.length}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Grade Levels</div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {canCreateStudent && (
-                    <Button
-                      variant="outline"
-                      className="h-20 flex-col"
-                      onClick={() => handleDemoAction('create_student')}
-                    >
-                      <Plus className="w-6 h-6 mb-2" />
-                      Add Student
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    className="h-20 flex-col"
-                    onClick={() => handleDemoAction('import_students')}
-                  >
-                    <FileText className="w-6 h-6 mb-2" />
-                    Bulk Import
-                  </Button>
-
-                  {canExportData && (
-                    <Button
-                      variant="outline"
-                      className="h-20 flex-col"
-                      onClick={() => handleDemoAction('generate_reports')}
-                    >
-                      <BarChart3 className="w-6 h-6 mb-2" />
-                      Generate Reports
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    className="h-20 flex-col"
-                    onClick={() => handleDemoAction('manage_grades')}
-                  >
-                    <BookOpen className="w-6 h-6 mb-2" />
-                    Manage Grades
-                  </Button>
-                </div>
-              </div>
-
-              {/* Feature Preview Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                {/* Core Learning System Features */}
-                <FeatureCard icon={Users} title="Student Profiles" description="Comprehensive student information management" color="blue" />
-                <FeatureCard icon={BookOpen} title="Student Progress" description="Track academic progress and performance" color="green" />
-                <FeatureCard icon={Award} title="Learning Achievements" description="Recognize and track student accomplishments" color="yellow" />
-                <FeatureCard icon={CreditCard} title="License Management" description="Manage assigned learning licenses" color="purple" />
-                <FeatureCard icon={BookOpen} title="Programs & Subjects" description="View enrolled programs and subjects" color="indigo" />
-                <FeatureCard icon={MapPin} title="Branch & Grade" description="Student's assigned branch and grade level" color="orange" />
-                <FeatureCard icon={Users} title="Class & Sections" description="Manage class and section assignments" color="teal" />
-                <FeatureCard icon={UserCheck} title="Assigned Teachers" description="View teachers assigned to student's classes" color="pink" />
-          </div>
-          <PaginationControls
-            page={studentsPage}
-            rowsPerPage={studentsRowsPerPage}
-            totalCount={studentsTotalCount}
-            totalPages={studentsTotalPages}
-            onPageChange={goToStudentsPage}
-            onNextPage={nextStudentsPage}
-            onPreviousPage={previousStudentsPage}
-            onRowsPerPageChange={changeStudentsRowsPerPage}
-            showingRange={{ start: studentsStart, end: studentsEnd }}
-          />
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg mb-6">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'overview'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Award className="w-4 h-4 inline mr-2" />
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('list')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'list'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Users className="w-4 h-4 inline mr-2" />
+            Student List
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'analytics'
+                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 inline mr-2" />
+            Analytics
+          </button>
         </div>
-      </TabsContent>
-
-          <TabsContent value="list">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              {/* Filters */}
-              <div className="flex flex-col lg:flex-row gap-4 mb-6">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <Input
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search students by name, email, or student code..."
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  {availableGrades.length > 0 && (
-                    <Select
-                      value={filterGrade}
-                      onChange={(value) => setFilterGrade(value)}
-                      options={[
-                        { value: 'all', label: 'All Grades' },
-                        ...availableGrades.map(grade => ({ value: grade, label: `Grade ${grade}` }))
-                      ]}
-                      className="w-32"
-                    />
-                  )}
-
-                  {availableSchools.length > 0 && (
-                    <Select
-                      value={filterSchool}
-                      onChange={(value) => setFilterSchool(value)}
-                      options={[
-                        { value: 'all', label: 'All Schools' },
-                        ...availableSchools.map(s => ({ value: s.id, label: s.name }))
-                      ]}
-                      className="w-48"
-                    />
-                  )}
-
-                  <Select
-                    value={filterStatus}
-                    onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-                    options={[
-                      { value: 'all', label: 'All Status' },
-                      { value: 'active', label: 'Active Only' },
-                      { value: 'inactive', label: 'Inactive Only' }
-                    ]}
-                    className="w-32"
-                  />
-                </div>
-              </div>
-
-              {/* Bulk Actions */}
-              {selectedStudents.length > 0 && (
-                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
-                    </span>
-                    <div className="flex gap-2">
-                      {canModifyStudent && (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => handleBulkAction('activate')}>
-                            <UserCheck className="w-4 h-4 mr-1" />
-                            Activate
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleBulkAction('transfer')}>
-                            <MapPin className="w-4 h-4 mr-1" />
-                            Transfer
-                          </Button>
-                        </>
-                      )}
-                      {canExportData && (
-                        <Button size="sm" variant="outline" onClick={() => handleBulkAction('export')}>
-                          <FileText className="w-4 h-4 mr-1" />
-                          Export
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        <input
-                          ref={headerCheckboxRef}
-                          type="checkbox"
-                          checked={areAllCurrentStudentsSelected}
-                          aria-checked={areAllCurrentStudentsSelected ? 'true' : (isSomeCurrentStudentsSelected ? 'mixed' : 'false')}
-                          onChange={(e) => handleSelectAll(e.target.checked)}
-                          className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                      </th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Student</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Grade & Section</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">School</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {isLoadingStudents && (
-                      <tr>
-                        <td colSpan={6} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                          Loading students...
-                        </td>
-                      </tr>
-                    )}
-
-                    {studentsError && (
-                      <tr>
-                        <td colSpan={6} className="px-3 py-12 text-center text-red-500">
-                          Failed to load students. Please try again later.
-                        </td>
-                      </tr>
-                    )}
-
-                    {!isLoadingStudents && studentsTotalCount === 0 && !studentsError && (
-                      <tr>
-                        <td colSpan={6} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
-                          <Users className="w-10 h-10 mx-auto mb-3 text-gray-400" />
-                          <p className="font-medium">No students found</p>
-                          <p className="text-sm">Try adjusting your filters or search criteria</p>
-                        </td>
-                      </tr>
-                    )}
-
-                    {paginatedStudents.map(student => (
-                      <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                        <td className="p-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedStudents.includes(student.id)}
-                            onChange={(e) => handleSelectStudent(student.id, e.target.checked)}
-                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                          />
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center">
-                              <Users className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900 dark:text-white">{student.name || 'Unnamed Student'}</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">{student.student_code}</div>
-                              <div className="text-xs text-gray-400 dark:text-gray-500">
-                                {student.user_data?.email || 'No email provided'}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="text-sm text-gray-700 dark:text-gray-300">
-                            Grade {student.grade_level || 'N/A'}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">Section {student.section || 'N/A'}</div>
-                        </td>
-                        <td className="p-3">
-                          <div className="text-sm text-gray-700 dark:text-gray-300">
-                            {student.school_name}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <StatusBadge
-                            status={student.is_active ? 'active' : 'inactive'}
-                            variant={student.is_active ? 'success' : 'warning'}
-                          />
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewStudent(student)}
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            {canModifyStudent && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditStudent(student)}
-                                title="Edit Student"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <div className="space-y-6">
-              {/* Analytics Placeholder */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
-                <BarChart3 className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Student Analytics Dashboard
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Comprehensive analytics and insights will be available here
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">Enrollment Trends</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Track student enrollment patterns over time</p>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">Performance Metrics</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Analyze academic performance across grades</p>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">Attendance Patterns</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Monitor attendance rates and trends</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
       </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                {summaryStats.total}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Total Students</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
+              <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
+                {summaryStats.active}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Active Students</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
+              <div className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">
+                {summaryStats.recentAdmissions}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">New This Month</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
+              <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                {availableGrades.length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Grade Levels</div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {canCreateStudent && (
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col"
+                  onClick={() => handleDemoAction('create_student')}
+                >
+                  <Plus className="w-6 h-6 mb-2" />
+                  Add Student
+                </Button>
+              )}
+              
+              <Button
+                variant="outline"
+                className="h-20 flex-col"
+                onClick={() => handleDemoAction('import_students')}
+              >
+                <FileText className="w-6 h-6 mb-2" />
+                Bulk Import
+              </Button>
+              
+              {canExportData && (
+                <Button
+                  variant="outline"
+                  className="h-20 flex-col"
+                  onClick={() => handleDemoAction('generate_reports')}
+                >
+                  <BarChart3 className="w-6 h-6 mb-2" />
+                  Generate Reports
+                </Button>
+              )}
+              
+              <Button
+                variant="outline"
+                className="h-20 flex-col"
+                onClick={() => handleDemoAction('manage_grades')}
+              >
+                <BookOpen className="w-6 h-6 mb-2" />
+                Manage Grades
+              </Button>
+            </div>
+          </div>
+
+          {/* Feature Preview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[
+              { icon: Users, title: 'Student Profiles', description: 'Comprehensive student information management', color: 'blue' },
+              { icon: BookOpen, title: 'Academic Records', description: 'Complete academic tracking and performance', color: 'green' },
+              { icon: Calendar, title: 'Attendance', description: 'Advanced attendance tracking and reporting', color: 'purple' },
+              { icon: Award, title: 'Achievements', description: 'Recognition and achievement tracking', color: 'yellow' },
+              { icon: Heart, title: 'Health & Welfare', description: 'Student health and wellbeing management', color: 'red' },
+              { icon: DollarSign, title: 'Financial', description: 'Student fees and financial tracking', color: 'emerald' },
+              { icon: Bus, title: 'Transport', description: 'School transport and logistics', color: 'orange' },
+              { icon: User, title: 'Parent Portal', description: 'Family engagement and communication', color: 'indigo' }
+            ].map((feature, index) => {
+              const IconComponent = feature.icon;
+              return (
+                <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                  <div className={`w-10 h-10 bg-${feature.color}-100 dark:bg-${feature.color}-900/30 rounded-lg flex items-center justify-center mb-3`}>
+                    <IconComponent className={`w-5 h-5 text-${feature.color}-600 dark:text-${feature.color}-400`} />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">
+                    {feature.title}
+                  </h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {feature.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'list' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          {/* Filters */}
+          <div className="flex flex-col lg:flex-row gap-4 mb-6">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search students by name, email, or student code..."
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-4">
+              {availableGrades.length > 0 && (
+                <Select
+                  value={filterGrade}
+                  onChange={(value) => setFilterGrade(value)}
+                  options={[
+                    { value: 'all', label: 'All Grades' },
+                    ...availableGrades.map(grade => ({ value: grade, label: `Grade ${grade}` }))
+                  ]}
+                  className="w-32"
+                />
+              )}
+              
+              {availableSchools.length > 0 && (
+                <Select
+                  value={filterSchool}
+                  onChange={(value) => setFilterSchool(value)}
+                  options={[
+                    { value: 'all', label: 'All Schools' },
+                    ...availableSchools.map(s => ({ value: s.id, label: s.name }))
+                  ]}
+                  className="w-48"
+                />
+              )}
+              
+              <Select
+                value={filterStatus}
+                onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'active', label: 'Active Only' },
+                  { value: 'inactive', label: 'Inactive Only' }
+                ]}
+                className="w-32"
+              />
+            </div>
+          </div>
+
+          {/* Bulk Actions */}
+          {selectedStudents.length > 0 && (
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
+                </span>
+                <div className="flex gap-2">
+                  {canModifyStudent && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => handleBulkAction('activate')}>
+                        <UserCheck className="w-4 h-4 mr-1" />
+                        Activate
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleBulkAction('transfer')}>
+                        <MapPin className="w-4 h-4 mr-1" />
+                        Transfer
+                      </Button>
+                    </>
+                  )}
+                  {canExportData && (
+                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('export')}>
+                      <FileText className="w-4 h-4 mr-1" />
+                      Export
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Students Table */}
+          {isLoadingStudents ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <span className="ml-2 text-gray-600 dark:text-gray-400">Loading students...</span>
+            </div>
+          ) : studentsError ? (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+                <div>
+                  <h3 className="font-semibold text-red-800 dark:text-red-200">
+                    Error Loading Students
+                  </h3>
+                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                    {studentsError.message || 'Failed to load student data. Please try again.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="text-center p-8 text-gray-500 dark:text-gray-400">
+              <GraduationCap className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              {students.length === 0 ? (
+                <>
+                  <h3 className="text-lg font-medium mb-2">No Students Found</h3>
+                  <p className="text-sm mb-4">
+                    {!canAccessAll 
+                      ? "No students found within your assigned scope." 
+                      : "No students have been added to this organization yet."
+                    }
+                  </p>
+                  {canCreateStudent && (
+                    <Button onClick={handleCreateStudent}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add First Student
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-medium mb-2">No Matching Students</h3>
+                  <p className="text-sm">
+                    Try adjusting your search terms or filters to find students.
+                  </p>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left p-3">
+                      <input
+                        type="checkbox"
+                        checked={
+                          selectedStudents.length === filteredStudents.length &&
+                          filteredStudents.length > 0
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedStudents(filteredStudents.map(s => s.id));
+                          } else {
+                            setSelectedStudents([]);
+                          }
+                        }}
+                        className="rounded border-gray-300 dark:border-gray-600"
+                      />
+                    </th>
+                    <th className="text-left p-3 font-medium">Student</th>
+                    <th className="text-left p-3 font-medium">Student Code</th>
+                    <th className="text-left p-3 font-medium">Grade</th>
+                    <th className="text-left p-3 font-medium">Section</th>
+                    <th className="text-left p-3 font-medium">School</th>
+                    <th className="text-left p-3 font-medium">Status</th>
+                    <th className="text-left p-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.map((student) => (
+                    <tr 
+                      key={student.id} 
+                      className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    >
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudents.includes(student.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedStudents([...selectedStudents, student.id]);
+                            } else {
+                              setSelectedStudents(selectedStudents.filter(id => id !== student.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                            <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">
+                              {student.name}
+                            </div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              {student.email}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                          {student.student_code || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                          {student.grade_level || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-gray-700 dark:text-gray-300">
+                          {student.section || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                          {student.school_name}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <StatusBadge
+                          status={student.is_active ? 'active' : 'inactive'}
+                          variant={student.is_active ? 'success' : 'warning'}
+                        />
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-1">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleViewStudent(student)}
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {canModifyStudent && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleEditStudent(student)}
+                              title="Edit Student"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          {/* Analytics Placeholder */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <BarChart3 className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Student Analytics Dashboard
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Comprehensive analytics and insights will be available here
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Enrollment Trends</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Track student enrollment patterns over time</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Performance Metrics</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Analyze academic performance across grades</p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Attendance Patterns</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Monitor attendance rates and trends</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Development Status */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
@@ -1050,8 +1001,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
               <span className="text-blue-600 dark:text-blue-400">Multi-tab interface ✓</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Student registration forms ✓</span>
+              <Clock className="w-4 h-4 text-blue-500" />
+              <span className="text-blue-600 dark:text-blue-400">Student registration forms</span>
             </div>
           </div>
           <div className="space-y-2">
@@ -1074,38 +1025,6 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           </div>
         </div>
       </div>
-
-      {/* Student Form Modal */}
-      <StudentForm
-        isOpen={showStudentForm}
-        onClose={() => {
-          setShowStudentForm(false);
-          setEditingStudent(null);
-        }}
-        onSuccess={handleStudentFormSuccess}
-        companyId={companyId}
-        initialData={editingStudent ? {
-          id: editingStudent.id,
-          user_id: editingStudent.user_id,
-          name: editingStudent.name || '',
-          email: editingStudent.email || '',
-          phone: editingStudent.user_data?.raw_user_meta_data?.phone || '',
-          student_code: editingStudent.student_code || '',
-          enrollment_number: editingStudent.enrollment_number || '',
-          grade_level: editingStudent.grade_level || '',
-          section: editingStudent.section || '',
-          admission_date: editingStudent.admission_date || '',
-          school_id: editingStudent.school_id || '',
-          branch_id: editingStudent.branch_id || '',
-          parent_name: editingStudent.parent_name || '',
-          parent_contact: editingStudent.parent_contact || '',
-          parent_email: editingStudent.parent_email || '',
-          emergency_contact: editingStudent.emergency_contact || {},
-          enrolled_programs: editingStudent.enrolled_programs || [],
-          is_active: editingStudent.is_active ?? true,
-          company_id: editingStudent.company_id
-        } : undefined}
-      />
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { toast } from '../../../components/shared/Toast';
 const licenseSchema = z.object({
   company_id: z.string().uuid('Please select a company'),
   data_structure_id: z.string().uuid('Please select a data structure'),
-  total_allocated: z.number().min(1, 'Quantity must be greater than 0').optional(),
+  total_quantity: z.number().min(1, 'Quantity must be greater than 0').optional(),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().min(1, 'End date is required'),
   notes: z.string().optional()
@@ -246,58 +246,42 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
   const licenseMutation = useMutation(
     async (formData: FormData) => {
       const totalQuantityValue = formData.get('total_quantity') as string;
+      
+      const data = {
+        company_id: selectedCompany,
+        data_structure_id: dataStructureId,
+        total_quantity: totalQuantityValue ? parseInt(totalQuantityValue) : (editingLicense?.total_quantity || undefined),
+        start_date: formData.get('start_date') as string,
+        end_date: formData.get('end_date') as string,
+        notes: (formData.get('notes') || '') as string,
+        status: 'active'
+      };
+
+      // For editing, if total_quantity is not provided, use the existing value
+      if (editingLicense && !data.total_quantity) {
+        data.total_quantity = editingLicense.total_quantity;
+      }
+
+      const validatedData = licenseSchema.parse(data);
 
       if (editingLicense) {
-        // For UPDATE: only send editable fields to avoid unique constraint violation
-        // The fields company_id, data_structure_id, and status are part of a unique constraint
-        // and cannot be changed during edit, so we exclude them from the update payload
-        const updateData = {
-          start_date: formData.get('start_date') as string,
-          end_date: formData.get('end_date') as string,
-          notes: (formData.get('notes') || '') as string
-        };
-
-        // Validate dates
-        const start = dayjs(updateData.start_date);
-        const end = dayjs(updateData.end_date);
-        if (!end.isAfter(start) && !end.isSame(start)) {
-          throw new Error('End date must be after or equal to start date');
-        }
-
         const { error } = await supabase
           .from('licenses')
-          .update(updateData)
+          .update(validatedData)
           .eq('id', editingLicense.id);
 
         if (error) {
-          console.error('License UPDATE Error Details:', {
-            code: error.code,
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            payload: updateData
-          });
+          if (error.code === '23505') {
+            throw new Error('An active license for this company and data structure already exists.');
+          }
           throw error;
         }
-        return { ...editingLicense, ...updateData };
+        return { ...editingLicense, ...validatedData };
       } else {
-        // For INSERT: build complete data object with all required fields
-        const data = {
-          company_id: selectedCompany,
-          data_structure_id: dataStructureId,
-          total_allocated: totalQuantityValue ? parseInt(totalQuantityValue) : undefined,
-          start_date: formData.get('start_date') as string,
-          end_date: formData.get('end_date') as string,
-          notes: (formData.get('notes') || '') as string,
-          status: 'active'
-        };
-
-        // For new licenses, total_allocated is required
-        if (!data.total_allocated) {
+        // For new licenses, total_quantity is required
+        if (!validatedData.total_quantity) {
           throw new Error('Total quantity is required for new licenses');
         }
-
-        const validatedData = licenseSchema.parse(data);
 
         const { data: newLicense, error } = await supabase
           .from('licenses')
@@ -306,13 +290,6 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
           .maybeSingle();
 
         if (error) {
-          console.error('License INSERT Error Details:', {
-            code: error.code,
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            payload: validatedData
-          });
           if (error.code === '23505') {
             throw new Error('An active license for this company and data structure already exists.');
           }
@@ -331,8 +308,6 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
       },
       onError: (error) => {
         setIsSubmittingForm(false);
-        console.error('License Mutation Error:', error);
-
         if (error instanceof z.ZodError) {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
@@ -342,34 +317,28 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
           });
           setFormErrors(errors);
         } else if (error instanceof Error) {
-          // Log the full error for debugging
-          console.error('Full Error Object:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            error: error
-          });
-
           // Check for Supabase unique constraint error
-          if (error.message.includes('23505') ||
-              error.message.includes('already exists') ||
+          if (error.message.includes('23505') || 
+              error.message.includes('already exists') || 
               error.message.includes('unique constraint')) {
-            setFormErrors({
-              form: 'An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.'
+            setFormErrors({ 
+              form: 'An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.' 
             });
             toast.error('An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.');
-          } else if (error.message.includes('total_quantity') || error.message.includes('total_allocated')) {
+          } else if (error.message.includes('total_quantity')) {
             setFormErrors({ total_quantity: error.message });
-            toast.error(error.message);
-          } else if (error.message.includes('permission') || error.message.includes('policy')) {
-            setFormErrors({ form: `Permission Error: ${error.message}` });
-            toast.error(`Permission Error: ${error.message}`);
           } else {
             setFormErrors({ form: error.message });
             toast.error(error.message);
           }
+        } else if (error instanceof Error) {
+          if (error.message.includes('total_quantity')) {
+            setFormErrors({ total_quantity: error.message });
+          } else {
+            setFormErrors({ form: error.message });
+          }
         } else {
-          console.error('Unknown error type saving license:', error);
+          console.error('Error saving license:', error);
           setFormErrors({ form: 'Failed to save license. Please try again.' });
           toast.error('Failed to save license. Please try again.');
         }

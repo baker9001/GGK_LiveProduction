@@ -30,63 +30,51 @@ export function Tooltip({
   // Calculate tooltip position
   const updatePosition = () => {
     if (!triggerRef.current || !tooltipRef.current) return;
-
+    
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
-
-    // If tooltip hasn't been rendered yet (height is 0), skip position update
-    // It will be recalculated in the next frame
-    if (tooltipRect.height === 0 || tooltipRect.width === 0) {
-      return;
-    }
-
+    
     let top = 0;
     let left = 0;
-
-    // Since we're using position: fixed, we work with viewport coordinates
-    // getBoundingClientRect() gives us viewport-relative positions
-    const gap = 8; // Gap between tooltip and trigger
-
+    
     switch (position) {
       case 'top':
-        top = triggerRect.top - tooltipRect.height - gap;
+        top = triggerRect.top - tooltipRect.height - 8;
         left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
         break;
       case 'bottom':
-        top = triggerRect.bottom + gap;
+        top = triggerRect.bottom + 8;
         left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
         break;
       case 'left':
         top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
-        left = triggerRect.left - tooltipRect.width - gap;
+        left = triggerRect.left - tooltipRect.width - 8;
         break;
       case 'right':
         top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
-        left = triggerRect.right + gap;
+        left = triggerRect.right + 8;
         break;
     }
-
-    // Adjust for window boundaries (keep tooltip in viewport)
+    
+    // Adjust for window boundaries
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
-    const padding = 10;
-
-    // Horizontal boundary checks
-    if (left < padding) {
-      left = padding;
+    
+    // Prevent tooltip from going off-screen
+    if (left < 10) left = 10;
+    if (left + tooltipRect.width > windowWidth - 10) {
+      left = windowWidth - tooltipRect.width - 10;
     }
-    if (left + tooltipRect.width > windowWidth - padding) {
-      left = windowWidth - tooltipRect.width - padding;
+    
+    if (top < 10) top = 10;
+    if (top + tooltipRect.height > windowHeight - 10) {
+      top = windowHeight - tooltipRect.height - 10;
     }
-
-    // Vertical boundary checks
-    if (top < padding) {
-      top = padding;
-    }
-    if (top + tooltipRect.height > windowHeight - padding) {
-      top = windowHeight - tooltipRect.height - padding;
-    }
-
+    
+    // Add scroll position
+    top += window.scrollY;
+    left += window.scrollX;
+    
     setTooltipPosition({ top, left });
   };
   
@@ -95,9 +83,11 @@ export function Tooltip({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-
+    
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true);
+      // Update position after a small delay to ensure tooltip is rendered
+      setTimeout(updatePosition, 0);
     }, delay);
   };
   
@@ -111,38 +101,21 @@ export function Tooltip({
     setIsVisible(false);
   };
   
-  // Update position when tooltip becomes visible and on scroll/resize
+  // Update position on scroll or resize
   useEffect(() => {
     if (isVisible) {
-      // Update position multiple times to ensure accurate positioning
-      // First update
-      const update1 = requestAnimationFrame(() => {
-        updatePosition();
-        // Second update after tooltip is rendered with content
-        const update2 = requestAnimationFrame(() => {
-          updatePosition();
-          // Third update to catch any remaining layout shifts
-          const update3 = setTimeout(() => {
-            updatePosition();
-          }, 10);
-          return () => clearTimeout(update3);
-        });
-        return () => cancelAnimationFrame(update2);
-      });
-
       const handleScroll = () => updatePosition();
       const handleResize = () => updatePosition();
-
+      
       window.addEventListener('scroll', handleScroll, true);
       window.addEventListener('resize', handleResize);
-
+      
       return () => {
-        cancelAnimationFrame(update1);
         window.removeEventListener('scroll', handleScroll, true);
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, [isVisible, position]);
+  }, [isVisible]);
   
   // Clean up timeout on unmount
   useEffect(() => {

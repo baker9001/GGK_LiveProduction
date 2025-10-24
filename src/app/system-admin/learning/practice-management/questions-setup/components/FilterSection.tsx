@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FormField, Input } from '../../../../../../components/shared/FormField';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
 import { FilterCard } from '../../../../../../components/shared/FilterCard';
@@ -11,16 +11,10 @@ interface FilterState {
   validation_status: string[];
 }
 
-interface SubjectOption {
-  id: string;
-  name: string;
-  provider_ids?: string[];
-}
-
 interface FilterSectionProps {
   providers: Array<{ id: string; name: string }>;
-  subjects: SubjectOption[];
-  units: Array<{ id: string; name: string; subject_id?: string }>;
+  subjects: Array<{ id: string; name: string }>;
+  units: Array<{ id: string; name: string }>;
   searchTerm: string;
   filters: FilterState;
   resultCount?: number;
@@ -42,35 +36,8 @@ export function FilterSection({
 }: FilterSectionProps) {
   const handleFilterUpdate = (key: keyof FilterState, value: string[]) => {
     const newFilters = { ...filters, [key]: value };
-
-    // Cascade filter clearing when parent filter changes
-    if (key === 'provider_ids') {
-      // Clear subjects and units when provider changes
-      newFilters.subject_ids = [];
-      newFilters.unit_ids = [];
-    } else if (key === 'subject_ids') {
-      // Clear units when subject changes
-      newFilters.unit_ids = [];
-    }
-
     onFilterChange(newFilters);
   };
-
-  const filteredSubjects = useMemo(() => {
-    if (filters.provider_ids.length === 0) return subjects;
-    return subjects.filter(subject => {
-      if (!subject.provider_ids || subject.provider_ids.length === 0) return true;
-      return subject.provider_ids.some(providerId => filters.provider_ids.includes(providerId));
-    });
-  }, [subjects, filters.provider_ids]);
-
-  // Filter units based on selected subjects
-  const filteredUnits = useMemo(() => {
-    if (filters.subject_ids.length === 0) return units;
-    return units.filter(unit =>
-      unit.subject_id && filters.subject_ids.includes(unit.subject_id)
-    );
-  }, [units, filters.subject_ids]);
 
   return (
     <FilterCard
@@ -100,7 +67,7 @@ export function FilterSection({
 
           <SearchableMultiSelect
             label="Subject"
-            options={filteredSubjects.map(s => ({ value: s.id, label: s.name }))}
+            options={subjects.map(s => ({ value: s.id, label: s.name }))}
             selectedValues={filters.subject_ids}
             onChange={(values) => handleFilterUpdate('subject_ids', values)}
             placeholder="Select subjects..."
@@ -108,11 +75,10 @@ export function FilterSection({
 
           <SearchableMultiSelect
             label="Unit"
-            options={filteredUnits.map(u => ({ value: u.id, label: u.name }))}
+            options={units.map(u => ({ value: u.id, label: u.name }))}
             selectedValues={filters.unit_ids}
             onChange={(values) => handleFilterUpdate('unit_ids', values)}
-            placeholder={filters.subject_ids.length === 0 ? "Select subject first..." : "Select units..."}
-            disabled={filters.subject_ids.length === 0}
+            placeholder="Select units..."
           />
 
           <SearchableMultiSelect

@@ -19,21 +19,19 @@
  * - paper_id: uuid (nullable, foreign key to papers_setup)
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
 import { supabase } from '../../../../../lib/supabase';
 import { toast } from '../../../../../components/shared/Toast';
 import { useUser } from '../../../../../contexts/UserContext';
-import {
-  Loader2, AlertCircle, FileJson, Database,
+import { 
+  Loader2, CheckCircle, AlertCircle, FileJson, Database, 
   FileText, ClipboardList, Shield, Settings, Info, ChevronDown
 } from 'lucide-react';
 import { ScrollNavigator } from '../../../../../components/shared/ScrollNavigator';
 import { Button } from '../../../../../components/shared/Button';
 import { cn } from '../../../../../lib/utils';
-import { ExtractionRules, JsonGuidelineSummary } from './types';
-import { JsonGuidelineChecklist } from './components/JsonGuidelineChecklist';
 
 // Import tab components
 import { UploadTab } from './tabs/UploadTab';
@@ -41,7 +39,6 @@ import StructureTab from './tabs/StructureTab';
 import { MetadataTab } from './tabs/MetadataTab';
 import { QuestionsTab } from './tabs/QuestionsTab';
 import { PreviousSessionsTable } from './components/PreviousSessionsTable';
-import { transformImportedPaper } from '../../../../../lib/extraction/jsonTransformer';
 
 // Define the tabs for the import workflow
 const IMPORT_TABS = [
@@ -53,6 +50,57 @@ const IMPORT_TABS = [
 
 // Define the possible tab statuses
 type TabStatus = 'pending' | 'completed' | 'error' | 'active';
+
+// Enhanced Extraction rules based on JSON structure
+interface ExtractionRules {
+  // Core extraction settings
+  forwardSlashHandling: boolean;
+  lineByLineProcessing: boolean;
+  alternativeLinking: boolean;
+  contextRequired: boolean;
+  figureDetection: boolean;
+  
+  // Educational content requirements
+  educationalContent: {
+    hintsRequired: boolean;
+    explanationsRequired: boolean;
+  };
+  
+  // Subject-specific handling
+  subjectSpecific: {
+    physics: boolean;
+    chemistry: boolean;
+    biology: boolean;
+    mathematics: boolean;
+  };
+  
+  // Answer format abbreviations
+  abbreviations: {
+    ora: boolean; // "or reverse argument"
+    owtte: boolean; // "or words to that effect"
+    ecf: boolean; // "error carried forward"
+    cao: boolean; // "correct answer only"
+  };
+  
+  // Answer structure validation
+  answerStructure: {
+    validateMarks: boolean;
+    requireContext: boolean;
+    validateLinking: boolean;
+    acceptAlternatives: boolean;
+  };
+  
+  // Mark scheme processing
+  markScheme: {
+    requiresManualMarking: boolean;
+    markingCriteria: boolean;
+    componentMarking: boolean;
+    levelDescriptors: boolean;
+  };
+  
+  // Exam board specific rules
+  examBoard: 'Cambridge' | 'Edexcel' | 'Both';
+}
 
 // Extraction Rules Configuration Component
 const ExtractionRulesPanel: React.FC<{
@@ -78,27 +126,21 @@ const ExtractionRulesPanel: React.FC<{
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <Button
-        variant="secondary"
-        size="lg"
-        className="w-full justify-between px-6 py-4 h-auto text-left"
+      <button
         onClick={onToggle}
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
       >
-        <div className="flex w-full items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-              Extraction Rules Configuration
-            </h3>
-          </div>
-          <ChevronDown
-            className={cn(
-              "h-5 w-5 text-gray-500 transition-transform",
-              isExpanded && "transform rotate-180"
-            )}
-          />
+        <div className="flex items-center gap-3">
+          <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+            Extraction Rules Configuration
+          </h3>
         </div>
-      </Button>
+        <ChevronDown className={cn(
+          "h-5 w-5 text-gray-500 transition-transform",
+          isExpanded && "transform rotate-180"
+        )} />
+      </button>
 
       {isExpanded && (
         <div className="px-6 pb-6 space-y-6 border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -422,439 +464,6 @@ const ExtractionRulesPanel: React.FC<{
   );
 };
 
-const MANUAL_MARKING_FORMATS = new Set([
-  'diagram',
-  'chemical_structure',
-  'structural_diagram',
-  'table',
-  'graph',
-  'multi_line',
-  'multi_line_labeled',
-  'file_upload',
-  'audio',
-  'code'
-]);
-
-const ABBREVIATION_LABELS: Record<'owtte' | 'ora' | 'ecf' | 'cao', string> = {
-  owtte: 'OWTTE',
-  ora: 'ORA',
-  ecf: 'ECF',
-  cao: 'CAO'
-};
-
-const hasWordBoundaryMatch = (value: string, token: string) => {
-  if (!value) return false;
-  const regex = new RegExp(`\\b${token}\\b`, 'i');
-  return regex.test(value);
-};
-
-const analyzeParsedDataForGuidelines = (data: any): JsonGuidelineSummary => {
-  const questions = Array.isArray(data?.questions) ? data.questions : [];
-
-  const questionTypes = new Set<string>();
-  const answerFormats = new Set<string>();
-  const answerRequirements = new Set<string>();
-  const subjects = new Set<string>();
-  const variationSignals = new Set<string>();
-  const abbreviationsDetected = new Set<string>();
-  const contextTypes = new Set<string>();
-
-  let usesForwardSlash = false;
-  let usesLineByLineMarking = false;
-  let usesAlternativeLinking = false;
-  let includesContextualAnswers = false;
-  let includesFigures = false;
-  let includesAttachments = false;
-  let includesHints = false;
-  let includesExplanations = false;
-  let requiresManualMarking = false;
-  let hasComponentMarking = false;
-  let hasMultiMarkAllocations = false;
-  let partialCreditDetected = false;
-
-  const addVariationSignal = (label: string) => {
-    if (label) {
-      variationSignals.add(label);
-    }
-  };
-
-  const markAbbreviation = (key: keyof typeof ABBREVIATION_LABELS) => {
-    abbreviationsDetected.add(ABBREVIATION_LABELS[key]);
-  };
-
-  const recordAnswer = (answer: any) => {
-    if (!answer) return;
-    const rawAnswer = String(answer.answer ?? '');
-    const normalizedText = rawAnswer.toLowerCase();
-    if (rawAnswer.includes('/')) {
-      usesForwardSlash = true;
-    }
-    if (normalizedText.includes(' or ') || normalizedText.includes(' and ')) {
-      usesAlternativeLinking = true;
-    }
-    if (typeof answer.total_alternatives === 'number' && answer.total_alternatives > 1) {
-      usesAlternativeLinking = true;
-    }
-    if (Array.isArray(answer.linked_alternatives) && answer.linked_alternatives.length > 0) {
-      usesAlternativeLinking = true;
-    }
-    if (typeof answer.alternative_type === 'string') {
-      const normalized = answer.alternative_type.toLowerCase();
-      if (normalized.includes('one') || normalized.includes('any') || normalized.includes('all') || normalized.includes('both')) {
-        usesAlternativeLinking = true;
-      }
-    }
-    if (answer.context) {
-      includesContextualAnswers = true;
-      if (Array.isArray(answer.context)) {
-        answer.context.forEach((contextItem: any) => {
-          if (contextItem?.type) {
-            contextTypes.add(String(contextItem.type));
-          }
-        });
-      } else if (answer.context.type) {
-        contextTypes.add(String(answer.context.type));
-      } else {
-        contextTypes.add('context');
-      }
-    }
-    if (answer.unit) {
-      includesContextualAnswers = true;
-      contextTypes.add('unit');
-    }
-    if (answer.measurement_details) {
-      includesContextualAnswers = true;
-      contextTypes.add('measurement');
-    }
-    if (answer.context_type) {
-      includesContextualAnswers = true;
-      contextTypes.add(String(answer.context_type));
-    }
-    if (answer.line_number !== undefined || answer.marking_point !== undefined) {
-      usesLineByLineMarking = true;
-    }
-    if (Array.isArray(answer.marking_points) && answer.marking_points.length > 0) {
-      usesLineByLineMarking = true;
-    }
-    if (
-      answer.accepts_equivalent_phrasing ||
-      answer.accepts_equivalent ||
-      normalizedText.includes('owtte')
-    ) {
-      addVariationSignal('Equivalent phrasing allowed');
-      markAbbreviation('owtte');
-    }
-    if (
-      answer.accepts_reverse_argument ||
-      normalizedText.includes('reverse argument') ||
-      hasWordBoundaryMatch(rawAnswer, 'ora')
-    ) {
-      addVariationSignal('Reverse argument accepted');
-      markAbbreviation('ora');
-    }
-    if (
-      answer.error_carried_forward ||
-      normalizedText.includes('error carried forward') ||
-      hasWordBoundaryMatch(rawAnswer, 'ecf')
-    ) {
-      addVariationSignal('Error carried forward supported');
-      markAbbreviation('ecf');
-    }
-    if (typeof answer.accept_level === 'string' && answer.accept_level.toLowerCase().includes('cao')) {
-      addVariationSignal('Correct answer only (CAO)');
-      markAbbreviation('cao');
-    }
-    if (
-      normalizedText.includes('(cao') ||
-      normalizedText.includes(' cao ') ||
-      normalizedText.endsWith(' cao') ||
-      normalizedText.startsWith('cao ') ||
-      normalizedText.includes('cao only')
-    ) {
-      markAbbreviation('cao');
-    }
-    if (answer.conditional_on || answer.conditions || answer.marking_conditions) {
-      addVariationSignal('Conditional marking rules present');
-    }
-    if (Array.isArray(answer.rejected_answers) && answer.rejected_answers.length > 0) {
-      addVariationSignal('Reject list provided');
-    }
-    if (Array.isArray(answer.ignored_content) && answer.ignored_content.length > 0) {
-      addVariationSignal('Ignore list provided');
-    }
-    if (answer.answer_variations && Object.keys(answer.answer_variations).length > 0) {
-      addVariationSignal('Documented answer variations');
-    }
-    if (answer.marking_flags) {
-      const flags = answer.marking_flags;
-      if (flags.accepts_equivalent_phrasing || flags.owtte) {
-        addVariationSignal('Equivalent phrasing allowed');
-        markAbbreviation('owtte');
-      }
-      if (flags.accepts_reverse_argument || flags.ora) {
-        addVariationSignal('Reverse argument accepted');
-        markAbbreviation('ora');
-      }
-      if (flags.error_carried_forward || flags.ecf) {
-        addVariationSignal('Error carried forward supported');
-        markAbbreviation('ecf');
-      }
-      if (flags.correct_answer_only || flags.cao) {
-        addVariationSignal('Correct answer only (CAO)');
-        markAbbreviation('cao');
-      }
-    }
-    if (answer.partial_credit || answer.partial_marking || answer.partial_marks) {
-      partialCreditDetected = true;
-    }
-    if (
-      typeof answer.maximum_marks_available === 'number' &&
-      typeof answer.marks === 'number' &&
-      answer.maximum_marks_available !== answer.marks
-    ) {
-      partialCreditDetected = true;
-    }
-    if (typeof answer.marks === 'number' && answer.marks > 1) {
-      hasMultiMarkAllocations = true;
-    }
-    if (typeof answer.answer_requirement === 'string') {
-      answerRequirements.add(answer.answer_requirement);
-      const normalized = answer.answer_requirement.toLowerCase();
-      if (normalized.includes('any') || normalized.includes('alternative')) {
-        usesAlternativeLinking = true;
-      }
-      if (normalized.includes('all') || normalized.includes('both')) {
-        hasMultiMarkAllocations = true;
-      }
-      if (normalized.includes('owtte')) {
-        addVariationSignal('Equivalent phrasing allowed');
-        markAbbreviation('owtte');
-      }
-      if (normalized.includes('ora')) {
-        addVariationSignal('Reverse argument accepted');
-        markAbbreviation('ora');
-      }
-      if (normalized.includes('ecf')) {
-        addVariationSignal('Error carried forward supported');
-        markAbbreviation('ecf');
-      }
-      if (normalized.includes('cao')) {
-        addVariationSignal('Correct answer only (CAO)');
-        markAbbreviation('cao');
-      }
-    }
-  };
-
-  const walkQuestionNode = (node: any) => {
-    if (!node || typeof node !== 'object') return;
-
-    const options = Array.isArray(node.options) ? node.options : [];
-    const parts = Array.isArray(node.parts) ? node.parts : [];
-    const subparts = Array.isArray(node.subparts) ? node.subparts : [];
-
-    let detectedType = node.type;
-    if (!detectedType) {
-      if (parts.length > 0) {
-        detectedType = 'complex';
-      } else if (options.length > 0) {
-        detectedType = 'mcq';
-      } else if (node.answer_format === 'true_false') {
-        detectedType = 'tf';
-      }
-    }
-    if (detectedType) {
-      questionTypes.add(String(detectedType));
-    }
-
-    if (node.answer_format) {
-      answerFormats.add(String(node.answer_format));
-      if (MANUAL_MARKING_FORMATS.has(String(node.answer_format))) {
-        requiresManualMarking = true;
-      }
-    }
-
-    if (node.answer_requirement) {
-      answerRequirements.add(String(node.answer_requirement));
-      const normalized = String(node.answer_requirement).toLowerCase();
-      if (normalized.includes('any') || normalized.includes('alternative')) {
-        usesAlternativeLinking = true;
-      }
-      if (normalized.includes('all') || normalized.includes('both')) {
-        hasMultiMarkAllocations = true;
-      }
-      if (normalized.includes('owtte')) {
-        addVariationSignal('Equivalent phrasing allowed');
-        markAbbreviation('owtte');
-      }
-      if (normalized.includes('ora')) {
-        addVariationSignal('Reverse argument accepted');
-        markAbbreviation('ora');
-      }
-      if (normalized.includes('ecf')) {
-        addVariationSignal('Error carried forward supported');
-        markAbbreviation('ecf');
-      }
-      if (normalized.includes('cao')) {
-        addVariationSignal('Correct answer only (CAO)');
-        markAbbreviation('cao');
-      }
-    }
-
-    if (node.context) {
-      includesContextualAnswers = true;
-      if (Array.isArray(node.context)) {
-        node.context.forEach((ctx: any) => {
-          if (ctx?.type) {
-            contextTypes.add(String(ctx.type));
-          }
-        });
-      } else if (node.context.type) {
-        contextTypes.add(String(node.context.type));
-      }
-    }
-    if (Array.isArray(node.context_fields)) {
-      includesContextualAnswers = true;
-      node.context_fields.forEach((field: any) => {
-        if (field?.type) {
-          contextTypes.add(String(field.type));
-        }
-      });
-    }
-
-    if (node.figure || node.figure_required) {
-      includesFigures = true;
-    }
-
-    if (Array.isArray(node.attachments) && node.attachments.length > 0) {
-      includesAttachments = true;
-    }
-
-    if (node.hint) {
-      includesHints = true;
-    }
-
-    if (node.explanation) {
-      includesExplanations = true;
-    }
-
-    if (node.requires_manual_marking) {
-      requiresManualMarking = true;
-    }
-
-    if (node.subject) {
-      subjects.add(String(node.subject));
-    }
-    if (node.subject_code) {
-      subjects.add(String(node.subject_code));
-    }
-
-    if (node.partial_credit || node.partial_marking || node.partial_mark_distribution || node.partial_marks) {
-      partialCreditDetected = true;
-    }
-
-    if (Array.isArray(node.marking_points) && node.marking_points.length > 0) {
-      usesLineByLineMarking = true;
-    }
-    if (Array.isArray(node.mark_scheme) && node.mark_scheme.length > 0) {
-      usesLineByLineMarking = true;
-    }
-    if (typeof node.mark_scheme === 'string' && node.mark_scheme.includes('\n')) {
-      usesLineByLineMarking = true;
-    }
-    if (node.line_by_line === true) {
-      usesLineByLineMarking = true;
-    }
-
-    if (typeof node.marks === 'number' && node.marks > 1) {
-      hasMultiMarkAllocations = true;
-    }
-
-    if (Array.isArray(node.correct_answers) && node.correct_answers.length > 0) {
-      if (node.correct_answers.length > 1) {
-        usesLineByLineMarking = true;
-      }
-      node.correct_answers.forEach(recordAnswer);
-    } else if (node.correct_answer) {
-      recordAnswer({ answer: node.correct_answer, marks: node.marks, answer_requirement: node.answer_requirement });
-    }
-
-    if (parts.length > 0) {
-      hasComponentMarking = true;
-      parts.forEach((part: any) => {
-        if (typeof part.marks === 'number' && part.marks > 0) {
-          hasMultiMarkAllocations = true;
-        }
-        walkQuestionNode(part);
-      });
-    }
-
-    if (subparts.length > 0) {
-      hasComponentMarking = true;
-      subparts.forEach((sub: any) => {
-        if (typeof sub.marks === 'number' && sub.marks > 0) {
-          hasMultiMarkAllocations = true;
-        }
-        walkQuestionNode(sub);
-      });
-    }
-  };
-
-  questions.forEach(walkQuestionNode);
-
-  if (contextTypes.size > 0) {
-    includesContextualAnswers = true;
-  }
-
-  const possibleSubjects = [
-    data?.subject,
-    data?.subject_code,
-    data?.paper_metadata?.subject,
-    data?.paper_metadata?.subject_code,
-    data?.metadata?.subject
-  ];
-  possibleSubjects
-    .filter((value): value is string => Boolean(value))
-    .forEach(value => subjects.add(value));
-
-  return {
-    questionTypes: Array.from(questionTypes).sort(),
-    answerFormats: Array.from(answerFormats).sort(),
-    answerRequirements: Array.from(answerRequirements).sort(),
-    subjectsDetected: Array.from(subjects).filter(Boolean),
-    examBoard: data?.exam_board || data?.board || data?.paper_metadata?.exam_board,
-    usesForwardSlash,
-    usesLineByLineMarking,
-    usesAlternativeLinking,
-    includesContextualAnswers,
-    includesFigures,
-    includesAttachments,
-    includesHints,
-    includesExplanations,
-    requiresManualMarking,
-    hasComponentMarking,
-    hasMultiMarkAllocations,
-    variationSignals: Array.from(variationSignals).sort(),
-    abbreviationsDetected: Array.from(abbreviationsDetected).sort(),
-    contextTypesDetected: Array.from(contextTypes).sort(),
-    partialCreditDetected
-  };
-};
-
-const normalizeExamBoard = (value?: string): 'Cambridge' | 'Edexcel' | 'Both' | undefined => {
-  if (!value) return undefined;
-  const normalized = value.toLowerCase();
-  if (normalized.includes('cambridge') && normalized.includes('edexcel')) {
-    return 'Both';
-  }
-  if (normalized.includes('cambridge') || normalized.includes('cie')) {
-    return 'Cambridge';
-  }
-  if (normalized.includes('edexcel') || normalized.includes('pearson')) {
-    return 'Edexcel';
-  }
-  return undefined;
-};
-
 // Utility function to generate a hash for JSON content
 const generateJsonHash = async (jsonData: any): Promise<string> => {
   const jsonString = JSON.stringify(jsonData);
@@ -872,7 +481,6 @@ export default function PapersSetupPage() {
   const location = useLocation();
   const displayedSessionIdRef = useRef<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const tabTransitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasCheckedForSession = useRef(false);
   
   // Get tab from URL query parameter or default to 'upload'
@@ -896,10 +504,7 @@ export default function PapersSetupPage() {
   const [stagedAttachments, setStagedAttachments] = useState<Record<string, any[]>>({});
   const [previousSessionsExpanded, setPreviousSessionsExpanded] = useState(false);
   const [extractionRulesExpanded, setExtractionRulesExpanded] = useState(true); // Always expanded by default
-  const [isTabTransitioning, setIsTabTransitioning] = useState(false);
-  const [transitionMessage, setTransitionMessage] = useState('');
-  const [pendingTab, setPendingTab] = useState<string | null>(null);
-
+  
   // Track the status of each tab
   const [tabStatuses, setTabStatuses] = useState<Record<string, TabStatus>>({
     upload: 'pending',
@@ -907,38 +512,7 @@ export default function PapersSetupPage() {
     metadata: 'pending',
     questions: 'pending',
   });
-
-  const activeTabDefinition = useMemo(
-    () => IMPORT_TABS.find(tab => tab.id === activeTab),
-    [activeTab]
-  );
-
-  const workflowProgress = useMemo(() => {
-    const total = IMPORT_TABS.length;
-    if (total === 0) return 0;
-
-    const completedCount = IMPORT_TABS.reduce((count, tab) => {
-      return count + (tabStatuses[tab.id] === 'completed' ? 1 : 0);
-    }, 0);
-
-    const activeStatus = tabStatuses[activeTab];
-    const activeContribution = activeStatus === 'completed' ? 0 : 0.5;
-    const transitionBoost = isTabTransitioning ? 0.2 : 0;
-
-    const progressUnits = Math.min(
-      total,
-      completedCount + activeContribution + transitionBoost
-    );
-
-    const rawProgress = Math.round((progressUnits / total) * 100);
-    return Math.max(0, Math.min(100, rawProgress));
-  }, [tabStatuses, activeTab, isTabTransitioning]);
-
-  const guidelineSummary = useMemo<JsonGuidelineSummary | null>(
-    () => (parsedData ? analyzeParsedDataForGuidelines(parsedData) : null),
-    [parsedData]
-  );
-
+  
   // Enhanced extraction rules configuration with defaults based on JSON structure
   const [extractionRules, setExtractionRules] = useState<ExtractionRules>({
     forwardSlashHandling: true,
@@ -957,16 +531,16 @@ export default function PapersSetupPage() {
       mathematics: false,
     },
     abbreviations: {
-      ora: false,
-      owtte: false,
-      ecf: false,
-      cao: false,
+      ora: true,
+      owtte: true,
+      ecf: true,
+      cao: true,
     },
     answerStructure: {
       validateMarks: true,
       requireContext: true,
       validateLinking: true,
-      acceptAlternatives: false,
+      acceptAlternatives: true,
     },
     markScheme: {
       requiresManualMarking: true,
@@ -976,155 +550,6 @@ export default function PapersSetupPage() {
     },
     examBoard: 'Cambridge',
   });
-
-  useEffect(() => {
-    if (!guidelineSummary) return;
-
-    setExtractionRules(prev => {
-      let changed = false;
-      const next: ExtractionRules = {
-        ...prev,
-        educationalContent: { ...prev.educationalContent },
-        subjectSpecific: { ...prev.subjectSpecific },
-        abbreviations: { ...prev.abbreviations },
-        answerStructure: { ...prev.answerStructure },
-        markScheme: { ...prev.markScheme }
-      };
-
-      if (guidelineSummary.usesForwardSlash && !prev.forwardSlashHandling) {
-        next.forwardSlashHandling = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.usesLineByLineMarking && !prev.lineByLineProcessing) {
-        next.lineByLineProcessing = true;
-        changed = true;
-      }
-
-      if ((guidelineSummary.usesAlternativeLinking || guidelineSummary.answerRequirements.length > 0) && !prev.alternativeLinking) {
-        next.alternativeLinking = true;
-        changed = true;
-      }
-
-      if ((guidelineSummary.includesFigures || guidelineSummary.includesAttachments) && !prev.figureDetection) {
-        next.figureDetection = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.includesContextualAnswers && !prev.contextRequired) {
-        next.contextRequired = true;
-        changed = true;
-      }
-
-      const nextEducationalContent = {
-        hintsRequired: guidelineSummary.includesHints,
-        explanationsRequired: guidelineSummary.includesExplanations
-      };
-
-      if (
-        nextEducationalContent.hintsRequired !== prev.educationalContent.hintsRequired ||
-        nextEducationalContent.explanationsRequired !== prev.educationalContent.explanationsRequired
-      ) {
-        next.educationalContent = nextEducationalContent;
-        changed = true;
-      }
-
-      const normalizedSubjects = guidelineSummary.subjectsDetected.map(subject => subject.toLowerCase());
-      const nextSubjectSpecific = {
-        physics: normalizedSubjects.some(subject => subject.includes('physics')),
-        chemistry: normalizedSubjects.some(subject => subject.includes('chemistry')),
-        biology: normalizedSubjects.some(subject => subject.includes('biology')),
-        mathematics: normalizedSubjects.some(subject => subject.includes('math'))
-      };
-
-      if (
-        nextSubjectSpecific.physics !== prev.subjectSpecific.physics ||
-        nextSubjectSpecific.chemistry !== prev.subjectSpecific.chemistry ||
-        nextSubjectSpecific.biology !== prev.subjectSpecific.biology ||
-        nextSubjectSpecific.mathematics !== prev.subjectSpecific.mathematics
-      ) {
-        next.subjectSpecific = nextSubjectSpecific;
-        changed = true;
-      }
-
-      if (guidelineSummary.abbreviationsDetected.length > 0) {
-        const abbreviationMap: Record<string, keyof ExtractionRules['abbreviations']> = {
-          ORA: 'ora',
-          OWTTE: 'owtte',
-          ECF: 'ecf',
-          CAO: 'cao'
-        };
-        const nextAbbreviations = { ...next.abbreviations };
-        let abbreviationsChanged = false;
-
-        Object.entries(abbreviationMap).forEach(([label, key]) => {
-          const shouldEnable = guidelineSummary.abbreviationsDetected.includes(label);
-          if (shouldEnable && !prev.abbreviations[key]) {
-            nextAbbreviations[key] = true;
-            abbreviationsChanged = true;
-          }
-        });
-
-        if (abbreviationsChanged) {
-          next.abbreviations = nextAbbreviations;
-          changed = true;
-        }
-      }
-
-      if (guidelineSummary.includesContextualAnswers && !prev.answerStructure.requireContext) {
-        next.answerStructure.requireContext = true;
-        changed = true;
-      }
-
-      if ((guidelineSummary.usesAlternativeLinking || guidelineSummary.answerRequirements.length > 0) && !prev.answerStructure.validateLinking) {
-        next.answerStructure.validateLinking = true;
-        changed = true;
-      }
-
-      if ((guidelineSummary.variationSignals.length > 0 || guidelineSummary.usesAlternativeLinking) && !prev.answerStructure.acceptAlternatives) {
-        next.answerStructure.acceptAlternatives = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.hasMultiMarkAllocations && !prev.answerStructure.validateMarks) {
-        next.answerStructure.validateMarks = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.partialCreditDetected && !prev.answerStructure.validateMarks) {
-        next.answerStructure.validateMarks = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.requiresManualMarking && !prev.markScheme.requiresManualMarking) {
-        next.markScheme.requiresManualMarking = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.hasComponentMarking && !prev.markScheme.componentMarking) {
-        next.markScheme.componentMarking = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.hasMultiMarkAllocations && !prev.markScheme.markingCriteria) {
-        next.markScheme.markingCriteria = true;
-        changed = true;
-      }
-
-      if (guidelineSummary.partialCreditDetected && !prev.markScheme.markingCriteria) {
-        next.markScheme.markingCriteria = true;
-        changed = true;
-      }
-
-      const normalizedBoard = normalizeExamBoard(guidelineSummary.examBoard);
-      if (normalizedBoard && normalizedBoard !== prev.examBoard) {
-        next.examBoard = normalizedBoard;
-        changed = true;
-      }
-
-      return changed ? next : prev;
-    });
-  }, [guidelineSummary]);
 
   // Check for existing in-progress session on mount
   useEffect(() => {
@@ -1138,12 +563,11 @@ export default function PapersSetupPage() {
   const checkForExistingSession = async () => {
     setIsLoadingSession(true);
     try {
-      // Get the most recent in-progress session for the current user
+      // Get the most recent in-progress session
       const { data, error } = await supabase
         .from('past_paper_import_sessions')
         .select('*')
         .eq('status', 'in_progress')
-        .eq('created_by', user?.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1183,10 +607,7 @@ export default function PapersSetupPage() {
         setTabStatuses(newStatuses);
         
         // Show notification
-        toast.success('Previous import session restored', {
-          id: 'papers-setup-session-status',
-          duration: 3500,
-        });
+        toast.success('Previous import session restored');
         
         // Update subject-specific rules based on parsed data
         if (data.raw_json?.subject) {
@@ -1224,49 +645,16 @@ export default function PapersSetupPage() {
     }
   }, [activeTab, location.pathname, location.search, navigate]);
 
-  useEffect(() => {
-    return () => {
-      if (tabTransitionTimeoutRef.current) {
-        clearTimeout(tabTransitionTimeoutRef.current);
-      }
-    };
-  }, []);
-
   // Load session from URL if present
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const sessionId = params.get('session');
-
+    
     if (sessionId && sessionId !== displayedSessionIdRef.current) {
       displayedSessionIdRef.current = sessionId;
       loadImportSession(sessionId);
     }
   }, [location.search]);
-
-  useEffect(() => {
-    if (!pendingTab) {
-      return;
-    }
-
-    if (pendingTab === activeTab && !isLoadingSession) {
-      if (tabTransitionTimeoutRef.current) {
-        clearTimeout(tabTransitionTimeoutRef.current);
-      }
-
-      tabTransitionTimeoutRef.current = setTimeout(() => {
-        setIsTabTransitioning(false);
-        setTransitionMessage('');
-        setPendingTab(null);
-        tabTransitionTimeoutRef.current = null;
-      }, 800);
-    }
-
-    return () => {
-      if (tabTransitionTimeoutRef.current && pendingTab === activeTab) {
-        clearTimeout(tabTransitionTimeoutRef.current);
-      }
-    };
-  }, [activeTab, pendingTab, isLoadingSession]);
 
   const loadImportSession = async (sessionId: string) => {
     setIsLoadingSession(true);
@@ -1280,26 +668,6 @@ export default function PapersSetupPage() {
       if (error) throw error;
 
       if (data) {
-        // Don't restore sessions that are failed or completed
-        if (data.status === 'failed' || data.status === 'completed') {
-          console.log('Session is not in progress, clearing URL and starting fresh');
-          // Clear URL parameters
-          const params = new URLSearchParams(location.search);
-          params.delete('session');
-          params.delete('tab');
-          const newUrl = params.toString()
-            ? `${location.pathname}?${params.toString()}`
-            : location.pathname;
-          navigate(newUrl, { replace: true });
-
-          toast.info('Previous session was closed. Starting a new import.', {
-            id: 'papers-setup-session-status',
-            duration: 4000,
-          });
-          setIsLoadingSession(false);
-          return;
-        }
-
         setImportSession(data);
         if (data.raw_json) {
           setParsedData(data.raw_json);
@@ -1351,27 +719,9 @@ export default function PapersSetupPage() {
       }
     } catch (error) {
       console.error('Error loading import session:', error);
-      toast.error('Failed to load import session', {
-        id: 'papers-setup-session-error',
-      });
-
-      // Clear URL parameters on error
-      const params = new URLSearchParams(location.search);
-      params.delete('session');
-      params.delete('tab');
-      const newUrl = params.toString()
-        ? `${location.pathname}?${params.toString()}`
-        : location.pathname;
-      navigate(newUrl, { replace: true });
+      toast.error('Failed to load import session');
     } finally {
       setIsLoadingSession(false);
-      if (tabTransitionTimeoutRef.current) {
-        clearTimeout(tabTransitionTimeoutRef.current);
-        tabTransitionTimeoutRef.current = null;
-      }
-      setIsTabTransitioning(false);
-      setTransitionMessage('');
-      setPendingTab(null);
     }
   };
 
@@ -1396,51 +746,30 @@ export default function PapersSetupPage() {
       // Read and parse the file
       const text = await file.text();
       const jsonData = JSON.parse(text);
-
+      
       // Validate JSON structure
       if (!jsonData.exam_board || !jsonData.qualification || !jsonData.questions) {
         throw new Error('Invalid JSON structure. Missing required fields: exam_board, qualification, or questions.');
       }
-
-      // Transform imported JSON to internal format
-      try {
-        const transformed = transformImportedPaper(jsonData);
-        // Store both original and transformed data
-        setParsedData({
-          ...jsonData,
-          transformedQuestions: transformed.questions,
-          transformedMetadata: transformed.metadata
-        });
-      } catch (transformError) {
-        console.error('JSON transformation error:', transformError);
-        // Fall back to original if transformation fails
-        setParsedData(jsonData);
-        toast.warning('Some questions may not display correctly', {
-          id: 'papers-setup-session-warning',
-          duration: 4500,
-        });
-      }
+      
+      setParsedData(jsonData);
       
       // Generate hash for duplicate detection
       const jsonHash = await generateJsonHash(jsonData);
       
-      // Check for exact duplicate (same hash) within user's own sessions
+      // Check for exact duplicate (same hash)
       try {
         const { data: exactDuplicate } = await supabase
           .from('past_paper_import_sessions')
           .select('*')
           .eq('json_hash', jsonHash)
           .eq('status', 'in_progress')
-          .eq('created_by', user?.id)
           .maybeSingle();
         
         if (exactDuplicate) {
           // Silently use existing session for exact duplicate
           setImportSession(exactDuplicate);
-          toast.info('Resuming existing import session with identical content', {
-            id: 'papers-setup-session-status',
-            duration: 4000,
-          });
+          toast.info('Resuming existing import session with identical content');
           
           // Update URL with session ID
           const params = new URLSearchParams(location.search);
@@ -1457,7 +786,7 @@ export default function PapersSetupPage() {
             structure: 'active',
           }));
           
-          handleTabChange('structure', { message: 'Preparing academic structure review...' });
+          handleTabChange('structure');
           return;
         }
       } catch (hashError) {
@@ -1474,7 +803,6 @@ export default function PapersSetupPage() {
           .from('past_paper_import_sessions')
           .select('*')
           .eq('status', 'in_progress')
-          .eq('created_by', user?.id)
           .order('created_at', { ascending: false });
         
         // Check if we have a session with the same paper code and year but different content
@@ -1488,19 +816,16 @@ export default function PapersSetupPage() {
         if (similarSession) {
           // Ask user about similar but different content
           const createNew = confirm(
-            `You have an existing import session for ${paperCode} (${examYear}), but with different content. ` +
+            `An import session for ${paperCode} (${examYear}) already exists, but with different content. ` +
             `This might be a corrected version or different variant.\n\n` +
             `Would you like to create a new session for this version?\n\n` +
-            `Click OK to create new session, or Cancel to resume the existing one.`
+            `Click OK to create new session, or Cancel to use the existing one.`
           );
           
           if (!createNew) {
             // Use the existing similar session
             setImportSession(similarSession);
-            toast.info('Using existing import session for this paper', {
-              id: 'papers-setup-session-status',
-              duration: 4000,
-            });
+            toast.info('Using existing import session for this paper');
             
             // Update URL with session ID
             const params = new URLSearchParams(location.search);
@@ -1517,7 +842,7 @@ export default function PapersSetupPage() {
               structure: 'active',
             }));
             
-            handleTabChange('structure', { message: 'Preparing academic structure review...' });
+            handleTabChange('structure');
             return;
           }
           // Continue to create new session if user chose OK
@@ -1529,7 +854,6 @@ export default function PapersSetupPage() {
         json_file_name: file.name,
         raw_json: jsonData,
         status: 'in_progress',
-        created_by: user?.id,
         metadata: {
           upload_timestamp: new Date().toISOString(),
           file_size: file.size,
@@ -1569,13 +893,10 @@ export default function PapersSetupPage() {
         structure: 'active',
       }));
       
-      toast.success('File uploaded successfully', {
-        id: 'papers-setup-upload-status',
-        duration: 3500,
-      });
+      toast.success('File uploaded successfully');
       
       // Auto-navigate to structure tab
-      handleTabChange('structure', { message: 'Preparing academic structure review...' });
+      handleTabChange('structure');
       
       // Update subject rules based on parsed data
       if (jsonData.subject) {
@@ -1604,9 +925,7 @@ export default function PapersSetupPage() {
       }
       
       setError(errorMessage);
-      toast.error(errorMessage, {
-        id: 'papers-setup-upload-error',
-      });
+      toast.error(errorMessage);
       setTabStatuses(prev => ({
         ...prev,
         upload: 'error',
@@ -1619,54 +938,9 @@ export default function PapersSetupPage() {
   const handleSelectPreviousSession = async (session: any) => {
     const params = new URLSearchParams(location.search);
     params.set('session', session.id);
-
-    const nextTab = getAppropriateTab(session);
-    params.set('tab', nextTab);
-
-    if (tabTransitionTimeoutRef.current) {
-      clearTimeout(tabTransitionTimeoutRef.current);
-    }
-
-    setTransitionMessage('Restoring previous session...');
-    setIsTabTransitioning(true);
-    setPendingTab(nextTab);
-
-    if (activeTab !== nextTab) {
-      setActiveTab(nextTab);
-    }
-
+    params.set('tab', getAppropriateTab(session));
     navigate({ search: params.toString() });
   };
-
-  // Clear session state without page reload
-  const handleClearSession = useCallback(() => {
-    // Reset all state to initial values
-    setImportSession(null);
-    setUploadedFile(null);
-    setParsedData(null);
-    setError(null);
-    setUploadProgress(0);
-    setStructureComplete(false);
-    setStructureCompleteCalled(false);
-    setExistingPaperId(null);
-    setSavedPaperDetails(null);
-    setStagedAttachments({});
-
-    // Reset tab statuses
-    setTabStatuses({
-      upload: 'pending',
-      structure: 'pending',
-      metadata: 'pending',
-      questions: 'pending',
-    });
-
-    // Navigate to upload tab
-    setActiveTab('upload');
-    const params = new URLSearchParams(location.search);
-    params.delete('session');
-    params.set('tab', 'upload');
-    navigate({ search: params.toString() }, { replace: true });
-  }, [location.search, navigate]);
 
   const getAppropriateTab = (session: any) => {
     if (session.metadata?.questions_imported) return 'questions';
@@ -1675,157 +949,62 @@ export default function PapersSetupPage() {
     return 'structure';
   };
 
-  const handleQuestionsContinue = () => {
-    if (tabTransitionTimeoutRef.current) {
-      clearTimeout(tabTransitionTimeoutRef.current);
-      tabTransitionTimeoutRef.current = null;
-    }
-
-    setTransitionMessage('Opening question management workspace...');
-    setIsTabTransitioning(true);
-    setPendingTab(null);
-
-    try {
-      console.log('Navigating to questions setup page after successful import');
-      navigate('/app/system-admin/learning/practice-management/questions-setup');
-    } catch (error) {
-      console.error('Navigation error:', error);
-      toast.error('Failed to navigate to questions page. Please refresh and try again.');
-    }
-  };
-
-  const handleTabChange = useCallback((tabId: string, options?: { message?: string }) => {
-    if (!tabId || tabId === activeTab) {
-      return;
-    }
-
-    if (tabTransitionTimeoutRef.current) {
-      clearTimeout(tabTransitionTimeoutRef.current);
-    }
-
-    const tabName = IMPORT_TABS.find(t => t.id === tabId)?.label || 'content';
-
-    setTransitionMessage(options?.message || `Preparing ${tabName}...`);
-    setIsTabTransitioning(true);
-    setPendingTab(tabId);
+  const handleTabChange = (tabId: string) => {
+    const params = new URLSearchParams(location.search);
+    params.set('tab', tabId);
+    navigate({ search: params.toString() }, { replace: true });
     setActiveTab(tabId);
-
-    setTabStatuses(prev => {
-      const updatedStatuses = { ...prev };
-      if (updatedStatuses[tabId] !== 'completed') {
-        updatedStatuses[tabId] = 'active';
-      }
-      return updatedStatuses;
-    });
-  }, [activeTab]);
+  };
 
   const handleStructureComplete = async () => {
     if (structureCompleteCalled) return;
     setStructureCompleteCalled(true);
-
-    try {
-      // Refresh import session metadata from database to get updated entity_ids
-      // Only fetch the fields we need for better performance
-      if (importSession?.id) {
-        const { data: refreshedSession, error: refreshError } = await supabase
-          .from('past_paper_import_sessions')
-          .select('id, metadata, updated_at')
-          .eq('id', importSession.id)
-          .single();
-
-        if (refreshError) {
-          console.error('[handleStructureComplete] Error refreshing import session:', refreshError);
-          toast.error('Failed to refresh import session data');
-          setStructureCompleteCalled(false);
-          return;
-        }
-
-        if (refreshedSession) {
-          console.log('[handleStructureComplete] Refreshed import session with entity_ids:', refreshedSession.metadata?.entity_ids);
-          // Merge with existing session to preserve all other fields
-          setImportSession(prev => ({
-            ...prev,
-            ...refreshedSession
-          }));
-        }
-      }
-
-      setStructureComplete(true);
-      setTabStatuses(prev => ({
-        ...prev,
-        structure: 'completed',
-        metadata: 'active',
-      }));
-
-      // Auto-navigate to metadata tab
-      handleTabChange('metadata', { message: 'Configuring paper metadata workspace...' });
-    } catch (error) {
-      console.error('[handleStructureComplete] Unexpected error:', error);
-      toast.error('An error occurred while completing structure configuration');
-      setStructureCompleteCalled(false);
-    }
+    
+    setStructureComplete(true);
+    setTabStatuses(prev => ({
+      ...prev,
+      structure: 'completed',
+      metadata: 'active',
+    }));
+    
+    // Auto-navigate to metadata tab
+    handleTabChange('metadata');
   };
 
   const handleMetadataSave = async (paperId: string, paperDetails: any) => {
-    try {
-      // Update session metadata first
-      if (importSession?.id) {
-        const { data: existingSession } = await supabase
-          .from('past_paper_import_sessions')
-          .select('metadata')
-          .eq('id', importSession.id)
-          .maybeSingle();
+    setExistingPaperId(paperId);
+    setSavedPaperDetails(paperDetails);
+    
+    // Update session metadata
+    if (importSession?.id) {
+      const { data: existingSession } = await supabase
+        .from('past_paper_import_sessions')
+        .select('metadata')
+        .eq('id', importSession.id)
+        .single();
 
-        const updatedMetadata = {
-          ...(existingSession?.metadata || {}),
-          metadata_complete: true,
-          paper_id: paperId,
-          paper_details: paperDetails
-        };
-
-        await supabase
-          .from('past_paper_import_sessions')
-          .update({
-            metadata: updatedMetadata,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', importSession.id);
-
-        // Update local importSession state with new metadata
-        setImportSession((prev: any) => ({
-          ...prev,
-          metadata: updatedMetadata,
-          updated_at: new Date().toISOString()
-        }));
-      }
-
-      // Use React's batched state updates with flushSync for immediate updates
-      // This ensures all state is set before navigation
-      await new Promise<void>((resolve) => {
-        setExistingPaperId(paperId);
-        setSavedPaperDetails(paperDetails);
-        setTabStatuses(prev => ({
-          ...prev,
-          metadata: 'completed',
-          questions: 'active',
-        }));
-
-        // Use requestAnimationFrame to ensure DOM updates are complete
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            resolve();
-          });
-        });
-      });
-
-      // Now navigate to questions tab after state is guaranteed to be set
-      handleTabChange('questions', { message: 'Preparing questions review...' });
-    } catch (error) {
-      console.error('Error in handleMetadataSave:', error);
-      toast.error('Failed to save metadata. Please try again.', {
-        id: 'papers-setup-metadata-error',
-      });
+      await supabase
+        .from('past_paper_import_sessions')
+        .update({
+          metadata: {
+            ...(existingSession?.metadata || {}),
+            metadata_complete: true,
+            paper_id: paperId,
+            paper_details: paperDetails
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', importSession.id);
     }
+    
+    setTabStatuses(prev => ({
+      ...prev,
+      metadata: 'completed',
+      questions: 'active',
+    }));
+    
+    // Auto-navigate to questions tab
+    handleTabChange('questions');
   };
 
   const getTabStatus = (tabId: string): TabStatus => {
@@ -1873,138 +1052,133 @@ export default function PapersSetupPage() {
   }
 
   return (
-    <>
-      {isTabTransitioning && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm dark:bg-gray-950/80"
-          role="status"
-          aria-live="assertive"
-        >
-          <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white/90 p-8 text-center shadow-xl dark:border-gray-700 dark:bg-gray-900/90">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative h-14 w-14">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900/40" />
-                <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {transitionMessage || 'Preparing the next step...'}
-                </p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {activeTabDefinition?.label
-                    ? `Moving to ${activeTabDefinition.label}`
-                    : 'Hang tight while we set things up.'}
-                </p>
-              </div>
-              <div className="w-full">
-                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div className="h-full w-full animate-pulse bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500" />
+    <div className="container mx-auto px-4 py-6 max-w-7xl" ref={contentRef}>
+      {/* Page Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Past Papers Import Wizard
+        </h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          Import and configure past exam papers with structured question extraction
+        </p>
+      </div>
+
+      {/* Scroll Navigator */}
+      <ScrollNavigator
+        sections={scrollSections}
+        containerRef={contentRef}
+        offset={100}
+      />
+
+      {/* Progress Indicator */}
+      <div id="workflow" className="mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            {IMPORT_TABS.map((tab, index) => {
+              const status = getTabStatus(tab.id);
+              const Icon = tab.icon;
+              
+              return (
+                <div key={tab.id} className="flex items-center flex-1">
+                  <div className="flex flex-col items-center">
+                    <div className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                      status === 'completed' && "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400",
+                      status === 'active' && "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500",
+                      status === 'error' && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
+                      status === 'pending' && "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
+                    )}>
+                      {status === 'completed' ? (
+                        <CheckCircle className="h-5 w-5" />
+                      ) : (
+                        <Icon className="h-5 w-5" />
+                      )}
+                    </div>
+                    <span className={cn(
+                      "text-xs mt-1 font-medium",
+                      status === 'active' && "text-blue-600 dark:text-blue-400",
+                      status === 'completed' && "text-green-600 dark:text-green-400",
+                      status === 'pending' && "text-gray-400 dark:text-gray-500"
+                    )}>
+                      {tab.label}
+                    </span>
+                  </div>
+                  {index < IMPORT_TABS.length - 1 && (
+                    <div className={cn(
+                      "flex-1 h-0.5 mx-2 transition-all",
+                      tabStatuses[IMPORT_TABS[index + 1].id] === 'completed' || 
+                      tabStatuses[IMPORT_TABS[index + 1].id] === 'active' 
+                        ? "bg-green-500 dark:bg-green-400" 
+                        : "bg-gray-300 dark:bg-gray-600"
+                    )} />
+                  )}
                 </div>
-              </div>
-            </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Error display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg p-4 mb-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 flex-shrink-0" />
+            <p>{error}</p>
           </div>
         </div>
       )}
 
-      <div className="container mx-auto px-4 py-6 max-w-7xl" ref={contentRef}>
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Past Papers Import Wizard
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Import and configure past exam papers with structured question extraction
-          </p>
-        </div>
+      {/* Tab Content */}
+      <Tabs 
+        value={activeTab} 
+        onValueChange={handleTabChange}
+        className="space-y-6"
+      >
+        <TabsList className="grid grid-cols-4 w-full bg-gray-100/50 dark:bg-gray-800/50 p-1 rounded-lg">
+          {IMPORT_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const status = getTabStatus(tab.id);
+            const isDisabled = isTabDisabled(tab.id);
+            
+            return (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                disabled={isDisabled}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-3 py-2 rounded-md transition-all",
+                  status === 'completed' && "bg-green-50 dark:bg-green-900/20",
+                  status === 'error' && "bg-red-50 dark:bg-red-900/20",
+                  status === 'active' && "bg-white dark:bg-gray-900 shadow-sm",
+                  isDisabled && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <Icon className={cn(
+                  "h-4 w-4",
+                  status === 'completed' && "text-green-600 dark:text-green-400",
+                  status === 'error' && "text-red-600 dark:text-red-400",
+                  status === 'active' && "text-blue-600 dark:text-blue-400"
+                )} />
+                <span className="font-medium">{tab.label}</span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
 
-        {/* Scroll Navigator */}
-        <ScrollNavigator
-          sections={scrollSections}
-          containerRef={contentRef}
-          offset={100}
-        />
-
-        {/* Progress Indicator */}
-        <div id="workflow" className="mb-8 space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                    Workflow progress
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {activeTabDefinition?.label
-                      ? `Currently on: ${activeTabDefinition.label}`
-                      : 'Getting things ready'}
-                  </p>
-                </div>
-                <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                  {workflowProgress}%
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-green-500 transition-all duration-500 ease-out"
-                  style={{ width: `${workflowProgress}%` }}
-                />
-              </div>
-            </div>
+        <TabsContent value="upload" className="space-y-6">
+          <div id="upload-section">
+            <UploadTab
+              onFileSelected={handleFileSelected}
+              uploadedFile={uploadedFile}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
+              error={error}
+              parsedData={parsedData}
+              onSelectPreviousSession={handleSelectPreviousSession}
+              importSession={importSession}
+            />
           </div>
-        </div>
-
-        {/* Error display */}
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 flex-shrink-0" />
-              <p>{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Tabs */}
-        <Tabs
-          defaultValue={activeTab}
-          value={activeTab}
-          onValueChange={handleTabChange}
-          className="space-y-6"
-        >
-          <TabsList className="w-full justify-start overflow-x-auto">
-            {IMPORT_TABS.map((tab) => {
-              const status = getTabStatus(tab.id);
-              const Icon = tab.icon;
-
-              return (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.id}
-                  tabStatus={status}
-                  disabled={isTabDisabled(tab.id)}
-                  className="gap-2"
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          <TabsContent value="upload" className="space-y-6">
-            <div id="upload-section">
-              <UploadTab
-                onFileSelected={handleFileSelected}
-                uploadedFile={uploadedFile}
-                isUploading={isUploading}
-                uploadProgress={uploadProgress}
-                error={error}
-                parsedData={parsedData}
-                onSelectPreviousSession={handleSelectPreviousSession}
-                importSession={importSession}
-                onNavigateToTab={handleTabChange}
-                onClearSession={handleClearSession}
-              />
-            </div>
           
           {/* Extraction Rules - moved here as requested */}
           <div id="extraction-rules" className="mt-6">
@@ -2015,34 +1189,22 @@ export default function PapersSetupPage() {
               onToggle={() => setExtractionRulesExpanded(!extractionRulesExpanded)}
             />
           </div>
-
-          {guidelineSummary && (
-            <div className="mt-4">
-              <JsonGuidelineChecklist summary={guidelineSummary} extractionRules={extractionRules} />
-            </div>
-          )}
-
+          
           {/* Previous Sessions */}
           <div id="previous-sessions" className="mt-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              <Button
-                variant="secondary"
-                size="lg"
-                className="w-full justify-between px-6 py-4 h-auto text-left rounded-t-lg"
+              <button
                 onClick={() => setPreviousSessionsExpanded(!previousSessionsExpanded)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded-t-lg"
               >
-                <div className="flex w-full items-center justify-between">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                    Previous Import Sessions
-                  </h3>
-                  <ChevronDown
-                    className={cn(
-                      "h-5 w-5 text-gray-500 transition-transform",
-                      previousSessionsExpanded && "transform rotate-180"
-                    )}
-                  />
-                </div>
-              </Button>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  Previous Import Sessions
+                </h3>
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-gray-500 transition-transform",
+                  previousSessionsExpanded && "transform rotate-180"
+                )} />
+              </button>
               
               {previousSessionsExpanded && (
                 <div className="border-t border-gray-200 dark:border-gray-700 p-6">
@@ -2062,7 +1224,7 @@ export default function PapersSetupPage() {
               importSession={importSession}
               parsedData={parsedData}
               onNext={handleStructureComplete}
-              onPrevious={() => handleTabChange('upload', { message: 'Returning to upload review...' })}
+              onPrevious={() => handleTabChange('upload')}
             />
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
@@ -2080,12 +1242,7 @@ export default function PapersSetupPage() {
               importSession={importSession}
               parsedData={parsedData}
               onSave={handleMetadataSave}
-              onPrevious={() => {
-                // Reset structure completion flags when going back
-                setStructureCompleteCalled(false);
-                setStructureComplete(false);
-                handleTabChange('structure', { message: 'Going back to academic structure...' });
-              }}
+              onPrevious={() => handleTabChange('structure')}
             />
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
@@ -2104,22 +1261,12 @@ export default function PapersSetupPage() {
               parsedData={parsedData}
               existingPaperId={existingPaperId}
               savedPaperDetails={savedPaperDetails}
-              onPrevious={() => handleTabChange('metadata', { message: 'Returning to metadata setup...' })}
-              onContinue={handleQuestionsContinue}
+              onPrevious={() => handleTabChange('metadata')}
+              onContinue={() => navigate('/system-admin/learning/practice-management/questions-setup')}
               extractionRules={extractionRules}
               updateStagedAttachments={updateStagedAttachments}
               stagedAttachments={stagedAttachments}
             />
-          ) : importSession && parsedData && !existingPaperId ? (
-            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
-              <Loader2 className="h-12 w-12 text-blue-600 mx-auto mb-3 animate-spin" />
-              <p className="text-gray-600 dark:text-gray-400">
-                Loading paper data...
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                Preparing questions review workspace
-              </p>
-            </div>
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
               <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
@@ -2131,6 +1278,5 @@ export default function PapersSetupPage() {
         </TabsContent>
       </Tabs>
     </div>
-    </>
   );
 }

@@ -1,6 +1,6 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/UploadTab.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, Loader2, FileJson } from 'lucide-react';
 import { supabase } from '../../../../../../lib/supabase';
 import { FileUploader } from '../../../../../../components/shared/FileUploader';
@@ -18,8 +18,6 @@ interface UploadTabProps {
   parsedData: any;
   onSelectPreviousSession: (session: any) => void;
   importSession: any;
-  onNavigateToTab: (tabId: string, options?: { message?: string }) => void;
-  onClearSession?: () => void; // New prop to clear session state in parent
 }
 
 export function UploadTab({
@@ -30,15 +28,11 @@ export function UploadTab({
   error,
   parsedData,
   onSelectPreviousSession,
-  importSession,
-  onNavigateToTab,
-  onClearSession
+  importSession
 }: UploadTabProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isContinuing, setIsContinuing] = useState(false);
-  const continueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  
   // Handle file selection
   const handleFileSelected = async (file: File, content: string | ArrayBuffer | null) => {
     if (typeof content === 'string') {
@@ -51,104 +45,60 @@ export function UploadTab({
       }
     }
   };
-
+  
   // Delete current session and start new
   const handleDeleteSession = async () => {
     if (!importSession) return;
-
+    
     setIsDeleting(true);
     try {
-      // Mark session as failed in database
       const { error } = await supabase
         .from('past_paper_import_sessions')
         .update({ status: 'failed' })
         .eq('id', importSession.id);
-
+      
       if (error) throw error;
-
-      // Clear URL parameters to ensure fresh start
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState(null, '', cleanUrl);
-
-      // Clear session state in parent component (React state update, no reload)
-      if (onClearSession) {
-        onClearSession();
-      }
-
-      toast.success('Session cleared. You can now start a new import.');
-      setShowDeleteConfirm(false);
+      
+      // Reload page to start fresh
+      window.location.reload();
     } catch (err) {
       console.error('Error deleting session:', err);
-      toast.error('Failed to delete session. Please try again.');
+      toast.error('Failed to delete session');
     } finally {
       setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
-
+  
   // Continue with existing session
   const handleContinueSession = () => {
-    if (!importSession) return;
-
-    setIsContinuing(true);
-
-    const clearLoader = () => {
-      if (continueTimeoutRef.current) {
-        clearTimeout(continueTimeoutRef.current);
-      }
-
-      continueTimeoutRef.current = setTimeout(() => {
-        setIsContinuing(false);
-        continueTimeoutRef.current = null;
-      }, 1200);
-    };
-
     // Navigate to the appropriate tab based on session state
     const params = new URLSearchParams(window.location.search);
-
+    
     if (importSession.metadata?.questions_imported) {
       params.set('tab', 'questions');
-      onNavigateToTab('questions', { message: 'Restoring your questions review...' });
     } else if (importSession.metadata?.metadata_complete) {
       params.set('tab', 'questions');
-      onNavigateToTab('questions', { message: 'Loading your saved metadata...' });
     } else if (importSession.metadata?.structure_complete) {
       params.set('tab', 'metadata');
-      onNavigateToTab('metadata', { message: 'Preparing paper metadata...' });
     } else {
       params.set('tab', 'structure');
-      onNavigateToTab('structure', { message: 'Reopening academic structure...' });
     }
-
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-
-    clearLoader();
+    
+    window.location.search = params.toString();
   };
-
-  // Refresh session data - use soft refresh via parent callback
+  
+  // Refresh session data
   const handleRefreshSession = () => {
-    if (onClearSession) {
-      onClearSession();
-      toast.success('Session data refreshed');
-    } else {
-      // Fallback to reload if callback not provided
-      window.location.reload();
-    }
+    window.location.reload();
   };
-
-  useEffect(() => {
-    return () => {
-      if (continueTimeoutRef.current) {
-        clearTimeout(continueTimeoutRef.current);
-      }
-    };
-  }, []);
-
+  
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
         Upload Past Paper JSON
       </h2>
-
+      
       {/* Show resuming session banner if we have an existing session and file */}
       {importSession && uploadedFile && !error && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -156,13 +106,13 @@ export function UploadTab({
             <CircleCheck className="h-5 w-5 text-blue-500 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
             <div className="flex-1">
               <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                Your Import Session In Progress
+                Import Session In Progress
               </h3>
               <p className="mt-1 text-sm text-blue-700 dark:text-blue-400">
-                You have an active import session for <strong>{uploadedFile.name}</strong>.
-                You can continue from where you left off or start a new import. Other users can work on their own imports simultaneously.
+                You have an active import session for <strong>{uploadedFile.name}</strong>. 
+                You can continue from where you left off or start a new import.
               </p>
-
+              
               {/* Show session details */}
               <div className="mt-3 text-xs text-blue-600 dark:text-blue-500 space-y-1">
                 <p>Session ID: {importSession.id}</p>
@@ -174,22 +124,14 @@ export function UploadTab({
                   </>
                 )}
               </div>
-
+              
               <div className="mt-4 flex flex-wrap gap-3">
                 <Button
                   size="sm"
                   leftIcon={<ArrowRight className="h-4 w-4" />}
                   onClick={handleContinueSession}
-                  disabled={isContinuing}
                 >
-                  {isContinuing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Resuming...
-                    </>
-                  ) : (
-                    'Continue Import'
-                  )}
+                  Continue Import
                 </Button>
                 <Button
                   size="sm"
@@ -213,7 +155,7 @@ export function UploadTab({
           </div>
         </div>
       )}
-
+      
       {/* Delete confirmation dialog */}
       {showDeleteConfirm && (
         <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -224,7 +166,7 @@ export function UploadTab({
                 Confirm Delete Session
               </h3>
               <p className="mt-1 text-sm text-red-700 dark:text-red-400">
-                Are you sure you want to delete the current import session and start over?
+                Are you sure you want to delete the current import session and start over? 
                 This action cannot be undone.
               </p>
               <div className="mt-3 flex space-x-3">
@@ -256,7 +198,7 @@ export function UploadTab({
           </div>
         </div>
       )}
-
+      
       {/* Error message */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -273,7 +215,7 @@ export function UploadTab({
           </div>
         </div>
       )}
-
+      
       {/* File uploader - only show if no existing session or there's an error */}
       {(!importSession || !uploadedFile || error) && !showDeleteConfirm && (
         <div className="space-y-4">
@@ -297,7 +239,7 @@ export function UploadTab({
               </p>
             </div>
           )}
-
+          
           <FileUploader
             accept=".json"
             onFileSelected={handleFileSelected}
@@ -306,7 +248,7 @@ export function UploadTab({
             buttonText="Select Past Paper JSON File"
             disabled={isUploading}
           />
-
+          
           {isUploading && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between">
@@ -318,7 +260,7 @@ export function UploadTab({
           )}
         </div>
       )}
-
+      
       {/* File preview - enhanced with session info */}
       {uploadedFile && !error && (
         <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -340,7 +282,7 @@ export function UploadTab({
                       <div><span className="font-medium">Questions:</span> {parsedData.questions?.length || 0}</div>
                     </div>
                   </div>
-
+                  
                   {/* Show completion status */}
                   {importSession && (
                     <div className="border-t border-gray-200 dark:border-gray-600 pt-2">
@@ -358,8 +300,8 @@ export function UploadTab({
                         <div className="flex items-center text-xs">
                           <CircleCheck className={cn(
                             "h-3 w-3 mr-2",
-                            importSession.metadata?.structure_complete
-                              ? "text-green-500"
+                            importSession.metadata?.structure_complete 
+                              ? "text-green-500" 
                               : "text-gray-300 dark:text-gray-600"
                           )} />
                           <span className="text-gray-600 dark:text-gray-400">
@@ -369,8 +311,8 @@ export function UploadTab({
                         <div className="flex items-center text-xs">
                           <CircleCheck className={cn(
                             "h-3 w-3 mr-2",
-                            importSession.metadata?.metadata_complete
-                              ? "text-green-500"
+                            importSession.metadata?.metadata_complete 
+                              ? "text-green-500" 
                               : "text-gray-300 dark:text-gray-600"
                           )} />
                           <span className="text-gray-600 dark:text-gray-400">
@@ -380,8 +322,8 @@ export function UploadTab({
                         <div className="flex items-center text-xs">
                           <CircleCheck className={cn(
                             "h-3 w-3 mr-2",
-                            importSession.metadata?.questions_imported
-                              ? "text-green-500"
+                            importSession.metadata?.questions_imported 
+                              ? "text-green-500" 
                               : "text-gray-300 dark:text-gray-600"
                           )} />
                           <span className="text-gray-600 dark:text-gray-400">
@@ -397,23 +339,15 @@ export function UploadTab({
           </div>
         </div>
       )}
-
+      
       {/* Navigation buttons */}
       {importSession && uploadedFile && !error && (
         <div className="mt-8 flex justify-end">
           <Button
             onClick={handleContinueSession}
             rightIcon={<ArrowRight className="h-4 w-4 ml-1" />}
-            disabled={isContinuing}
           >
-            {isContinuing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Preparing next step...
-              </>
-            ) : (
-              'Continue to Next Step'
-            )}
+            Continue to Next Step
           </Button>
         </div>
       )}

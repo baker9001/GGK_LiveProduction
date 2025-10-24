@@ -1,17 +1,16 @@
 // src/components/shared/DynamicAnswerField.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  AlertCircle,
-  Calculator,
-  Beaker,
-  Book,
-  Globe,
-  Music,
-  Palette,
-  Check,
-  CheckCircle2,
-  X,
+import React, { useState, useEffect } from 'react';
+import { 
+  AlertCircle, 
+  Calculator, 
+  Beaker, 
+  Book, 
+  Globe, 
+  Music, 
+  Palette, 
+  Check, 
+  X, 
   ChevronRight,
   Ruler,
   FlaskConical,
@@ -20,8 +19,7 @@ import {
   Plus,
   Trash2,
   Copy,
-  Link as LinkIcon,
-  Target
+  Link as LinkIcon
 } from 'lucide-react';
 import ScientificEditor from './ScientificEditor';
 import Button from './Button';
@@ -40,50 +38,10 @@ interface CorrectAnswer {
     label?: string;
   };
   unit?: string;
-  measurement_details?: Record<string, unknown> | null;
+  measurement_details?: any;
   accepts_equivalent_phrasing?: boolean;
   error_carried_forward?: boolean;
-  accepts_reverse_argument?: boolean;
-  answer_requirement?: string;
-  total_alternatives?: number;
-  validation_issues?: string[];
-  // Enhanced variation support from extraction guides
-  equivalent_variations?: string[];
-  answer_variations?: {
-    alternative_phrasings?: string[];
-    reverse_arguments?: string[];
-    mathematical_expressions?: string[];
-    simplified_forms?: string[];
-  };
-  synonym_mappings?: Record<string, string[]>;
-  marking_flags?: {
-    accepts_reverse_argument?: boolean;
-    accepts_equivalent_phrasing?: boolean;
-    accepts_mathematical_notation?: boolean;
-    case_insensitive?: boolean;
-    accepts_abbreviated_forms?: boolean;
-    ignore_articles?: boolean;
-    accepts_symbolic_notation?: boolean;
-  };
 }
-
-type AnswerPrimitive = string | number | boolean;
-
-interface StructuredAnswerValue {
-  main?: string;
-  components?: Record<string, AnswerPrimitive>;
-  context?: Record<string, string>;
-  units?: Record<string, string>;
-  [key: string]: unknown;
-}
-
-type AnswerValue =
-  | AnswerPrimitive
-  | AnswerPrimitive[]
-  | StructuredAnswerValue
-  | CorrectAnswer[]
-  | null
-  | undefined;
 
 interface AnswerComponent {
   id: string;
@@ -150,13 +108,13 @@ interface AnswerFieldProps {
     figure?: boolean;
     attachments?: string[];
   };
-  value?: AnswerValue;
-  onChange: (value: AnswerValue) => void;
-  onValidate?: (value: AnswerValue) => { isValid: boolean; errors: string[] };
+  value?: any;
+  onChange: (value: any) => void;
+  onValidate?: (value: any) => { isValid: boolean; errors: string[] };
   disabled?: boolean;
   showHints?: boolean;
   showCorrectAnswer?: boolean;
-  mode?: 'practice' | 'exam' | 'review' | 'admin' | 'qa_preview';
+  mode?: 'practice' | 'exam' | 'review' | 'admin';
   // New optional props
   answerComponents?: AnswerComponent[];
   contextRequirements?: ContextRequirement[];
@@ -181,25 +139,15 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [textAnswers, setTextAnswers] = useState<{ [key: string]: string }>({});
   const [contextAnswers, setContextAnswers] = useState<{ [key: string]: string }>({});
-  const [componentAnswers, setComponentAnswers] = useState<Record<string, AnswerPrimitive>>({});
+  const [componentAnswers, setComponentAnswers] = useState<{ [key: string]: any }>({});
   const [validation, setValidation] = useState<{ isValid: boolean; errors: string[] }>({ isValid: true, errors: [] });
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showAllCorrectAnswers, setShowAllCorrectAnswers] = useState(false);
   const [measurementUnits, setMeasurementUnits] = useState<{ [key: string]: string }>({});
-
+  
   // Admin mode states
   const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>([]);
   const [editingAnswerIndex, setEditingAnswerIndex] = useState<number | null>(null);
-
-  const getCurrentStructuredValue = useCallback((): StructuredAnswerValue => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      return value as StructuredAnswerValue;
-    }
-    if (typeof value === 'string') {
-      return { main: value };
-    }
-    return {};
-  }, [value]);
 
   // Get subject icon
   const getSubjectIcon = () => {
@@ -251,57 +199,6 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
   };
 
-  // Helper to render mark scheme abbreviation badges
-  const renderMarkSchemeBadges = (answer: CorrectAnswer) => {
-    const badges: JSX.Element[] = [];
-
-    if (answer.accepts_equivalent_phrasing || answer.marking_flags?.accepts_equivalent_phrasing) {
-      badges.push(
-        <span key="owtte" className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
-          OWTTE
-        </span>
-      );
-    }
-
-    if (answer.accepts_reverse_argument || answer.marking_flags?.accepts_reverse_argument) {
-      badges.push(
-        <span key="ora" className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
-          ORA
-        </span>
-      );
-    }
-
-    if (answer.error_carried_forward) {
-      badges.push(
-        <span key="ecf" className="px-2 py-0.5 bg-green-100 dark:bg-green-900/60 text-green-700 dark:text-green-300 rounded-full text-xs font-medium">
-          ECF
-        </span>
-      );
-    }
-
-    if (answer.marking_flags?.accepts_mathematical_notation) {
-      badges.push(
-        <span key="math" className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium">
-          Math notation OK
-        </span>
-      );
-    }
-
-    if (answer.unit) {
-      badges.push(
-        <span key="unit" className="px-2 py-0.5 bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 rounded-full text-xs font-medium">
-          Unit: {answer.unit}
-        </span>
-      );
-    }
-
-    return badges.length > 0 ? (
-      <div className="flex flex-wrap gap-1.5 mt-1.5">
-        {badges}
-      </div>
-    ) : null;
-  };
-
   // Helper to format chemical formulas
   const formatChemicalFormula = (formula: string) => {
     // Convert numbers to subscripts for chemical formulas
@@ -315,41 +212,23 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   useEffect(() => {
     if (mode === 'admin' && question.correct_answers) {
       setAdminCorrectAnswers(question.correct_answers);
-      return;
-    }
-
-    if (question.type === 'mcq') {
-      if (Array.isArray(value)) {
-        const selections = value.filter((entry): entry is string => typeof entry === 'string');
-        setSelectedOptions(selections);
-        setHasAnswered(selections.length > 0);
-      } else if (typeof value === 'string') {
-        setSelectedOptions(value ? [value] : []);
-        setHasAnswered(Boolean(value));
-      } else {
-        setSelectedOptions([]);
-        setHasAnswered(false);
-      }
-    } else if (question.type === 'descriptive') {
-      const structuredValue = getCurrentStructuredValue();
-      const { main, components, context, units, ...rest } = structuredValue;
-
-      const nextTextAnswers: Record<string, string> = {};
-      if (typeof main === 'string') {
-        nextTextAnswers.main = main;
-      }
-      Object.entries(rest).forEach(([key, entryValue]) => {
-        if (typeof entryValue === 'string') {
-          nextTextAnswers[key] = entryValue;
+    } else if (value) {
+      if (question.type === 'mcq') {
+        setSelectedOptions(Array.isArray(value) ? value : [value]);
+        setHasAnswered(true);
+      } else if (question.type === 'descriptive') {
+        if (typeof value === 'object') {
+          const { main, components, context, units, ...rest } = value;
+          setTextAnswers({ main, ...rest });
+          if (components) setComponentAnswers(components);
+          if (context) setContextAnswers(context);
+          if (units) setMeasurementUnits(units);
+        } else {
+          setTextAnswers({ main: value });
         }
-      });
-
-      setTextAnswers(nextTextAnswers);
-      setComponentAnswers(components ?? {});
-      setContextAnswers(context ?? {});
-      setMeasurementUnits(units ?? {});
+      }
     }
-  }, [getCurrentStructuredValue, mode, question.correct_answers, question.type, value]);
+  }, [value, question.type, mode, question.correct_answers]);
 
   // Admin mode handlers
   const handleAddCorrectAnswer = () => {
@@ -395,11 +274,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     onChange([...adminCorrectAnswers, newAnswer]);
   };
 
-  const handleUpdateCorrectAnswer = (
-    index: number,
-    field: keyof CorrectAnswer,
-    value: CorrectAnswer[keyof CorrectAnswer]
-  ) => {
+  const handleUpdateCorrectAnswer = (index: number, field: keyof CorrectAnswer, value: any) => {
     const updatedAnswers = [...adminCorrectAnswers];
     updatedAnswers[index] = { ...updatedAnswers[index], [field]: value };
     setAdminCorrectAnswers(updatedAnswers);
@@ -407,19 +282,6 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   };
 
   const handleDeleteCorrectAnswer = (index: number) => {
-    if (adminCorrectAnswers.length <= 1) {
-      // Don't allow deleting the last answer
-      return;
-    }
-
-    const answerToDelete = adminCorrectAnswers[index];
-
-    // Show confirmation for non-empty answers
-    if (answerToDelete.answer.trim() &&
-        !window.confirm(`Are you sure you want to delete this answer: "${answerToDelete.answer}"?`)) {
-      return;
-    }
-
     const updatedAnswers = adminCorrectAnswers.filter((_, i) => i !== index);
     // Re-index alternative IDs
     const reindexedAnswers = updatedAnswers.map((ans, i) => ({
@@ -588,14 +450,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   </button>
                   <button
                     onClick={() => handleDeleteCorrectAnswer(index)}
-                    disabled={adminCorrectAnswers.length <= 1}
-                    className={cn(
-                      "p-1",
-                      adminCorrectAnswers.length <= 1
-                        ? "text-gray-300 cursor-not-allowed dark:text-gray-600"
-                        : "text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                    )}
-                    title={adminCorrectAnswers.length <= 1 ? "Cannot delete the last answer" : "Delete answer"}
+                    className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    title="Delete answer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -719,7 +575,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   };
 
   // Enhanced validation with validation modes
-  const performValidation = (answers: AnswerValue) => {
+  const performValidation = (answers: any) => {
     const errors: string[] = [];
     
     if (mode === 'admin') {
@@ -821,49 +677,44 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
   };
 
-  const buildStructuredValue = useCallback((updates: Partial<StructuredAnswerValue>) => ({
-    ...getCurrentStructuredValue(),
-    ...updates,
-  }), [getCurrentStructuredValue]);
-
   // MCQ Handler
-  const handleMCQSelection = (optionLabel: string) => {
+  const handleMCQSelection = (option: string) => {
     if (hasAnswered && mode === 'practice' && showCorrectAnswer) {
       return;
     }
 
     let newSelection: string[];
-
+    
     // Check answer requirement for multiple selection
-    const requiresMultiple = question.answer_requirement?.includes('any_two') ||
+    const requiresMultiple = question.answer_requirement?.includes('any_two') || 
                            question.answer_requirement?.includes('any_three') ||
                            question.answer_requirement?.includes('both_required') ||
                            question.answer_requirement?.includes('all_required');
-
+    
     if (requiresMultiple) {
       // Handle multiple selection
       const match = question.answer_requirement?.match(/any_(\w+)_from/);
-      const maxSelections = match ?
-        (match[1] === 'two' ? 2 : match[1] === 'three' ? 3 : parseInt(match[1]) || 1)
+      const maxSelections = match ? 
+        (match[1] === 'two' ? 2 : match[1] === 'three' ? 3 : parseInt(match[1]) || 1) 
         : getAllCorrectAnswers().length;
-
-      if (selectedOptions.includes(optionLabel)) {
-        newSelection = selectedOptions.filter(o => o !== optionLabel);
+      
+      if (selectedOptions.includes(option)) {
+        newSelection = selectedOptions.filter(o => o !== option);
       } else if (selectedOptions.length < maxSelections) {
-        newSelection = [...selectedOptions, optionLabel];
+        newSelection = [...selectedOptions, option];
       } else {
         // Replace oldest selection
-        newSelection = [...selectedOptions.slice(1), optionLabel];
+        newSelection = [...selectedOptions.slice(1), option];
       }
     } else {
       // Default MCQ behavior - single selection only
-      newSelection = [optionLabel];
+      newSelection = [option];
     }
-
+    
     setSelectedOptions(newSelection);
     setHasAnswered(true);
-
-    // Return appropriate value format - always return just the label for consistent validation
+    
+    // Return appropriate value format
     const valueToReturn = requiresMultiple ? newSelection : newSelection[0];
     onChange(valueToReturn);
   };
@@ -906,22 +757,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
   // Check if an option is correct
   const isOptionCorrect = (optionLabel: string) => {
-    // First check if the option itself is marked as correct
-    const option = question.options?.find(o => o.label === optionLabel);
-    if (option?.is_correct) {
-      return true;
-    }
-
-    // Fallback: check if the label matches correct_answer or correct_answers
-    if (question.correct_answer === optionLabel) {
-      return true;
-    }
-
-    if (question.correct_answers?.some(ca => ca.answer === optionLabel)) {
-      return true;
-    }
-
-    return false;
+    return question.correct_answer === optionLabel ||
+           question.correct_answers?.some(ca => ca.answer === optionLabel) ||
+           question.options?.find(o => o.label === optionLabel)?.is_correct;
   };
 
   // Render Contextual Input
@@ -948,8 +786,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(e) => {
                     const newContext = { ...contextAnswers, [req.type]: e.target.value };
                     setContextAnswers(newContext);
-                    const nextValue = buildStructuredValue({ context: newContext });
-                    onChange(nextValue);
+                    onChange({ ...value, context: newContext });
                   }}
                   disabled={disabled}
                   className="flex-1 px-3 py-1 border rounded-md bg-white dark:bg-gray-800 text-sm"
@@ -966,8 +803,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(e) => {
                     const newContext = { ...contextAnswers, [req.type]: e.target.value };
                     setContextAnswers(newContext);
-                    const nextValue = buildStructuredValue({ context: newContext });
-                    onChange(nextValue);
+                    onChange({ ...value, context: newContext });
                   }}
                   placeholder={req.placeholder || `Enter ${req.label}`}
                   disabled={disabled}
@@ -1053,9 +889,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 onChange={(e) => {
                   const newAnswers = { ...componentAnswers, [component.id]: e.target.value };
                   setComponentAnswers(newAnswers);
-                  const nextValue = buildStructuredValue({ components: newAnswers });
-                  onChange(nextValue);
-                  performValidation(nextValue);
+                  onChange({ ...value, components: newAnswers });
+                  performValidation({ ...value, components: newAnswers });
                 }}
                 disabled={disabled}
                 className="flex-1 px-3 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -1070,14 +905,12 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     step={0.01}
                     value={componentAnswers[`${component.id}_uncertainty`] || ''}
                     onChange={(e) => {
-                      const newAnswers = {
-                        ...componentAnswers,
-                        [`${component.id}_uncertainty`]: e.target.value
+                      const newAnswers = { 
+                        ...componentAnswers, 
+                        [`${component.id}_uncertainty`]: e.target.value 
                       };
                       setComponentAnswers(newAnswers);
-                      const nextValue = buildStructuredValue({ components: newAnswers });
-                      onChange(nextValue);
-                      performValidation(nextValue);
+                      onChange({ ...value, components: newAnswers });
                     }}
                     disabled={disabled}
                     className="w-20 px-2 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -1091,8 +924,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 onChange={(e) => {
                   const newUnits = { ...measurementUnits, [component.id]: e.target.value };
                   setMeasurementUnits(newUnits);
-                  const nextValue = buildStructuredValue({ units: newUnits });
-                  onChange(nextValue);
+                  onChange({ ...value, units: newUnits });
                 }}
                 disabled={disabled}
                 className="w-24 px-2 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -1109,13 +941,12 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 <select
                   value={contextAnswers[`${component.id}_instrument`] || ''}
                   onChange={(e) => {
-                    const newContext = {
-                      ...contextAnswers,
-                      [`${component.id}_instrument`]: e.target.value
+                    const newContext = { 
+                      ...contextAnswers, 
+                      [`${component.id}_instrument`]: e.target.value 
                     };
                     setContextAnswers(newContext);
-                    const nextValue = buildStructuredValue({ context: newContext });
-                    onChange(nextValue);
+                    onChange({ ...value, context: newContext });
                   }}
                   disabled={disabled}
                   className="w-full px-3 py-1 text-sm border rounded-md bg-white dark:bg-gray-800"
@@ -1158,9 +989,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 onChange={(e) => {
                   const newAnswers = { ...componentAnswers, [component.id]: e.target.value };
                   setComponentAnswers(newAnswers);
-                  const nextValue = buildStructuredValue({ components: newAnswers });
-                  onChange(nextValue);
-                  performValidation(nextValue);
+                  onChange({ ...value, components: newAnswers });
+                  performValidation({ ...value, components: newAnswers });
                 }}
                 disabled={disabled}
                 className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -1180,9 +1010,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                           const newValue = current + ' ' + state;
                           const newAnswers = { ...componentAnswers, [component.id]: newValue };
                           setComponentAnswers(newAnswers);
-                          const nextValue = buildStructuredValue({ components: newAnswers });
-                          onChange(nextValue);
-                          performValidation(nextValue);
+                          onChange({ ...value, components: newAnswers });
                         }}
                         disabled={disabled}
                         className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1199,14 +1027,12 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   type="text"
                   value={componentAnswers[`${component.id}_oxidation`] || ''}
                   onChange={(e) => {
-                    const newAnswers = {
-                      ...componentAnswers,
-                      [`${component.id}_oxidation`]: e.target.value
+                    const newAnswers = { 
+                      ...componentAnswers, 
+                      [`${component.id}_oxidation`]: e.target.value 
                     };
                     setComponentAnswers(newAnswers);
-                    const nextValue = buildStructuredValue({ components: newAnswers });
-                    onChange(nextValue);
-                    performValidation(nextValue);
+                    onChange({ ...value, components: newAnswers });
                   }}
                   disabled={disabled}
                   className="w-full px-3 py-1 text-sm border rounded-md bg-white dark:bg-gray-800"
@@ -1237,23 +1063,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     if (mode === 'admin') {
       return renderAdminModeEditor();
     }
-
-    // QA Preview mode: Show MCQ options + teacher insights
-    const isQAPreview = mode === 'qa_preview';
-    const shouldShowTeacherInsights = isQAPreview;
-
+    
     // Existing MCQ rendering logic...
-    const shouldExplainRequirement = showHints || mode !== 'exam';
-    const shouldShowFeedback = (
-      mode === 'review' ||
-      mode === 'admin' ||
-      (mode === 'practice' && showCorrectAnswer && hasAnswered)
-    );
+    const shouldShowFeedback = (mode === 'review' || (mode === 'practice' && showCorrectAnswer && hasAnswered));
     const allCorrectAnswers = getAllCorrectAnswers();
     
     return (
-      <div className="space-y-4">
-        {shouldExplainRequirement && question.answer_requirement && (
+      <div className="space-y-2">
+        {question.answer_requirement && (
           <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               <AlertCircle className="inline w-4 h-4 mr-1" />
@@ -1304,24 +1121,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               )}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <span className={cn("font-semibold px-2 py-1 rounded", labelClass)}>
                     {option.label}
                   </span>
-                  <div className="flex flex-col">
-                    <span className="text-gray-700 dark:text-gray-300">{option.text}</span>
-                    {shouldShowFeedback && isCorrect && (
-                      <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
-                        <CircleCheck className="h-3.5 w-3.5" /> Correct answer
-                      </span>
-                    )}
-                    {shouldShowFeedback && isIncorrect && (
-                      <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
-                        <X className="h-3.5 w-3.5" /> Incorrect selection
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-gray-700 dark:text-gray-300">{option.text}</span>
                 </div>
                 {shouldShowFeedback && (
                   isSelected ? (
@@ -1351,11 +1155,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
     
     // Existing true/false rendering logic...
-    const shouldShowFeedback = (
-      mode === 'review' ||
-      mode === 'admin' ||
-      (mode === 'practice' && showCorrectAnswer && hasAnswered)
-    );
+    const shouldShowFeedback = (mode === 'review' || (mode === 'practice' && showCorrectAnswer && hasAnswered));
     const correctAnswer = question.correct_answer?.toLowerCase() === 'true' || question.correct_answer === true;
     const isDisabled = disabled || (hasAnswered && mode === 'practice' && showCorrectAnswer);
     
@@ -1378,20 +1178,10 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
           )}
         >
-          <div className="flex flex-col items-center gap-1">
-            <span>True</span>
-            {shouldShowFeedback && correctAnswer && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
-                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
-                <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
-              </span>
-            )}
-            {shouldShowFeedback && value === true && !correctAnswer && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
-                <X className="h-3.5 w-3.5" /> Incorrect selection
-              </span>
-            )}
-          </div>
+          True
+          {shouldShowFeedback && value === true && (
+            correctAnswer ? <Check className="inline ml-2 w-4 h-4" /> : <X className="inline ml-2 w-4 h-4" />
+          )}
         </button>
         <button
           onClick={() => handleTrueFalse(false)}
@@ -1410,20 +1200,10 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
           )}
         >
-          <div className="flex flex-col items-center gap-1">
-            <span>False</span>
-            {shouldShowFeedback && !correctAnswer && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
-                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
-                <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
-              </span>
-            )}
-            {shouldShowFeedback && value === false && correctAnswer && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
-                <X className="h-3.5 w-3.5" /> Incorrect selection
-              </span>
-            )}
-          </div>
+          False
+          {shouldShowFeedback && value === false && (
+            !correctAnswer ? <Check className="inline ml-2 w-4 h-4" /> : <X className="inline ml-2 w-4 h-4" />
+          )}
         </button>
       </div>
     );
@@ -1465,9 +1245,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(content) => {
                     const newAnswers = { ...componentAnswers, [component.id]: content };
                     setComponentAnswers(newAnswers);
-                    const nextValue = buildStructuredValue({ components: newAnswers });
-                    onChange(nextValue);
-                    performValidation(nextValue);
+                    onChange({ ...value, components: newAnswers });
+                    performValidation({ ...value, components: newAnswers });
                   }}
                   disabled={disabled}
                   subject={question.subject}
@@ -1481,9 +1260,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(e) => {
                     const newAnswers = { ...componentAnswers, [component.id]: e.target.value };
                     setComponentAnswers(newAnswers);
-                    const nextValue = buildStructuredValue({ components: newAnswers });
-                    onChange(nextValue);
-                    performValidation(nextValue);
+                    onChange({ ...value, components: newAnswers });
+                    performValidation({ ...value, components: newAnswers });
                   }}
                   disabled={disabled}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
@@ -1652,14 +1430,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
   // Render correct answers section
   const renderCorrectAnswers = () => {
-    if (
-      !showCorrectAnswer ||
-      !(
-        mode === 'review' ||
-        mode === 'admin' ||
-        (mode === 'practice' && hasAnswered)
-      )
-    ) {
+    if (!showCorrectAnswer || !(mode === 'review' || (mode === 'practice' && hasAnswered))) {
       return null;
     }
 

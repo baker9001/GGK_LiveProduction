@@ -1,9 +1,7 @@
-///home/project/src/app/system-admin/learning/education-catalogue/components/SubjectsTable.tsx
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
-import { Plus, ImageOff } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase';
 import { DataTable } from '../../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../../components/shared/FilterCard';
@@ -11,28 +9,19 @@ import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { FormField, Input, Select } from '../../../../../components/shared/FormField';
 import { StatusBadge } from '../../../../../components/shared/StatusBadge';
 import { Button } from '../../../../../components/shared/Button';
-import { ImageUpload } from '../../../../../components/shared/ImageUpload';
 import { SearchableMultiSelect } from '../../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../../components/shared/Toast';
-import {
-  getPublicUrl,
-  deleteFileFromStorage,
-  deleteFileViaEdgeFunction,
-} from '../../../../../lib/storageHelpers';
 
 const subjectSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   code: z.string().min(1, 'Code is required'),
-  logo_url: z.union([z.string(), z.null()]).optional(),
   status: z.enum(['active', 'inactive'])
 });
 
 type Subject = {
   id: string;
   name: string;
-  code?: string | null;
-  logo_url?: string | null;
   status: 'active' | 'inactive';
   created_at: string;
 };
@@ -40,9 +29,9 @@ type Subject = {
 export default function SubjectsTable() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [localSearchTerm, setLocalSearchTerm] = useState('');
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [logoPath, setLogoPath] = useState<string | null>(null);
   
   // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -87,7 +76,6 @@ export default function SubjectsTable() {
       const data = {
         name: (formData.get('name') as string).trim(),
         code: (formData.get('code') as string).trim(),
-        logo_url: logoPath,
         status: (formData.get('status') as 'active' | 'inactive')
       };
 
@@ -105,7 +93,6 @@ export default function SubjectsTable() {
           .update({
             ...validatedData,
             name: subjectName,
-            logo_url: logoPath,
           })
           .eq('id', editingSubject.id);
 
@@ -122,7 +109,6 @@ export default function SubjectsTable() {
           .insert([{
             ...validatedData,
             name: subjectName,
-            logo_url: logoPath,
           }])
           .select()
           .single();
@@ -143,7 +129,6 @@ export default function SubjectsTable() {
         setIsFormOpen(false);
         setEditingSubject(null);
         setFormErrors({});
-        setLogoPath(null);
         toast.success(`Subject ${editingSubject ? 'updated' : 'created'} successfully`);
       },
       onError: (error) => {
@@ -167,24 +152,6 @@ export default function SubjectsTable() {
   // Delete subject mutation
   const deleteMutation = useMutation(
     async (subjects: Subject[]) => {
-      // Delete associated logo files from storage using Edge Function
-      for (const subject of subjects) {
-        if (subject.logo_url) {
-          try {
-            // Try Edge Function first for secure deletion
-            const result = await deleteFileViaEdgeFunction('subject-logos', subject.logo_url);
-
-            if (!result.success) {
-              // Fallback to direct delete if Edge Function fails
-              console.warn('Edge Function delete failed, trying direct delete');
-              await deleteFileFromStorage('subject-logos', subject.logo_url);
-            }
-          } catch (error) {
-            console.warn('Failed to delete logo file:', error);
-          }
-        }
-      }
-
       const { error } = await supabase
         .from('edu_subjects')
         .delete()
@@ -245,40 +212,7 @@ export default function SubjectsTable() {
     setSubjectsToDelete([]);
   };
 
-  // Helper function to get logo public URL
-  const getLogoUrl = (path: string | null | undefined) => {
-    if (!path) return null;
-    return getPublicUrl('subject-logos', path);
-  };
-
   const columns = [
-    {
-      id: 'logo',
-      header: 'Logo',
-      cell: (row: Subject) => (
-        <div className="w-10 h-10 flex items-center justify-center">
-          {row.logo_url ? (
-            <img
-              src={getLogoUrl(row.logo_url) || ''}
-              alt={`${row.name} logo`}
-              className="w-10 h-10 object-cover rounded-lg"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-                const parent = (e.target as HTMLElement).parentElement;
-                if (parent) {
-                  const icon = document.createElement('div');
-                  icon.className = 'text-gray-400';
-                  icon.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>';
-                  parent.appendChild(icon);
-                }
-              }}
-            />
-          ) : (
-            <ImageOff className="w-6 h-6 text-gray-400" />
-          )}
-        </div>
-      ),
-    },
     {
       id: 'name',
       header: 'Name',
@@ -312,23 +246,6 @@ export default function SubjectsTable() {
     },
   ];
 
-  const filteredSubjects = useMemo(() => {
-    const searchTerm = filters.search.trim().toLowerCase();
-
-    return subjects.filter(subject => {
-      const matchesSearch = searchTerm
-        ? ((subject.name || '').toLowerCase().includes(searchTerm) ||
-           (subject.code || '').toLowerCase().includes(searchTerm))
-        : true;
-
-      const matchesStatus = filters.status.length > 0
-        ? filters.status.includes(subject.status)
-        : true;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [subjects, filters]);
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -336,7 +253,6 @@ export default function SubjectsTable() {
         <Button
           onClick={() => {
             setEditingSubject(null);
-            setLogoPath(null);
             setIsFormOpen(true);
           }}
           leftIcon={<Plus className="h-4 w-4" />}
@@ -347,12 +263,15 @@ export default function SubjectsTable() {
 
       <FilterCard
         title="Filters"
-        onApply={() => {}}
+        onApply={() => filtering.applyFilters(filters)}
         onClear={() => {
-          setFilters({
+          const resetFilters = {
             search: '',
             status: []
-          });
+          };
+          setFiltersState(resetFilters);
+          setLocalSearchTerm('');
+          filtering.clearFilters();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -363,13 +282,8 @@ export default function SubjectsTable() {
             <Input
               id="search"
               placeholder="Search by name or code..."
-              value={filters.search}
-              onChange={(e) =>
-                setFilters(prev => ({
-                  ...prev,
-                  search: e.target.value
-                }))
-              }
+              value={localSearchTerm}
+              onChange={(e) => setLocalSearchTerm(e.target.value)}
             />
           </FormField>
 
@@ -380,19 +294,14 @@ export default function SubjectsTable() {
               { value: 'inactive', label: 'Inactive' }
             ]}
             selectedValues={filters.status}
-            onChange={(values) =>
-              setFilters(prev => ({
-                ...prev,
-                status: values
-              }))
-            }
+            onChange={(values) => setFilters({ ...filters, status: values })}
             placeholder="Select status..."
           />
         </div>
       </FilterCard>
 
       <DataTable
-        data={filteredSubjects}
+        data={subjects}
         columns={columns}
         keyField="id"
         caption="List of educational subjects with their codes and status"
@@ -401,7 +310,6 @@ export default function SubjectsTable() {
         isFetching={isFetching}
         onEdit={(subject) => {
           setEditingSubject(subject);
-          setLogoPath(subject.logo_url || null);
           setIsFormOpen(true);
         }}
         onDelete={handleDelete}
@@ -416,7 +324,6 @@ export default function SubjectsTable() {
           setIsFormOpen(false);
           setEditingSubject(null);
           setFormErrors({});
-          setLogoPath(null);
         }}
         onSave={() => {
           const form = document.querySelector('form');
@@ -464,20 +371,6 @@ export default function SubjectsTable() {
           <div className="p-3 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p>The subject will be saved as: <strong>[Name] - [Code]</strong> (e.g., Physics - 0625)</p>
           </div>
-
-          <FormField
-            id="logo"
-            label="Subject Logo"
-            description="Upload a logo image for this subject (PNG, JPG, JPEG or SVG, max 2MB)"
-          >
-            <ImageUpload
-              id="logo"
-              bucket="subject-logos"
-              value={logoPath}
-              publicUrl={logoPath ? getLogoUrl(logoPath) : null}
-              onChange={(path) => setLogoPath(path)}
-            />
-          </FormField>
 
           <FormField
             id="status"

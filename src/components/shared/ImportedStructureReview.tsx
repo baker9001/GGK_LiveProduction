@@ -3,21 +3,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import {
-  ChevronRight, ChevronDown, FileText, Folder, AlertCircle,
+import { 
+  ChevronRight, ChevronDown, FileText, Folder, AlertCircle, 
   CheckCircle, XCircle, Loader2, RefreshCw, Package, Building2,
   BookOpen, FileStack, Hash, Tags, Plus, Filter, Square, CheckSquare,
   Info, MapPin, Database, ArrowLeft, WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import {
-  buildSubjectIndex,
-  matchSubject,
-  extractSubjectMetadata,
-  type SubjectEntity as SubjectEntityType,
-  type MatchResult
-} from '@/utils/subjectMatching';
 
 // Toast implementation
 const showToast = ({ title, description, variant = 'default' }: { 
@@ -204,8 +197,42 @@ export function extractAcademicStructure(data: any) {
   return structure;
 }
 
-// NOTE: Subject extraction functions now imported from @/utils/subjectMatching
-// Old functions removed - using the new universal matching system
+// Extract subject code from subject string if present
+function extractSubjectCode(subjectString: string): string | undefined {
+  if (!subjectString) return undefined;
+  
+  // Handle format like "Physics - 0625"
+  const dashMatch = subjectString.match(/\s*-\s*(\d+)$/);
+  if (dashMatch) {
+    return dashMatch[1];
+  }
+  
+  // Handle format like "Physics (0625)"
+  const parenMatch = subjectString.match(/\((\d+)\)$/);
+  if (parenMatch) {
+    return parenMatch[1];
+  }
+  
+  // Handle format like "0625 Physics"
+  const prefixMatch = subjectString.match(/^(\d+)\s+/);
+  if (prefixMatch) {
+    return prefixMatch[1];
+  }
+  
+  return undefined;
+}
+
+// Extract subject name without code
+function extractSubjectName(subjectString: string): string {
+  if (!subjectString) return subjectString;
+  
+  // Remove code patterns
+  return subjectString
+    .replace(/\s*-\s*\d+$/, '')  // Remove " - 0625" pattern
+    .replace(/\s*\(\d+\)$/, '')   // Remove " (0625)" pattern
+    .replace(/^\d+\s+/, '')       // Remove "0625 " pattern
+    .trim();
+}
 
 // Check if entity name is a potential duplicate
 function isPotentialDuplicate(name1: string, name2: string): boolean {
@@ -300,7 +327,6 @@ export default function ImportedStructureReview({
     topics: EntityMap,
     subtopics: EntityMap
   } | null>(null);
-  const [subjectMatchingIndex, setSubjectMatchingIndex] = useState<any>(null);
 
   // Preload all entities and regions from DB on mount
   useEffect(() => {
@@ -379,36 +405,15 @@ export default function ImportedStructureReview({
           if (x.code) providers.set(normalize(x.code), { id: x.id, exists: true, name: x.name });
         });
         
-        // Build comprehensive subject index using new matching system
-        const subjectsList: SubjectEntityType[] = (subjectsRes.data || []).map(x => ({
-          id: x.id,
-          name: x.name,
-          code: x.code,
-          status: 'active'
-        }));
-
-        const subjectIndex = buildSubjectIndex(subjectsList);
-
-        // Keep the old Map structure for compatibility, but populate it more comprehensively
         const subjects = new Map();
         subjectsRes.data?.forEach((x) => {
-          // Store by name
+          // Store both by name and by code for better matching
           subjects.set(normalize(x.name), { id: x.id, exists: true, name: x.name });
-
           if (x.code) {
-            // Store by code
             subjects.set(normalize(x.code), { id: x.id, exists: true, name: x.name });
-
-            // Store all possible format variations
+            // Also store by name+code combination for exact matching
             subjects.set(normalize(`${x.name} - ${x.code}`), { id: x.id, exists: true, name: x.name });
             subjects.set(normalize(`${x.name} (${x.code})`), { id: x.id, exists: true, name: x.name });
-            subjects.set(normalize(`${x.code} ${x.name}`), { id: x.id, exists: true, name: x.name });
-
-            // Extract clean name and store it too
-            const metadata = extractSubjectMetadata(x.name);
-            if (metadata.cleanName && metadata.cleanName !== x.name) {
-              subjects.set(normalize(metadata.cleanName), { id: x.id, exists: true, name: x.name });
-            }
           }
         });
         
@@ -428,7 +433,6 @@ export default function ImportedStructureReview({
         });
         
         setMaps({ programs, providers, subjects, units, topics, subtopics });
-        setSubjectMatchingIndex(subjectIndex);
         
         // Check if we had any critical failures
         if (!programsRes.data && !providersRes.data && !subjectsRes.data) {
@@ -532,97 +536,42 @@ export default function ImportedStructureReview({
               break;
             }
             case "subject": {
-              // Use the new universal subject matching system
-              let matchResult: MatchResult | null = null;
-
-              if (subjectMatchingIndex) {
-                // Use the advanced matching system
-                matchResult = matchSubject(name, subjectMatchingIndex, {
-                  enableFuzzyMatching: true,
-                  fuzzyThreshold: 0.85,
-                  enableLogging: true,
-                  maxAlternatives: 5,
-                  strictCodeMatching: false
-                });
-
-                console.log(`[Subject Match] Input: "${name}"`);
-                console.log(`[Subject Match] Matched: ${matchResult.matched}`);
-                if (matchResult.matched) {
-                  console.log(`[Subject Match] Found: ${matchResult.subjectEntity?.name} (${matchResult.subjectEntity?.code})`);
-                  console.log(`[Subject Match] Confidence: ${Math.round(matchResult.confidence * 100)}%`);
-                  console.log(`[Subject Match] Strategy: ${matchResult.strategy}`);
-                } else {
-                  console.log(`[Subject Match] No match found`);
-                  if (matchResult.alternatives && matchResult.alternatives.length > 0) {
-                    console.log(`[Subject Match] Alternatives:`, matchResult.alternatives.slice(0, 3));
-                  }
-                }
-
-                if (matchResult.matched && matchResult.subjectEntity) {
-                  id = matchResult.subjectEntity.id;
-                  exists = true;
-                  code = matchResult.metadata.code || matchResult.subjectEntity.code;
-
-                  // Add alternatives as potential duplicates if confidence is not perfect
-                  if (matchResult.confidence < 0.95 && matchResult.alternatives) {
-                    potentialDuplicates = matchResult.alternatives.slice(0, 3).map(alt => ({
-                      id: alt.entity.id,
-                      name: alt.entity.name
-                    }));
-                  }
-                } else {
-                  // No match - extract metadata for display
-                  const metadata = extractSubjectMetadata(name);
-                  code = metadata.code;
-                  exists = false;
-
-                  // Show alternatives as potential duplicates
-                  if (matchResult.alternatives && matchResult.alternatives.length > 0) {
-                    potentialDuplicates = matchResult.alternatives.slice(0, 5).map(alt => ({
-                      id: alt.entity.id,
-                      name: alt.entity.name
-                    }));
-                  }
-                }
-              } else {
-                // Fallback to old system if index not ready
-                const metadata = extractSubjectMetadata(name);
-                const subjectName = metadata.cleanName;
-                const subjectCode = metadata.code;
-
-                // Try different matching strategies
-                let m = null;
-
-                // 1. Try exact match with full string
-                m = maps.subjects.get(normalize(name));
-
-                // 2. Try matching just the subject name
-                if (!m) {
-                  m = maps.subjects.get(normalize(subjectName));
-                }
-
-                // 3. Try matching with the code if available
-                if (!m && subjectCode) {
-                  m = maps.subjects.get(normalize(subjectCode));
-                }
-
-                // 4. Try matching name + code combinations
-                if (!m && subjectCode) {
-                  m = maps.subjects.get(normalize(`${subjectName} - ${subjectCode}`)) ||
-                      maps.subjects.get(normalize(`${subjectName} (${subjectCode})`));
-                }
-
-                id = m?.id;
-                exists = !!m;
-                code = subjectCode;
-
-                // Check for potential duplicates
-                maps.subjects.forEach((value, key) => {
-                  if (!m && value.name && isPotentialDuplicate(subjectName, value.name)) {
-                    potentialDuplicates.push({ id: value.id, name: value.name });
-                  }
-                });
+              // Extract the subject name and code
+              const subjectName = extractSubjectName(name);
+              const subjectCode = extractSubjectCode(name);
+              
+              // Try different matching strategies
+              let m = null;
+              
+              // 1. Try exact match with full string
+              m = maps.subjects.get(normalize(name));
+              
+              // 2. Try matching just the subject name
+              if (!m) {
+                m = maps.subjects.get(normalize(subjectName));
               }
+              
+              // 3. Try matching with the code if available
+              if (!m && subjectCode) {
+                m = maps.subjects.get(normalize(subjectCode));
+              }
+              
+              // 4. Try matching name + code combinations
+              if (!m && subjectCode) {
+                m = maps.subjects.get(normalize(`${subjectName} - ${subjectCode}`)) ||
+                    maps.subjects.get(normalize(`${subjectName} (${subjectCode})`));
+              }
+              
+              id = m?.id;
+              exists = !!m;
+              code = subjectCode;
+              
+              // Check for potential duplicates
+              maps.subjects.forEach((value, key) => {
+                if (!m && value.name && isPotentialDuplicate(subjectName, value.name)) {
+                  potentialDuplicates.push({ id: value.id, name: value.name });
+                }
+              });
               break;
             }
             case "unit": {
@@ -715,15 +664,15 @@ export default function ImportedStructureReview({
         await checkOrCreateDataStructure(root);
       }
       
-      // Only call onComplete if all entities exist, no errors, and we haven't called it yet for this structure
-      if (exists && onComplete && !completionCalled && !dataStructureError) {
+      // Only call onComplete if all entities exist and we haven't called it yet for this structure
+      if (exists && onComplete && !completionCalled) {
         setCompletionCalled(true);
         onComplete();
       }
     }
-
+    
     buildStructure();
-  }, [importedData, maps, onComplete, completionCalled, dataStructureError]);
+  }, [importedData, maps, onComplete, completionCalled]);
 
   // Check or create data structure
   async function checkOrCreateDataStructure(root: StructureEntity) {
@@ -787,31 +736,23 @@ export default function ImportedStructureReview({
       }
 
       if (existingStructure) {
-        console.log('[ImportedStructureReview] Data structure already exists:', existingStructure.id);
+        console.log('[GGK] Data structure already exists:', existingStructure.id);
         setDataStructureId(existingStructure.id);
-
+        
         // Store in metadata if onStructureChange is provided
         if (onStructureChange) {
-          const structureMetadata = {
+          onStructureChange({
             dataStructureId: existingStructure.id,
             program: program.name,
             provider: provider.name,
             subject: subject.name,
-            region: availableRegions.find(r => r.id === selectedRegionId)?.name,
-            programId: program.id,
-            providerId: provider.id,
-            subjectId: subject.id,
-            regionId: selectedRegionId
-          };
-          console.log('[ImportedStructureReview] Calling onStructureChange with:', structureMetadata);
-          onStructureChange(structureMetadata);
-        } else {
-          console.warn('[ImportedStructureReview] No onStructureChange callback provided');
+            region: availableRegions.find(r => r.id === selectedRegionId)?.name
+          });
         }
       } else {
         // Create new data structure
         console.log('[GGK] Creating new data structure for:', program.name, provider.name, subject.name);
-
+        
         const { data: newStructure, error: createError } = await supabase
           .from('data_structures')
           .insert({
@@ -832,7 +773,7 @@ export default function ImportedStructureReview({
             setDataStructureError(error);
             return;
           }
-
+          
           const error = `Failed to create data structure: ${createError.message}`;
           console.error('[GGK]', error);
           setDataStructureError(error);
@@ -842,28 +783,20 @@ export default function ImportedStructureReview({
             variant: "error"
           });
         } else {
-          console.log('[ImportedStructureReview] Created new data structure:', newStructure.id);
+          console.log('[GGK] Created new data structure:', newStructure.id);
           setDataStructureId(newStructure.id);
-
+          
           // Store in metadata if onStructureChange is provided
           if (onStructureChange) {
-            const structureMetadata = {
+            onStructureChange({
               dataStructureId: newStructure.id,
               program: program.name,
               provider: provider.name,
               subject: subject.name,
-              region: availableRegions.find(r => r.id === selectedRegionId)?.name,
-              programId: program.id,
-              providerId: provider.id,
-              subjectId: subject.id,
-              regionId: selectedRegionId
-            };
-            console.log('[ImportedStructureReview] Calling onStructureChange with:', structureMetadata);
-            onStructureChange(structureMetadata);
-          } else {
-            console.warn('[ImportedStructureReview] No onStructureChange callback provided');
+              region: availableRegions.find(r => r.id === selectedRegionId)?.name
+            });
           }
-
+          
           showToast({
             title: "Success",
             description: `Data structure created: ${program.name} - ${provider.name} - ${subject.name}`,
@@ -904,13 +837,13 @@ export default function ImportedStructureReview({
     
     const allExist = checkAllExist(structure);
     setAllEntitiesExist(allExist);
-
-    if (allExist && onComplete && !dataStructureError) {
+    
+    if (allExist && onComplete) {
       console.log('[GGK] All entities already exist, calling onComplete');
       setCompletionCalled(true);
       onComplete();
     }
-  }, [structure, onComplete, completionCalled, dataStructureError]);
+  }, [structure, onComplete, completionCalled]);
 
   // Create a single entity
   async function createEntity(node: StructureEntity, parentId?: string, trackRollback = true) {
@@ -929,19 +862,13 @@ export default function ImportedStructureReview({
           break;
         case "subject":
           table = "edu_subjects";
-          // Use new metadata extraction system
-          const subjectMetadata = extractSubjectMetadata(node.name);
+          // Extract subject name without code for database
+          const subjectName = extractSubjectName(node.name);
           payload = {
-            name: subjectMetadata.cleanName,
-            code: node.code || subjectMetadata.code || subjectMetadata.cleanName.substr(0, 12),
+            name: subjectName,
+            code: node.code || extractSubjectCode(node.name) || subjectName.substr(0, 12),
             status: "active"
           };
-          console.log(`[Subject Creation] Creating subject with metadata:`, {
-            originalName: node.name,
-            cleanName: subjectMetadata.cleanName,
-            code: node.code || subjectMetadata.code,
-            formatDetected: subjectMetadata.formatDetected
-          });
           break;
         case "unit":
           table = "edu_units";
@@ -1007,26 +934,11 @@ export default function ImportedStructureReview({
               maps.providers.set(normalize(node.name), { id: data.id, exists: true, name: node.name });
               break;
             case "subject":
-              const subjectMeta = extractSubjectMetadata(node.name);
-              const subjectNameForMap = subjectMeta.cleanName;
-              // Add to existing maps
+              const subjectNameForMap = extractSubjectName(node.name);
               maps.subjects.set(normalize(subjectNameForMap), { id: data.id, exists: true, name: subjectNameForMap });
               maps.subjects.set(normalize(node.name), { id: data.id, exists: true, name: node.name });
-              if (node.code || subjectMeta.code) {
-                const finalCode = node.code || subjectMeta.code;
-                maps.subjects.set(normalize(finalCode!), { id: data.id, exists: true, name: subjectNameForMap });
-              }
-              // Update the subject matching index with the new subject
-              if (subjectMatchingIndex && subjectMatchingIndex.byName) {
-                const newSubject: SubjectEntityType = {
-                  id: data.id,
-                  name: subjectNameForMap,
-                  code: node.code || subjectMeta.code,
-                  status: 'active'
-                };
-                // Rebuild the index with the new subject
-                // (In production, you might want a more efficient incremental update)
-                console.log('[Subject Match] Adding new subject to index:', newSubject);
+              if (node.code) {
+                maps.subjects.set(normalize(node.code), { id: data.id, exists: true, name: subjectNameForMap });
               }
               break;
             case "unit":
@@ -1207,8 +1119,8 @@ export default function ImportedStructureReview({
         variant: "success"
       });
       
-      // Trigger onComplete callback if all entities exist and no data structure errors
-      if (allExist && onComplete && !completionCalled && !dataStructureError) {
+      // Trigger onComplete callback if all entities exist
+      if (allExist && onComplete && !completionCalled) {
         console.log('[GGK] All entities created, calling onComplete');
         setCompletionCalled(true);
         onComplete();
@@ -1242,8 +1154,8 @@ export default function ImportedStructureReview({
         
         if (allExist) {
           await checkOrCreateDataStructure(structure);
-
-          if (onComplete && !completionCalled && !dataStructureError) {
+          
+          if (onComplete && !completionCalled) {
             console.log('[GGK] All entities now exist after individual creation, calling onComplete');
             setCompletionCalled(true);
             onComplete();

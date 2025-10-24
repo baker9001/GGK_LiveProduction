@@ -45,60 +45,42 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Initial load
     refreshUser();
-
+    
     // Listen for storage changes
     const handleStorageChange = (e: StorageEvent) => {
       // SECURITY: Refresh on auth changes
-      if (e.key === 'ggk_authenticated_user' ||
+      if (e.key === 'ggk_authenticated_user' || 
           e.key === 'test_mode_user' ||
-          e.key === 'test_mode_metadata' ||
           e.key === 'ggk_auth_token') {
-        console.log('[UserContext] Auth storage changed:', e.key);
+        console.log('[UserContext] Auth storage changed, refreshing user');
         refreshUser();
       }
     };
-
+    
     // Listen for custom auth events
     const handleAuthChange = () => {
       console.log('[UserContext] Auth event received, refreshing user');
       refreshUser();
     };
-
-    // Listen for test mode events
-    const handleTestModeChange = () => {
-      console.log('[UserContext] Test mode event received, refreshing user');
-      refreshUser();
-    };
-
+    
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('auth-change', handleAuthChange);
-    window.addEventListener('test-mode-change', handleTestModeChange);
-
+    
     // Check periodically for changes (backup)
     const interval = setInterval(() => {
       const currentUser = getCurrentUser();
-      const currentTestMode = isInTestMode();
-
-      // Check if user changed
       if (currentUser?.id !== user?.id) {
         console.log('[UserContext] User mismatch detected, refreshing');
         refreshUser();
       }
-
-      // Check if test mode state changed
-      if (currentTestMode !== isTestMode) {
-        console.log('[UserContext] Test mode state changed, refreshing');
-        refreshUser();
-      }
     }, 5000); // Check every 5 seconds
-
+    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('auth-change', handleAuthChange);
-      window.removeEventListener('test-mode-change', handleTestModeChange);
       clearInterval(interval);
     };
-  }, [user?.id, isTestMode]);
+  }, [user?.id]);
 
   return (
     <UserContext.Provider value={{ 

@@ -2,8 +2,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../../lib/supabase';
 import { toast } from '../../../../../../components/shared/Toast';
-import type { PaperStatus } from '../../../../../../types/questions';
-import { deriveAnswerRequirement } from '../../../../../../lib/extraction/answerRequirementDeriver';
 
 interface UpdateFieldParams {
   id: string;
@@ -58,16 +56,6 @@ interface UpdatePaperStatusParams {
 
 export function useQuestionMutations() {
   const queryClient = useQueryClient();
-
-  const STATUS_LABELS: Record<PaperStatus | string, string> = {
-    draft: 'Draft',
-    qa_review: 'Under QA',
-    active: 'Published',
-    inactive: 'Archived',
-    archived: 'Archived',
-    completed: 'Completed',
-    failed: 'Failed'
-  };
   
   // Update a single field
   const updateField = useMutation({
@@ -137,115 +125,75 @@ export function useQuestionMutations() {
 
   // Update correct answers with context support
   const updateCorrectAnswers = useMutation({
-    mutationFn: async ({
-      questionId,
-      isSubQuestion,
-      correctAnswers
+    mutationFn: async ({ 
+      questionId, 
+      isSubQuestion, 
+      correctAnswers 
     }: UpdateCorrectAnswersParams) => {
-      try {
-        // First, delete existing correct answers with better error handling
-        const deleteQuery = isSubQuestion
-          ? supabase.from('question_correct_answers').delete().eq('sub_question_id', questionId)
-          : supabase.from('question_correct_answers').delete().eq('question_id', questionId);
-
-        const { error: deleteError, count } = await deleteQuery;
-
-        if (deleteError) {
-          console.error('Delete error details:', {
-            message: deleteError.message,
-            details: deleteError.details,
-            hint: deleteError.hint,
-            code: deleteError.code
-          });
-          throw new Error(`Failed to delete existing answers: ${deleteError.message}`);
-        }
-
-        console.log(`Deleted ${count || 0} existing answers for ${isSubQuestion ? 'sub-question' : 'question'} ${questionId}`);
-
-        // Then insert new correct answers if any
-        if (correctAnswers.length > 0) {
-          const answersToInsert = correctAnswers.map(ca => ({
-            [isSubQuestion ? 'sub_question_id' : 'question_id']: questionId,
-            answer: ca.answer,
-            marks: ca.marks || 1,
-            alternative_id: ca.alternative_id || 1,
-            context_type: ca.context?.type || null,
-            context_value: ca.context?.value || null,
-            context_label: ca.context?.label || null
-          }));
-
-          const { error: insertError, data: insertedData } = await supabase
-            .from('question_correct_answers')
-            .insert(answersToInsert)
-            .select();
-
-          if (insertError) {
-            console.error('Insert error details:', {
-              message: insertError.message,
-              details: insertError.details,
-              hint: insertError.hint,
-              code: insertError.code
-            });
-            throw new Error(`Failed to insert new answers: ${insertError.message}`);
-          }
-
-          console.log(`Inserted ${insertedData?.length || 0} new answers`);
-        }
-
-        // Use the comprehensive auto-fill logic to determine answer requirement
-        const table = isSubQuestion ? 'sub_questions' : 'questions_master_admin';
-
-        // Get the question's type and answer_format to help derive the requirement
-        const { data: questionData } = await supabase
-          .from(table)
-          .select('type, answer_format')
-          .eq('id', questionId)
-          .maybeSingle();
-
-        const derivedResult = deriveAnswerRequirement({
-          questionType: questionData?.type || 'descriptive',
-          answerFormat: questionData?.answer_format,
-          correctAnswers: correctAnswers.map(ca => ({
-            answer: ca.answer,
-            marks: ca.marks,
-            alternative_id: ca.alternative_id,
-            context: ca.context
-          })),
-          totalAlternatives: correctAnswers.length,
-          options: undefined
-        });
-
-        const answerRequirement = derivedResult.answerRequirement || 'single_choice';
-
-        const { error: updateError } = await supabase
-          .from(table)
-          .update({
-            answer_requirement: answerRequirement,
-            total_alternatives: correctAnswers.length,
-            // Also update the simple correct_answer field for backward compatibility
-            correct_answer: correctAnswers[0]?.answer || null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', questionId);
-
-        if (updateError) {
-          console.error('Update error details:', {
-            message: updateError.message,
-            details: updateError.details,
-            hint: updateError.hint,
-            code: updateError.code
-          });
-          throw new Error(`Failed to update question metadata: ${updateError.message}`);
-        }
-
-        return { success: true };
-      } catch (error) {
-        // Re-throw with more context
-        if (error instanceof Error) {
-          throw error;
-        }
-        throw new Error('An unknown error occurred while updating correct answers');
+      // First, delete existing correct answers
+      const deleteQuery = isSubQuestion
+        ? supabase.from('question_correct_answers').delete().eq('sub_question_id', questionId)
+        : supabase.from('question_correct_answers').delete().eq('question_id', questionId);
+      
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) throw deleteError;
+      
+      // Then insert new correct answers if any
+      if (correctAnswers.length > 0) {
+        const answersToInsert = correctAnswers.map(ca => ({
+          [isSubQuestion ? 'sub_question_id' : 'question_id']: questionId,
+          answer: ca.answer,
+          marks: ca.marks || 1,
+          alternative_id: ca.alternative_id || 1,
+          context_type: ca.context?.type || null,
+          context_value: ca.context?.value || null,
+          context_label: ca.context?.label || null
+        }));
+        
+        const { error: insertError } = await supabase
+          .from('question_correct_answers')
+          .insert(answersToInsert);
+        
+        if (insertError) throw insertError;
       }
+
+      // Update the answer_requirement and total_alternatives fields
+      const table = isSubQuestion ? 'sub_questions' : 'questions_master_admin';
+      let answerRequirement = 'single_choice';
+      
+      if (correctAnswers.length > 1) {
+        // Determine answer requirement based on number of answers
+        const uniqueMarks = new Set(correctAnswers.map(ca => ca.marks || 1));
+        
+        if (uniqueMarks.size === 1 && uniqueMarks.has(1)) {
+          // All answers have the same mark value of 1
+          if (correctAnswers.length === 2) {
+            answerRequirement = 'both_required';
+          } else if (correctAnswers.length <= 5) {
+            answerRequirement = `any_${Math.min(correctAnswers.length - 1, 3)}_from`;
+          } else {
+            answerRequirement = 'alternative_methods';
+          }
+        } else {
+          // Different mark values or not all 1
+          answerRequirement = 'all_required';
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({
+          answer_requirement: answerRequirement,
+          total_alternatives: correctAnswers.length,
+          // Also update the simple correct_answer field for backward compatibility
+          correct_answer: correctAnswers[0]?.answer || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', questionId);
+
+      if (updateError) throw updateError;
+      
+      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['questions'] });
@@ -254,8 +202,7 @@ export function useQuestionMutations() {
     },
     onError: (error) => {
       console.error('Error updating correct answers:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update correct answers';
-      toast.error(errorMessage);
+      toast.error('Failed to update correct answers');
     }
   });
   
@@ -371,39 +318,22 @@ export function useQuestionMutations() {
         .from('questions_attachments')
         .delete()
         .eq('id', attachmentId);
-
+      
       if (dbError) throw dbError;
-
-      // Derive the storage path from the public URL so we can delete the file
-      let storagePath: string | null = null;
-
-      try {
-        const url = new URL(fileUrl);
-        const pathSegments = url.pathname.split('/').filter(Boolean);
-        const bucketIndex = pathSegments.findIndex(segment => segment === 'questions-attachments');
-
-        if (bucketIndex !== -1 && bucketIndex < pathSegments.length - 1) {
-          storagePath = decodeURIComponent(pathSegments.slice(bucketIndex + 1).join('/'));
-        } else if (pathSegments.length > 0) {
-          storagePath = decodeURIComponent(pathSegments[pathSegments.length - 1]);
-        }
-      } catch (error) {
-        console.error('Error parsing attachment URL for deletion:', error);
+      
+      // Extract filename from URL and delete from storage
+      const urlParts = fileUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      
+      const { error: storageError } = await supabase.storage
+        .from('questions-attachments')
+        .remove([fileName]);
+      
+      if (storageError) {
+        console.error('Error deleting from storage:', storageError);
+        // Don't throw - file might already be deleted
       }
-
-      if (storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from('questions-attachments')
-          .remove([storagePath]);
-
-        if (storageError) {
-          console.error('Error deleting from storage:', storageError);
-          // Don't throw - file might already be deleted
-        }
-      } else {
-        console.warn('Unable to determine storage path for attachment deletion.');
-      }
-
+      
       return { success: true };
     },
     onSuccess: () => {
@@ -431,10 +361,10 @@ export function useQuestionMutations() {
       
       if (fetchError) throw fetchError;
       
-      // Update main question status (allow from draft or qa_review)
+      // Update main question status
       const { error: questionError } = await supabase
         .from('questions_master_admin')
-        .update({
+        .update({ 
           status: 'active',
           is_confirmed: true,
           confirmed_at: new Date().toISOString(),
@@ -442,14 +372,14 @@ export function useQuestionMutations() {
           updated_at: new Date().toISOString()
         })
         .eq('id', questionId)
-        .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
-
+        .eq('status', 'qa_review'); // Only update if currently in qa_review
+      
       if (questionError) throw questionError;
-
-      // Update all sub-questions status (allow from draft or qa_review)
+      
+      // Update all sub-questions status
       const { error: subQuestionError } = await supabase
         .from('sub_questions')
-        .update({
+        .update({ 
           status: 'active',
           is_confirmed: true,
           confirmed_at: new Date().toISOString(),
@@ -457,7 +387,7 @@ export function useQuestionMutations() {
           updated_at: new Date().toISOString()
         })
         .eq('question_id', questionId)
-        .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
+        .eq('status', 'qa_review'); // Only update if currently in qa_review
       
       if (subQuestionError) throw subQuestionError;
 
@@ -489,22 +419,17 @@ export function useQuestionMutations() {
           const allConfirmed = allQuestions.every(q => q.status === 'active');
           
           if (allConfirmed) {
-            // Auto-confirm the paper (allow from draft or qa_review)
+            // Auto-confirm the paper
             const { error: paperError } = await supabase
               .from('papers_setup')
-              .update({
+              .update({ 
                 status: 'active',
-                qa_status: 'completed',
                 qa_completed_at: new Date().toISOString(),
                 qa_completed_by: user?.id || null,
-                published_at: new Date().toISOString(),
-                published_by: user?.id || null,
-                updated_at: new Date().toISOString(),
-                last_status_change_at: new Date().toISOString(),
-                last_status_change_by: user?.id || null
+                updated_at: new Date().toISOString()
               })
               .eq('id', question.paper_id)
-              .in('status', ['draft', 'qa_review']);
+              .eq('status', 'qa_review');
             
             if (!paperError) {
               // Return info that paper was also confirmed
@@ -521,7 +446,7 @@ export function useQuestionMutations() {
       queryClient.invalidateQueries({ queryKey: ['papers'] });
       
       if (data.paperConfirmed) {
-        toast.success('Question confirmed and paper automatically published!');
+        toast.success('Question confirmed and paper automatically confirmed!');
       } else {
         toast.success('Question confirmed successfully');
       }
@@ -532,98 +457,53 @@ export function useQuestionMutations() {
     }
   });
   
-  // Confirm paper (change status from draft/qa_review to active - publishing)
+  // Confirm paper (change status from qa_review to active)
   const confirmPaper = useMutation({
     mutationFn: async ({ paperId }: ConfirmPaperParams) => {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-
-      // First, get the paper to check current status
-      const { data: paper, error: paperFetchError } = await supabase
-        .from('papers_setup')
-        .select('id, status, qa_status')
-        .eq('id', paperId)
-        .single();
-
-      if (paperFetchError) throw paperFetchError;
-
-      // Only allow publishing from draft or qa_review status
-      if (!['draft', 'qa_review'].includes(paper.status)) {
-        throw new Error('Paper must be in draft or qa_review status to be published');
-      }
-
-      // Check if all questions are ready (have all required fields)
+      
+      // First, check if all questions in the paper are confirmed (active)
       const { data: questions, error: fetchError } = await supabase
         .from('questions_master_admin')
-        .select('id, status, question_description, marks, difficulty, topic_id')
+        .select('id, status')
         .eq('paper_id', paperId);
-
+      
       if (fetchError) throw fetchError;
-
-      // Validate questions have required data
-      const invalidQuestions = questions?.filter(q =>
-        !q.question_description || !q.marks || !q.difficulty || !q.topic_id
-      );
-
-      if (invalidQuestions && invalidQuestions.length > 0) {
-        throw new Error(`${invalidQuestions.length} question(s) are missing required fields (description, marks, difficulty, or topic)`);
+      
+      const hasUnconfirmedQuestions = questions?.some(q => q.status !== 'active');
+      
+      if (hasUnconfirmedQuestions) {
+        throw new Error('All questions must be confirmed before confirming the paper');
       }
-
-      const now = new Date().toISOString();
-
-      // Update paper status to active (published)
+      
+      // Update paper status
       const { error: paperError } = await supabase
         .from('papers_setup')
-        .update({
+        .update({ 
           status: 'active',
-          qa_status: 'completed',
-          qa_completed_at: now,
+          qa_completed_at: new Date().toISOString(),
           qa_completed_by: user?.id || null,
-          published_at: now,
-          published_by: user?.id || null,
-          updated_at: now,
-          last_status_change_at: now,
-          last_status_change_by: user?.id || null
+          updated_at: new Date().toISOString()
         })
         .eq('id', paperId)
-        .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
-
+        .eq('status', 'qa_review'); // Only update if currently in qa_review
+      
       if (paperError) throw paperError;
-
-      // Log the status change in history
-      const { error: historyError } = await supabase
-        .from('paper_status_history')
-        .insert({
-          paper_id: paperId,
-          previous_status: paper.status,
-          new_status: 'active',
-          changed_by: user?.id || null,
-          changed_at: now,
-          reason: 'Paper published after QA review',
-          metadata: {
-            qa_status: paper.qa_status,
-            total_questions: questions?.length || 0
-          }
-        });
-
-      if (historyError) {
-        console.error('Error logging status change:', historyError);
-        // Don't throw - history is not critical
-      }
-
+      
       return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['questions'] });
       queryClient.invalidateQueries({ queryKey: ['papers'] });
-      toast.success('Paper published successfully');
+      toast.success('Paper confirmed successfully');
     },
     onError: (error) => {
       console.error('Error confirming paper:', error);
       if (error instanceof Error && error.message.includes('All questions must be confirmed')) {
         toast.error(error.message);
       } else {
-        toast.error('Failed to publish paper');
+        toast.error('Failed to confirm paper');
       }
     }
   });
@@ -631,132 +511,26 @@ export function useQuestionMutations() {
   // Update paper status
   const updatePaperStatus = useMutation({
     mutationFn: async ({ paperId, newStatus }: UpdatePaperStatusParams) => {
-      const [{ data: auth }, paperResponse, questionsResponse] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase
-          .from('papers_setup')
-          .select('id, status, qa_status')
-          .eq('id', paperId)
-          .single(),
-        supabase
-          .from('questions_master_admin')
-          .select('id')
-          .eq('paper_id', paperId)
-      ]);
-
-      if (paperResponse.error) throw paperResponse.error;
-      if (questionsResponse.error) throw questionsResponse.error;
-
-      const user = auth.user;
-      const now = new Date().toISOString();
-
-      const paperUpdates: Record<string, any> = {
-        status: newStatus,
-        updated_at: now,
-        last_status_change_at: now,
-        last_status_change_by: user?.id || null
-      };
-
-      if (newStatus === 'draft') {
-        paperUpdates.qa_status = 'pending';
-      }
-
-      const { error: updateError } = await supabase
+      const { error } = await supabase
         .from('papers_setup')
-        .update(paperUpdates)
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+          last_status_change_at: new Date().toISOString()
+        })
         .eq('id', paperId);
 
-      if (updateError) throw updateError;
-
-      if (newStatus === 'inactive' || newStatus === 'draft') {
-        const questionStatus = newStatus === 'inactive' ? 'inactive' : 'draft';
-
-        const { error: questionUpdateError } = await supabase
-          .from('questions_master_admin')
-          .update({
-            status: questionStatus,
-            is_confirmed: false,
-            updated_at: now
-          })
-          .eq('paper_id', paperId);
-
-        if (questionUpdateError) throw questionUpdateError;
-
-        const questionIds = (questionsResponse.data || []).map(record => record.id);
-
-        if (questionIds.length > 0) {
-          const { error: subQuestionUpdateError } = await supabase
-            .from('sub_questions')
-            .update({
-              status: questionStatus,
-              is_confirmed: false,
-              updated_at: now
-            })
-            .in('question_id', questionIds);
-
-          if (subQuestionUpdateError) throw subQuestionUpdateError;
-        }
-      }
-
-      if (paperResponse.data && paperResponse.data.status !== newStatus) {
-        const { error: historyError } = await supabase
-          .from('paper_status_history')
-          .insert({
-            paper_id: paperId,
-            previous_status: paperResponse.data.status,
-            new_status: newStatus,
-            changed_by: user?.id || null,
-            changed_at: now,
-            reason:
-              newStatus === 'inactive'
-                ? 'Paper archived from Questions Setup'
-                : newStatus === 'draft'
-                  ? 'Paper restored from archive'
-                  : 'Paper status updated via Questions Setup',
-            metadata: {
-              qa_status: paperResponse.data.qa_status
-            }
-          });
-
-        if (historyError) {
-          console.error('Error logging status change:', historyError);
-        }
-      }
-
-      return { success: true, newStatus };
+      if (error) throw error;
+      return { success: true };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['questions'] });
       queryClient.invalidateQueries({ queryKey: ['papers'] });
-      const label = STATUS_LABELS[variables.newStatus] || variables.newStatus;
-      toast.success(`Paper status updated to "${label}" successfully`);
+      toast.success(`Paper status updated to "${variables.newStatus}" successfully`);
     },
-    onError: (error: any) => {
+    onError: (error) => {
       console.error('Error updating paper status:', error);
-      console.error('Error details:', {
-        message: error?.message,
-        code: error?.code,
-        details: error?.details,
-        hint: error?.hint,
-        statusCode: error?.statusCode
-      });
-
-      // Provide more specific error messages
-      let errorMessage = 'Failed to update paper status';
-
-      if (error?.message) {
-        if (error.message.includes('row-level security') || error.message.includes('policy')) {
-          errorMessage = 'Permission denied: You may not have access to update this paper';
-        } else if (error.message.includes('violates check constraint')) {
-          errorMessage = 'Invalid status value provided';
-        } else if (error.message.includes('not found')) {
-          errorMessage = 'Paper not found';
-        } else {
-          errorMessage = `Failed to update paper status: ${error.message}`;
-        }
-      }
-
-      toast.error(errorMessage);
+      toast.error('Failed to update paper status');
     }
   });
 

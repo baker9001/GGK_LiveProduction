@@ -1,10 +1,3 @@
-/**
- * File: /src/components/shared/SlideInForm.tsx
- * 
- * Slide-in form panel component with green theme
- * Updated to use green (#8CC63F) instead of blue for consistency
- */
-
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
@@ -133,7 +126,7 @@ export function SlideInForm({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-full p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[#8CC63F]/20"
+                  className="rounded-full p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   title="Close (Esc)"
                 >
                   <X className="h-5 w-5" />
@@ -143,14 +136,14 @@ export function SlideInForm({
             <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-600">
               {children}
             </div>
-            <div className="shrink-0 border-t border-gray-100 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-6 py-4">
+            <div className="shrink-0 border-t border-gray-100 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm px-6 py-4">
               <div className="flex justify-end gap-3">
                 {footerContent}
                 <Button
                   variant="outline"
                   onClick={onClose}
                   disabled={loading}
-                  className="min-w-[100px] border-gray-300 hover:border-gray-400 focus:ring-[#8CC63F]/20"
+                  className="min-w-[100px]"
                   title="Cancel (Esc)"
                 >
                   Cancel
@@ -158,7 +151,7 @@ export function SlideInForm({
                 <Button
                   onClick={onSave}
                   disabled={loading}
-                  className="min-w-[100px] bg-[#8CC63F] hover:bg-[#7AB52F] focus:ring-[#8CC63F]/20 text-white"
+                  className="min-w-[100px]"
                   title="Save (Enter)"
                 >
                   {loading ? (

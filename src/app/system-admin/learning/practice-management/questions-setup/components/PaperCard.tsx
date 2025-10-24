@@ -1,36 +1,33 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/PaperCard.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import {
+import { 
   ChevronDown,
-  ChevronUp,
-  FileText,
-  Play,
-  CheckCircle as CircleCheck,
-  CheckCircle,
-  AlertCircle,
-  PlayCircle,
+  ChevronUp, 
+  FileText, 
+  Play, 
+  CheckCircle as CircleCheck, 
+  CheckCircle, 
+  AlertCircle, 
+  PlayCircle, 
+  Upload,
   CheckSquare,
   MoreVertical,
   Download,
+  Copy,
   Wand2,
   RefreshCw,
-  Square,
-  Archive,
-  Trash2
+  Square
 } from 'lucide-react';
 import { Button } from '../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { QuestionCard } from './QuestionCard';
 import { cn } from '../../../../../../lib/utils';
 import { GroupedPaper, Question, SubQuestion } from '../page';
-import { getPaperStatusLabel, getQuestionStatusLabel, questionNeedsAttachment, naturalSort } from '../utils/questionHelpers';
 import { useQuestionValidation } from '../hooks/useQuestionValidation';
 import { useQuestionMutations } from '../hooks/useQuestionMutations';
 import { useQuestionBatchOperations } from '../hooks/useQuestionBatchOperations';
 import { toast } from '../../../../../../components/shared/Toast';
 import { FullPageQuestionReview } from './FullPageQuestionReview';
-import { supabase } from '../../../../../../lib/supabase';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface PaperCardProps {
   paper: GroupedPaper;
@@ -64,18 +61,11 @@ export function PaperCard({
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const [showFullPageReview, setShowFullPageReview] = useState(false);
-  const [isArchiveConfirmationActive, setIsArchiveConfirmationActive] = useState(false);
-  const archiveConfirmationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  const queryClient = useQueryClient();
   const { getValidationSummary, canConfirmPaper, validateForConfirmation } = useQuestionValidation();
-  const {
-    confirmQuestion,
-    confirmPaper,
-    updateSubtopics,
-    updatePaperStatus
-  } = useQuestionMutations();
+  const { confirmQuestion, confirmPaper, updateSubtopics } = useQuestionMutations();
   const { batchConfirmQuestions, autoAssignDifficulty } = useQuestionBatchOperations();
+  const { updatePaperStatus } = useQuestionMutations();
   
   // Close status dropdown when clicking outside
   useEffect(() => {
@@ -86,14 +76,6 @@ export function PaperCard({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (archiveConfirmationTimeoutRef.current) {
-        clearTimeout(archiveConfirmationTimeoutRef.current);
-      }
-    };
   }, []);
 
   // Count questions by status
@@ -110,34 +92,29 @@ export function PaperCard({
   // Get validation summary
   const validationSummary = getValidationSummary(paper.questions);
   const canConfirm = canConfirmPaper(paper.questions);
-
+  
   // Check if any questions need attachments
-  const questionsNeedingAttachments = paper.questions.filter(questionNeedsAttachment);
-
+  const questionsNeedingAttachments = paper.questions.filter(q => {
+    const needsAttachment = q.question_description?.toLowerCase().includes('figure') || 
+                           q.question_description?.toLowerCase().includes('diagram') ||
+                           q.question_description?.toLowerCase().includes('graph') ||
+                           q.question_description?.toLowerCase().includes('image');
+    const hasAttachment = q.attachments && q.attachments.length > 0;
+    
+    if (needsAttachment && !hasAttachment) return true;
+    
+    // Check sub-questions
+    return q.parts.some(part => {
+      const partNeedsAttachment = part.question_description?.toLowerCase().includes('figure') || 
+                                 part.question_description?.toLowerCase().includes('diagram') ||
+                                 part.question_description?.toLowerCase().includes('graph') ||
+                                 part.question_description?.toLowerCase().includes('image');
+      const partHasAttachment = part.attachments && part.attachments.length > 0;
+      return partNeedsAttachment && !partHasAttachment;
+    });
+  });
+  
   const hasQuestionsNeedingAttachments = questionsNeedingAttachments.length > 0;
-
-  const totalQuestions = paper.questions.length;
-  const completionPercentage = totalQuestions > 0
-    ? Math.round((confirmedCount / totalQuestions) * 100)
-    : 0;
-
-  const paperChecklist = [
-    {
-      label: 'All questions confirmed',
-      complete: confirmedCount === totalQuestions && totalQuestions > 0
-    },
-    {
-      label: 'No validation issues',
-      complete: validationSummary.invalidQuestions === 0
-    },
-    {
-      label: 'Attachments in place',
-      complete: !hasQuestionsNeedingAttachments
-    }
-  ];
-
-  const readyToPublish =
-    paper.status === 'qa_review' && paperChecklist.every(item => item.complete) && canConfirm;
   
   // Selection handlers
   const handleSelectAll = () => {
@@ -180,45 +157,6 @@ export function PaperCard({
     await autoAssignDifficulty.mutateAsync(paper.id);
   };
   
-  const handleBatchDelete = async () => {
-    const selectedQuestionsList = paper.questions.filter(q => selectedQuestions.has(q.id));
-
-    if (selectedQuestionsList.length === 0) {
-      toast.error('No questions selected for deletion');
-      return;
-    }
-
-    const confirmMessage = `Are you sure you want to delete ${selectedQuestionsList.length} question${selectedQuestionsList.length > 1 ? 's' : ''}? This action cannot be undone.`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    try {
-      const deletePromises = selectedQuestionsList.map(question =>
-        supabase
-          .from('questions_master_admin')
-          .delete()
-          .eq('id', question.id)
-      );
-
-      const results = await Promise.all(deletePromises);
-      const errors = results.filter(r => r.error);
-
-      if (errors.length > 0) {
-        console.error('Errors deleting questions:', errors);
-        toast.error(`Failed to delete ${errors.length} question${errors.length > 1 ? 's' : ''}`);
-      } else {
-        toast.success(`Successfully deleted ${selectedQuestionsList.length} question${selectedQuestionsList.length > 1 ? 's' : ''}`);
-        setSelectedQuestions(new Set());
-        queryClient.invalidateQueries({ queryKey: ['questions'] });
-      }
-    } catch (error) {
-      console.error('Error during batch delete:', error);
-      toast.error('Failed to delete questions');
-    }
-  };
-
   const handleAutoFillAllSubtopics = async () => {
     if (isAutoFillingAll) return;
     
@@ -349,142 +287,80 @@ export function PaperCard({
   const handleCloseFullPageReview = () => {
     setShowFullPageReview(false);
   };
-
-  const isUpdatingPaperStatus = updatePaperStatus.isPending;
-  const canArchivePaper = ['draft', 'qa_review', 'active'].includes(paper.status);
-  const canRestorePaper = paper.status === 'inactive';
-
-  const resetArchiveConfirmation = () => {
-    if (archiveConfirmationTimeoutRef.current) {
-      clearTimeout(archiveConfirmationTimeoutRef.current);
-      archiveConfirmationTimeoutRef.current = null;
+  
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return 'secondary';
+      case 'active':
+        return 'success';
+      case 'qa_review':
+        return 'warning';
+      case 'inactive':
+        return 'inactive';
+      default:
+        return 'default';
     }
-    setIsArchiveConfirmationActive(false);
-  };
-
-  const handleArchivePaper = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-
-    if (isUpdatingPaperStatus) {
-      return;
-    }
-
-    if (!canArchivePaper) {
-      return;
-    }
-
-    if (!isArchiveConfirmationActive) {
-      setIsArchiveConfirmationActive(true);
-
-      if (archiveConfirmationTimeoutRef.current) {
-        clearTimeout(archiveConfirmationTimeoutRef.current);
-      }
-
-      archiveConfirmationTimeoutRef.current = setTimeout(() => {
-        setIsArchiveConfirmationActive(false);
-        archiveConfirmationTimeoutRef.current = null;
-      }, 5000);
-
-      return;
-    }
-
-    resetArchiveConfirmation();
-
-    updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'inactive' });
-  };
-
-  const handleRestorePaper = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-
-    if (isUpdatingPaperStatus) {
-      return;
-    }
-
-    updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'draft' });
   };
   
   return (
     <>
-      <div
-        className={cn(
-          'relative rounded-2xl border bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
-          expanded
-            ? 'border-[#8CC63F]/60 ring-2 ring-[#8CC63F]/40'
-            : 'border-gray-200 dark:border-gray-700 hover:shadow-lg'
-        )}
-      >
+      <div className={cn(
+        "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-200",
+        expanded && "ring-2 ring-blue-500 dark:ring-blue-400"
+      )}>
         {/* Paper Header */}
-        <div
-          className="flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-white via-gray-50 to-gray-100 px-6 py-5 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 md:flex-row md:items-center md:justify-between"
+        <div 
+          className="bg-gray-50 dark:bg-gray-900 p-4 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
           onClick={toggleExpanded}
         >
-          <div className="flex flex-1 flex-wrap items-center gap-4">
-            <div className="flex items-center justify-center w-11 h-11 rounded-xl border border-blue-200/60 bg-blue-100/80 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
               <FileText className="h-5 w-5" />
             </div>
-            <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <div className="flex flex-col gap-1">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{paper.code}</h3>
-                    {paper.title && (
-                      <p className="text-sm font-medium text-blue-600 dark:text-blue-400">{paper.title}</p>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                {paper.code}
+                {showQAActions && (
+                  <div className="ml-3 flex items-center space-x-3 text-sm font-normal">
+                    <span className="text-green-600 dark:text-green-400">
+                      {confirmedCount}/{paper.questions.length} confirmed
+                    </span>
+                    {qaReviewCount > 0 && (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        ({qaReviewCount} pending)
+                      </span>
                     )}
-                    {(paper.exam_year || paper.exam_session) && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        {paper.exam_year && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-indigo-100 dark:bg-indigo-900/30 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
-                            {paper.exam_year}
-                          </span>
-                        )}
-                        {paper.exam_session && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-xs font-medium text-purple-700 dark:text-purple-300">
-                            {paper.exam_session === 'M/J' ? 'May/June' : paper.exam_session === 'O/N' ? 'Oct/Nov' : paper.exam_session}
-                          </span>
-                        )}
-                      </div>
+                    {validationSummary.invalidQuestions > 0 && (
+                      <span className="text-red-600 dark:text-red-400">
+                        ({validationSummary.invalidQuestions} incomplete)
+                      </span>
                     )}
                   </div>
-                  <StatusBadge
-                    status={paper.status}
-                    label={getPaperStatusLabel(paper.status)}
-                    showIcon
-                    className="px-3 py-1 text-xs font-semibold"
-                  />
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/60 bg-emerald-100/70 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  <CircleCheck className="h-3.5 w-3.5" />
-                  {confirmedCount}/{paper.questions.length} confirmed
-                </span>
-                {qaReviewCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-100/70 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    {qaReviewCount} pending
+                )}
+                {paper.status === 'active' && (
+                  <span className="ml-2 flex items-center text-sm font-normal text-green-600 dark:text-green-400">
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Paper Confirmed
                   </span>
                 )}
                 {validationSummary.invalidQuestions > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-300/60 bg-rose-100/70 px-3 py-1 text-xs font-semibold text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-200">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    {validationSummary.invalidQuestions} incomplete
+                  <span className="ml-2 text-sm font-normal text-red-600 dark:text-red-400">
+                    ({validationSummary.invalidQuestions} incomplete)
                   </span>
                 )}
                 {hasQuestionsNeedingAttachments && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-100/70 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
-                    <FileText className="h-3.5 w-3.5" />
-                    {questionsNeedingAttachments.length} need figures
+                  <span className="ml-2 text-sm font-normal text-amber-600 dark:text-amber-400">
+                    ({questionsNeedingAttachments.length} need figures)
                   </span>
                 )}
                 {questionsNeedingSubtopics > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-300/60 bg-purple-100/70 px-3 py-1 text-xs font-semibold text-purple-800 dark:border-purple-500/50 dark:bg-purple-500/10 dark:text-purple-200">
-                    <Square className="h-3.5 w-3.5" />
-                    {questionsNeedingSubtopics} need subtopics
+                  <span className="ml-2 text-sm font-normal text-purple-600 dark:text-purple-400">
+                    ({questionsNeedingSubtopics} need subtopics)
                   </span>
                 )}
-                {paper.status === 'active' && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/60 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-                    <CheckCircle className="h-3.5 w-3.5" /> Published
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
+              </h3>
+              <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 mt-1">
                 <span>{paper.subject}</span>
                 <span>•</span>
                 <span>{paper.provider}</span>
@@ -498,66 +374,18 @@ export function PaperCard({
                     <span>{paper.duration}</span>
                   </>
                 )}
-              {paper.total_marks && (
-                <>
-                  <span>•</span>
-                  <span>{paper.total_marks} marks</span>
-                </>
-              )}
-            </div>
-            <div className="mt-4 space-y-3">
-              <div>
-                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                  <span>
-                    {confirmedCount} of {totalQuestions} question{totalQuestions === 1 ? '' : 's'} confirmed
-                  </span>
-                  <span>{qaReviewCount} awaiting QA</span>
-                </div>
-                <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-500 dark:bg-emerald-400"
-                    style={{ width: `${completionPercentage}%` }}
-                  />
-                </div>
+                {paper.total_marks && (
+                  <>
+                    <span>•</span>
+                    <span>{paper.total_marks} marks</span>
+                  </>
+                )}
               </div>
-              {showQAActions && (
-                <div className="flex flex-wrap gap-2">
-                  {paperChecklist.map(item => (
-                    <span
-                      key={item.label}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-                        item.complete
-                          ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200'
-                          : 'border-amber-300/70 bg-amber-100/70 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200'
-                      )}
-                    >
-                      {item.complete ? (
-                        <CircleCheck className="h-3.5 w-3.5" />
-                      ) : (
-                        <AlertCircle className="h-3.5 w-3.5" />
-                      )}
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {showQAActions && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {readyToPublish
-                    ? 'All QA checks are complete. Publish to move this paper to the Published tab and unlock it for other modules.'
-                    : 'Complete the remaining QA checklist items to publish this paper for teachers and learners.'}
-                </p>
-              )}
             </div>
           </div>
-        </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-2 sm:gap-3"
-            >
+          
+          <div className="flex items-center space-x-3">
+            <div onClick={(e) => e.stopPropagation()}>
               {/* Full Page Review Button */}
               <Button
                 size="sm"
@@ -570,25 +398,31 @@ export function PaperCard({
               </Button>
 
               {/* Status Badge and Dropdown */}
-              {showQAActions && (
-                <div className="relative" ref={statusDropdownRef}>
+              <div className="flex items-center space-x-2 ml-2">
+                <StatusBadge 
+                  status={paper.status} 
+                  className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600"
+                />
+                
+                {showQAActions && (
+                  <div className="relative" ref={statusDropdownRef}>
                     <button
                       onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                      className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900"
+                      className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-500 dark:text-gray-400"
                       title="Change paper status"
                     >
-                      <MoreVertical className="h-4 w-4" />
+                      <MoreVertical className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                     </button>
-
+                    
                     {showStatusDropdown && (
-                      <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:shadow-gray-900/30 z-20">
+                      <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-900/20 py-1 z-20 border border-gray-200 dark:border-gray-700">
                         {paper.status === 'draft' && (
                           <button
                             onClick={() => {
                               updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'qa_review' });
                               setShowStatusDropdown(false);
                             }}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                           >
                             Set to QA Review
                           </button>
@@ -600,7 +434,7 @@ export function PaperCard({
                               updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'inactive' });
                               setShowStatusDropdown(false);
                             }}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                           >
                             Set to Inactive
                           </button>
@@ -612,7 +446,7 @@ export function PaperCard({
                               updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'inactive' });
                               setShowStatusDropdown(false);
                             }}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                           >
                             Set to Inactive
                           </button>
@@ -624,62 +458,18 @@ export function PaperCard({
                               updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'draft' });
                               setShowStatusDropdown(false);
                             }}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                           >
                             Set to Draft
                           </button>
                         )}
                       </div>
                     )}
-                </div>
-              )}
-            </div>
-
-            {showQAActions && (
-              <div className="flex flex-col gap-2">
-                {canArchivePaper && (
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleArchivePaper}
-                      leftIcon={<Archive className="h-3 w-3" />}
-                      className={cn(
-                        "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20",
-                        isArchiveConfirmationActive && "ring-2 ring-red-500 ring-offset-2 dark:ring-offset-gray-900"
-                      )}
-                      disabled={isUpdatingPaperStatus}
-                    >
-                      {isArchiveConfirmationActive ? 'Click Again to Confirm' : 'Archive'}
-                    </Button>
-                    {isArchiveConfirmationActive && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <div className="font-semibold mb-1">Confirm Archive</div>
-                            <p>Archiving will remove this paper and its questions from all teacher and student experiences. Click "Archive" again within 5 seconds to confirm.</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
-                {canRestorePaper && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleRestorePaper}
-                    leftIcon={<RefreshCw className="h-3 w-3" />}
-                    className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
-                    disabled={isUpdatingPaperStatus}
-                  >
-                    Restore to Draft
-                  </Button>
-                )}
               </div>
-            )}
-
+            </div>
+            
             {showQAActions && (
               <>
                 {onStartTestMode && (
@@ -709,9 +499,9 @@ export function PaperCard({
                     leftIcon={<CircleCheck className="h-3 w-3" />}
                     className="bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 text-white"
                     disabled={confirmPaper.isPending || !canConfirm}
-                    title={!canConfirm ? "Resolve validation issues before publishing" : "Publish this paper"}
+                    title={!canConfirm ? "Some questions have validation errors" : "Confirm this paper"}
                   >
-                    {confirmPaper.isPending ? 'Publishing...' : 'Publish Paper'}
+                    {confirmPaper.isPending ? 'Confirming...' : 'Confirm Paper'}
                   </Button>
                 )}
               </>
@@ -752,14 +542,6 @@ export function PaperCard({
             {/* Statistics and Actions Bar */}
             <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md dark:shadow-gray-900/20">
               <div className="p-4 space-y-3">
-                {showQAActions && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
-                    <div className="font-semibold">QA publishing checklist</div>
-                    <p className="mt-1 leading-relaxed">
-                      Confirm each question below. When all items are resolved, publish the paper to move it into the Published tab and make it available to teachers and learners.
-                    </p>
-                  </div>
-                )}
                 {/* Note about figure attachments - informational only, no PDF upload */}
                 {showQAActions && hasQuestionsNeedingAttachments && (
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
@@ -794,15 +576,6 @@ export function PaperCard({
                           className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
                         >
                           Confirm Selected
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleBatchDelete}
-                          leftIcon={<Trash2 className="h-3 w-3" />}
-                          className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
-                        >
-                          Delete Selected
                         </Button>
                         <Button
                           size="sm"
@@ -952,7 +725,7 @@ export function PaperCard({
             {/* Questions Container */}
             <div className="p-4 space-y-6 max-h-[calc(100vh-280px)] overflow-y-auto bg-gray-50 dark:bg-gray-900/50">
               {paper.questions
-                .sort((a, b) => naturalSort(a.question_number, b.question_number))
+                .sort((a, b) => parseInt(a.question_number) - parseInt(b.question_number))
                 .map((question, questionIndex) => (
                   <div key={question.id} className="relative">
                     {/* Selection Checkbox */}

@@ -1,6 +1,5 @@
 // src/lib/layout/treeLayout.ts
 // Tidy tree layout algorithm for organizational charts with variable card sizes
-// UNIFIED VERSION: Single function that properly handles all hierarchies
 
 export interface TreeNode {
   id: string;
@@ -65,7 +64,7 @@ export class TreeLayoutEngine {
     // Step 3: Position nodes top-down
     const positions = new Map<string, NodePosition>();
     const levelHeights = this.calculateLevelHeights();
-
+    
     this.positionNodes(rootId, 0, 0, positions, levelHeights);
 
     // Step 4: Normalize positions to start from (0, 0)
@@ -127,7 +126,7 @@ export class TreeLayoutEngine {
     this.nodeLevels.forEach((level, nodeId) => {
       const dimensions = this.dimensions.get(nodeId);
       const height = dimensions?.height || 140; // Default height
-
+      
       const currentMaxHeight = levelHeights.get(level) || 0;
       levelHeights.set(level, Math.max(currentMaxHeight, height));
     });
@@ -171,7 +170,7 @@ export class TreeLayoutEngine {
     // Calculate starting X for children to center them under parent
     const totalChildrenWidth = childWidths.reduce((sum, width) => sum + width, 0) +
                               (childWidths.length - 1) * this.config.gapX;
-
+    
     const childrenStartX = parentX - totalChildrenWidth / 2;
 
     // Position children
@@ -179,7 +178,7 @@ export class TreeLayoutEngine {
     node.children.forEach((childId, index) => {
       const childWidth = childWidths[index];
       const childCenterX = currentX + childWidth / 2;
-
+      
       this.positionNodes(childId, childCenterX, yPosition, positions, levelHeights);
       currentX += childWidth + this.config.gapX;
     });
@@ -189,7 +188,7 @@ export class TreeLayoutEngine {
       // Center parent over children
       const firstChildPos = positions.get(node.children[0]);
       const lastChildPos = positions.get(node.children[node.children.length - 1]);
-
+      
       if (firstChildPos && lastChildPos) {
         const childrenCenterX = (firstChildPos.x + lastChildPos.x) / 2;
         positions.set(nodeId, { x: childrenCenterX, y: yPosition });
@@ -243,7 +242,7 @@ export class TreeLayoutEngine {
   }
 }
 
-// UNIFIED tree building function that properly handles all hierarchy scenarios
+// Utility function to build tree from flat data with visibility control
 export function buildTreeFromData(
   companyData: any,
   expandedNodes: Set<string>,
@@ -253,11 +252,12 @@ export function buildTreeFromData(
 ): Map<string, TreeNode> {
   const nodes = new Map<string, TreeNode>();
 
+  // Early return if no company data
   if (!companyData) {
     return nodes;
   }
 
-  // Add company node
+  // Add company node - always include for tree structure
   nodes.set('company', {
     id: 'company',
     type: 'company',
@@ -268,11 +268,12 @@ export function buildTreeFromData(
   // Only add school children if company is expanded
   if (expandedNodes.has('company') && companyData?.schools) {
     const schoolChildren: string[] = [];
-
+    
+    // Process schools that are in the filtered data
     companyData.schools.forEach((school: any) => {
       const schoolId = `school-${school.id}`;
       schoolChildren.push(schoolId);
-
+      
       nodes.set(schoolId, {
         id: schoolId,
         type: 'school',
@@ -282,145 +283,47 @@ export function buildTreeFromData(
       });
     });
 
+    // Update company children
     const companyNode = nodes.get('company');
     if (companyNode) {
       companyNode.children = schoolChildren;
     }
   }
 
-  // Process each school for branches and grade levels
+  // Add branch nodes only for expanded schools
   if (companyData?.schools) {
     companyData.schools.forEach((school: any) => {
       const schoolId = `school-${school.id}`;
       const schoolNode = nodes.get(schoolId);
-
+      
+      // Only add branches if:
+      // 1. The school node exists
+      // 2. The school is expanded
+      // 3. We have branch data
       if (schoolNode && expandedNodes.has(schoolId)) {
-        const children: string[] = [];
+        const branches = lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
+        const branchChildren: string[] = [];
 
-        // Add branches if branches tab is visible
-        if (visibleLevels?.has('branches')) {
-          const branches = school.branches || lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
-
-          branches.forEach((branch: any) => {
-            const branchId = `branch-${branch.id}`;
-            children.push(branchId);
-
-            nodes.set(branchId, {
-              id: branchId,
-              type: 'branch',
-              parentId: schoolId,
-              children: [],
-              data: branch
-            });
-
-            // Add branch-level grades if years tab is visible and branch is expanded
-            if (visibleLevels?.has('years') && expandedNodes.has(branchId)) {
-              const branchGrades = lazyLoadedData.get(`grades-branch-${branch.id}`) || branch.grade_levels || [];
-
-              if (branchGrades.length > 0) {
-                const branchNode = nodes.get(branchId);
-                const branchGradeChildren: string[] = [];
-
-                branchGrades.forEach((grade: any) => {
-                  const gradeId = `grade-${grade.id}`;
-                  branchGradeChildren.push(gradeId);
-
-                  nodes.set(gradeId, {
-                    id: gradeId,
-                    type: 'year',
-                    parentId: branchId,
-                    children: [],
-                    data: grade
-                  });
-
-                  // Add sections if sections tab is visible and grade is expanded
-                  if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
-                    const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
-
-                    if (sections.length > 0) {
-                      const gradeNode = nodes.get(gradeId);
-                      const sectionChildren: string[] = [];
-
-                      sections.forEach((section: any) => {
-                        const sectionId = `section-${section.id}`;
-                        sectionChildren.push(sectionId);
-
-                        nodes.set(sectionId, {
-                          id: sectionId,
-                          type: 'section',
-                          parentId: gradeId,
-                          children: [],
-                          data: section
-                        });
-                      });
-
-                      if (gradeNode) {
-                        gradeNode.children = sectionChildren;
-                      }
-                    }
-                  }
-                });
-
-                if (branchNode) {
-                  branchNode.children = branchGradeChildren;
-                }
-              }
-            }
+        branches.forEach((branch: any) => {
+          const branchId = `branch-${branch.id}`;
+          branchChildren.push(branchId);
+          
+          nodes.set(branchId, {
+            id: branchId,
+            type: 'branch',
+            parentId: schoolId,
+            children: [],
+            data: branch
           });
-        }
+        });
 
-        // Add school-level grades if years tab is visible
-        // These are grades assigned directly to schools (not through branches)
-        if (visibleLevels?.has('years')) {
-          const schoolGrades = lazyLoadedData.get(`grades-school-${school.id}`) || school.grade_levels || [];
-
-          schoolGrades.forEach((grade: any) => {
-            const gradeId = `grade-${grade.id}`;
-
-            // Check if this grade is already added under a branch
-            if (!nodes.has(gradeId)) {
-              children.push(gradeId);
-
-              nodes.set(gradeId, {
-                id: gradeId,
-                type: 'year',
-                parentId: schoolId,
-                children: [],
-                data: grade
-              });
-            }
-
-            // Add sections if sections tab is visible and grade is expanded
-            if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
-              const gradeNode = nodes.get(gradeId);
-              const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
-
-              if (sections.length > 0 && gradeNode && gradeNode.children.length === 0) {
-                const sectionChildren: string[] = [];
-
-                sections.forEach((section: any) => {
-                  const sectionId = `section-${section.id}`;
-                  sectionChildren.push(sectionId);
-
-                  nodes.set(sectionId, {
-                    id: sectionId,
-                    type: 'section',
-                    parentId: gradeId,
-                    children: [],
-                    data: section
-                  });
-                });
-
-                gradeNode.children = sectionChildren;
-              }
-            }
-          });
-        }
-
-        schoolNode.children = children;
+        schoolNode.children = branchChildren;
       }
     });
   }
+
+  // Add year nodes only for expanded branches (if implemented)
+  // Add section nodes only for expanded years (if implemented)
 
   return nodes;
 }
@@ -440,7 +343,7 @@ export function generateConnectionPath(
   // Center the connection points on the cards
   const parentCenterX = parentPos.x;
   const childCenterX = childPos.x;
-
+  
   // Create smooth orthogonal path
   return `M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop}`;
 }

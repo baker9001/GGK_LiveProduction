@@ -1,12 +1,5 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
- * 
- * FIXED VERSION - School Admin can now see Schools tab
- * 
- * Fix Applied:
- * - Changed from using permissionService.canAccessTab() to canViewTab() from useAccessControl
- * - This ensures School Admins can properly see the Schools tab
- * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/lib/auth
@@ -14,7 +7,28 @@
  *   - @/contexts/PermissionContext
  *   - @/hooks/useAccessControl
  *   - @/app/entity-module/organisation/tabs/* (all tab components)
+ *   - @/app/entity-module/organisation/tabs/admins/services/permissionService
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * 
+ * Preserved Features:
+ *   - All 6 tabs (Structure, Schools, Branches, Admins, Teachers, Students)
+ *   - Statistics cards with real-time data
+ *   - Tab navigation with permission checking
+ *   - Lazy loading of tab components
+ *   - Company data fetching
+ *   - Error handling and loading states
+ * 
+ * Added/Modified:
+ *   - Unified green color (#8CC63F) for all active tabs
+ *   - Removed flashing dots animation
+ *   - Consistent hover and active states
+ * 
+ * Database Tables:
+ *   - companies, schools, branches, entity_users, teachers, students
+ * 
+ * Connected Files:
+ *   - All tab components in ./tabs/*
+ *   - Permission service and contexts
  */
 
 'use client';
@@ -27,8 +41,9 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { toast } from '@/components/shared/Toast';
+import { toast } from 'react-hot-toast';
 import { usePermissions } from '@/contexts/PermissionContext';
+import { permissionService } from '@/app/entity-module/organisation/tabs/admins/services/permissionService';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
@@ -116,6 +131,7 @@ export default function OrganizationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const { permissions, adminLevel } = usePermissions();
+  const authenticatedUser = getAuthenticatedUser();
   const { canView } = usePermissions();
   
   // Use the access control hook
@@ -142,70 +158,54 @@ export default function OrganizationManagement() {
   const schoolsTabRef = useRef<SchoolsTabRef>(null);
   const branchesTabRef = useRef<BranchesTabRef>(null);
 
-  // FIX: Get accessible tabs using canViewTab from useAccessControl
+  // Get accessible tabs based on user permissions
   const accessibleTabs = useMemo(() => {
-    // Wait for access control to be loaded
-    if (isAccessControlLoading) return [];
+    // Wait for permissions to be loaded
+    if (!permissions || isAccessControlLoading) return [];
     
     const tabs = [];
     
-    // Check each tab using canViewTab from useAccessControl
+    // IMPORTANT: Check Structure tab FIRST to ensure it's the default when available
     // Structure tab - only for entity_admin and sub_entity_admin
-    if (canViewTab('structure')) {
+    if ((isEntityAdmin || isSubEntityAdmin) && canViewTab('structure')) {
       tabs.push('structure');
     }
     
-    // Schools tab - entity, sub-entity, and school admins
-    if (canViewTab('schools')) {
+    // Schools tab
+    if (permissionService.canAccessTab('schools', permissions)) {
       tabs.push('schools');
     }
     
-    // Branches tab - all admin levels
-    if (canViewTab('branches')) {
+    // Branches tab
+    if (permissionService.canAccessTab('branches', permissions)) {
       tabs.push('branches');
     }
     
-    // Admins tab - entity, sub-entity, and school admins
-    if (canViewTab('admins')) {
+    // Admins tab
+    if (permissionService.canAccessTab('admins', permissions)) {
       tabs.push('admins');
     }
     
-    // Teachers tab - all admin levels
-    if (canViewTab('teachers')) {
+    // Teachers tab
+    if (permissionService.canAccessTab('teachers', permissions)) {
       tabs.push('teachers');
     }
     
-    // Students tab - all admin levels
-    if (canViewTab('students')) {
+    // Students tab
+    if (permissionService.canAccessTab('students', permissions)) {
       tabs.push('students');
     }
     
-    // Debug logging to help diagnose issues
-    console.log('Tab Access Debug:', {
-      adminLevel: getUserContext()?.adminLevel,
+    console.log('Accessible tabs calculated:', {
       isEntityAdmin,
       isSubEntityAdmin,
-      isSchoolAdmin,
-      isBranchAdmin,
       canViewStructure: canViewTab('structure'),
-      canViewSchools: canViewTab('schools'),
-      canViewBranches: canViewTab('branches'),
-      canViewAdmins: canViewTab('admins'),
-      canViewTeachers: canViewTab('teachers'),
-      canViewStudents: canViewTab('students'),
-      resultingTabs: tabs
+      tabs,
+      permissions: !!permissions
     });
     
     return tabs;
-  }, [
-    canViewTab, 
-    isEntityAdmin, 
-    isSubEntityAdmin, 
-    isSchoolAdmin, 
-    isBranchAdmin, 
-    isAccessControlLoading,
-    getUserContext
-  ]);
+  }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab, isAccessControlLoading]);
 
   // Set default active tab to the first accessible tab
   useEffect(() => {
@@ -225,67 +225,26 @@ export default function OrganizationManagement() {
   // Fetch user's company
   useEffect(() => {
     const fetchUserCompany = async () => {
-      if (!user) {
-        console.log('[OrganisationManagement] No authenticated user found');
-        return;
-      }
-
-      // CRITICAL FIX: Validate user.id is a valid UUID before making Supabase queries  
-      if (!user.id || 
-          typeof user.id !== 'string' || 
-          user.id === 'undefined' || 
-          user.id === 'null' || 
-          user.id.trim() === '') {
-        console.error('[OrganisationManagement] Invalid user ID detected:', {
-          userId: user.id,
-          userType: typeof user.id,
-          userObject: user
-        });
-        toast.error('Invalid user session. Please sign in again.');
-        return;
-      }
-
-      // Additional UUID format validation
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(user.id)) {
-        console.error('[OrganisationManagement] User ID is not a valid UUID format:', {
-          userId: user.id,
-          length: user.id.length
-        });
-        toast.error('Invalid user session format. Please sign in again.');
-        return;
-      }
+      if (!authenticatedUser) return;
 
       try {
-        console.log('[OrganisationManagement] Fetching company for user:', user.id);
-        
         const { data: entityUserData, error: entityUserError } = await supabase
           .from('entity_users')
           .select('company_id')
-          .eq('user_id', user.id)
+          .eq('user_id', authenticatedUser.id)
           .maybeSingle();
 
-        if (entityUserError) {
-          console.error('[OrganisationManagement] Error fetching entity user data:', entityUserError);
-          toast.error('Failed to load organization data. Please try refreshing the page.');
-          return;
-        }
-
-        if (entityUserData?.company_id) {
-          console.log('[OrganisationManagement] Company ID found:', entityUserData.company_id);
+        if (!entityUserError && entityUserData?.company_id) {
           setUserCompanyId(entityUserData.company_id);
-        } else {
-          console.warn('[OrganisationManagement] No company association found for user:', user.id);
-          toast.warning('No organization found for your account. Please contact your administrator.');
         }
       } catch (error) {
-        console.error('[OrganisationManagement] Unexpected error fetching user company:', error);
-        toast.error('Failed to load organization data. Please try refreshing the page.');
+        console.error('Error fetching user company:', error);
+        toast.error('Failed to load organization data');
       }
     };
 
     fetchUserCompany();
-  }, [user?.id]);
+  }, [authenticatedUser]);
 
   // Fetch complete organization data including schools and branches
   const { 
@@ -350,37 +309,12 @@ export default function OrganizationManagement() {
             })
           );
 
-          // Fetch grade levels for this school
-          const { data: gradeLevels } = await supabase
-            .from('grade_levels')
-            .select('*')
-            .eq('school_id', school.id)
-            .eq('status', 'active')
-            .order('grade_order');
-
-          // Fetch class sections for each grade level
-          const gradeLevelsWithSections = await Promise.all(
-            (gradeLevels || []).map(async (grade) => {
-              const { data: classSections } = await supabase
-                .from('class_sections')
-                .select('*')
-                .eq('grade_level_id', grade.id)
-                .eq('status', 'active')
-                .order('class_section_order');
-
-              return {
-                ...grade,
-                class_sections: classSections || []
-              };
-            })
-          );
           const activeBranches = branchesWithDetails.filter(b => b.status === 'active');
 
           return { 
             ...school, 
             additional: schoolAdditional, 
             branches: branchesWithDetails,
-            grade_levels: gradeLevelsWithSections,
             branch_count: activeBranches.length,
             student_count: schoolAdditional?.student_count || 0,
             teachers_count: schoolAdditional?.teachers_count || 0
@@ -423,76 +357,24 @@ export default function OrganizationManagement() {
     async () => {
       if (!userCompanyId) return null;
 
-      // Count schools belonging to this company
       let schoolsQuery = supabase
         .from('schools')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('status', 'active');
 
-      // Count branches belonging to schools in this company
-      const { data: companySchoolIds } = await supabase
-        .from('schools')
-        .select('id')
-        .eq('company_id', userCompanyId);
-      
-      const schoolIds = companySchoolIds?.map(s => s.id) || [];
-      
       let branchesQuery = supabase
         .from('branches')
-        .select('id', { count: 'exact' })
+        .select('id, school_id', { count: 'exact' })
         .eq('status', 'active');
-      
-      if (schoolIds.length > 0) {
-        branchesQuery = branchesQuery.in('school_id', schoolIds);
-      } else {
-        // No schools in company, so no branches
-        branchesQuery = branchesQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // Force empty result
-      }
 
-      // Apply scope filtering for non-entity/sub-entity admins
       if (!isEntityAdmin && !isSubEntityAdmin) {
-        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-          schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
-          // Filter branches to only those in scope schools
-          const scopeSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
-          if (scopeSchoolIds.length > 0) {
-            branchesQuery = branchesQuery.in('school_id', scopeSchoolIds);
-          } else {
-            branchesQuery = branchesQuery.eq('id', '00000000-0000-0000-0000-000000000000');
-          }
-        } else if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
-          // For branch admins, get schools that contain their branches
-          const { data: branchSchools } = await supabase
-            .from('branches')
-            .select('school_id')
-            .in('id', scopeFilters.branch_ids);
-          
-          const branchSchoolIds = [...new Set(branchSchools?.map(b => b.school_id) || [])];
-          // Only include schools that belong to this company
-          const validSchoolIds = branchSchoolIds.filter(id => schoolIds.includes(id));
-          if (validSchoolIds.length > 0) {
-            schoolsQuery = schoolsQuery.in('id', validSchoolIds);
-          } else {
-            return {
-              company_id: userCompanyId,
-              total_schools: 0,
-              total_branches: 0,
-              total_students: 0,
-              total_teachers: 0,
-              total_users: 0
-            } as OrganizationStats;
-          }
-          branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
-        } else {
-          return {
-            company_id: userCompanyId,
-            total_schools: 0,
-            total_branches: 0,
-            total_students: 0,
-            total_teachers: 0,
-            total_users: 0
-          } as OrganizationStats;
+        if (scopeFilters.school_id) {
+          schoolsQuery = schoolsQuery.in('id', scopeFilters.school_id);
+          branchesQuery = branchesQuery.in('school_id', scopeFilters.school_id);
+        }
+        if (scopeFilters.branch_id) {
+          branchesQuery = branchesQuery.in('id', scopeFilters.branch_id);
         }
       }
 
@@ -501,111 +383,31 @@ export default function OrganizationManagement() {
         branchesQuery
       ]);
 
-      // Count teachers belonging to this company
-      let teacherCountQuery = supabase
+      const { count: teacherCount } = await supabase
         .from('teachers')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('is_active', true);
 
-      if (!isEntityAdmin && !isSubEntityAdmin) {
-        const orConditions: string[] = [];
-        
-        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-          // Only include schools that belong to this company
-          const validSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
-          if (validSchoolIds.length > 0) {
-            orConditions.push(`school_id.in.(${validSchoolIds.join(',')})`);
-          }
-        }
-        
-        if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
-          // Only include branches that belong to schools in this company
-          const { data: validBranches } = await supabase
-            .from('branches')
-            .select('id')
-            .in('id', scopeFilters.branch_ids)
-            .in('school_id', schoolIds);
-          
-          const validBranchIds = validBranches?.map(b => b.id) || [];
-          if (validBranchIds.length > 0) {
-            orConditions.push(`branch_id.in.(${validBranchIds.join(',')})`);
-          }
-        }
-        
-        if (orConditions.length > 0) {
-          teacherCountQuery = teacherCountQuery.or(orConditions.join(','));
-        } else {
-          teacherCountQuery = teacherCountQuery.limit(0);
-        }
-      }
-
-      // Count students belonging to this company
-      let studentCountQuery = supabase
+      const { count: studentCount } = await supabase
         .from('students')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('is_active', true);
 
-      if (!isEntityAdmin && !isSubEntityAdmin) {
-        const orConditions: string[] = [];
-        
-        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-          // Only include schools that belong to this company
-          const validSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
-          if (validSchoolIds.length > 0) {
-            orConditions.push(`school_id.in.(${validSchoolIds.join(',')})`);
-          }
-        }
-        
-        if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
-          // Only include branches that belong to schools in this company
-          const { data: validBranches } = await supabase
-            .from('branches')
-            .select('id')
-            .in('id', scopeFilters.branch_ids)
-            .in('school_id', schoolIds);
-          
-          const validBranchIds = validBranches?.map(b => b.id) || [];
-          if (validBranchIds.length > 0) {
-            orConditions.push(`branch_id.in.(${validBranchIds.join(',')})`);
-          }
-        }
-        
-        if (orConditions.length > 0) {
-          studentCountQuery = studentCountQuery.or(orConditions.join(','));
-        } else {
-          studentCountQuery = studentCountQuery.limit(0);
-        }
-      }
-
-      // Count entity users belonging to this company
-      let userCountQuery = supabase
+      const { count: userCount } = await supabase
         .from('entity_users')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('is_active', true);
 
-      if (!isEntityAdmin && !isSubEntityAdmin) {
-        // For school and branch admins, they still see all entity users in the company
-        // as entity users are company-level administrators
-        // No additional filtering needed beyond company_id
-      }
-
-      // Execute all count queries
-      const [teacherCountResult, studentCountResult, userCountResult] = await Promise.all([
-        teacherCountQuery,
-        studentCountQuery,
-        userCountQuery
-      ]);
-
       return {
         company_id: userCompanyId,
         total_schools: schoolsResult.count || 0,
         total_branches: branchesResult.count || 0,
-        total_students: studentCountResult.count || 0,
-        total_teachers: teacherCountResult.count || 0,
-        total_users: userCountResult.count || 0
+        total_students: studentCount || 0,
+        total_teachers: teacherCount || 0,
+        total_users: userCount || 0
       } as OrganizationStats;
     },
     {
@@ -704,7 +506,7 @@ export default function OrganizationManagement() {
           <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 text-left">
             <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Your Role:</h3>
             <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-              <div>Admin Level: {adminLevel || getUserContext()?.adminLevel || 'None'}</div>
+              <div>Admin Level: {adminLevel || 'None'}</div>
               <div>Company: {companyData?.name || 'Not assigned'}</div>
             </div>
           </div>

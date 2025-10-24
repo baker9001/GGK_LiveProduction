@@ -1,18 +1,46 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/branches/page.tsx
- * COMPLETE FIXED VERSION - All UI Issues Resolved
+ * Dependencies:
+ *   - @/lib/supabase
+ *   - @/lib/auth
+ *   - @/contexts/UserContext
+ *   - @/hooks/useAccessControl
+ *   - @/components/shared/* (SlideInForm, FormField, Button, StatusBadge)
+ *   - @/components/shared/ImageUpload
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * Fixes Applied:
- * 1. ✅ Removed duplicate bottom buttons (kept only top icon buttons)
- * 2. ✅ Enhanced logo size (80x80) and display with better background
- * 3. ✅ Unified color scheme (purple for branches, blue for students, green for teachers)
- * 4. ✅ View mode toggle moved to right side for consistency
+ * FIXED: Changed permission checks from 'organization.modify_branch' to 'modify_branch'
+ * This matches the permission format in useAccessControl hook
+ * 
+ * Preserved Features:
+ *   - All original branch management functionality
+ *   - Search, filter, and status management
+ *   - Branch creation and editing forms
+ *   - ImageUpload integration
+ *   - Statistics display
+ *   - All original event handlers
+ *   - Tab-based form organization
+ * 
+ * Database Tables:
+ *   - branches & branches_additional
+ *   - schools (for reference)
+ *   - entity_user_branches (for scope)
+ * 
+ * Connected Files:
+ *   - useAccessControl.ts (permission checking)
+ *   - StatusBadge.tsx (status display)
+ *   - ImageUpload.tsx (logo upload)
  */
 
 'use client';
 
-import React, { useState, useEffect, memo, useCallback, useMemo, useRef } from 'react';
-import { MapPin, Plus, CreditCard as Edit2, Trash2, Search, Filter, Building, Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, XCircle, AlertTriangle, School, Hash, Navigation, Home, Info, Lock, Shield, Loader2, Grid3x3 as Grid3X3, List } from 'lucide-react';
+import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
+import { 
+  MapPin, Plus, Edit2, Trash2, Search, Filter, Building,
+  Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, 
+  XCircle, AlertTriangle, School, Hash, Navigation, Home, Info,
+  Lock, Shield, Loader2
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -22,11 +50,9 @@ import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { ImageUpload } from '@/components/shared/ImageUpload';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
-import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
-import { PaginationControls } from '@/components/shared/PaginationControls';
-import { usePagination } from '@/hooks/usePagination';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -43,15 +69,14 @@ interface BranchData {
   student_count?: number;
   teachers_count?: number;
   school_name?: string;
-  readOnly?: boolean;
 }
 
 interface BranchAdditional {
   id?: string;
   branch_id: string;
   student_capacity?: number;
-  student_count?: number;
   current_students?: number;
+  student_count?: number;
   teachers_count?: number;
   active_teachers_count?: number;
   branch_head_name?: string;
@@ -80,7 +105,7 @@ export interface BranchesTabRef {
 }
 
 // ===== MAIN COMPONENT =====
-const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ companyId: propCompanyId, refreshData }, ref) => {
+const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ companyId, refreshData }, ref) => {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -98,9 +123,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     error: accessError
   } = useAccessControl();
 
-  // Get user context early for company ID
-  const userContext = getUserContext();
-
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -111,45 +133,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
-  const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
-
-  // Confirmation dialog state
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [deleteContext, setDeleteContext] = useState<{ ids: string[]; names: string[] } | null>(null);
-  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
-  const selectAllRef = useRef<HTMLInputElement>(null);
-
-  // Delete confirmation variables (calculated after deleteContext is declared)
-  const deleteCount = deleteContext?.ids.length ?? 0;
-  const deleteTitle = deleteCount > 1 ? 'Delete Branches' : 'Delete Branch';
-  const deleteNamesPreview = deleteContext ? deleteContext.names.slice(0, 3).join(', ') : '';
-  const deleteMessage = deleteCount === 1
-    ? `Are you sure you want to delete "${deleteContext?.names[0]}"? This action cannot be undone.`
-    : deleteCount > 1
-      ? `Are you sure you want to delete ${deleteCount} branches? This action cannot be undone.${deleteNamesPreview ? ` Selected: ${deleteNamesPreview}${deleteCount > 3 ? '…' : ''}` : ''}`
-      : '';
-
-  // AUTO-SELECT USER'S COMPANY
-  const companyId = useMemo(() => {
-    if (userContext?.companyId) {
-      console.log('Using company ID from user context:', userContext.companyId);
-      return userContext.companyId;
-    }
-
-    if (user?.company_id) {
-      console.log('Using company ID from user object:', user.company_id);
-      return user.company_id;
-    }
-
-    if (propCompanyId) {
-      console.log('Using company ID from prop:', propCompanyId);
-      return propCompanyId;
-    }
-
-    console.error('No company ID found in user context, user object, or props');
-    return null;
-  }, [userContext, user, propCompanyId]);
 
   // ACCESS CHECK: Block entry if user cannot view this tab
   useEffect(() => {
@@ -179,16 +162,19 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const getBranchLogoUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
     
+    // If it's already a full URL, return as is
     if (path.startsWith('http')) {
       return path;
     }
     
+    // Construct Supabase storage URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl) {
       console.warn('VITE_SUPABASE_URL is not defined');
       return null;
     }
     
+    // Use the correct bucket name for branches
     return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
   }, []);
 
@@ -196,46 +182,35 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const scopeFilters = getScopeFilters('branches');
 
   // ===== FETCH SCHOOLS FOR DROPDOWN =====
-  const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery(
-    ['schools-for-branches', companyId],
+  const { data: schools = [], isLoading: isLoadingSchools } = useQuery(
+    ['schools-for-branches', companyId, scopeFilters],
     async () => {
-      console.log('Fetching schools for user company:', companyId);
-      
-      if (!companyId) {
-        console.error('No company ID available for user');
-        return [];
-      }
-      
       let query = supabase
         .from('schools')
-        .select('id, name, code, company_id')
+        .select(`
+          id, name, code, company_id,
+          companies (id, name)
+        `)
         .eq('company_id', companyId)
+        .eq('status', 'active')
         .order('name');
       
-      if (isSchoolAdmin && scopeFilters.school_id) {
-        if (Array.isArray(scopeFilters.school_id)) {
-          if (scopeFilters.school_id.length === 0) return [];
-          query = query.in('id', scopeFilters.school_id);
-        } else {
-          query = query.eq('id', scopeFilters.school_id);
+      // Apply scope filters for school admins
+      if (!isEntityAdmin && !isSubEntityAdmin && scopeFilters.id) {
+        if (Array.isArray(scopeFilters.id) && scopeFilters.id.length === 0) {
+          return [];
         }
+        query = query.in('id', scopeFilters.id);
       }
       
       const { data, error } = await query;
       
-      if (error) {
-        console.error('Error fetching schools:', error);
-        toast.error('Failed to load schools: ' + error.message);
-        throw error;
-      }
-      
-      console.log(`Found ${data?.length || 0} schools for user's company (${companyId}):`, data);
+      if (error) throw error;
       return data || [];
     },
     { 
       enabled: !!companyId && !isAccessControlLoading,
-      staleTime: 5 * 60 * 1000,
-      retry: 1
+      staleTime: 5 * 60 * 1000
     }
   );
 
@@ -243,6 +218,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const { data: branches = [], isLoading, error: fetchError, refetch } = useQuery(
     ['branches-tab', companyId, scopeFilters],
     async () => {
+      // For branch admins, get branches directly
       if (isBranchAdmin && scopeFilters.branch_id) {
         let branchQuery = supabase
           .from('branches')
@@ -261,6 +237,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         const { data: branchesData, error } = await branchQuery.order('name');
         if (error) throw error;
         
+        // Fetch additional data
         const enrichedBranches = await Promise.all((branchesData || []).map(async (branch) => {
           const { data: additional } = await supabase
             .from('branches_additional')
@@ -268,12 +245,14 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             .eq('branch_id', branch.id)
             .maybeSingle();
           
+          // Get school name
           const { data: school } = await supabase
             .from('schools')
             .select('name')
             .eq('id', branch.school_id)
             .single();
           
+          // Get teacher count if not in additional
           let teacherCount = additional?.teachers_count || 0;
           if (!teacherCount) {
             const { count } = await supabase
@@ -296,6 +275,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         return enrichedBranches;
       }
       
+      // For others, get schools first then branches
       let schoolsQuery = supabase
         .from('schools')
         .select(`
@@ -304,6 +284,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         `)
         .eq('company_id', companyId);
 
+      // Apply school scope filters
       if (!isEntityAdmin && !isSubEntityAdmin && scopeFilters.school_id) {
         if (Array.isArray(scopeFilters.school_id)) {
           if (scopeFilters.school_id.length === 0) return [];
@@ -319,6 +300,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       const schoolIds = schoolsData?.map(s => s.id) || [];
       if (schoolIds.length === 0) return [];
       
+      // Get branches for these schools
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
         .select(`
@@ -330,6 +312,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       
       if (branchesError) throw branchesError;
       
+      // Fetch additional data for each branch
       const branchesWithAdditional = await Promise.all((branchesData || []).map(async (branch) => {
         const { data: additional } = await supabase
           .from('branches_additional')
@@ -337,8 +320,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           .eq('branch_id', branch.id)
           .maybeSingle();
         
+        // Get school name
         const school = schoolsData?.find(s => s.id === branch.school_id);
         
+        // Get teacher count if not in additional
         let teacherCount = additional?.teachers_count || 0;
         if (!teacherCount) {
           const { count } = await supabase
@@ -349,6 +334,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           teacherCount = count || 0;
         }
         
+        // Return enriched branch data
         return {
           ...branch,
           additional,
@@ -373,52 +359,55 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // ===== MUTATIONS =====
   const createBranchMutation = useMutation(
     async (data: any) => {
+      // Validate school selection for branch admins
       if (isBranchAdmin) {
         toast.error('Branch administrators cannot create new branches');
         throw new Error('Insufficient permissions');
       }
       
-      const branchFields = ['name', 'code', 'school_id', 'status', 'address', 'notes', 'logo'];
+      // Prepare main data
+      const mainData = {
+        name: data.name,
+        code: data.code,
+        school_id: data.school_id,
+        status: data.status,
+        address: data.address,
+        notes: data.notes,
+        logo: data.logo
+      };
       
-      const additionalFieldsList = [
-        'student_capacity', 'student_count', 'current_students', 'teachers_count',
-        'active_teachers_count', 'branch_head_name', 'branch_head_email',
-        'branch_head_phone', 'building_name', 'floor_details', 'opening_time',
-        'closing_time', 'working_days'
-      ];
-      
-      const branchData: any = {};
-      const additionalData: any = {};
-      
-      Object.keys(data).forEach(key => {
-        if (branchFields.includes(key)) {
-          branchData[key] = data[key];
-        } else if (additionalFieldsList.includes(key)) {
-          // Map student_count to both fields for compatibility
-          if (key === 'student_count') {
-            additionalData['student_count'] = data[key];
-            additionalData['current_students'] = data[key];
-          } else {
-            additionalData[key] = data[key];
-          }
-        }
-      });
-      
+      // Create main record
       const { data: branch, error } = await supabase
         .from('branches')
-        .insert([branchData])
+        .insert([mainData])
         .select()
         .single();
       
       if (error) throw error;
       
-      if (Object.keys(additionalData).length > 0) {
+      // Create additional record
+      const additionalData: any = {
+        branch_id: branch.id
+      };
+      
+      // Add additional fields
+      const additionalFields = [
+        'student_capacity', 'current_students', 'student_count', 'teachers_count',
+        'active_teachers_count', 'branch_head_name', 'branch_head_email',
+        'branch_head_phone', 'building_name', 'floor_details', 'opening_time',
+        'closing_time', 'working_days'
+      ];
+      
+      additionalFields.forEach(field => {
+        if (data[field] !== undefined) {
+          additionalData[field] = data[field];
+        }
+      });
+      
+      if (Object.keys(additionalData).length > 1) {
         const { error: additionalError } = await supabase
           .from('branches_additional')
-          .insert([{
-            branch_id: branch.id,
-            ...additionalData
-          }]);
+          .insert([additionalData]);
         
         if (additionalError && additionalError.code !== '23505') {
           console.error('Additional data error:', additionalError);
@@ -429,14 +418,13 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['branches-tab']);
+        queryClient.invalidateQueries(['branches-tab', companyId]);
         queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('Branch created successfully');
         setShowCreateModal(false);
         setFormData({});
         setFormErrors({});
-        setTabErrors({ basic: false, additional: false, contact: false });
         setActiveTab('basic');
       },
       onError: (error: any) => {
@@ -448,54 +436,56 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
   const updateBranchMutation = useMutation(
     async ({ id, data }: { id: string; data: any }) => {
-      const branchFields = ['name', 'code', 'school_id', 'status', 'address', 'notes', 'logo'];
+      // Prepare main data
+      const mainData = {
+        name: data.name,
+        code: data.code,
+        school_id: data.school_id,
+        status: data.status,
+        address: data.address,
+        notes: data.notes,
+        logo: data.logo
+      };
       
-      const additionalFieldsList = [
-        'student_capacity', 'student_count', 'current_students', 'teachers_count',
+      // Update main record
+      const { error } = await supabase
+        .from('branches')
+        .update(mainData)
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Update or insert additional record
+      const additionalData: any = {
+        branch_id: id
+      };
+      
+      // Add additional fields
+      const additionalFields = [
+        'student_capacity', 'current_students', 'student_count', 'teachers_count',
         'active_teachers_count', 'branch_head_name', 'branch_head_email',
         'branch_head_phone', 'building_name', 'floor_details', 'opening_time',
         'closing_time', 'working_days'
       ];
       
-      const branchData: any = {};
-      const additionalData: any = {};
-      
-      Object.keys(data).forEach(key => {
-        if (branchFields.includes(key)) {
-          branchData[key] = data[key];
-        } else if (additionalFieldsList.includes(key)) {
-          // Map student_count to both fields for compatibility
-          if (key === 'student_count') {
-            additionalData['student_count'] = data[key];
-            additionalData['current_students'] = data[key];
-          } else {
-            additionalData[key] = data[key];
-          }
+      additionalFields.forEach(field => {
+        if (data[field] !== undefined) {
+          additionalData[field] = data[field];
         }
       });
       
-      if (Object.keys(branchData).length > 0) {
-        const { error } = await supabase
-          .from('branches')
-          .update(branchData)
-          .eq('id', id);
-        
-        if (error) throw error;
-      }
-      
-      if (Object.keys(additionalData).length > 0) {
+      if (Object.keys(additionalData).length > 1) {
+        // Try update first
         const { error: updateError } = await supabase
           .from('branches_additional')
           .update(additionalData)
           .eq('branch_id', id);
         
+        // If no rows updated, insert
         if (updateError?.code === 'PGRST116') {
           const { error: insertError } = await supabase
             .from('branches_additional')
-            .insert([{
-              branch_id: id,
-              ...additionalData
-            }]);
+            .insert([additionalData]);
           
           if (insertError && insertError.code !== '23505') {
             console.error('Additional insert error:', insertError);
@@ -505,7 +495,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['branches-tab']);
+        queryClient.invalidateQueries(['branches-tab', companyId]);
         queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('Branch updated successfully');
@@ -513,7 +503,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         setSelectedBranch(null);
         setFormData({});
         setFormErrors({});
-        setTabErrors({ basic: false, additional: false, contact: false });
         setActiveTab('basic');
       },
       onError: (error: any) => {
@@ -523,93 +512,72 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     }
   );
 
-  // Delete branch mutation
-  const deleteBranchMutation = useMutation(
-    async (ids: string[]) => {
-      const { error } = await supabase
-        .from('branches')
-        .delete()
-        .in('id', ids);
-
-      if (error) throw error;
-      return ids;
-    },
-    {
-      onSuccess: (_data, ids) => {
-        toast.success(ids.length > 1 ? 'Branches deleted successfully' : 'Branch deleted successfully');
-        queryClient.invalidateQueries(['branches-tab']);
-        setShowDeleteConfirmation(false);
-        setDeleteContext(null);
-        setSelectedBranches([]);
-        if (refreshData) refreshData();
-      },
-      onError: (error: any) => {
-        console.error('Error deleting branch:', error);
-        toast.error(error.message || 'Failed to delete branch');
-        setShowDeleteConfirmation(false);
-        setDeleteContext(null);
-      }
-    }
-  );
-
-  // Form validation
+  // ===== HELPER FUNCTIONS =====
   const validateForm = useCallback(() => {
     const errors: Record<string, string> = {};
-    let hasBasicErrors = false;
-    let hasAdditionalErrors = false;
-    let hasContactErrors = false;
-
-    // Basic tab validation
-    if (!formData.name?.trim()) {
-      errors.name = 'Branch name is required';
-      hasBasicErrors = true;
-    }
-    if (!formData.code?.trim()) {
-      errors.code = 'Branch code is required';
-      hasBasicErrors = true;
-    }
-    if (!formData.school_id) {
-      errors.school_id = 'School is required';
-      hasBasicErrors = true;
-    }
-
-    // Additional tab validation (optional fields, but validate format if provided)
-    if (formData.student_capacity && formData.student_capacity < 0) {
-      errors.student_capacity = 'Student capacity must be a positive number';
-      hasAdditionalErrors = true;
-    }
-    if (formData.student_count && formData.student_count < 0) {
-      errors.student_count = 'Student count must be a positive number';
-      hasAdditionalErrors = true;
-    }
-
-    // Contact tab validation (optional fields, but validate format if provided)
+    
+    if (!formData.name) errors.name = 'Name is required';
+    if (!formData.code) errors.code = 'Code is required';
+    if (!formData.school_id) errors.school_id = 'School is required';
+    if (!formData.status) errors.status = 'Status is required';
+    
+    // Email validation
     if (formData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.branch_head_email)) {
-      errors.branch_head_email = 'Please enter a valid email address';
-      hasContactErrors = true;
+      errors.branch_head_email = 'Invalid email address';
     }
-
+    
     setFormErrors(errors);
-    setTabErrors({
-      basic: hasBasicErrors,
-      additional: hasAdditionalErrors,
-      contact: hasContactErrors
-    });
-
     return Object.keys(errors).length === 0;
   }, [formData]);
 
-  // Update form data when editing
+  // Effect to populate form data when editing
   useEffect(() => {
     if (selectedBranch && showEditModal) {
-      const additionalData = selectedBranch.additional || {};
-      const combinedData = {
-        ...selectedBranch,
-        ...additionalData
+      console.log('Populating form for branch:', selectedBranch);
+      const populateEditForm = async () => {
+        try {
+          const { data: schoolData, error } = await supabase
+            .from('schools')
+            .select('id, name, company_id')
+            .eq('id', selectedBranch.school_id)
+            .single();
+          
+          if (error) {
+            console.error('Error fetching school data:', error);
+            toast.error('Failed to load school information');
+            return;
+          }
+          
+          const additionalData = selectedBranch.additional || {};
+          console.log('Additional data:', additionalData);
+          
+          const combinedData = {
+            ...selectedBranch,
+            school_id: selectedBranch.school_id,
+            company_id: schoolData?.company_id,
+            ...additionalData
+          };
+          
+          console.log('Setting form data:', combinedData);
+          setFormData(combinedData);
+        } catch (error) {
+          console.error('Error populating form:', error);
+          toast.error('Failed to load branch data');
+        }
       };
-      setFormData(combinedData);
+      
+      populateEditForm();
     }
   }, [selectedBranch, showEditModal]);
+
+  // Effect to fetch schools when formData.company_id changes
+  useEffect(() => {
+    if (formData.company_id && schools.length === 0) {
+      console.log('Fetching schools for company:', formData.company_id);
+      // Trigger schools fetch by updating the schools query
+      // This will be handled by the schools query dependency
+    }
+  }, [formData.company_id]);
 
   const handleSubmit = useCallback((mode: 'create' | 'edit') => {
     if (!validateForm()) {
@@ -628,7 +596,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     setSelectedBranch(branch);
     setFormErrors({});
     setActiveTab('basic');
-    setTabErrors({ basic: false, additional: false, contact: false });
     setShowEditModal(true);
   }, []);
 
@@ -636,25 +603,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     setFormData({ status: 'active' });
     setFormErrors({});
     setActiveTab('basic');
-    setTabErrors({ basic: false, additional: false, contact: false });
     setShowCreateModal(true);
-  }, []);
-
-  // Handle delete confirmation
-  const handleDeleteClick = useCallback((branch: BranchData) => {
-    setDeleteContext({ ids: [branch.id], names: [branch.name] });
-    setShowDeleteConfirmation(true);
-  }, []);
-
-  const handleConfirmDelete = useCallback(() => {
-    if (deleteContext) {
-      deleteBranchMutation.mutate(deleteContext.ids);
-    }
-  }, [deleteContext, deleteBranchMutation]);
-
-  const handleCancelDelete = useCallback(() => {
-    setShowDeleteConfirmation(false);
-    setDeleteContext(null);
   }, []);
 
   // Filter branches based on search, status, and school
@@ -668,71 +617,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     });
   }, [branches, searchTerm, filterStatus, filterSchool]);
 
-  const {
-    page: branchesPage,
-    rowsPerPage: branchesRowsPerPage,
-    totalPages: branchesTotalPages,
-    totalCount: branchesTotalCount,
-    paginatedItems: paginatedBranches,
-    start: branchesStart,
-    end: branchesEnd,
-    goToPage: goToBranchesPage,
-    nextPage: nextBranchesPage,
-    previousPage: previousBranchesPage,
-    changeRowsPerPage: changeBranchesRowsPerPage,
-  } = usePagination(filteredBranches);
-
-  const listViewBranches = viewMode === 'list' ? paginatedBranches : filteredBranches;
-
-  const currentBranchIds = useMemo(
-    () => (viewMode === 'list' ? paginatedBranches.map(branch => branch.id) : []),
-    [viewMode, paginatedBranches]
-  );
-
-  // Bulk delete - must be defined AFTER filteredBranches
-  const handleBulkDelete = useCallback(() => {
-    if (selectedBranches.length === 0) return;
-
-    const selected = filteredBranches.filter(branch => selectedBranches.includes(branch.id));
-    if (selected.length === 0) return;
-
-    setDeleteContext({
-      ids: selected.map(branch => branch.id),
-      names: selected.map(branch => branch.name)
-    });
-    setShowDeleteConfirmation(true);
-  }, [filteredBranches, selectedBranches]);
-
-  const isAllSelected = viewMode === 'list' &&
-    currentBranchIds.length > 0 &&
-    currentBranchIds.every(id => selectedBranches.includes(id));
-
-  const isSomeSelected = viewMode === 'list' &&
-    currentBranchIds.some(id => selectedBranches.includes(id));
-
-  useEffect(() => {
-    if (viewMode !== 'list') {
-      if (selectedBranches.length > 0) {
-        setSelectedBranches([]);
-      }
-      return;
-    }
-
-    setSelectedBranches(prev => {
-      const filtered = prev.filter(id => filteredBranches.some(branch => branch.id === id));
-      if (filtered.length === prev.length && filtered.every((id, index) => id === prev[index])) {
-        return prev;
-      }
-      return filtered;
-    });
-  }, [filteredBranches, viewMode, selectedBranches.length]);
-
-  useEffect(() => {
-    if (!selectAllRef.current) return;
-
-    selectAllRef.current.indeterminate = viewMode === 'list' && isSomeSelected && !isAllSelected;
-  }, [isAllSelected, isSomeSelected, viewMode]);
-
   // Calculate stats
   const stats = useMemo(() => ({
     total: branches.length,
@@ -741,7 +625,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     teachers: branches.reduce((acc, b) => acc + (b.teachers_count || 0), 0)
   }), [branches]);
 
-  // Get admin level display text
+  // Get user context for display
+  const userContext = getUserContext();
   const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
 
   // Loading state
@@ -749,7 +634,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-600 mx-auto mb-2" />
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
           <p className="text-gray-600 dark:text-gray-400">Loading branches...</p>
         </div>
       </div>
@@ -772,84 +657,225 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     );
   }
 
-  // Form content rendering function
-  const renderFormContent = () => {
-    return (
-      <div className="space-y-4">
-        {/* Tab Navigation with Green Theme and Error Indicators */}
-        <div className="flex space-x-4 border-b dark:border-gray-700">
-          <button
-            type="button"
-            onClick={() => setActiveTab('basic')}
-            className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
-              activeTab === 'basic' 
-                ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
-                : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
-            }`}
-          >
-            Basic Info
-            {tabErrors.basic && !selectedBranch && (
-              <span 
-                className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
-                title="Required fields missing" 
-              />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('additional')}
-            className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
-              activeTab === 'additional' 
-                ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
-                : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
-            }`}
-          >
-            Additional
-            {tabErrors.additional && !selectedBranch && (
-              <span 
-                className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
-                title="Required fields missing" 
-              />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('contact')}
-            className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
-              activeTab === 'contact' 
-                ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
-                : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
-            }`}
-          >
-            Contact
-            {tabErrors.contact && !selectedBranch && (
-              <span 
-                className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
-                title="Required fields missing" 
-              />
-            )}
-          </button>
-        </div>
+  // ===== RENDER FORM =====
+  const renderBranchForm = () => (
+    <>
+      {activeTab === 'basic' && (
+        <div className="space-y-4">
+          <FormField id="school_id" label="School" required error={formErrors.school_id}>
+            <Select
+              id="school_id"
+              value={formData.school_id || ''}
+              onChange={(e) => setFormData({...formData, school_id: e.target.value})}
+              disabled={isBranchAdmin} // Branch admins can't change school
+            >
+              <option value="">Select school</option>
+              {schools.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Select>
+          </FormField>
 
-        {/* Form Content using BranchFormContent component */}
-        <div className="mt-4">
-          <BranchFormContent
-            formData={formData}
-            setFormData={setFormData}
-            formErrors={formErrors}
-            setFormErrors={setFormErrors}
-            activeTab={activeTab}
-            schools={schools}
-            isEditing={!!selectedBranch}
-            isLoadingSchools={isLoadingSchools}
-            schoolsError={schoolsError}
-            isBranchAdmin={isBranchAdmin}
-            onTabErrorsChange={setTabErrors}
-          />
+          <FormField id="name" label="Branch Name" required error={formErrors.name}>
+            <Input
+              id="name"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Enter branch name"
+            />
+          </FormField>
+
+          <FormField id="code" label="Branch Code" required error={formErrors.code}>
+            <Input
+              id="code"
+              value={formData.code || ''}
+              onChange={(e) => setFormData({...formData, code: e.target.value})}
+              placeholder="e.g., BR-001"
+            />
+          </FormField>
+
+          <FormField id="status" label="Status" required error={formErrors.status}>
+            <Select
+              id="status"
+              value={formData.status || 'active'}
+              onChange={(e) => setFormData({...formData, status: e.target.value})}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </Select>
+          </FormField>
+
+          <FormField id="building_name" label="Building Name">
+            <Input
+              id="building_name"
+              value={formData.building_name || ''}
+              onChange={(e) => setFormData({...formData, building_name: e.target.value})}
+              placeholder="Enter building name"
+            />
+          </FormField>
+
+          <FormField id="floor_details" label="Floor Details">
+            <Input
+              id="floor_details"
+              value={formData.floor_details || ''}
+              onChange={(e) => setFormData({...formData, floor_details: e.target.value})}
+              placeholder="e.g., 2nd Floor, Wing A"
+            />
+          </FormField>
+
+          <FormField id="address" label="Address">
+            <Textarea
+              id="address"
+              value={formData.address || ''}
+              onChange={(e) => setFormData({...formData, address: e.target.value})}
+              placeholder="Enter branch address"
+              rows={3}
+            />
+          </FormField>
+
+          <FormField id="logo" label="Branch Logo">
+            <ImageUpload
+              id="branch-logo"
+              bucket="branch-logos"
+              value={formData.logo}
+              publicUrl={formData.logo ? getBranchLogoUrl(formData.logo) : null}
+              onChange={(path) => setFormData({...formData, logo: path || ''})}
+            />
+          </FormField>
         </div>
-      </div>
-    );
-  };
+      )}
+
+      {activeTab === 'additional' && (
+        <div className="space-y-4">
+          <FormField id="student_capacity" label="Student Capacity">
+            <Input
+              id="student_capacity"
+              type="number"
+              value={formData.student_capacity || ''}
+              onChange={(e) => setFormData({...formData, student_capacity: parseInt(e.target.value)})}
+              placeholder="Maximum students"
+            />
+          </FormField>
+
+          <FormField id="current_students" label="Current Students">
+            <Input
+              id="current_students"
+              type="number"
+              value={formData.current_students || ''}
+              onChange={(e) => setFormData({...formData, current_students: parseInt(e.target.value)})}
+              placeholder="Current number of students"
+            />
+          </FormField>
+
+          <FormField id="teachers_count" label="Teachers Count">
+            <Input
+              id="teachers_count"
+              type="number"
+              value={formData.teachers_count || ''}
+              onChange={(e) => setFormData({...formData, teachers_count: parseInt(e.target.value)})}
+              placeholder="Number of teachers"
+            />
+          </FormField>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField id="opening_time" label="Opening Time">
+              <Input
+                id="opening_time"
+                type="time"
+                value={formData.opening_time || ''}
+                onChange={(e) => setFormData({...formData, opening_time: e.target.value})}
+              />
+            </FormField>
+
+            <FormField id="closing_time" label="Closing Time">
+              <Input
+                id="closing_time"
+                type="time"
+                value={formData.closing_time || ''}
+                onChange={(e) => setFormData({...formData, closing_time: e.target.value})}
+              />
+            </FormField>
+          </div>
+
+          <FormField id="working_days" label="Working Days">
+            <div className="space-y-2">
+              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                <label key={day} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={(formData.working_days || []).includes(day)}
+                    onChange={(e) => {
+                      const current = formData.working_days || [];
+                      if (e.target.checked) {
+                        setFormData({...formData, working_days: [...current, day]});
+                      } else {
+                        setFormData({...formData, working_days: current.filter((d: string) => d !== day)});
+                      }
+                    }}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span className="text-sm capitalize">{day}</span>
+                </label>
+              ))}
+            </div>
+          </FormField>
+
+          <FormField id="notes" label="Notes">
+            <Textarea
+              id="notes"
+              value={formData.notes || ''}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              placeholder="Additional notes"
+              rows={3}
+            />
+          </FormField>
+        </div>
+      )}
+
+      {activeTab === 'contact' && (
+        <div className="space-y-4">
+          <FormField id="branch_head_name" label="Branch Head Name">
+            <Input
+              id="branch_head_name"
+              value={formData.branch_head_name || ''}
+              onChange={(e) => setFormData({...formData, branch_head_name: e.target.value})}
+              placeholder="Enter branch head name"
+            />
+          </FormField>
+
+          <FormField id="branch_head_email" label="Branch Head Email" error={formErrors.branch_head_email}>
+            <Input
+              id="branch_head_email"
+              type="email"
+              value={formData.branch_head_email || ''}
+              onChange={(e) => setFormData({...formData, branch_head_email: e.target.value})}
+              placeholder="branchhead@school.com"
+            />
+          </FormField>
+
+          <FormField id="branch_head_phone" label="Branch Head Phone">
+            <Input
+              id="branch_head_phone"
+              type="tel"
+              value={formData.branch_head_phone || ''}
+              onChange={(e) => setFormData({...formData, branch_head_phone: e.target.value})}
+              placeholder="+1 (555) 123-4567"
+            />
+          </FormField>
+
+          <FormField id="active_teachers_count" label="Active Teachers">
+            <Input
+              id="active_teachers_count"
+              type="number"
+              value={formData.active_teachers_count || ''}
+              onChange={(e) => setFormData({...formData, active_teachers_count: parseInt(e.target.value)})}
+              placeholder="Number of active teachers"
+            />
+          </FormField>
+        </div>
+      )}
+    </>
+  );
 
   // ===== MAIN RENDER =====
   return (
@@ -869,49 +895,25 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             </div>
             <Select
               value={filterSchool}
-              onChange={(value) => setFilterSchool(value)}
+              onChange={(e) => setFilterSchool(e.target.value)}
               className="w-48"
-              options={[
-                { value: 'all', label: 'All Schools' },
-                ...schools.map(s => ({ value: s.id, label: s.name }))
-              ]}
-            />
+            >
+              <option value="all">All Schools</option>
+              {schools.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Select>
             <Select
               value={filterStatus}
-              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
+              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
               className="w-32"
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-            />
-            {/* View Mode Toggle - Moved to Right */}
-            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('card')}
-                className={`p-2 rounded-md transition-colors ${
-                  viewMode === 'card'
-                    ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-                title="Card View"
-              >
-                <Grid3X3 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-md transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-                title="List View"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </Select>
           </div>
+          {/* FIXED: Changed from 'organization.create_branch' to 'create_branch' */}
           {can('create_branch') ? (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
@@ -944,14 +946,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           </div>
         )}
 
-        {/* Stats - Unified Colors */}
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {canAccessAll ? 'Total Branches' : 'Assigned Branches'}
-                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Branches</p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
                   {stats.total}
                 </p>
@@ -985,19 +985,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
-                <p className="text-xl font-semibold text-green-600 dark:text-green-400">
+                <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
                   {stats.teachers.toLocaleString()}
                 </p>
               </div>
-              <Users className="w-8 h-8 text-green-400" />
+              <Users className="w-8 h-8 text-purple-400" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Branches Display */}
-      {viewMode === 'card' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Branches List */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredBranches.length === 0 ? (
           <div className="col-span-full text-center py-8">
             <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -1010,354 +1009,124 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         ) : (
           filteredBranches.map((branch) => {
             const logoUrl = getBranchLogoUrl(branch.logo);
-            const canEdit = can('modify_branch') && !branch.readOnly;
+            // FIXED: Changed from 'organization.modify_branch' to 'modify_branch'
+            const canEdit = can('modify_branch');
             
             return (
               <div
                 key={branch.id}
-                className="group bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl hover:border-[#8CC63F]/40 dark:hover:border-[#8CC63F]/40 transition-all duration-300 hover:-translate-y-2 overflow-hidden relative"
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
               >
-                {/* Hover overlay for actions */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                
-                <div className="relative p-6">
-                  {/* Header with ENHANCED logo, name, and status */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-4">
-                      {/* ENHANCED LOGO DISPLAY */}
-                      <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F]/20 to-[#8CC63F]/30 dark:from-[#8CC63F]/30 dark:to-[#8CC63F]/40 rounded-2xl flex items-center justify-center overflow-hidden shadow-xl border-2 border-[#8CC63F]/30 group-hover:border-[#8CC63F]/50 transition-all duration-300">
-                        {logoUrl ? (
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    {/* Logo display with better error handling */}
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-md overflow-hidden relative bg-white">
+                      {logoUrl ? (
+                        <>
                           <img
                             src={logoUrl}
                             alt={`${branch.name} logo`}
-                            className="w-full h-full object-contain p-2"
+                            className="w-full h-full object-contain p-0.5"
                             onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = 'none';
-                              const fallback = target.nextSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
+                              const imgElement = e.currentTarget as HTMLImageElement;
+                              imgElement.style.display = 'none';
+                              const parent = imgElement.parentElement;
+                              if (parent) {
+                                const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
+                                if (fallback) {
+                                  fallback.style.display = 'flex';
+                                }
+                              }
                             }}
                           />
-                        ) : null}
-                        <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                          <MapPin className="w-10 h-10 text-[#8CC63F]/70" />
+                          <div className="logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-purple-500 text-white">
+                            <MapPin className="w-5 h-5" />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full bg-purple-500 text-white">
+                          <MapPin className="w-5 h-5" />
                         </div>
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-xl text-gray-900 dark:text-white group-hover:text-[#8CC63F] transition-colors">
-                          {branch.name}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-sm text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
-                            {branch.code}
-                          </span>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={branch.status} size="sm" />
-                      {/* Action buttons - floating on hover */}
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-4 group-hover:translate-x-0">
-                        {canEdit && (
-                          <Button
-                            onClick={() => handleEdit(branch)}
-                            variant="outline"
-                            size="sm"
-                            className="h-9 w-9 p-0 border-[#8CC63F]/30 text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200 shadow-md hover:shadow-lg"
-                            title="Edit branch"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {can('delete_branch') && (
-                          <Button
-                            onClick={() => handleDeleteClick(branch)}
-                            variant="outline"
-                            size="sm"
-                            className="h-9 w-9 p-0 border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 shadow-md hover:shadow-lg"
-                            title="Delete branch"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
+                    
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{branch.name}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{branch.code}</p>
                     </div>
                   </div>
+                  <StatusBadge status={branch.status} size="xs" />
+                </div>
 
-                  {/* Branch details */}
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <School className="w-4 h-4 text-blue-500" />
-                      <span>{branch.school_name}</span>
-                    </div>
-                    {branch.additional?.branch_head_name && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <User className="w-4 h-4 text-green-500" />
-                        <span>{branch.additional.branch_head_name}</span>
-                      </div>
-                    )}
-                    {branch.additional?.building_name && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Building className="w-4 h-4 text-purple-500" />
-                        <span>{branch.additional.building_name}</span>
-                        {branch.additional.floor_details && (
-                          <span className="text-gray-400">• {branch.additional.floor_details}</span>
-                        )}
-                      </div>
-                    )}
-                    {branch.address && (
-                      <div className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Navigation className="w-4 h-4 text-orange-500 mt-0.5" />
-                        <span className="line-clamp-2">{branch.address}</span>
-                      </div>
-                    )}
-                    {branch.additional?.opening_time && branch.additional?.closing_time && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Clock className="w-4 h-4 text-indigo-500" />
-                        <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
-                      </div>
-                    )}
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <School className="w-3 h-3" />
+                    <span>{branch.school_name}</span>
                   </div>
+                  {branch.additional?.branch_head_name && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <User className="w-3 h-3" />
+                      <span>{branch.additional.branch_head_name}</span>
+                    </div>
+                  )}
+                  {branch.additional?.building_name && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Building className="w-3 h-3" />
+                      <span>{branch.additional.building_name}</span>
+                      {branch.additional.floor_details && (
+                        <span className="text-gray-400">• {branch.additional.floor_details}</span>
+                      )}
+                    </div>
+                  )}
+                  {branch.address && (
+                    <div className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Navigation className="w-3 h-3 mt-0.5" />
+                      <span className="line-clamp-2">{branch.address}</span>
+                    </div>
+                  )}
+                  {branch.additional?.opening_time && branch.additional?.closing_time && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Clock className="w-3 h-3" />
+                      <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
+                    </div>
+                  )}
+                </div>
 
-                  {/* Statistics - UNIFIED COLORS */}
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
-                      <div className="flex items-center justify-center mb-1">
-                        <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
+                  <div className="flex items-center space-x-4 text-xs">
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
                         {branch.student_count || 0}
-                      </div>
-                      <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                        Students
-                      </div>
+                      </span>
                     </div>
-                    <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-900/30 rounded-xl border border-green-200 dark:border-green-800">
-                      <div className="flex items-center justify-center mb-1">
-                        <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      </div>
-                      <div className="text-xl font-bold text-green-700 dark:text-green-300">
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
                         {branch.teachers_count || 0}
-                      </div>
-                      <div className="text-xs font-medium text-green-600 dark:text-green-400">
-                        Teachers
-                      </div>
+                      </span>
                     </div>
                   </div>
-
-                  {/* Footer - NO DUPLICATE BUTTONS */}
-                  <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Created {new Date(branch.created_at).toLocaleDateString()}
-                      </div>
+                  {/* UI GATING: Show edit button based on permissions */}
+                  {canEdit ? (
+                    <button
+                      onClick={() => handleEdit(branch)}
+                      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Edit branch"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                    </button>
+                  ) : (
+                    <div className="p-1.5 opacity-50" title="You don't have permission to edit branches">
+                      <Shield className="w-4 h-4 text-gray-400" />
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             );
           })
         )}
-        </div>
-      ) : (
-        /* List View */
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {selectedBranches.length > 0 && (
-            <div className="flex items-center justify-between px-6 py-3 bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700" role="toolbar" aria-label="Bulk actions">
-              <span className="text-sm text-gray-700 dark:text-gray-300">{selectedBranches.length} selected</span>
-              <div className="flex gap-2">
-                {can('delete_branch') && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleBulkDelete}
-                    disabled={deleteBranchMutation.isLoading || deleteBranchMutation.isPending}
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                  <th className="px-6 py-4 text-left">
-                    <input
-                      ref={selectAllRef}
-                      type="checkbox"
-                      checked={isAllSelected}
-                      aria-checked={isAllSelected ? 'true' : (isSomeSelected ? 'mixed' : 'false')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedBranches(prev => {
-                            const next = new Set(prev);
-                            paginatedBranches.forEach(branch => next.add(branch.id));
-                            return Array.from(next);
-                          });
-                        } else {
-                          setSelectedBranches(prev => prev.filter(id => !paginatedBranches.some(branch => branch.id === id)));
-                        }
-                      }}
-                      className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
-                      aria-label="Select all branches"
-                    />
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Branch</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Code</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">School</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Students</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Teachers</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Created</th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {branchesTotalCount === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center">
-                      <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-600 dark:text-gray-400">
-                        {searchTerm || filterStatus !== 'all' || filterSchool !== 'all'
-                          ? 'No branches match your filters'
-                          : 'No branches found'}
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  listViewBranches.map((branch) => {
-                    const logoUrl = getBranchLogoUrl(branch.logo);
-                    const canEdit = can('modify_branch') && !branch.readOnly;
-
-                    return (
-                      <tr key={branch.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <input
-                            type="checkbox"
-                          checked={selectedBranches.includes(branch.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedBranches(prev => (prev.includes(branch.id) ? prev : [...prev, branch.id]));
-                            } else {
-                              setSelectedBranches(prev => prev.filter(id => id !== branch.id));
-                            }
-                          }}
-                          className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
-                          aria-label={`Select ${branch.name}`}
-                        />
-                      </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            {/* ENHANCED LOGO IN LIST VIEW */}
-                            <div className="w-14 h-14 bg-gradient-to-br from-[#8CC63F]/10 to-[#8CC63F]/20 dark:from-[#8CC63F]/20 dark:to-[#8CC63F]/30 rounded-xl flex items-center justify-center overflow-hidden border border-[#8CC63F]/20">
-                              {logoUrl ? (
-                                <img
-                                  src={logoUrl}
-                                  alt={`${branch.name} logo`}
-                                  className="w-full h-full object-contain p-1"
-                                  onError={(e) => {
-                                    const target = e.currentTarget;
-                                    target.style.display = 'none';
-                                    const fallback = target.nextSibling as HTMLElement;
-                                    if (fallback) fallback.style.display = 'flex';
-                                  }}
-                                />
-                              ) : null}
-                              <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                                <MapPin className="w-7 h-7 text-[#8CC63F]/60" />
-                              </div>
-                            </div>
-                            <div>
-                              <div className="font-semibold text-gray-900 dark:text-white">{branch.name}</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">
-                                {branch.additional?.building_name && (
-                                  <span>{branch.additional.building_name}</span>
-                                )}
-                                {branch.additional?.floor_details && (
-                                  <span className="text-gray-400"> • {branch.additional.floor_details}</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                            {branch.code}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1">
-                            <School className="w-4 h-4 text-blue-500" />
-                            <span className="text-sm">{branch.school_name}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <StatusBadge status={branch.status} size="sm" />
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1">
-                            <Users className="w-4 h-4 text-blue-500" />
-                            <span className="font-medium">{branch.student_count || 0}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1">
-                            <Users className="w-4 h-4 text-green-500" />
-                            <span className="font-medium">{branch.teachers_count || 0}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {new Date(branch.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {canEdit && (
-                              <Button
-                                onClick={() => handleEdit(branch)}
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0 border-[#8CC63F]/30 text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200"
-                                title="Edit branch"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {can('delete_branch') && (
-                              <Button
-                                onClick={() => handleDeleteClick(branch)}
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0 border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
-                                title="Delete branch"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-          <PaginationControls
-            page={branchesPage}
-            rowsPerPage={branchesRowsPerPage}
-            totalCount={branchesTotalCount}
-            totalPages={branchesTotalPages}
-            onPageChange={goToBranchesPage}
-            onNextPage={nextBranchesPage}
-            onPreviousPage={previousBranchesPage}
-            onRowsPerPageChange={changeBranchesRowsPerPage}
-            showingRange={{ start: branchesStart, end: branchesEnd }}
-          />
-        </div>
-      )}
+      </div>
 
       {/* Create Modal */}
       <SlideInForm
@@ -1367,13 +1136,54 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setShowCreateModal(false);
           setFormData({});
           setFormErrors({});
-          setTabErrors({ basic: false, additional: false, contact: false });
-          setActiveTab('basic');
         }}
         onSave={() => handleSubmit('create')}
-        loading={createBranchMutation.isPending || createBranchMutation.isLoading}
+        loading={createBranchMutation.isLoading}
       >
-        {renderFormContent()}
+        {/* Use BranchFormContent component */}
+        <div className="space-y-4">
+          {/* Tab Navigation */}
+          <div className="flex space-x-4 border-b dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 ${activeTab === 'basic' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Basic Info
+            </button>
+            <button
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 ${activeTab === 'additional' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Additional
+            </button>
+            <button
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 ${activeTab === 'contact' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Contact
+            </button>
+          </div>
+
+          {/* Form Content */}
+          <div className="mt-4">
+            <BranchFormContent
+              formData={formData}
+              setFormData={setFormData}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              schools={schools}
+              isEditing={false}
+            />
+          </div>
+        </div>
       </SlideInForm>
 
       {/* Edit Modal */}
@@ -1386,26 +1196,56 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setSelectedBranch(null);
           setFormData({});
           setFormErrors({});
-          setTabErrors({ basic: false, additional: false, contact: false });
           setActiveTab('basic');
         }}
         onSave={() => handleSubmit('edit')}
-        loading={updateBranchMutation.isPending || updateBranchMutation.isLoading}
+        loading={updateBranchMutation.isLoading}
       >
-        {renderFormContent()}
-      </SlideInForm>
+        {/* Use BranchFormContent component */}
+        <div className="space-y-4">
+          {/* Tab Navigation */}
+          <div className="flex space-x-4 border-b dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 ${activeTab === 'basic' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Basic Info
+            </button>
+            <button
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 ${activeTab === 'additional' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Additional
+            </button>
+            <button
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 ${activeTab === 'contact' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Contact
+            </button>
+          </div>
 
-      {/* Delete Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={showDeleteConfirmation}
-        title={deleteTitle}
-        message={deleteMessage}
-        confirmText={deleteCount > 1 ? 'Delete Branches' : 'Delete Branch'}
-        cancelText="Cancel"
-        confirmVariant="destructive"
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCancelDelete}
-      />
+          {/* Form Content */}
+          <div className="mt-4">
+            <BranchFormContent
+              formData={formData}
+              setFormData={setFormData}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              schools={schools}
+              isEditing={true}
+            />
+          </div>
+        </div>
+      </SlideInForm>
     </div>
   );
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase';
@@ -43,8 +43,11 @@ export default function ProvidersTable() {
     status: ''
   });
 
-  const fetchProviders = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    fetchProviders();
+  }, []);
+
+  const fetchProviders = async () => {
     try {
       let query = supabase
         .from('providers')
@@ -73,11 +76,7 @@ export default function ProvidersTable() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
-
-  useEffect(() => {
-    fetchProviders();
-  }, [fetchProviders]);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -276,6 +275,7 @@ export default function ProvidersTable() {
             code: '',
             status: ''
           });
+          fetchProviders();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

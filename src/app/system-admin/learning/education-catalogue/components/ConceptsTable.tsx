@@ -119,12 +119,9 @@ export default function ConceptsTable() {
   });
 
   useEffect(() => {
+    fetchConcepts();
     fetchSubjects();
   }, []);
-
-  useEffect(() => {
-    fetchConcepts();
-  }, [filters]);
 
   // Filter cascade effects
   useEffect(() => {
@@ -278,7 +275,6 @@ export default function ConceptsTable() {
   }, [editingConcept]);
 
   const fetchConcepts = async () => {
-    setLoading(true);
     try {
       // First, fetch the concepts
       let query = supabase
@@ -810,6 +806,7 @@ export default function ConceptsTable() {
             objective_id: '',
             status: []
           });
+          fetchConcepts();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -820,16 +817,7 @@ export default function ConceptsTable() {
               label: subject.name
             }))}
             selectedValues={filters.subject_id ? [filters.subject_id] : []}
-            onChange={(values) =>
-              setFilters(prev => ({
-                ...prev,
-                subject_id: values[0] || '',
-                unit_id: '',
-                topic_id: '',
-                subtopic_id: '',
-                objective_id: ''
-              }))
-            }
+            onChange={(values) => setFilters({ ...filters, subject_id: values[0] || '', unit_id: '', topic_id: '', subtopic_id: '', objective_id: '' })}
             isMulti={false}
             placeholder="Select subject..."
           />
@@ -841,15 +829,7 @@ export default function ConceptsTable() {
               label: unit.name
             }))}
             selectedValues={filters.unit_id ? [filters.unit_id] : []}
-            onChange={(values) =>
-              setFilters(prev => ({
-                ...prev,
-                unit_id: values[0] || '',
-                topic_id: '',
-                subtopic_id: '',
-                objective_id: ''
-              }))
-            }
+            onChange={(values) => setFilters({ ...filters, unit_id: values[0] || '', topic_id: '', subtopic_id: '', objective_id: '' })}
             isMulti={false}
             disabled={!filters.subject_id}
             placeholder="Select unit..."
@@ -862,14 +842,7 @@ export default function ConceptsTable() {
               label: topic.name
             }))}
             selectedValues={filters.topic_id ? [filters.topic_id] : []}
-            onChange={(values) =>
-              setFilters(prev => ({
-                ...prev,
-                topic_id: values[0] || '',
-                subtopic_id: '',
-                objective_id: ''
-              }))
-            }
+            onChange={(values) => setFilters({ ...filters, topic_id: values[0] || '', subtopic_id: '', objective_id: '' })}
             isMulti={false}
             disabled={!filters.unit_id}
             placeholder="Select topic..."
@@ -882,13 +855,7 @@ export default function ConceptsTable() {
               label: subtopic.name
             }))}
             selectedValues={filters.subtopic_id ? [filters.subtopic_id] : []}
-            onChange={(values) =>
-              setFilters(prev => ({
-                ...prev,
-                subtopic_id: values[0] || '',
-                objective_id: ''
-              }))
-            }
+            onChange={(values) => setFilters({ ...filters, subtopic_id: values[0] || '', objective_id: '' })}
             isMulti={false}
             disabled={!filters.topic_id}
             placeholder="Select subtopic..."
@@ -901,12 +868,7 @@ export default function ConceptsTable() {
               label: objective.name.substring(0, 30) + (objective.name.length > 30 ? '...' : '')
             }))}
             selectedValues={filters.objective_id ? [filters.objective_id] : []}
-            onChange={(values) =>
-              setFilters(prev => ({
-                ...prev,
-                objective_id: values[0] || ''
-              }))
-            }
+            onChange={(values) => setFilters({ ...filters, objective_id: values[0] || '' })}
             isMulti={false}
             disabled={!filters.subtopic_id}
             placeholder="Select objective..."
@@ -919,12 +881,7 @@ export default function ConceptsTable() {
               { value: 'inactive', label: 'Inactive' }
             ]}
             selectedValues={filters.status}
-            onChange={(values) =>
-              setFilters(prev => ({
-                ...prev,
-                status: values
-              }))
-            }
+            onChange={(values) => setFilters({ ...filters, status: values })}
             placeholder="Select status..."
           />
         </div>

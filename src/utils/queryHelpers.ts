@@ -80,8 +80,7 @@ export const queryActiveStudents = async (
       throw new Error('Company ID is required');
     }
 
-    // First, get students data
-    let studentsQuery = supabase
+    let query = supabase
       .from('students')
       .select(`
         id,
@@ -95,6 +94,13 @@ export const queryActiveStudents = async (
         branch_id,
         created_at,
         updated_at,
+        users!students_user_id_fkey (
+          id,
+          email,
+          is_active,
+          raw_user_meta_data,
+          last_login_at
+        ),
         schools (
           id,
           name,
@@ -107,6 +113,7 @@ export const queryActiveStudents = async (
         )
       `)
       .eq('company_id', companyId)
+      .eq('users.is_active', true)  // FIXED: Filter active through users table
       .order('created_at', { ascending: false });
 
     // Apply school/branch filters
@@ -117,96 +124,51 @@ export const queryActiveStudents = async (
           `school_id.in.(${filters.school_ids.join(',')})`,
           `branch_id.in.(${filters.branch_ids.join(',')})`
         ];
-        studentsQuery = studentsQuery.or(orConditions.join(','));
+        query = query.or(orConditions.join(','));
       } else {
-        studentsQuery = studentsQuery.in('school_id', filters.school_ids);
+        query = query.in('school_id', filters.school_ids);
       }
     } else if (filters.branch_ids && filters.branch_ids.length > 0) {
-      studentsQuery = studentsQuery.in('branch_id', filters.branch_ids);
+      query = query.in('branch_id', filters.branch_ids);
     }
 
     // Apply additional filters
     if (filters.grade_level) {
-      studentsQuery = studentsQuery.eq('grade_level', filters.grade_level);
+      query = query.eq('grade_level', filters.grade_level);
+    }
+
+    if (filters.search) {
+      const searchTerm = filters.search.trim();
+      query = query.or(`student_code.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%,users.email.ilike.%${searchTerm}%`);
     }
 
     if (filters.limit) {
-      studentsQuery = studentsQuery.limit(filters.limit);
+      query = query.limit(filters.limit);
     }
 
     if (filters.offset) {
-      studentsQuery = studentsQuery.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
+      query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
     }
 
-    const { data: studentsData, error: studentsError } = await studentsQuery;
+    const { data, error } = await query;
 
-    if (studentsError) {
-      console.error('Students query error:', studentsError);
-      throw new Error(`Failed to fetch students: ${studentsError.message}`);
+    if (error) {
+      console.error('Students query error:', error);
+      throw new Error(`Failed to fetch students: ${error.message}`);
     }
 
-    if (!studentsData) {
-      return [];
-    }
-
-    // Get user IDs from students
-    const userIds = studentsData.map(s => s.user_id).filter(Boolean);
-    
-    // Fetch users data separately
-    const { data: usersData, error: usersError } = await supabase
-      .from('users')
-      .select('id, email, is_active, raw_user_meta_data, last_login_at')
-      .in('id', userIds)
-      .eq('is_active', true);
-
-    if (usersError) {
-      console.error('Users query error:', usersError);
-      throw new Error(`Failed to fetch user data: ${usersError.message}`);
-    }
-
-    // Create a map of users by ID for quick lookup
-    const usersMap = new Map();
-    (usersData || []).forEach(user => {
-      usersMap.set(user.id, user);
-    });
-
-    // Filter students to only include those with active users
-    const studentsWithActiveUsers = studentsData.filter(student => 
-      student.user_id && usersMap.has(student.user_id)
-    );
-
-    // Apply search filter after getting user data
-    let filteredStudents = studentsWithActiveUsers;
-    if (filters.search) {
-      const searchTerm = filters.search.trim().toLowerCase();
-      filteredStudents = studentsWithActiveUsers.filter(student => {
-        const userData = usersMap.get(student.user_id);
-        const name = userData?.raw_user_meta_data?.name || userData?.email?.split('@')[0] || '';
-        const email = userData?.email || '';
-        
-        return (
-          student.student_code?.toLowerCase().includes(searchTerm) ||
-          name.toLowerCase().includes(searchTerm) ||
-          email.toLowerCase().includes(searchTerm)
-        );
-      });
-    }
-
-    // Transform and enrich the data
-    return filteredStudents.map(student => {
-      const userData = usersMap.get(student.user_id);
-      return {
+    // FIXED: Transform and enrich the data - name derived from users table
+    return (data || []).map(student => ({
       ...student,
-      name: userData?.raw_user_meta_data?.name || 
-            userData?.email?.split('@')[0] || 
+      name: student.users?.raw_user_meta_data?.name || 
+            student.users?.email?.split('@')[0] || 
             'Unknown Student',
-      email: userData?.email || '',
-      is_active: userData?.is_active || false,
+      email: student.users?.email || '',
+      is_active: student.users?.is_active || false,
       school_name: student.schools?.name || 'No School Assigned',
       branch_name: student.branches?.name || 'No Branch Assigned',
-      user_data: userData
-      };
-    }) as StudentRecord[];
+      user_data: student.users
+    })) as StudentRecord[];
 
   } catch (error) {
     console.error('Error in queryActiveStudents:', error);
@@ -227,8 +189,7 @@ export const queryActiveTeachers = async (
       throw new Error('Company ID is required');
     }
 
-    // First, get teachers data
-    let teachersQuery = supabase
+    let query = supabase
       .from('teachers')
       .select(`
         id,
@@ -240,9 +201,17 @@ export const queryActiveTeachers = async (
         bio,
         company_id,
         school_id,
+        branch_id,
         hire_date,
         created_at,
         updated_at,
+        users!teachers_user_id_fkey (
+          id,
+          email,
+          is_active,
+          raw_user_meta_data,
+          last_login_at
+        ),
         schools (
           id,
           name,
@@ -255,6 +224,7 @@ export const queryActiveTeachers = async (
         )
       `)
       .eq('company_id', companyId)
+      .eq('users.is_active', true)  // FIXED: Filter active through users table
       .order('created_at', { ascending: false });
 
     // Apply school/branch filters
@@ -265,96 +235,51 @@ export const queryActiveTeachers = async (
           `school_id.in.(${filters.school_ids.join(',')})`,
           `branch_id.in.(${filters.branch_ids.join(',')})`
         ];
-        teachersQuery = teachersQuery.or(orConditions.join(','));
+        query = query.or(orConditions.join(','));
       } else {
-        teachersQuery = teachersQuery.in('school_id', filters.school_ids);
+        query = query.in('school_id', filters.school_ids);
       }
     } else if (filters.branch_ids && filters.branch_ids.length > 0) {
-      teachersQuery = teachersQuery.in('branch_id', filters.branch_ids);
+      query = query.in('branch_id', filters.branch_ids);
     }
 
     // Apply additional filters
     if (filters.specialization) {
-      teachersQuery = teachersQuery.contains('specialization', [filters.specialization]);
+      query = query.contains('specialization', [filters.specialization]);
+    }
+
+    if (filters.search) {
+      const searchTerm = filters.search.trim();
+      query = query.or(`teacher_code.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%,users.email.ilike.%${searchTerm}%`);
     }
 
     if (filters.limit) {
-      teachersQuery = teachersQuery.limit(filters.limit);
+      query = query.limit(filters.limit);
     }
 
     if (filters.offset) {
-      teachersQuery = teachersQuery.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
+      query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
     }
 
-    const { data: teachersData, error: teachersError } = await teachersQuery;
+    const { data, error } = await query;
 
-    if (teachersError) {
-      console.error('Teachers query error:', teachersError);
-      throw new Error(`Failed to fetch teachers: ${teachersError.message}`);
+    if (error) {
+      console.error('Teachers query error:', error);
+      throw new Error(`Failed to fetch teachers: ${error.message}`);
     }
 
-    if (!teachersData) {
-      return [];
-    }
-
-    // Get user IDs from teachers
-    const userIds = teachersData.map(t => t.user_id).filter(Boolean);
-    
-    // Fetch users data separately
-    const { data: usersData, error: usersError } = await supabase
-      .from('users')
-      .select('id, email, is_active, raw_user_meta_data, last_login_at')
-      .in('id', userIds)
-      .eq('is_active', true);
-
-    if (usersError) {
-      console.error('Users query error:', usersError);
-      throw new Error(`Failed to fetch user data: ${usersError.message}`);
-    }
-
-    // Create a map of users by ID for quick lookup
-    const usersMap = new Map();
-    (usersData || []).forEach(user => {
-      usersMap.set(user.id, user);
-    });
-
-    // Filter teachers to only include those with active users
-    const teachersWithActiveUsers = teachersData.filter(teacher => 
-      teacher.user_id && usersMap.has(teacher.user_id)
-    );
-
-    // Apply search filter after getting user data
-    let filteredTeachers = teachersWithActiveUsers;
-    if (filters.search) {
-      const searchTerm = filters.search.trim().toLowerCase();
-      filteredTeachers = teachersWithActiveUsers.filter(teacher => {
-        const userData = usersMap.get(teacher.user_id);
-        const name = userData?.raw_user_meta_data?.name || userData?.email?.split('@')[0] || '';
-        const email = userData?.email || '';
-        
-        return (
-          teacher.teacher_code?.toLowerCase().includes(searchTerm) ||
-          name.toLowerCase().includes(searchTerm) ||
-          email.toLowerCase().includes(searchTerm)
-        );
-      });
-    }
-
-    // Transform and enrich the data
-    return filteredTeachers.map(teacher => {
-      const userData = usersMap.get(teacher.user_id);
-      return {
+    // FIXED: Transform and enrich the data - name derived from users table
+    return (data || []).map(teacher => ({
       ...teacher,
-      name: userData?.raw_user_meta_data?.name || 
-            userData?.email?.split('@')[0] || 
+      name: teacher.users?.raw_user_meta_data?.name || 
+            teacher.users?.email?.split('@')[0] || 
             'Unknown Teacher',
-      email: userData?.email || '',
-      is_active: userData?.is_active || false,
+      email: teacher.users?.email || '',
+      is_active: teacher.users?.is_active || false,
       school_name: teacher.schools?.name || 'No School Assigned',
       branch_name: teacher.branches?.name || 'No Branch Assigned',
-      user_data: userData
-      };
-    }) as TeacherRecord[];
+      user_data: teacher.users
+    })) as TeacherRecord[];
 
   } catch (error) {
     console.error('Error in queryActiveTeachers:', error);

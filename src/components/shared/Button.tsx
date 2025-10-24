@@ -23,7 +23,6 @@ import React from 'react';
 import { cn } from '../../lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
-import { Tooltip } from './Tooltip';
 
 const buttonVariants = cva(
   'inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 relative overflow-hidden group',
@@ -155,8 +154,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const iconClass = getIconSize();
-
-    const buttonContent = (
+    
+    return (
       <button
         ref={ref}
         className={cn(
@@ -167,6 +166,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className
         )}
         disabled={isDisabled}
+        title={tooltip}
         aria-busy={loading}
         aria-disabled={isDisabled}
         {...props}
@@ -194,17 +194,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         <span className="absolute inset-0 rounded-lg bg-white/20 scale-0 group-active:scale-100 transition-transform duration-200 ease-out" />
       </button>
     );
-
-    // Wrap with tooltip if provided
-    if (tooltip) {
-      return (
-        <Tooltip content={tooltip} position="top" delay={200}>
-          {buttonContent}
-        </Tooltip>
-      );
-    }
-
-    return buttonContent;
   }
 );
 

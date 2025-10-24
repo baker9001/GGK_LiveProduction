@@ -21,28 +21,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ["pdfjs-dist", "react", "react-dom", "buffer"]
   },
-  build: {
-    rollupOptions: {
-      onwarn(warning, warn) {
-        // Suppress eval warnings from pdf.js and ScientificEditor
-        if (warning.code === 'EVAL' && (
-          warning.id?.includes('pdfjs-dist') ||
-          warning.id?.includes('ScientificEditor')
-        )) {
-          return;
-        }
-        warn(warning);
-      },
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'pdf-worker': ['pdfjs-dist'],
-          'ui-components': ['lucide-react'],
-          'query': ['@tanstack/react-query'],
-          'supabase': ['@supabase/supabase-js'],
-        }
-      }
-    },
-    chunkSizeWarningLimit: 1000,
-  }
 });

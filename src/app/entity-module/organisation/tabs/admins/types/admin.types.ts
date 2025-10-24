@@ -30,12 +30,6 @@ export interface AdminPermissions {
     view_all_branches: boolean;
     manage_departments: boolean;
   };
-  licenses: {
-    assign_license: boolean;
-    revoke_license: boolean;
-    view_licenses: boolean;
-    manage_license_assignments: boolean;
-  };
   settings: {
     manage_company_settings: boolean;
     manage_school_settings: boolean;
