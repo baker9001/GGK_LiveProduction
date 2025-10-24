@@ -13,6 +13,7 @@ import { FilterSection } from './components/FilterSection';
 import { supabase } from '../../../../../lib/supabase';
 import { toast } from '../../../../../components/shared/Toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { autoPopulateAnswerFields } from '../../../../../services/answerFieldAutoPopulationService';
 
 // Type definitions (keeping your existing types)
 export interface Attachment {
@@ -911,6 +912,32 @@ export default function QuestionsSetupPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleAutoPopulate = async () => {
+    if (!window.confirm('This will auto-populate missing Answer Format and Answer Requirement fields based on question characteristics. Continue?')) {
+      return;
+    }
+
+    try {
+      toast.info('Auto-populating answer fields...');
+
+      const result = await autoPopulateAnswerFields();
+
+      if (result.errors.length > 0) {
+        console.error('Auto-population errors:', result.errors);
+        toast.error(`Completed with ${result.errors.length} errors. Check console for details.`);
+      } else {
+        toast.success(
+          `Successfully updated ${result.questionsUpdated} questions and ${result.subQuestionsUpdated} sub-questions`
+        );
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+    } catch (error) {
+      console.error('Error auto-populating answer fields:', error);
+      toast.error('Failed to auto-populate answer fields');
+    }
+  };
+
   if (simulationPaper) {
     return (
       <ExamSimulation
@@ -1148,6 +1175,7 @@ export default function QuestionsSetupPage() {
           onShowAnalytics={() => setActiveTab('analytics')}
           onBulkImport={() => toast.info('Bulk import feature coming soon')}
           onBulkExport={handleBulkExport}
+          onAutoFix={handleAutoPopulate}
         />
       </div>
     </div>
