@@ -26,13 +26,15 @@ import { cn } from '../../lib/utils';
 import { FormField, Input, Select } from './FormField';
 import { RichTextEditor } from './RichTextEditor';
 import {
-  deriveAnswerRequirement,
+  deriveAnswerRequirement as deriveAnswerRequirementLegacy,
   getAnswerRequirementExplanation,
   validateAnswerRequirement
 } from '../../lib/extraction/answerRequirementDeriver';
 import {
   ANSWER_FORMAT_OPTIONS,
-  ANSWER_REQUIREMENT_OPTIONS
+  ANSWER_REQUIREMENT_OPTIONS,
+  deriveAnswerFormat,
+  deriveAnswerRequirement
 } from '../../lib/constants/answerOptions';
 
 const formatOptionLabel = (value: string) =>
@@ -421,16 +423,40 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     [commitQuestionUpdate, taxonomyMaps.subtopicsById, taxonomyMaps.topicsById, taxonomyMaps.unitsById]
   );
 
-  const autoFillAnswerRequirement = useCallback((question: QuestionDisplayData) => {
-    const result = deriveAnswerRequirement({
-      questionType: question.question_type,
-      answerFormat: question.answer_format,
-      correctAnswers: question.correct_answers,
-      totalAlternatives: question.total_alternatives,
-      options: question.options
-    });
+  const autoFillAnswerFields = useCallback((question: QuestionDisplayData) => {
+    const updates: Partial<QuestionDisplayData> = {};
 
-    return result.answerRequirement;
+    // Auto-fill answer_format if empty
+    if (!question.answer_format) {
+      const derivedFormat = deriveAnswerFormat({
+        type: question.question_type || 'descriptive',
+        question_description: question.question_text || '',
+        correct_answers: question.correct_answers || [],
+        has_direct_answer: true,
+        is_contextual_only: false
+      });
+
+      if (derivedFormat) {
+        updates.answer_format = derivedFormat;
+      }
+    }
+
+    // Auto-fill answer_requirement if empty
+    if (!question.answer_requirement) {
+      const derivedRequirement = deriveAnswerRequirement({
+        type: question.question_type || 'descriptive',
+        correct_answers: question.correct_answers || [],
+        total_alternatives: question.total_alternatives,
+        has_direct_answer: true,
+        is_contextual_only: false
+      });
+
+      if (derivedRequirement) {
+        updates.answer_requirement = derivedRequirement;
+      }
+    }
+
+    return updates;
   }, []);
 
   const handleQuestionFieldChange = <K extends keyof QuestionDisplayData>(
@@ -440,11 +466,29 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   ) => {
     const updates: Partial<QuestionDisplayData> = { [field]: value };
 
+    // Auto-fill answer_format when question_type changes
+    if (field === 'question_type' && !question.answer_format) {
+      const derivedFormat = deriveAnswerFormat({
+        type: value as string,
+        question_description: question.question_text || '',
+        correct_answers: question.correct_answers || [],
+        has_direct_answer: true,
+        is_contextual_only: false
+      });
+
+      if (derivedFormat) {
+        updates.answer_format = derivedFormat;
+      }
+    }
+
     // Auto-fill answer_requirement when question_type or answer_format changes
     if ((field === 'question_type' || field === 'answer_format') && !question.answer_requirement) {
-      const derivedRequirement = autoFillAnswerRequirement({
-        ...question,
-        ...updates
+      const derivedRequirement = deriveAnswerRequirement({
+        type: (field === 'question_type' ? value : question.question_type) as string,
+        correct_answers: question.correct_answers || [],
+        total_alternatives: question.total_alternatives,
+        has_direct_answer: true,
+        is_contextual_only: false
       });
 
       if (derivedRequirement) {
@@ -466,16 +510,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
-    // Auto-fill answer_requirement if not set
-    if (!question.answer_requirement) {
-      const derivedRequirement = autoFillAnswerRequirement({
+    // Auto-fill answer fields if not set
+    if (!question.answer_format || !question.answer_requirement) {
+      const autoFilled = autoFillAnswerFields({
         ...question,
         correct_answers: answers
       });
-
-      if (derivedRequirement) {
-        questionUpdates.answer_requirement = derivedRequirement;
-      }
+      Object.assign(questionUpdates, autoFilled);
     }
 
     commitQuestionUpdate(question, questionUpdates);
@@ -487,16 +528,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
-    // Auto-fill answer_requirement if not set
-    if (!question.answer_requirement) {
-      const derivedRequirement = autoFillAnswerRequirement({
+    // Auto-fill answer fields if not set
+    if (!question.answer_format || !question.answer_requirement) {
+      const autoFilled = autoFillAnswerFields({
         ...question,
         correct_answers: answers
       });
-
-      if (derivedRequirement) {
-        questionUpdates.answer_requirement = derivedRequirement;
-      }
+      Object.assign(questionUpdates, autoFilled);
     }
 
     commitQuestionUpdate(question, questionUpdates);
@@ -508,16 +546,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
-    // Auto-fill answer_requirement if not set
-    if (!question.answer_requirement) {
-      const derivedRequirement = autoFillAnswerRequirement({
+    // Auto-fill answer fields if not set
+    if (!question.answer_format || !question.answer_requirement) {
+      const autoFilled = autoFillAnswerFields({
         ...question,
         correct_answers: answers
       });
-
-      if (derivedRequirement) {
-        questionUpdates.answer_requirement = derivedRequirement;
-      }
+      Object.assign(questionUpdates, autoFilled);
     }
 
     commitQuestionUpdate(question, questionUpdates);
@@ -1164,6 +1199,25 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       onReviewLoadingChange(isInitializing);
     }
   }, [isInitializing, onReviewLoadingChange]);
+
+  // Auto-fill empty answer_format and answer_requirement fields when questions load
+  useEffect(() => {
+    if (!memoizedQuestions || memoizedQuestions.length === 0 || isInitializing) {
+      return;
+    }
+
+    // Check each question and auto-fill if needed
+    memoizedQuestions.forEach(question => {
+      if (!question.answer_format || !question.answer_requirement) {
+        const updates = autoFillAnswerFields(question);
+
+        if (Object.keys(updates).length > 0) {
+          console.log(`Auto-filling answer fields for question ${question.question_number}:`, updates);
+          commitQuestionUpdate(question, updates);
+        }
+      }
+    });
+  }, [memoizedQuestions, isInitializing, autoFillAnswerFields, commitQuestionUpdate]);
 
   const initializeReviewSession = useCallback(async () => {
     // Check if already initialized
