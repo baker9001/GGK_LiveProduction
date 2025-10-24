@@ -291,12 +291,28 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
     return null;
   }
 
+  // Filter out attachments with no valid file_url or empty URLs
+  // Only keep attachments that have actual content to display
+  const validAttachments = attachments.filter(attachment => {
+    const hasValidUrl = attachment.file_url && attachment.file_url.trim() !== '';
+    const isDescriptionOnly = !hasValidUrl && attachment.file_type === 'text/description';
+
+    // Keep description-only attachments (placeholders) in QA mode
+    // But filter out completely invalid/empty attachments
+    return hasValidUrl || isDescriptionOnly;
+  });
+
+  // If no valid attachments remain after filtering, don't render anything
+  if (validAttachments.length === 0) {
+    return null;
+  }
+
   const closePreview = () => setPreviewAttachment(null);
 
   return (
     <>
       <div className="space-y-6">
-        {attachments.map((attachment, index) => {
+        {validAttachments.map((attachment, index) => {
           const isImage = attachment.file_type?.startsWith('image/');
           const id = attachment.id || `${attachment.file_url}-${index}`;
 
