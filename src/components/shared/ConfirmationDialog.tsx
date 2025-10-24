@@ -1,19 +1,20 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../../lib/utils';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
-  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link' | 'warning' | 'primary';
   onConfirm: () => void;
   onCancel: () => void;
   className?: string;
+  tone?: 'danger' | 'warning' | 'info' | 'success';
 }
 
 export function ConfirmationDialog({
@@ -25,7 +26,8 @@ export function ConfirmationDialog({
   confirmVariant = 'destructive',
   onConfirm,
   onCancel,
-  className
+  className,
+  tone = 'danger'
 }: ConfirmationDialogProps) {
   // Prevent body scroll when dialog is open
   useEffect(() => {
@@ -58,6 +60,29 @@ export function ConfirmationDialog({
 
   if (!isOpen) return null;
 
+  const resolvedConfirmVariant = confirmVariant === 'primary' ? 'default' : confirmVariant;
+
+  const toneConfig = {
+    danger: {
+      Icon: AlertCircle,
+      iconClass: 'text-red-500 dark:text-red-400',
+    },
+    warning: {
+      Icon: AlertTriangle,
+      iconClass: 'text-amber-500 dark:text-amber-400',
+    },
+    info: {
+      Icon: Info,
+      iconClass: 'text-blue-500 dark:text-blue-400',
+    },
+    success: {
+      Icon: CheckCircle2,
+      iconClass: 'text-emerald-500 dark:text-emerald-400',
+    },
+  } as const;
+
+  const { Icon, iconClass } = toneConfig[tone];
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div 
@@ -80,8 +105,8 @@ export function ConfirmationDialog({
         {/* Content */}
         <div className="px-6 py-4">
           <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5 mr-3 flex-shrink-0" />
-            <p className="text-gray-700 dark:text-gray-300">{message}</p>
+            <Icon className={cn('h-5 w-5 mt-0.5 mr-3 flex-shrink-0', iconClass)} />
+            <div className="text-gray-700 dark:text-gray-300 space-y-2">{message}</div>
           </div>
         </div>
         
@@ -94,7 +119,7 @@ export function ConfirmationDialog({
             {cancelText}
           </Button>
           <Button
-            variant={confirmVariant}
+            variant={resolvedConfirmVariant}
             onClick={onConfirm}
           >
             {confirmText}

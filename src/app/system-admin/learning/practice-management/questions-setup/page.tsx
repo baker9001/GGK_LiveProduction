@@ -1,7 +1,7 @@
 // src/app/system-admin/learning/practice-management/questions-setup/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, FileText, BarChart3, X, CheckCircle, Clock, Archive, AlertTriangle } from 'lucide-react';
 import { Button } from '../../../../../components/shared/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
@@ -29,11 +29,24 @@ export interface QuestionOption {
   option_text: string;
   is_correct: boolean;
   order: number;
+  text?: string;
+  label?: string;
 }
 
 export interface Subtopic {
   id: string;
   name: string;
+  topic_id?: string;
+}
+
+export interface CorrectAnswer {
+  id: string;
+  answer: string;
+  marks?: number;
+  alternative_id?: number;
+  context_type?: string;
+  context_value?: string;
+  context_label?: string;
 }
 
 export interface SubQuestion {
@@ -47,11 +60,21 @@ export interface SubQuestion {
   topic_id?: string;
   topic_name?: string;
   unit_name?: string;
+  unit_id?: string;
+  subtopic_id?: string;
   subtopics?: Subtopic[];
   options?: QuestionOption[];
   attachments: Attachment[];
   hint?: string;
   explanation?: string;
+  answer_format?: string;
+  answer_requirement?: string;
+  total_alternatives?: number;
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string;
+  parent_id?: string | null;
+  level?: number | null;
+  order_index?: number | null;
 }
 
 export interface Question {
@@ -72,6 +95,12 @@ export interface Question {
   attachments: Attachment[];
   hint?: string;
   explanation?: string;
+  unit_id?: string;
+  answer_format?: string;
+  answer_requirement?: string;
+  total_alternatives?: number;
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string;
 }
 
 export interface GroupedPaper {
@@ -84,6 +113,14 @@ export interface GroupedPaper {
   status: string;
   duration?: string;
   total_marks?: number;
+  subject_id?: string;
+  provider_id?: string;
+  program_id?: string;
+  region_id?: string;
+  data_structure_id?: string;
+  exam_year?: number;
+  exam_session?: string;
+  title?: string;
   questions: Question[];
 }
 
@@ -198,6 +235,15 @@ export default function QuestionsSetupPage() {
           status,
           topic_id,
           subtopic_id,
+          answer_format,
+          answer_requirement,
+          total_alternatives,
+          correct_answer,
+          primary_subtopic:edu_subtopics!questions_master_admin_subtopic_id_fkey (
+            id,
+            name,
+            topic_id
+          ),
           explanation,
           hint,
           created_at,
@@ -209,7 +255,10 @@ export default function QuestionsSetupPage() {
             provider_id,
             status,
             duration,
-            data_structure_id
+            data_structure_id,
+            exam_year,
+            exam_session,
+            title
           ),
           question_subtopics(
             subtopic_id,
@@ -223,13 +272,26 @@ export default function QuestionsSetupPage() {
             id,
             option_text,
             is_correct,
-            order
+            order,
+            label,
+            text
+          ),
+          question_correct_answers(
+            id,
+            answer,
+            marks,
+            alternative_id,
+            context_type,
+            context_value,
+            context_label
           ),
           sub_questions(
             id,
             question_id,
             type,
+            part_label,
             topic_id,
+            subtopic_id,
             question_description,
             marks,
             hint,
@@ -242,6 +304,15 @@ export default function QuestionsSetupPage() {
             level,
             explanation,
             status,
+            answer_format,
+            answer_requirement,
+            total_alternatives,
+            correct_answer,
+            primary_subtopic:edu_subtopics!sub_questions_subtopic_id_fkey (
+              id,
+              name,
+              topic_id
+            ),
             question_subtopics(
               subtopic_id,
               edu_subtopics(
@@ -254,7 +325,18 @@ export default function QuestionsSetupPage() {
               id,
               option_text,
               is_correct,
-              order
+              order,
+              label,
+              text
+            ),
+            question_correct_answers(
+              id,
+              answer,
+              marks,
+              alternative_id,
+              context_type,
+              context_value,
+              context_label
             ),
             questions_attachments(
               id,
@@ -295,55 +377,79 @@ export default function QuestionsSetupPage() {
         return [];
       }
 
+      if (!data || data.length === 0) {
+        return [];
+      }
+
       // Fetch paper details with data structure info
-      const paperIds = [...new Set(data?.map(q => q.paper_id).filter(Boolean))];
-      
-      const { data: paperDetails } = await supabase
-        .from('papers_setup')
-        .select(`
-          id,
-          paper_code,
-          data_structure_id,
-          data_structures(
-            id,
-            edu_subjects(id, name),
-            providers(id, name),
-            programs(id, name),
-            regions(id, name)
-          )
-        `)
-        .in('id', paperIds);
+      const paperIds = [...new Set(data.map(q => q.paper_id).filter(Boolean))];
 
-      const paperDetailsMap = new Map(
-        paperDetails?.map(p => [p.id, p]) || []
-      );
+      const [paperDetailsResponse, topicDetailsResponse] = await Promise.all([
+        paperIds.length
+          ? supabase
+              .from('papers_setup')
+              .select(`
+                id,
+                paper_code,
+                data_structure_id,
+                data_structures(
+                  id,
+                  edu_subjects(id, name),
+                  providers(id, name),
+                  programs(id, name),
+                  regions(id, name)
+                )
+              `)
+              .in('id', paperIds)
+          : Promise.resolve({ data: [], error: null }),
+        (() => {
+          const topicIds = [
+            ...new Set([
+              ...data.map(q => q.topic_id).filter(Boolean),
+              ...data
+                .flatMap(q => q.sub_questions?.map((sq: any) => sq.topic_id).filter(Boolean))
+            ])
+          ];
 
-      // Fetch topics and units for questions
-      const topicIds = [...new Set([
-        ...data?.map(q => q.topic_id).filter(Boolean) || [],
-        ...data?.flatMap(q => q.sub_questions?.map(sq => sq.topic_id).filter(Boolean)) || []
-      ])];
-      
-      const { data: topicDetails } = await supabase
-        .from('edu_topics')
-        .select('id, name, unit_id')
-        .in('id', topicIds);
+          return topicIds.length
+            ? supabase
+                .from('edu_topics')
+                .select('id, name, unit_id')
+                .in('id', topicIds)
+            : Promise.resolve({ data: [], error: null });
+        })()
+      ]);
 
+      if (paperDetailsResponse.error) {
+        console.error('Error fetching paper details:', paperDetailsResponse.error);
+      }
+
+      if (topicDetailsResponse.error) {
+        console.error('Error fetching topic details:', topicDetailsResponse.error);
+      }
+
+      const paperDetails = paperDetailsResponse.data ?? [];
+      const topicDetails = topicDetailsResponse.data ?? [];
+
+      const paperDetailsMap = new Map(paperDetails.map(p => [p.id, p]));
       const topicMap = new Map(
-        topicDetails?.map(t => [t.id, { name: t.name, unit_id: t.unit_id }]) || []
+        topicDetails.map(t => [t.id, { name: t.name, unit_id: t.unit_id }])
       );
 
-      // Fetch units for the topics
-      const unitIds = [...new Set(topicDetails?.map(t => t.unit_id).filter(Boolean) || [])];
-      
-      const { data: unitDetails } = await supabase
-        .from('edu_units')
-        .select('id, name')
-        .in('id', unitIds);
+      const unitIds = [...new Set(topicDetails.map(t => t.unit_id).filter(Boolean))];
 
-      const unitMap = new Map(
-        unitDetails?.map(u => [u.id, u.name]) || []
-      );
+      const { data: unitDetails, error: unitError } = unitIds.length
+        ? await supabase
+            .from('edu_units')
+            .select('id, name')
+            .in('id', unitIds)
+        : { data: [], error: null };
+
+      if (unitError) {
+        console.error('Error fetching units:', unitError);
+      }
+
+      const unitMap = new Map((unitDetails ?? []).map(u => [u.id, u.name]));
 
       // Group questions by paper
       const paperGroups: Record<string, GroupedPaper> = {};
@@ -365,6 +471,14 @@ export default function QuestionsSetupPage() {
             status: paper.status,
             duration: paper.duration,
             total_marks: 0,
+            subject_id: dataStructure?.edu_subjects?.id,
+            provider_id: dataStructure?.providers?.id,
+            program_id: dataStructure?.programs?.id,
+            region_id: dataStructure?.regions?.id,
+            data_structure_id: dataStructure?.id || paperDetail?.data_structure_id,
+            exam_year: paper.exam_year,
+            exam_session: paper.exam_session,
+            title: paper.title,
             questions: []
           };
         }
@@ -374,8 +488,68 @@ export default function QuestionsSetupPage() {
         paperGroups[paperId].total_marks += questionMarks;
 
         // Get topic and unit information
-        const topicInfo = topicMap.get(question.topic_id || '');
+        const primarySubtopicRecord = question.primary_subtopic;
+        const inferredTopicId = question.topic_id || primarySubtopicRecord?.topic_id || '';
+        const topicInfo = topicMap.get(inferredTopicId);
         const unitName = topicInfo?.unit_id ? unitMap.get(topicInfo.unit_id) : undefined;
+
+        const additionalSubtopics = (question.question_subtopics || []).map((qs: any) => ({
+          id: qs.edu_subtopics.id,
+          name: qs.edu_subtopics.name,
+          topic_id: qs.edu_subtopics.topic_id
+        }));
+
+        const mergedSubtopicsMap = new Map<string, Subtopic>();
+
+        if (primarySubtopicRecord?.id) {
+          mergedSubtopicsMap.set(primarySubtopicRecord.id, {
+            id: primarySubtopicRecord.id,
+            name: primarySubtopicRecord.name,
+            topic_id: primarySubtopicRecord.topic_id
+          });
+        }
+
+        additionalSubtopics.forEach(subtopic => {
+          if (subtopic.id && !mergedSubtopicsMap.has(subtopic.id)) {
+            mergedSubtopicsMap.set(subtopic.id, subtopic);
+          }
+        });
+
+        const mergedSubtopics = Array.from(mergedSubtopicsMap.values());
+
+        const mapOptions = (options: any[] | null | undefined): QuestionOption[] => {
+          if (!Array.isArray(options)) return [];
+
+          return options
+            .map((option, index) => {
+              const resolvedOrder = typeof option.order === 'number' ? option.order : index;
+              const optionText = option.option_text || option.text || '';
+
+              return {
+                id: option.id,
+                option_text: optionText,
+                text: optionText,
+                is_correct: Boolean(option.is_correct),
+                order: resolvedOrder,
+                label: option.label || String.fromCharCode(65 + resolvedOrder)
+              } as QuestionOption;
+            })
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        };
+
+        const mapCorrectAnswers = (answers: any[] | null | undefined): CorrectAnswer[] => {
+          if (!Array.isArray(answers)) return [];
+
+          return answers.map(answer => ({
+            id: answer.id,
+            answer: answer.answer,
+            marks: answer.marks ?? undefined,
+            alternative_id: answer.alternative_id ?? undefined,
+            context_type: answer.context_type ?? undefined,
+            context_value: answer.context_value ?? undefined,
+            context_label: answer.context_label ?? undefined
+          }));
+        };
 
         // Format the question
         const formattedQuestion: Question = {
@@ -386,41 +560,84 @@ export default function QuestionsSetupPage() {
           type: question.type,
           difficulty: question.difficulty,
           category: question.category,
-          status: question.status === 'active' ? 'active' : 'qa_review',
-          topic_id: question.topic_id,
+          status: question.status, // Use actual question status from database
+          topic_id: inferredTopicId || undefined,
           topic_name: topicInfo?.name,
           unit_name: unitName,
-          subtopic_id: question.subtopic_id,
-          subtopics: question.question_subtopics?.map((qs: any) => ({
-            id: qs.edu_subtopics.id,
-            name: qs.edu_subtopics.name
-          })) || [],
-          options: question.question_options || [],
+          unit_id: topicInfo?.unit_id,
+          subtopic_id: question.subtopic_id || primarySubtopicRecord?.id || undefined,
+          subtopics: mergedSubtopics,
+          options: mapOptions(question.question_options),
           attachments: question.questions_attachments || [],
           hint: question.hint || question.questions_hints?.[0]?.hint_text,
           explanation: question.explanation,
+          answer_format: question.answer_format || undefined,
+          answer_requirement: question.answer_requirement || undefined,
+          total_alternatives: question.total_alternatives || undefined,
+          correct_answer: question.correct_answer || undefined,
+          correct_answers: mapCorrectAnswers(question.question_correct_answers),
           parts: question.sub_questions?.
             sort((a: any, b: any) => (a.sort_order || a.order_index || a.order || 0) - (b.sort_order || b.order_index || b.order || 0))
-            .map((sq: any, index: number) => ({
-              id: sq.id,
-              part_label: `Part ${String.fromCharCode(97 + index)}`,
-              question_description: sq.question_description,
-              marks: sq.marks,
-              difficulty: 'medium', // Default since sub_questions doesn't have difficulty column
-              type: sq.type,
-              status: sq.status === 'active' ? 'active' : 'qa_review',
-              topic_id: sq.topic_id,
-              topic_name: topicMap.get(sq.topic_id || '')?.name,
-              unit_name: sq.topic_id ? unitMap.get(topicMap.get(sq.topic_id)?.unit_id || '') : undefined,
-              subtopics: sq.question_subtopics?.map((qs: any) => ({
+            .map((sq: any, index: number) => {
+              const primarySubQuestionSubtopic = sq.primary_subtopic;
+              const subQuestionTopicId = sq.topic_id || primarySubQuestionSubtopic?.topic_id || '';
+              const subQuestionTopicInfo = topicMap.get(subQuestionTopicId);
+              const subQuestionUnitName = subQuestionTopicInfo?.unit_id
+                ? unitMap.get(subQuestionTopicInfo.unit_id)
+                : undefined;
+
+              const subQuestionAdditionalSubtopics = (sq.question_subtopics || []).map((qs: any) => ({
                 id: qs.edu_subtopics.id,
-                name: qs.edu_subtopics.name
-              })) || [],
-              options: sq.question_options || [],
-              attachments: sq.questions_attachments || [],
-              hint: sq.hint || sq.questions_hints?.[0]?.hint_text,
-              explanation: sq.explanation
-            })) || []
+                name: qs.edu_subtopics.name,
+                topic_id: qs.edu_subtopics.topic_id
+              }));
+
+              const subQuestionMergedSubtopicsMap = new Map<string, Subtopic>();
+
+              if (primarySubQuestionSubtopic?.id) {
+                subQuestionMergedSubtopicsMap.set(primarySubQuestionSubtopic.id, {
+                  id: primarySubQuestionSubtopic.id,
+                  name: primarySubQuestionSubtopic.name,
+                  topic_id: primarySubQuestionSubtopic.topic_id
+                });
+              }
+
+              subQuestionAdditionalSubtopics.forEach(subtopic => {
+                if (subtopic.id && !subQuestionMergedSubtopicsMap.has(subtopic.id)) {
+                  subQuestionMergedSubtopicsMap.set(subtopic.id, subtopic);
+                }
+              });
+
+              const subQuestionMergedSubtopics = Array.from(subQuestionMergedSubtopicsMap.values());
+
+              return {
+                id: sq.id,
+                part_label: sq.part_label || `Part ${String.fromCharCode(97 + index)}`,
+                question_description: sq.question_description,
+                marks: sq.marks,
+                difficulty: 'medium', // Default since sub_questions doesn't have difficulty column
+                type: sq.type,
+                status: sq.status, // Use actual sub-question status from database
+                topic_id: subQuestionTopicId || undefined,
+                topic_name: subQuestionTopicInfo?.name,
+                unit_name: subQuestionUnitName,
+                unit_id: subQuestionTopicInfo?.unit_id,
+                subtopic_id: sq.subtopic_id || primarySubQuestionSubtopic?.id || undefined,
+                subtopics: subQuestionMergedSubtopics,
+                options: mapOptions(sq.question_options),
+                attachments: sq.questions_attachments || [],
+                hint: sq.hint || sq.questions_hints?.[0]?.hint_text,
+                explanation: sq.explanation,
+                answer_format: sq.answer_format || undefined,
+                answer_requirement: sq.answer_requirement || undefined,
+                total_alternatives: sq.total_alternatives || undefined,
+                correct_answers: mapCorrectAnswers(sq.question_correct_answers),
+                correct_answer: sq.correct_answer || undefined,
+                parent_id: sq.parent_id || null,
+                level: sq.level ?? null,
+                order_index: sq.sort_order || sq.order_index || sq.order || index
+              };
+            }) || []
         };
 
         paperGroups[paperId].questions.push(formattedQuestion);
@@ -436,10 +653,10 @@ export default function QuestionsSetupPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('edu_topics')
-        .select('id, name')
+        .select('id, name, unit_id')
         .eq('status', 'active')
         .order('name');
-      
+
       if (error) throw error;
       return data || [];
     }
@@ -453,16 +670,69 @@ export default function QuestionsSetupPage() {
         .select('id, name, topic_id')
         .eq('status', 'active')
         .order('name');
-      
+
       if (error) throw error;
       return data || [];
     }
   });
 
+  const subjectsForFilters = useMemo(
+    () => {
+      const nameById = new Map(subjects.map(subject => [subject.id, subject.name]));
+      const aggregate = new Map<
+        string,
+        { id: string; name: string; providerIds: Set<string> }
+      >();
+
+      groupedPapers.forEach(paper => {
+        if (!paper.subject_id) return;
+        const existing = aggregate.get(paper.subject_id);
+        const providerIds = existing?.providerIds || new Set<string>();
+        if (paper.provider_id) {
+          providerIds.add(paper.provider_id);
+        }
+
+        aggregate.set(paper.subject_id, {
+          id: paper.subject_id,
+          name: nameById.get(paper.subject_id) || paper.subject || 'Unknown',
+          providerIds
+        });
+      });
+
+      subjects.forEach(subject => {
+        if (!aggregate.has(subject.id)) {
+          aggregate.set(subject.id, {
+            id: subject.id,
+            name: subject.name,
+            providerIds: new Set<string>()
+          });
+        }
+      });
+
+      return Array.from(aggregate.values()).map(subject => ({
+        id: subject.id,
+        name: subject.name,
+        provider_ids: Array.from(subject.providerIds)
+      }));
+    },
+    [subjects, groupedPapers]
+  );
+
+  const hasActiveFilters = useMemo(
+    () =>
+      Boolean(searchTerm.trim()) ||
+      filters.provider_ids.length > 0 ||
+      filters.subject_ids.length > 0 ||
+      filters.unit_ids.length > 0 ||
+      filters.difficulty.length > 0 ||
+      filters.validation_status.length > 0,
+    [searchTerm, filters]
+  );
+
   // Enhanced filtering logic
   const filteredPapers = groupedPapers.filter(paper => {
     // Search term filter
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       paper.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       paper.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       paper.questions.some(q => 
@@ -470,18 +740,37 @@ export default function QuestionsSetupPage() {
       );
     
     // Provider filter
-    const matchesProvider = filters.provider_ids.length === 0 || 
-      filters.provider_ids.some(id => providers.find(p => p.id === id)?.name === paper.provider);
-    
+    const matchesProvider =
+      filters.provider_ids.length === 0 ||
+      (paper.provider_id
+        ? filters.provider_ids.includes(paper.provider_id)
+        : filters.provider_ids.some(id => {
+            const provider = providers.find(p => p.id === id);
+            return (
+              provider?.name?.toLowerCase() === paper.provider?.toLowerCase()
+            );
+          }));
+
     // Subject filter
-    const matchesSubject = filters.subject_ids.length === 0 || 
-      filters.subject_ids.some(id => subjects.find(s => s.id === id)?.name === paper.subject);
-    
+    const matchesSubject =
+      filters.subject_ids.length === 0 ||
+      (paper.subject_id
+        ? filters.subject_ids.includes(paper.subject_id)
+        : filters.subject_ids.some(id => {
+            const subject = subjectsForFilters.find(s => s.id === id);
+            return subject?.name?.toLowerCase() === paper.subject?.toLowerCase();
+          }));
+
     // Unit filter
-    const matchesUnit = filters.unit_ids.length === 0 || 
-      paper.questions.some(q => 
-        q.unit_name && filters.unit_ids.some(id => units.find(u => u.id === id)?.name === q.unit_name)
-      );
+    const matchesUnit =
+      filters.unit_ids.length === 0 ||
+      paper.questions.some(q => {
+        const matchesQuestionUnit = q.unit_id && filters.unit_ids.includes(q.unit_id);
+        const matchesPartUnit = q.parts?.some(
+          part => part.unit_id && filters.unit_ids.includes(part.unit_id)
+        );
+        return matchesQuestionUnit || matchesPartUnit;
+      });
     
     // Validation status filter
     let matchesValidation = true;
@@ -511,7 +800,7 @@ export default function QuestionsSetupPage() {
   });
 
   // Filter papers by status for tabs
-  const activePapers = groupedPapers.filter(paper => paper.status === 'active');
+  const publishedPapers = groupedPapers.filter(paper => paper.status === 'active');
   const underQAPapers = groupedPapers.filter(paper => 
     paper.status === 'draft' || paper.status === 'qa_review'
   );
@@ -649,7 +938,7 @@ export default function QuestionsSetupPage() {
             {emptyMessage}
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">
-            {searchTerm || filters.status !== 'all' 
+            {hasActiveFilters
               ? 'Try adjusting your search criteria or filters'
               : 'No papers available in this category'}
           </p>
@@ -658,7 +947,7 @@ export default function QuestionsSetupPage() {
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         {papers.map((paper) => (
           <PaperCard
             key={paper.id}
@@ -679,24 +968,57 @@ export default function QuestionsSetupPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-full">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2" data-testid="page-title">
-            Questions Setup & QA
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Review and manage exam questions
-            {isQAMode && <span className="ml-2 text-blue-600 dark:text-blue-400">(QA Mode)</span>}
-          </p>
+    <div className="px-4 sm:px-6 lg:px-8 py-6">
+      <div className="space-y-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="page-title flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2" data-testid="page-title">
+              Questions Setup & QA
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Review and manage exam questions
+              {isQAMode && <span className="ml-2 text-blue-600 dark:text-blue-400">(QA Mode)</span>}
+            </p>
+          </div>
         </div>
-      </div>
+
+      {/* Progress Overview Card */}
+      {filteredPapers.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {groupedPapers.flatMap(p => p.questions).length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Total Questions</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                {groupedPapers.flatMap(p => p.questions).filter(q => q.status === 'active').length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Active</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+                {groupedPapers.flatMap(p => p.questions).filter(q => q.status === 'draft' || q.status === 'qa_review').length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Under Review</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+                {filteredPapers.length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Papers</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <FilterSection
         providers={providers}
-        subjects={subjects}
+        subjects={subjectsForFilters}
         units={units}
         searchTerm={searchTerm}
         filters={filters}
@@ -717,20 +1039,29 @@ export default function QuestionsSetupPage() {
 
       {/* Main Content with Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="analytics" className="flex items-center">
+        <TabsList className="w-full flex-wrap gap-3">
+          <TabsTrigger value="analytics" className="flex-1 min-w-[200px]">
             <BarChart3 className="h-4 w-4 mr-2" />
             Analytics
           </TabsTrigger>
-          <TabsTrigger value="qa" className="flex items-center text-orange-600 dark:text-orange-400">
+          <TabsTrigger
+            value="qa"
+            className="flex-1 min-w-[200px] text-orange-600 dark:text-orange-400"
+          >
             <AlertTriangle className="h-4 w-4 mr-2" />
             Under QA ({underQAPapers.length})
           </TabsTrigger>
-          <TabsTrigger value="active" className="flex items-center text-green-600 dark:text-green-400">
+          <TabsTrigger
+            value="published"
+            className="flex-1 min-w-[200px] text-green-600 dark:text-green-400"
+          >
             <CheckCircle className="h-4 w-4 mr-2" />
-            Active Papers ({activePapers.length})
+            Published Papers ({publishedPapers.length})
           </TabsTrigger>
-          <TabsTrigger value="archived" className="flex items-center text-gray-600 dark:text-gray-400">
+          <TabsTrigger
+            value="archived"
+            className="flex-1 min-w-[200px] text-gray-600 dark:text-gray-400"
+          >
             <Archive className="h-4 w-4 mr-2" />
             Archived ({archivedPapers.length})
           </TabsTrigger>
@@ -742,37 +1073,53 @@ export default function QuestionsSetupPage() {
 
         <TabsContent value="qa" className="space-y-6">
           <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-            <div className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mr-2" />
-              <div>
-                <h3 className="text-sm font-medium text-orange-800 dark:text-orange-300">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mr-3 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">
                   Papers Under QA Review
                 </h3>
-                <p className="text-sm text-orange-700 dark:text-orange-400">
-                  These papers are either newly imported (Draft) or currently under quality assurance review. 
-                  Complete the review process to activate them.
+                <p className="text-sm text-orange-700 dark:text-orange-400 mb-3">
+                  Papers in this tab are in <strong>Draft</strong> status after being imported from Paper Setup.
+                  They must be reviewed and explicitly published before becoming accessible to teachers and students.
                 </p>
+                <div className="text-sm text-orange-700 dark:text-orange-400 space-y-1">
+                  <p className="font-medium">Workflow:</p>
+                  <ol className="list-decimal list-inside space-y-1 ml-2">
+                    <li>Review questions for accuracy and completeness</li>
+                    <li>Verify all questions have correct answers, difficulty, and topics</li>
+                    <li>Ensure questions mentioning figures have attachments</li>
+                    <li>Click "Publish Paper" to make the paper active</li>
+                  </ol>
+                  <p className="mt-2 text-xs italic">
+                    Only <strong>Active</strong> (published) papers are accessible to other modules (Teachers, Students, Entity).
+                  </p>
+                </div>
               </div>
             </div>
           </div>
           {renderPapersList(underQAPapers, "No papers under QA review")}
         </TabsContent>
 
-        <TabsContent value="active" className="space-y-6">
+        <TabsContent value="published" className="space-y-6">
           <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-            <div className="flex items-center">
-              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
+            <div className="flex items-start">
+              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-3 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-green-800 dark:text-green-300">
-                  Active Papers
+                <h3 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-1">
+                  Published Papers (Active)
                 </h3>
                 <p className="text-sm text-green-700 dark:text-green-400">
-                  These papers are confirmed and ready for use in the system. All questions have been validated and approved.
+                  These papers have been reviewed, validated, and published with <strong>Active</strong> status.
+                  They are now accessible across the platform to teachers, students, and entity modules.
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-500 mt-2 italic">
+                  Papers can be archived or returned to draft if corrections are needed.
                 </p>
               </div>
             </div>
           </div>
-          {renderPapersList(activePapers, "No active papers found")}
+          {renderPapersList(publishedPapers, "No published papers found")}
         </TabsContent>
 
         <TabsContent value="archived" className="space-y-6">
@@ -794,14 +1141,15 @@ export default function QuestionsSetupPage() {
         </TabsContent>
       </Tabs>
       
-      {/* Quick Action Toolbar */}
-      <QuickActionToolbar
-        onScrollToTop={handleScrollToTop}
-        onRefresh={() => refetch()}
-        onShowAnalytics={() => setActiveTab('analytics')}
-        onBulkImport={() => toast.info('Bulk import feature coming soon')}
-        onBulkExport={handleBulkExport}
-      />
+        {/* Quick Action Toolbar */}
+        <QuickActionToolbar
+          onScrollToTop={handleScrollToTop}
+          onRefresh={() => refetch()}
+          onShowAnalytics={() => setActiveTab('analytics')}
+          onBulkImport={() => toast.info('Bulk import feature coming soon')}
+          onBulkExport={handleBulkExport}
+        />
+      </div>
     </div>
   );
 }

@@ -18,12 +18,17 @@ export interface User {
   email: string;
   role: UserRole;
   userType?: string;
+  avatarUrl?: string | null;
 }
 
 const AUTH_STORAGE_KEY = 'ggk_authenticated_user';
 const TEST_USER_KEY = 'test_mode_user';
 const AUTH_TOKEN_KEY = 'ggk_auth_token';
 const REMEMBER_SESSION_KEY = 'ggk_remember_session';
+const SESSION_EXPIRED_NOTICE_KEY = 'ggk_session_expired_notice';
+const SUPABASE_SESSION_STORAGE_KEY = 'supabase.auth.token';
+const SUPABASE_SESSION_REQUIRED_KEY = 'ggk_supabase_session_required';
+export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
 // Session durations
 const DEFAULT_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -67,13 +72,22 @@ export function generateAuthToken(user: User, rememberMe: boolean = false): stri
 export function setAuthenticatedUser(user: User): void {
   // Check if remember me is enabled
   const rememberMe = localStorage.getItem(REMEMBER_SESSION_KEY) === 'true';
-  
+
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
   const token = generateAuthToken(user, rememberMe);
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  
-  console.log(`Session created with ${rememberMe ? '30-day' : '24-hour'} expiration`);
-  
+
+  // Ensure future checks validate the Supabase session (skip in test mode)
+  if (!isInTestMode()) {
+    localStorage.setItem(SUPABASE_SESSION_REQUIRED_KEY, 'true');
+  }
+
+  // CRITICAL FIX: Record login time to prevent session monitoring from interfering
+  lastLoginTime = Date.now();
+
+  console.log(`[Auth] Session created with ${rememberMe ? '30-day' : '24-hour'} expiration`);
+  console.log(`[Auth] Login time recorded: ${new Date(lastLoginTime).toISOString()}`);
+
   // SECURITY: Dispatch auth change event
   dispatchAuthChange();
 }
@@ -86,7 +100,7 @@ export function getAuthenticatedUser(): User | null {
     // Don't call clearAuthenticatedUser here to avoid loops
     return null;
   }
-  
+
   try {
     const payload = JSON.parse(atob(token));
     if (payload.exp && payload.exp < Date.now()) {
@@ -99,7 +113,15 @@ export function getAuthenticatedUser(): User | null {
   } catch {
     return null;
   }
-  
+
+  // Ensure the Supabase auth session is still valid when required
+  if (isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
+    console.warn('[Auth] Supabase session is missing or expired. Clearing local auth state.');
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    return null;
+  }
+
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
   return storedUser ? JSON.parse(storedUser) : null;
 }
@@ -160,7 +182,8 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(TEST_USER_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(REMEMBER_SESSION_KEY);
-  
+  localStorage.removeItem(SUPABASE_SESSION_REQUIRED_KEY);
+
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
   localStorage.removeItem('last_user_id');
@@ -187,6 +210,148 @@ export function clearAuthenticatedUserSync(): void {
 // Mark that user explicitly logged out (not session expiration)
 export function markUserLogout(): void {
   localStorage.setItem('ggk_user_logout', 'true');
+}
+
+// Mark that the session expired so the UI can show a friendly inline notice
+export function markSessionExpired(message: string = 'Your session has expired. Please sign in again to continue.'): void {
+  try {
+    localStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      const sessionExpiredEvent = new CustomEvent<{ message: string }>(SESSION_EXPIRED_EVENT, {
+        detail: { message }
+      });
+      window.dispatchEvent(sessionExpiredEvent);
+    }
+  } catch (error) {
+    console.warn('[Auth] Unable to persist session expiration notice:', error);
+  }
+}
+
+// Determine if Supabase session validation is required for the current user
+export function isSupabaseSessionRequired(): boolean {
+  try {
+    return localStorage.getItem(SUPABASE_SESSION_REQUIRED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+type SupabaseStoredSession = {
+  currentSession?: {
+    expires_at?: number | string;
+    expiresAt?: number | string;
+    expires_in?: number;
+  } | null;
+  expires_at?: number | string;
+  expiresAt?: number | string;
+};
+
+function normalizeSupabaseExpiry(value: unknown): number | null {
+  if (!value) return null;
+
+  if (typeof value === 'number') {
+    // Supabase stores seconds; convert if necessary
+    return value > 1e12 ? value : value * 1000;
+  }
+
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric) && numeric !== 0) {
+      return numeric > 1e12 ? numeric : numeric * 1000;
+    }
+
+    const parsedDate = Date.parse(value);
+    if (!Number.isNaN(parsedDate)) {
+      return parsedDate;
+    }
+  }
+
+  return null;
+}
+
+function getSupabaseSessionPayload(): SupabaseStoredSession | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const stored = localStorage.getItem(SUPABASE_SESSION_STORAGE_KEY);
+    if (!stored) return null;
+
+    return JSON.parse(stored) as SupabaseStoredSession;
+  } catch (error) {
+    console.warn('[Auth] Unable to parse Supabase session storage:', error);
+    return null;
+  }
+}
+
+export function getSupabaseSessionExpiry(): number | null {
+  const payload = getSupabaseSessionPayload();
+  if (!payload) return null;
+
+  const candidates: Array<number | null> = [
+    normalizeSupabaseExpiry(payload.expiresAt),
+    normalizeSupabaseExpiry(payload.expires_at)
+  ];
+
+  if (payload.currentSession) {
+    candidates.push(
+      normalizeSupabaseExpiry(payload.currentSession.expiresAt),
+      normalizeSupabaseExpiry(payload.currentSession.expires_at)
+    );
+
+    if (typeof payload.currentSession.expires_in === 'number') {
+      candidates.push(Date.now() + payload.currentSession.expires_in * 1000);
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && candidate > 0) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+export function getSupabaseSessionRemainingMinutes(): number | null {
+  const expiry = getSupabaseSessionExpiry();
+  if (expiry === null) return null;
+
+  const remainingMs = expiry - Date.now();
+  return Math.max(0, Math.floor(remainingMs / 60000));
+}
+
+export function isSupabaseSessionActive(gracePeriodMs = 0): boolean {
+  const expiry = getSupabaseSessionExpiry();
+  if (expiry === null) {
+    // Treat missing session as inactive only when monitoring is required
+    return !isSupabaseSessionRequired();
+  }
+
+  return expiry - Date.now() > gracePeriodMs;
+}
+
+// Consume (read and clear) the stored session expiration notice
+export function consumeSessionExpiredNotice(): string | null {
+  try {
+    const message = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+    if (message) {
+      localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+      return message;
+    }
+  } catch (error) {
+    console.warn('[Auth] Unable to read session expiration notice:', error);
+  }
+  return null;
+}
+
+// Explicitly clear any stored session expiration notice (used on manual logout)
+export function clearSessionExpiredNotice(): void {
+  try {
+    localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+  } catch (error) {
+    console.warn('[Auth] Unable to clear session expiration notice:', error);
+  }
 }
 
 // Check if authenticated
@@ -260,25 +425,65 @@ export function validateDeactivationRequest(targetUserId: string): {
 }
 
 // Test mode functions
-export function startTestMode(testUser: User): void {
+export function startTestMode(testUser: User, skipAuthDispatch: boolean = false): string | null {
   const currentUser = getAuthenticatedUser();
   if (!currentUser || currentUser.role !== 'SSA') {
     alert('Only Super Admins can use test mode');
-    return;
+    return null;
   }
-  
+
+  // Store test mode data
   localStorage.setItem(TEST_USER_KEY, JSON.stringify(testUser));
-  console.log('Test mode started for user:', testUser);
-  
-  // Redirect to appropriate module
+
+  // Store test mode metadata for audit
+  const testModeMetadata = {
+    realAdminId: currentUser.id,
+    realAdminEmail: currentUser.email,
+    testUserId: testUser.id,
+    testUserEmail: testUser.email,
+    testUserRole: testUser.role,
+    startTime: Date.now(),
+    expirationTime: Date.now() + (5 * 60 * 1000)
+  };
+  localStorage.setItem('test_mode_metadata', JSON.stringify(testModeMetadata));
+
+  console.log('[TestMode] Started for user:', testUser.email, '(', testUser.role, ')');
+  console.log('[TestMode] Real admin:', currentUser.email);
+
+  // Get redirect path BEFORE any context updates
   const redirectPath = getRedirectPathForUser(testUser);
-  window.location.href = redirectPath;
+
+  // CRITICAL FIX: Only dispatch auth change if caller requests it
+  // This allows navigation to complete BEFORE contexts update
+  if (!skipAuthDispatch) {
+    dispatchAuthChange();
+  }
+
+  // Return the redirect path for the caller to handle navigation
+  return redirectPath;
 }
 
 export function exitTestMode(): void {
+  const metadata = getTestModeMetadata();
+
   localStorage.removeItem(TEST_USER_KEY);
-  console.log('Test mode ended');
-  window.location.href = '/app/system-admin/dashboard';
+  localStorage.removeItem('test_mode_metadata');
+  localStorage.removeItem('test_mode_expiration');
+
+  console.log('[TestMode] Ended');
+  if (metadata) {
+    const duration = Math.round((Date.now() - metadata.startTime) / 1000);
+    console.log('[TestMode] Duration:', duration, 'seconds');
+    console.log('[TestMode] Test user:', metadata.testUserEmail);
+  }
+
+  // Dispatch auth change event to restore real admin context
+  dispatchAuthChange();
+
+  // Small delay to let contexts update
+  setTimeout(() => {
+    window.location.href = '/app/system-admin/dashboard';
+  }, 100);
 }
 
 export function isInTestMode(): boolean {
@@ -341,55 +546,70 @@ function isPublicPage(): boolean {
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isMonitoringActive = false;
 let isRedirecting = false;
+let lastLoginTime: number = 0;
 
 export function startSessionMonitoring(): void {
   // Prevent multiple intervals
   if (sessionCheckInterval) {
     clearInterval(sessionCheckInterval);
   }
-  
+
   // Reset flags
   isRedirecting = false;
-  
+
   // Don't start monitoring immediately - wait for app to initialize
+  // CRITICAL FIX: Increased delay to 10 seconds to prevent interference with login flow
   setTimeout(() => {
     isMonitoringActive = true;
-    
+
     sessionCheckInterval = setInterval(() => {
       // Skip if not monitoring or already redirecting
       if (!isMonitoringActive || isRedirecting) return;
-      
+
+      // CRITICAL FIX: Don't monitor if user just logged in (within last 30 seconds)
+      const timeSinceLogin = Date.now() - lastLoginTime;
+      if (timeSinceLogin < 30000) {
+        console.log('[SessionMonitoring] Skipping check - user just logged in');
+        return;
+      }
+
       // Get current path
       const currentPath = window.location.pathname;
-      
+
       // Skip monitoring for public pages AND signin page
       if (isPublicPage() || currentPath === '/signin' || currentPath.startsWith('/signin')) {
         return;
       }
-      
+
       const user = getAuthenticatedUser();
       if (!user) {
         // Session expired or no user
-        console.log('Session expired. Redirecting to login.');
-        
+        console.log('[SessionMonitoring] Session expired. Clearing auth and redirecting to login.');
+
         // Set flags to prevent loops
         isMonitoringActive = false;
         isRedirecting = true;
-        
+
         // Stop the interval
         if (sessionCheckInterval) {
           clearInterval(sessionCheckInterval);
           sessionCheckInterval = null;
         }
-        
-        // Use replace to prevent back button issues
+
+        // Clear all authentication data
+        clearAuthenticatedUser();
+
+        // Store a friendly notice so the sign-in page can show the message
+        markSessionExpired();
+
+        // Redirect to login
         window.location.replace('/signin');
       } else if (isSessionExpiringSoon()) {
         // Optional: Show warning to user
-        console.warn('Session expiring soon. Consider extending.');
+        console.warn('[SessionMonitoring] Session expiring soon. Consider extending.');
       }
     }, 60000); // Check every minute
-  }, 2000); // Wait 2 seconds before starting monitoring
+  }, 10000); // CRITICAL FIX: Wait 10 seconds before starting monitoring (was 2 seconds)
 }
 
 export function stopSessionMonitoring(): void {
@@ -411,22 +631,9 @@ export function setupSessionRefresh(): void {
   }, 30 * 60 * 1000); // 30 minutes
 }
 
-// Initialize on app start - but with delay
-if (typeof window !== 'undefined') {
-  // Wait for app to fully load before starting session management
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      setupSessionRefresh();
-      startSessionMonitoring();
-    });
-  } else {
-    // DOM already loaded
-    setTimeout(() => {
-      setupSessionRefresh();
-      startSessionMonitoring();
-    }, 1000);
-  }
-}
+// NOTE: Session monitoring is now handled by sessionManager.ts
+// The old monitoring system is disabled to prevent conflicts
+// Keeping these functions for backward compatibility but not auto-starting them
 
 // Helper to map user types to roles
 export function mapUserTypeToRole(userType: string): UserRole {
@@ -458,6 +665,34 @@ export function getRedirectPathForUser(user: User): string {
   return rolePathMap[user.role] || '/app/system-admin/dashboard';
 }
 
+// Get test mode metadata
+export function getTestModeMetadata(): {
+  realAdminId: string;
+  realAdminEmail: string;
+  testUserId: string;
+  testUserEmail: string;
+  testUserRole: string;
+  startTime: number;
+  expirationTime: number;
+} | null {
+  const metadataStr = localStorage.getItem('test_mode_metadata');
+  if (!metadataStr) return null;
+
+  try {
+    return JSON.parse(metadataStr);
+  } catch {
+    return null;
+  }
+}
+
+// Check if test mode has expired
+export function isTestModeExpired(): boolean {
+  const metadata = getTestModeMetadata();
+  if (!metadata) return false;
+
+  return Date.now() >= metadata.expirationTime;
+}
+
 // Log impersonation activity (for future use)
 export async function logImpersonationActivity(
   action: 'start' | 'end',
@@ -465,10 +700,19 @@ export async function logImpersonationActivity(
   targetUserId: string,
   reason?: string
 ): Promise<void> {
-  console.log(`Impersonation ${action}:`, {
+  const logEntry = {
+    action,
     adminId,
     targetUserId,
     reason,
     timestamp: new Date().toISOString()
-  });
+  };
+
+  console.log(`[TestMode] ${action}:`, logEntry);
+
+  // Store in local log
+  const logs = JSON.parse(localStorage.getItem('test_mode_logs') || '[]');
+  logs.push(logEntry);
+  // Keep only last 100 logs
+  localStorage.setItem('test_mode_logs', JSON.stringify(logs.slice(-100)));
 }

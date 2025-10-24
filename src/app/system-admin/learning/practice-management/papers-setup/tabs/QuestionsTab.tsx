@@ -12,7 +12,7 @@
  * - Ensured attachment state synchronization
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X, 
   ChevronDown, ChevronRight, FileText, Image, Upload, Scissors, 
@@ -20,7 +20,7 @@ import {
   Loader2, Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
   Calculator, PenTool, Table, Code, Mic, LineChart, FileUp,
   HelpCircle, BookOpen, Lightbulb, Target, Award, PlayCircle,
-  Flag, CheckSquare, FileCheck, TestTube, ShieldCheck
+  Flag, CheckSquare, FileCheck, ShieldCheck
 } from 'lucide-react';
 
 // Import shared components
@@ -33,8 +33,8 @@ import { DataTableSkeleton } from '../../../../../../components/shared/DataTable
 import { Select } from '../../../../../../components/shared/Select';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
 
-// Import ExamSimulation component
-import { ExamSimulation } from '../../questions-setup/components/ExamSimulation';
+// Import UnifiedTestSimulation component
+import { UnifiedTestSimulation } from '../../../../../../components/shared/UnifiedTestSimulation';
 
 // Import data operations (with optional validateQuestionsForImport)
 import {
@@ -54,6 +54,46 @@ import {
   type ImportResult
 } from '../../../../../../lib/data-operations/questionsDataOperations';
 
+// Import extraction parsers
+import {
+  parseForwardSlashAnswers,
+  extractAllValidAlternatives,
+  getAlternativeCount
+} from '../../../../../../lib/extraction/forwardSlashParser';
+import {
+  parseAndOrOperators,
+  analyzeAnswerLogic,
+  extractRequiredComponents,
+  extractOptionalComponents
+} from '../../../../../../lib/extraction/andOrOperatorParser';
+import {
+  validateAnswerStructure,
+  batchValidateAnswers,
+  getValidationSummary,
+  type ValidationIssue
+} from '../../../../../../lib/extraction/answerValidator';
+import {
+  validateQuestionsBeforeImport,
+  formatValidationErrors,
+  getValidationReportSummary,
+  type PreImportValidationResult
+} from '../../../../../../lib/extraction/preImportValidation';
+import {
+  deriveAnswerRequirement,
+  type AnswerRequirement
+} from '../../../../../../lib/extraction/answerRequirementDeriver';
+
+// Import sub-components and utilities
+import { QuestionsReviewSection } from './components/QuestionsReviewSection';
+import QuestionSupportMatrix from './components/QuestionSupportMatrix';
+import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
+import { QuestionImportReviewWorkflow } from '../../../../../../components/shared/QuestionImportReviewWorkflow';
+import type { QuestionDisplayData } from '../../../../../../components/shared/EnhancedQuestionDisplay';
+import { supabase } from '../../../../../../lib/supabase';
+import { cn } from '../../../../../../lib/utils';
+import { ExtractionRules, QuestionSupportSummary } from '../types';
+import { ErrorBoundary } from '../../../../../../components/shared/ErrorBoundary';
+
 // Try to import validateQuestionsForImport if it exists
 let validateQuestionsForImport: any;
 try {
@@ -62,13 +102,6 @@ try {
 } catch (e) {
   console.warn('validateQuestionsForImport not available, using fallback validation');
 }
-
-// Import sub-components
-import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
-import { QuestionsReviewSection } from './components/QuestionsReviewSection';
-import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
-import { supabase } from '../../../../../../lib/supabase';
-import { cn } from '../../../../../../lib/utils';
 
 // Answer format configuration for better UI/UX
 const answerFormatConfig = {
@@ -90,6 +123,139 @@ const answerFormatConfig = {
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
 };
 
+const DEFAULT_SNIPPING_VIEW_STATE = { page: 1, scale: 1.5 } as const;
+
+const manualAnswerFormats = new Set([
+  'diagram',
+  'chemical_structure',
+  'structural_diagram',
+  'table',
+  'graph',
+  'multi_line',
+  'multi_line_labeled',
+  'file_upload'
+]);
+
+const sanitizeQuestionForStorage = (question: unknown): any => {
+  const transform = (value: any): any => {
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(transform);
+    }
+
+    if (value && typeof value === 'object') {
+      const result: Record<string, any> = {};
+      Object.entries(value as Record<string, any>).forEach(([key, nestedValue]) => {
+        const transformed = transform(nestedValue);
+        if (transformed !== undefined) {
+          result[key] = transformed;
+        }
+      });
+      return result;
+    }
+
+    return value;
+  };
+
+  try {
+    if (typeof structuredClone === 'function') {
+      return transform(structuredClone(question));
+    }
+  } catch (error) {
+    console.warn('structuredClone failed when sanitizing question data:', error);
+  }
+
+  try {
+    return JSON.parse(
+      JSON.stringify(question, (_, value) => (typeof value === 'bigint' ? value.toString() : value))
+    );
+  } catch (error) {
+    console.warn('JSON serialization failed when sanitizing question data:', error);
+    return transform(question);
+  }
+};
+
+type InlineConfirmationOptions = {
+  title: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  confirmVariant?: string;
+};
+
+type PendingConfirmationState = InlineConfirmationOptions & {
+  resolve: (value: boolean) => void;
+};
+
+const normalizeText = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().replace(/\s+/g, ' ').toLowerCase();
+};
+
+const isExactTextMatch = (a: any, b: any): boolean => {
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  return normalizedA !== '' && normalizedA === normalizedB;
+};
+
+const isLooseTextMatch = (a: any, b: any): boolean => {
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  if (!normalizedA || !normalizedB) return false;
+  return normalizedA.includes(normalizedB) || normalizedB.includes(normalizedA);
+};
+
+const findUniqueMatch = <T,>(
+  items: T[],
+  candidate: any,
+  getters: Array<(item: T) => any>
+): T | null => {
+  const normalizedCandidate = normalizeText(candidate);
+  if (!normalizedCandidate) return null;
+
+  for (const getter of getters) {
+    const exactMatches = items.filter(item => isExactTextMatch(getter(item), candidate));
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
+    }
+  }
+
+  for (const getter of getters) {
+    const looseMatches = items.filter(item => isLooseTextMatch(getter(item), candidate));
+    if (looseMatches.length === 1) {
+      return looseMatches[0];
+    }
+  }
+
+  return null;
+};
+
+const extractNameCandidates = (value: any): string[] => {
+  if (value === null || value === undefined) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .flatMap(item => extractNameCandidates(item))
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[,/]/)
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+  }
+
+  return [String(value)];
+};
+
 interface QuestionsTabProps {
   importSession: any;
   parsedData: any;
@@ -97,7 +263,7 @@ interface QuestionsTabProps {
   savedPaperDetails: any;
   onPrevious: () => void;
   onContinue: () => void;
-  extractionRules?: any;
+  extractionRules?: ExtractionRules;
   updateStagedAttachments?: (questionId: string, attachments: any[]) => void;
   stagedAttachments?: Record<string, any[]>;
 }
@@ -108,11 +274,16 @@ interface ProcessedQuestion {
   question_text: string;
   question_type: string;
   marks: number;
+  unit?: string;
+  unit_id?: string | null;
   topic: string;
+  topic_id?: string | null;
   subtopic: string;
+  subtopic_id?: string | null;
   difficulty: string;
   status: string;
   figure: boolean;
+  figure_required?: boolean;
   attachments: string[];
   hint?: string;
   explanation?: string;
@@ -122,6 +293,14 @@ interface ProcessedQuestion {
   parts?: ProcessedPart[];
   correct_answers?: ProcessedAnswer[];
   options?: ProcessedOption[];
+  mcq_type?: string;
+  match_pairs?: any[];
+  left_column?: any[];
+  right_column?: any[];
+  correct_sequence?: any[];
+  partial_credit?: any;
+  partial_marking?: any;
+  conditional_marking?: any;
   // Store original data for mapping
   original_topics?: string[];
   original_subtopics?: string[];
@@ -139,6 +318,7 @@ interface ProcessedPart {
   answer_format: string;
   answer_requirement?: string;
   figure?: boolean;
+  figure_required?: boolean;
   attachments?: string[];
   hint?: string;
   explanation?: string;
@@ -147,6 +327,14 @@ interface ProcessedPart {
   options?: ProcessedOption[];
   requires_manual_marking?: boolean;
   marking_criteria?: any;
+  mcq_type?: string;
+  match_pairs?: any[];
+  left_column?: any[];
+  right_column?: any[];
+  correct_sequence?: any[];
+  partial_credit?: any;
+  partial_marking?: any;
+  conditional_marking?: any;
 }
 
 interface ProcessedSubpart {
@@ -156,11 +344,21 @@ interface ProcessedSubpart {
   marks: number;
   answer_format: string;
   answer_requirement?: string;
+  attachments?: string[];
   correct_answers?: ProcessedAnswer[];
   options?: ProcessedOption[];
   hint?: string;
   explanation?: string;
   figure?: boolean; // Add figure field to track requirement
+  figure_required?: boolean;
+  mcq_type?: string;
+  match_pairs?: any[];
+  left_column?: any[];
+  right_column?: any[];
+  correct_sequence?: any[];
+  partial_credit?: any;
+  partial_marking?: any;
+  conditional_marking?: any;
 }
 
 interface ProcessedAnswer {
@@ -176,6 +374,11 @@ interface ProcessedAnswer {
   error_carried_forward?: boolean;
   answer_requirement?: string;
   total_alternatives?: number;
+  validation_issues?: string[];
+  answer_logic?: 'simple' | 'all_required' | 'any_accepted' | 'complex';
+  required_components?: string[];
+  optional_components?: string[];
+  needs_context?: boolean;
 }
 
 interface ProcessedOption {
@@ -210,17 +413,214 @@ const generateAttachmentKey = (questionId: string, partIndex?: number, subpartIn
   return key;
 };
 
-export function QuestionsTab({ 
-  importSession, 
-  parsedData, 
+type SimulationAttachment = {
+  id: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+  source?: 'primary' | 'secondary';
+  attachmentKey?: string;
+  canDelete?: boolean;
+  originalId?: string;
+};
+
+const guessMimeTypeFromSource = (source: string): string | undefined => {
+  if (!source) {
+    return undefined;
+  }
+
+  if (source.startsWith('data:')) {
+    const mime = source.slice(5, source.indexOf(';'));
+    return mime || undefined;
+  }
+
+  const extensionMatch = source.match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
+  if (!extensionMatch) {
+    return undefined;
+  }
+
+  const extension = extensionMatch[1].toLowerCase();
+  const mimeMap: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    bmp: 'image/bmp',
+    svg: 'image/svg+xml',
+    pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  };
+
+  return mimeMap[extension];
+};
+
+const filterValidStructureItems = (items: any, context: string, issues?: string[]): any[] => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.filter((item, index) => {
+    const isValid = item !== null && typeof item === 'object';
+    if (!isValid) {
+      console.warn(`Skipping invalid ${context} at index ${index}:`, item);
+      if (issues) {
+        issues.push(`${context} ${index + 1} is missing or invalid.`);
+      }
+    }
+    return isValid;
+  });
+};
+
+const deriveFileNameFromUrl = (source: string): string | undefined => {
+  if (!source || source.startsWith('data:')) {
+    return undefined;
+  }
+
+  const cleaned = source.split('?')[0].split('#')[0];
+  const segments = cleaned.split('/').filter(Boolean);
+  const lastSegment = segments[segments.length - 1];
+  return lastSegment ? decodeURIComponent(lastSegment) : undefined;
+};
+
+const normalizeAttachmentForSimulation = (
+  attachment: any,
+  fallbackPrefix: string,
+  index: number,
+  options: {
+    source?: 'primary' | 'secondary';
+    attachmentKey?: string;
+  } = {}
+): SimulationAttachment | null => {
+  if (!attachment) {
+    return null;
+  }
+
+  if (typeof attachment === 'string') {
+    const trimmed = attachment.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const fileName = deriveFileNameFromUrl(trimmed) || `Attachment_${index + 1}`;
+    const fileType = guessMimeTypeFromSource(trimmed) || 'image/png';
+
+    return {
+      id: `${fallbackPrefix}_att_${index}`,
+      file_url: trimmed,
+      file_name: fileName,
+      file_type: fileType,
+      source: options.source,
+      attachmentKey: options.attachmentKey,
+      canDelete: options.source === 'secondary'
+    };
+  }
+
+  const urlCandidates = [
+    attachment.file_url,
+    attachment.url,
+    attachment.dataUrl,
+    attachment.data,
+    attachment.preview,
+    attachment.publicUrl,
+    attachment.public_url,
+    attachment.signedUrl,
+    attachment.signed_url,
+    attachment.path
+  ];
+
+  const fileUrl = urlCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)?.trim();
+
+  if (!fileUrl) {
+    return null;
+  }
+
+  const nameCandidates = [
+    attachment.file_name,
+    attachment.name,
+    attachment.fileName,
+    attachment.originalName,
+    attachment.filename,
+    attachment.title
+  ];
+
+  const resolvedName = nameCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)?.trim();
+  const fileName = resolvedName || deriveFileNameFromUrl(fileUrl) || `Attachment_${index + 1}`;
+
+  const typeCandidates = [attachment.file_type, attachment.type, attachment.mime_type];
+  const resolvedType = typeCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)?.trim();
+  const fileType = resolvedType || guessMimeTypeFromSource(fileUrl) || 'image/png';
+
+  const originalIdValue = attachment.id ?? attachment.attachmentId;
+  const originalId =
+    typeof originalIdValue === 'string' || typeof originalIdValue === 'number'
+      ? String(originalIdValue)
+      : undefined;
+
+  return {
+    id: originalId ?? `${fallbackPrefix}_att_${index}`,
+    file_url: fileUrl,
+    file_name: fileName,
+    file_type: fileType,
+    source: options.source,
+    attachmentKey: options.attachmentKey,
+    canDelete: options.source === 'secondary',
+    originalId
+  };
+};
+
+const mergeAttachmentSources = (
+  primary: any,
+  secondary: any,
+  fallbackPrefix: string
+): SimulationAttachment[] => {
+  const primaryArray = ensureArray(primary);
+  const secondaryArray = ensureArray(secondary);
+  const combined = [
+    ...primaryArray.map((item, index) => ({ item, index, source: 'primary' as const })),
+    ...secondaryArray.map((item, index) => ({ item, index: index + primaryArray.length, source: 'secondary' as const }))
+  ];
+
+  const seen = new Set<string>();
+
+  return combined.reduce<SimulationAttachment[]>((acc, { item, index, source }) => {
+    const normalized = normalizeAttachmentForSimulation(item, fallbackPrefix, index, {
+      source,
+      attachmentKey: source === 'secondary' ? fallbackPrefix : undefined
+    });
+
+    if (normalized) {
+      const dedupeKey = `${normalized.file_url}::${normalized.file_name}`;
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        if (normalized.canDelete && !normalized.attachmentKey) {
+          normalized.attachmentKey = fallbackPrefix;
+        }
+        acc.push(normalized);
+      }
+    }
+
+    return acc;
+  }, []);
+};
+
+function QuestionsTabInner({
+  importSession,
+  parsedData,
   existingPaperId,
   savedPaperDetails,
-  onPrevious, 
+  onPrevious,
   onContinue,
   extractionRules,
   updateStagedAttachments,
   stagedAttachments = {}
 }: QuestionsTabProps) {
+  // Critical data validation - prevent rendering with invalid state
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   // State management
   const [questions, setQuestions] = useState<ProcessedQuestion[]>([]);
   const [paperMetadata, setPaperMetadata] = useState<any>({
@@ -243,8 +643,12 @@ export function QuestionsTab({
   const [showSnippingTool, setShowSnippingTool] = useState(false);
   const [attachmentTarget, setAttachmentTarget] = useState<any>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmationState | null>(null);
   const [pdfFile, setPdfFile] = useState<any>(null);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
+  const [snippingViewState, setSnippingViewState] = useState<{ page: number; scale: number }>(() => ({
+    ...DEFAULT_SNIPPING_VIEW_STATE
+  }));
   const [attachments, setAttachments] = useState<Record<string, any[]>>({});
   const [deleteAttachmentConfirm, setDeleteAttachmentConfirm] = useState<any>(null);
   const [showValidation, setShowValidation] = useState(false);
@@ -266,14 +670,433 @@ export function QuestionsTab({
   const [showSimulation, setShowSimulation] = useState(false);
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
-  const [simulationRequired, setSimulationRequired] = useState(false);
+  const [simulationValidationErrors, setSimulationValidationErrors] = useState<Record<string, string[]>>({});
+
+  // Review workflow summary state (managed by QuestionImportReviewWorkflow)
+  const [reviewSummary, setReviewSummary] = useState({
+    total: 0,
+    reviewed: 0,
+    withIssues: 0,
+    allReviewed: false,
+  });
+  const [reviewWorkflowLoading, setReviewWorkflowLoading] = useState<boolean>(questions.length > 0);
+
+  const activeSnippingQuestionLabel = useMemo(() => {
+    if (!attachmentTarget) {
+      return null;
+    }
+
+    const question = questions.find(q => q.id === attachmentTarget.questionId);
+    if (!question) {
+      return null;
+    }
+
+    const questionNumber = question.question_number;
+    let label: string;
+
+    if (questionNumber !== undefined && questionNumber !== null && questionNumber !== '') {
+      label = `Question ${questionNumber}`;
+    } else {
+      label = `Question ${attachmentTarget.questionId}`;
+    }
+
+    if (typeof attachmentTarget.partIndex === 'number' && Array.isArray(question.parts)) {
+      const part = question.parts[attachmentTarget.partIndex];
+      if (part) {
+        const partLabelRaw = part.part?.trim();
+        const partLabel = partLabelRaw
+          ? (/^part\s+/i.test(partLabelRaw) ? partLabelRaw : `Part ${partLabelRaw}`)
+          : `Part ${attachmentTarget.partIndex + 1}`;
+        label = `${label} · ${partLabel}`;
+
+        if (
+          typeof attachmentTarget.subpartIndex === 'number' &&
+          Array.isArray(part.subparts)
+        ) {
+          const subpart = part.subparts[attachmentTarget.subpartIndex];
+          if (subpart) {
+            const subpartLabelRaw = subpart.subpart?.trim();
+            const subpartLabel = subpartLabelRaw
+              ? (/^subpart\s+/i.test(subpartLabelRaw) ? subpartLabelRaw : `Subpart ${subpartLabelRaw}`)
+              : `Subpart ${attachmentTarget.subpartIndex + 1}`;
+            label = `${label} · ${subpartLabel}`;
+          }
+        }
+      }
+    }
+
+    return label;
+  }, [attachmentTarget, questions]);
+
+  useEffect(() => {
+    if (questions.length > 0) {
+      setReviewWorkflowLoading(true);
+    } else {
+      setReviewWorkflowLoading(false);
+      setReviewSummary({ total: 0, reviewed: 0, withIssues: 0, allReviewed: false });
+    }
+  }, [questions.length]);
+
+  const requestInlineConfirmation = useCallback(
+    (options: InlineConfirmationOptions) =>
+      new Promise<boolean>(resolve => {
+        console.log('📋 Requesting inline confirmation:', options.title);
+        setPendingConfirmation({
+          ...options,
+          resolve,
+        });
+      }),
+    []
+  );
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionsRef = useRef<Record<string, HTMLDivElement>>({});
 
+  const paperTitleForMetadata = useMemo(
+    () => savedPaperDetails?.paper_name || paperMetadata.title || '',
+    [savedPaperDetails?.paper_name, paperMetadata.title]
+  );
+
+  const paperCodeForMetadata = useMemo(
+    () => savedPaperDetails?.paper_code || paperMetadata.paper_code || '',
+    [savedPaperDetails?.paper_code, paperMetadata.paper_code]
+  );
+
   // Helper arrays
   const Roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+
+  // Helper function to compute question support summary
+  const computeQuestionSupportSummary = (items: ProcessedQuestion[]): QuestionSupportSummary => {
+    const summary: QuestionSupportSummary = {
+      totalQuestions: items.length,
+      questionTypeCounts: {},
+      answerFormatCounts: {},
+      answerRequirementCounts: {},
+      optionTypeCounts: {},
+      contextTypes: {},
+      structureFlags: {
+        hasParts: false,
+        hasSubparts: false,
+        hasFigures: false,
+        hasAttachments: false,
+        hasContext: false,
+        hasHints: false,
+        hasExplanations: false,
+        hasOptions: false,
+        hasMatching: false,
+        hasSequencing: false
+      },
+      logicFlags: {
+        alternativeLinking: false,
+        allRequired: false,
+        anyOf: false,
+        alternativeMethods: false,
+        contextUsage: false,
+        multiMark: false,
+        componentMarking: false,
+        manualMarking: false,
+        partialCredit: false,
+        errorCarriedForward: false,
+        reverseArgument: false,
+        acceptsEquivalentPhrasing: false
+      }
+    };
+
+    const incrementCount = (map: Record<string, number>, key?: string | null) => {
+      if (!key) return;
+      const normalized = String(key);
+      map[normalized] = (map[normalized] || 0) + 1;
+    };
+
+    const registerContextType = (type?: string | null) => {
+      if (!type) return;
+      const normalized = String(type);
+      summary.contextTypes[normalized] = (summary.contextTypes[normalized] || 0) + 1;
+    };
+
+    const registerRequirement = (requirement?: string) => {
+      if (!requirement) return;
+      incrementCount(summary.answerRequirementCounts, requirement);
+      const normalized = requirement.toLowerCase();
+      if (normalized.includes('any')) {
+        summary.logicFlags.anyOf = true;
+        summary.logicFlags.alternativeLinking = true;
+      }
+      if (normalized.includes('all') || normalized.includes('both')) {
+        summary.logicFlags.allRequired = true;
+      }
+      if (normalized.includes('alternative')) {
+        summary.logicFlags.alternativeMethods = true;
+      }
+      if (normalized.includes('owtte')) {
+        summary.logicFlags.acceptsEquivalentPhrasing = true;
+      }
+      if (normalized.includes('ecf')) {
+        summary.logicFlags.errorCarriedForward = true;
+      }
+      if (normalized.includes('ora')) {
+        summary.logicFlags.reverseArgument = true;
+      }
+    };
+
+    const registerAnswer = (answer?: ProcessedAnswer) => {
+      if (!answer) return;
+
+      if (answer.context) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        if (Array.isArray(answer.context)) {
+          answer.context.forEach((ctx: any) => {
+            if (ctx?.type) {
+              registerContextType(ctx.type);
+            }
+          });
+        } else if (typeof answer.context === 'object' && answer.context.type) {
+          registerContextType(answer.context.type);
+        }
+      }
+
+      if (answer.unit) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        registerContextType('unit');
+      }
+
+      if (answer.measurement_details) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        registerContextType('measurement');
+      }
+
+      if (typeof answer.marks === 'number' && answer.marks > 1) {
+        summary.logicFlags.multiMark = true;
+      }
+
+      if (answer.partial_credit || answer.partial_marks) {
+        summary.logicFlags.partialCredit = true;
+      }
+
+      if (answer.error_carried_forward) {
+        summary.logicFlags.errorCarriedForward = true;
+      }
+
+      if (answer.accepts_reverse_argument) {
+        summary.logicFlags.reverseArgument = true;
+      }
+
+      if (answer.accepts_equivalent_phrasing) {
+        summary.logicFlags.acceptsEquivalentPhrasing = true;
+      }
+
+      if (typeof answer.total_alternatives === 'number' && answer.total_alternatives > 1) {
+        summary.logicFlags.alternativeLinking = true;
+      }
+
+      if (Array.isArray(answer.linked_alternatives) && answer.linked_alternatives.length > 0) {
+        summary.logicFlags.alternativeLinking = true;
+      }
+
+      if (answer.alternative_type) {
+        const normalized = answer.alternative_type.toLowerCase();
+        if (normalized.includes('all') || normalized.includes('both')) {
+          summary.logicFlags.allRequired = true;
+        }
+        if (normalized.includes('any') || normalized.includes('one')) {
+          summary.logicFlags.anyOf = true;
+          summary.logicFlags.alternativeLinking = true;
+        }
+        if (normalized.includes('alt')) {
+          summary.logicFlags.alternativeMethods = true;
+        }
+      }
+
+      if (answer.answer_requirement) {
+        registerRequirement(answer.answer_requirement);
+      }
+    };
+
+    const registerAnswerCarrier = (item?: {
+      answer_format?: string;
+      answer_requirement?: string;
+      correct_answers?: ProcessedAnswer[];
+      marks?: number;
+      figure?: boolean;
+      figure_required?: boolean;
+      attachments?: any[];
+      hint?: string;
+      explanation?: string;
+      requires_manual_marking?: boolean;
+      mcq_type?: string;
+      match_pairs?: any[];
+      left_column?: any[];
+      right_column?: any[];
+      correct_sequence?: any[];
+      partial_credit?: any;
+      partial_marking?: any;
+      conditional_marking?: any;
+      context_type?: string;
+      context_fields?: Array<{ type?: string }>;
+      options?: ProcessedOption[];
+    }) => {
+      if (!item) return;
+
+      if (item.answer_format) {
+        incrementCount(summary.answerFormatCounts, item.answer_format);
+        if (manualAnswerFormats.has(item.answer_format)) {
+          summary.logicFlags.manualMarking = true;
+        }
+      }
+
+      registerRequirement(item.answer_requirement);
+
+      if (item.context_type) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        registerContextType(item.context_type);
+      }
+
+      if (Array.isArray(item.context_fields) && item.context_fields.length > 0) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        item.context_fields.forEach(field => registerContextType(field?.type));
+      }
+
+      if (Array.isArray((item as any).options) && (item as any).options.length > 0) {
+        summary.structureFlags.hasOptions = true;
+        const optionType = item.mcq_type || item.answer_requirement || 'multiple_choice';
+        incrementCount(summary.optionTypeCounts, optionType);
+      }
+
+      if (item.match_pairs || (item.left_column && item.right_column)) {
+        summary.structureFlags.hasMatching = true;
+        incrementCount(summary.optionTypeCounts, 'matching');
+      }
+
+      if (item.correct_sequence && Array.isArray(item.correct_sequence) && item.correct_sequence.length > 0) {
+        summary.structureFlags.hasSequencing = true;
+        incrementCount(summary.optionTypeCounts, 'sequencing');
+      }
+
+      if (item.partial_credit || item.partial_marking) {
+        summary.logicFlags.partialCredit = true;
+      }
+
+      if (Array.isArray(item.correct_answers) && item.correct_answers.length > 0) {
+        if (item.correct_answers.length > 1) {
+          summary.logicFlags.alternativeLinking = true;
+        }
+        item.correct_answers.forEach(registerAnswer);
+      }
+
+      if (typeof item.marks === 'number' && item.marks > 1) {
+        summary.logicFlags.multiMark = true;
+      }
+
+      if (item.hint) {
+        summary.structureFlags.hasHints = true;
+      }
+
+      if (item.explanation) {
+        summary.structureFlags.hasExplanations = true;
+      }
+
+      if (item.figure || item.figure_required) {
+        summary.structureFlags.hasFigures = true;
+      }
+
+      if (Array.isArray(item.attachments) && item.attachments.length > 0) {
+        summary.structureFlags.hasAttachments = true;
+      }
+
+      if (item.requires_manual_marking) {
+        summary.logicFlags.manualMarking = true;
+      }
+    };
+
+    items.forEach(question => {
+      incrementCount(summary.questionTypeCounts, question.question_type || 'descriptive');
+
+      if (question.parts && question.parts.length > 0) {
+        summary.structureFlags.hasParts = true;
+      }
+
+      registerAnswerCarrier(question);
+
+      if (question.parts) {
+        question.parts.forEach(part => {
+          registerAnswerCarrier(part);
+          if (part.subparts && part.subparts.length > 0) {
+            summary.structureFlags.hasSubparts = true;
+            part.subparts.forEach(subpart => {
+              registerAnswerCarrier(subpart);
+            });
+          }
+        });
+      }
+    });
+
+    summary.logicFlags.componentMarking = summary.structureFlags.hasParts || summary.structureFlags.hasSubparts;
+
+    return summary;
+  };
+
+  const questionSupportSummary = useMemo<QuestionSupportSummary>(
+    () => computeQuestionSupportSummary(questions),
+    [questions]
+  );
+
+  const questionTypeEntries = useMemo(() => {
+    const entries = Object.entries(questionSupportSummary.questionTypeCounts || {});
+    return entries.sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+  }, [questionSupportSummary]);
+
+  const structuralHighlights = useMemo(() => {
+    const highlights: string[] = [];
+    if (questionSupportSummary.structureFlags.hasParts) {
+      highlights.push('Contains multipart questions');
+    }
+    if (questionSupportSummary.structureFlags.hasSubparts) {
+      highlights.push('Includes nested subparts');
+    }
+    if (questionSupportSummary.structureFlags.hasFigures) {
+      highlights.push('Requires figure review');
+    }
+    if (questionSupportSummary.structureFlags.hasAttachments) {
+      highlights.push('Attachments to upload or verify');
+    }
+    if (questionSupportSummary.structureFlags.hasContext) {
+      highlights.push('Context metadata captured');
+    }
+    if (questionSupportSummary.logicFlags.manualMarking) {
+      highlights.push('Manual marking required for some responses');
+    }
+    if (questionSupportSummary.logicFlags.alternativeLinking) {
+      highlights.push('Answer alternatives linked in mark scheme');
+    }
+    if (questionSupportSummary.logicFlags.partialCredit) {
+      highlights.push('Partial credit rules detected');
+    }
+    return highlights;
+  }, [questionSupportSummary]);
+
+  // Calculate average marks for display
+  const averageMarks = useMemo(() => {
+    if (questions.length === 0) return 0;
+    const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+    return totalMarks / questions.length;
+  }, [questions]);
+
+  const totalQuestionMarks = useMemo(() => {
+    return questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0);
+  }, [questions]);
+
+  const totalAttachments = useMemo(() => {
+    return Object.values(attachments || {}).reduce((sum, list) => {
+      if (!Array.isArray(list)) return sum;
+      return sum + list.length;
+    }, 0);
+  }, [attachments]);
 
   // Add global error handler for debugging - MUST BE AFTER STATE DECLARATIONS
   useEffect(() => {
@@ -340,19 +1163,40 @@ export function QuestionsTab({
     }
   };
 
+  const resolveFigureFlag = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure === 'boolean') {
+      return item.figure;
+    }
+    return safeRequiresFigure(item);
+  };
+
+  const resolveFigureRequirement = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure_required === 'boolean') {
+      return item.figure_required;
+    }
+    return resolveFigureFlag(item);
+  };
+
   // Helper function to parse answer requirement from mark scheme text
+  // Returns undefined (not empty string) when unable to determine requirement
   const parseAnswerRequirement = (markSchemeText: string, marks: number): string | undefined => {
+    if (!markSchemeText || typeof markSchemeText !== 'string') {
+      return undefined;
+    }
+
     const text = markSchemeText.toLowerCase();
-    
+
     // Check for specific patterns
     if (text.includes('any two from') || text.includes('any 2 from')) {
-      return 'any_two_from';
+      return 'any_2_from';
     }
     if (text.includes('any three from') || text.includes('any 3 from')) {
-      return 'any_three_from';
+      return 'any_3_from';
     }
     if (text.includes('any one from') || text.includes('any 1 from')) {
-      return 'any_one_from';
+      return 'single_choice';
     }
     if (text.includes('both required') || text.includes('both needed')) {
       return 'both_required';
@@ -364,25 +1208,25 @@ export function QuestionsTab({
       return 'alternative_methods';
     }
     if (text.includes('owtte') || text.includes('words to that effect')) {
-      return 'acceptable_variations';
+      return 'alternative_methods';
     }
-    
+
     // IGCSE specific patterns
     if (text.includes('name') && text.includes('two') && !text.includes('between')) {
-      return 'any_two_from';
+      return 'any_2_from';
     }
     if (text.includes('state') && text.includes('give') && text.includes('reason')) {
       return 'both_required';
     }
     if (text.includes('either') && text.includes('or')) {
-      return 'any_one_from';
+      return 'single_choice';
     }
-    
+
     // Check based on marks and answer count
     if (marks === 2 && text.includes(' and ')) {
       return 'both_required';
     }
-    
+
     // Check for forward slashes indicating alternatives
     const slashCount = (text.match(/\//g) || []).length;
     if (slashCount >= 2) {
@@ -392,54 +1236,158 @@ export function QuestionsTab({
     return undefined;
   };
 
-  // Fetch data structure information
+  // Fetch data structure information with retry logic
   useEffect(() => {
-    if (savedPaperDetails?.data_structure_id) {
-      loadDataStructureInfo();
-    }
-  }, [savedPaperDetails]);
+    let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    const loadWithRetry = async () => {
+      if (!savedPaperDetails?.data_structure_id) {
+        console.warn('Cannot load data structure: data_structure_id is missing');
+        return;
+      }
+
+      while (retryCount < maxRetries && isMounted) {
+        try {
+          await loadDataStructureInfo();
+          break;
+        } catch (error) {
+          retryCount++;
+          console.error(`Failed to load data structure (attempt ${retryCount}/${maxRetries}):`, error);
+
+          if (retryCount < maxRetries && isMounted) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+          } else if (isMounted) {
+            toast.error('Failed to load academic structure. Some features may not work correctly.');
+            setAcademicStructureLoaded(false);
+          }
+        }
+      }
+    };
+
+    loadWithRetry();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [savedPaperDetails?.data_structure_id]);
 
   const loadDataStructureInfo = async () => {
     try {
       setAcademicStructureLoaded(false);
+
+      if (!savedPaperDetails?.data_structure_id) {
+        throw new Error('Missing data_structure_id in savedPaperDetails');
+      }
+
       const result = await fetchDataStructureInfo(savedPaperDetails.data_structure_id);
+
+      // Validate the returned data structure
+      if (!result || typeof result !== 'object') {
+        throw new Error('Invalid data structure response');
+      }
+
+      if (!result.dataStructure) {
+        throw new Error('Missing dataStructure in response');
+      }
+
       setDataStructureInfo(result.dataStructure);
-      setUnits(result.units);
-      
+
+      // Safely set units with validation
+      const units = Array.isArray(result.units) ? result.units : [];
+      setUnits(units);
+
       // Ensure topics are properly loaded with their relationships
-      const allTopics = result.topics || [];
-      const allSubtopics = result.subtopics || [];
-      
+      const allTopics = Array.isArray(result.topics) ? result.topics : [];
+      const allSubtopics = Array.isArray(result.subtopics) ? result.subtopics : [];
+
       // Set all topics and subtopics
       setTopics(allTopics);
       setSubtopics(allSubtopics);
-      
+
       console.log('Loaded data structure:', {
-        units: result.units.length,
+        units: units.length,
         topics: allTopics.length,
         subtopics: allSubtopics.length,
         topicSample: allTopics[0],
         subtopicSample: allSubtopics[0]
       });
-      
+
+      if (units.length === 0) {
+        console.warn('No units loaded - this may cause mapping issues');
+      }
+
+      if (allTopics.length === 0) {
+        console.warn('No topics loaded - this may cause mapping issues');
+      }
+
       setAcademicStructureLoaded(true);
     } catch (error) {
       console.error('Error loading data structure info:', error);
-      toast.error('Failed to load academic structure information');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load academic structure information';
+      toast.error(errorMessage);
       setAcademicStructureLoaded(false);
+      throw error; // Re-throw for retry logic
     }
   };
 
-  // Initialize questions from parsed data
+  // Initialize questions from parsed data with comprehensive error handling
   useEffect(() => {
-    if (parsedData) {
-      initializeFromParsedData(parsedData);
-    } else if (importSession?.id) {
-      loadImportedQuestions();
-    } else {
-      setLoading(false);
-    }
-  }, [importSession, parsedData]);
+    let isMounted = true;
+
+    const initialize = async () => {
+      try {
+        setInitializationError(null);
+        setLoading(true);
+
+        // Validate critical props before proceeding
+        if (!importSession && !parsedData) {
+          throw new Error('Missing required data: importSession or parsedData');
+        }
+
+        if (!existingPaperId) {
+          console.warn('existingPaperId is not set, tab may not be fully initialized');
+        }
+
+        if (!savedPaperDetails?.data_structure_id) {
+          throw new Error('Missing data_structure_id in savedPaperDetails');
+        }
+
+        if (parsedData) {
+          if (!parsedData.questions || !Array.isArray(parsedData.questions)) {
+            throw new Error('Invalid parsedData: questions array is missing or malformed');
+          }
+          if (isMounted) {
+            await initializeFromParsedData(parsedData);
+          }
+        } else if (importSession?.id) {
+          if (isMounted) {
+            await loadImportedQuestions();
+          }
+        }
+
+        if (isMounted) {
+          setIsInitialized(true);
+        }
+      } catch (error) {
+        console.error('Failed to initialize QuestionsTab:', error);
+        if (isMounted) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
+          setInitializationError(errorMessage);
+          toast.error(`Initialization failed: ${errorMessage}`);
+          setLoading(false);
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [importSession, parsedData, existingPaperId, savedPaperDetails]);
 
   // Check existing questions after questions are loaded
   useEffect(() => {
@@ -447,6 +1395,8 @@ export function QuestionsTab({
       loadExistingQuestions();
     }
   }, [questions, existingPaperId]);
+
+  // Review synchronization is now handled inside QuestionImportReviewWorkflow
 
   // Auto-fill mappings from parsed data
   useEffect(() => {
@@ -456,85 +1406,190 @@ export function QuestionsTab({
       questions.forEach((q, index) => {
         // Check if parsed data has mapping information
         const originalQuestion = parsedData.questions?.[index];
-        if (originalQuestion) {
-          // Try to find matching unit/chapter
-          let chapterId = '';
-          if (originalQuestion.unit || originalQuestion.chapter) {
-            const unitName = originalQuestion.unit || originalQuestion.chapter;
-            const matchingUnit = units.find(u => 
-              u.name.toLowerCase().includes(unitName.toLowerCase()) ||
-              unitName.toLowerCase().includes(u.name.toLowerCase())
-            );
-            if (matchingUnit) {
-              chapterId = matchingUnit.id;
-            }
-          }
-
-          // Try to find matching topics
-          const topicIds: string[] = [];
-          const topicIdsFromSubtopics: string[] = [];
-          
-          if (originalQuestion.topic || originalQuestion.topics) {
-            const topicNames = Array.isArray(originalQuestion.topics) 
-              ? originalQuestion.topics 
-              : [originalQuestion.topic].filter(Boolean);
-            
-            topicNames.forEach((topicName: string) => {
-              const matchingTopic = topics.find(t => 
-                t.name.toLowerCase().includes(topicName.toLowerCase()) ||
-                topicName.toLowerCase().includes(t.name.toLowerCase())
-              );
-              if (matchingTopic && !topicIds.includes(matchingTopic.id)) {
-                topicIds.push(matchingTopic.id);
-              }
-            });
-          }
-
-          // Try to find matching subtopics
-          const subtopicIds: string[] = [];
-          if (originalQuestion.subtopic || originalQuestion.subtopics) {
-            const subtopicNames = Array.isArray(originalQuestion.subtopics) 
-              ? originalQuestion.subtopics 
-              : [originalQuestion.subtopic].filter(Boolean);
-            
-            subtopicNames.forEach((subtopicName: string) => {
-              const matchingSubtopic = subtopics.find(s => 
-                s.name.toLowerCase().includes(subtopicName.toLowerCase()) ||
-                subtopicName.toLowerCase().includes(s.name.toLowerCase())
-              );
-              if (matchingSubtopic) {
-                if (!subtopicIds.includes(matchingSubtopic.id)) {
-                  subtopicIds.push(matchingSubtopic.id);
-                }
-                
-                // Also add the parent topic if not already added
-                if (matchingSubtopic.topic_id && !topicIds.includes(matchingSubtopic.topic_id) && !topicIdsFromSubtopics.includes(matchingSubtopic.topic_id)) {
-                  topicIdsFromSubtopics.push(matchingSubtopic.topic_id);
-                }
-              }
-            });
-          }
-          
-          // Combine topic IDs from direct matches and subtopic parents
-          const allTopicIds = [...topicIds, ...topicIdsFromSubtopics];
-
-          mappings[q.id] = {
-            chapter_id: chapterId,
-            topic_ids: allTopicIds,
-            subtopic_ids: subtopicIds
-          };
-        } else {
+        if (!originalQuestion) {
           mappings[q.id] = {
             chapter_id: '',
             topic_ids: [],
             subtopic_ids: []
           };
+          return;
         }
+
+        const toId = (value: any): string => (value === null || value === undefined ? '' : String(value));
+
+        const matchUnit = (candidate: any) =>
+          findUniqueMatch(units, candidate, [
+            (unit: any) => unit.name,
+            (unit: any) => unit.code,
+            (unit: any) => unit.short_name,
+            (unit: any) => unit.display_name
+          ]);
+
+        const matchTopicInList = (availableTopics: any[], name: string) =>
+          findUniqueMatch(availableTopics, name, [
+            (topic: any) => topic.name,
+            (topic: any) => topic.code,
+            (topic: any) => topic.alias
+          ]);
+
+        const matchSubtopicInList = (availableSubtopics: any[], name: string) =>
+          findUniqueMatch(availableSubtopics, name, [
+            (subtopic: any) => subtopic.name,
+            (subtopic: any) => subtopic.code,
+            (subtopic: any) => subtopic.alias
+          ]);
+
+        const unitCandidates = [
+          originalQuestion.unit,
+          originalQuestion.chapter,
+          originalQuestion.unit_name,
+          originalQuestion.chapter_name,
+          originalQuestion.unit?.name,
+          q.original_unit
+        ];
+
+        let chapterId = '';
+        for (const candidate of unitCandidates) {
+          const match = matchUnit(candidate);
+          if (match) {
+            chapterId = toId(match.id);
+            break;
+          }
+        }
+
+        const topicIdSet = new Set<string>();
+        const subtopicIdSet = new Set<string>();
+
+        const topicNames = [
+          ...extractNameCandidates(originalQuestion.topics),
+          ...extractNameCandidates(originalQuestion.topic),
+          ...extractNameCandidates(q.original_topics),
+          ...extractNameCandidates(q.topic)
+        ];
+
+        const subtopicNames = [
+          ...extractNameCandidates(originalQuestion.subtopics),
+          ...extractNameCandidates(originalQuestion.subtopic),
+          ...extractNameCandidates(q.original_subtopics),
+          ...extractNameCandidates(q.subtopic)
+        ];
+
+        const ensureUnitFromTopic = (topic: any) => {
+          if (!topic) return;
+          const topicUnitId = toId(topic.unit_id);
+          if (!topicUnitId) return;
+          if (!chapterId) {
+            chapterId = topicUnitId;
+          }
+        };
+
+        const considerTopic = (name: string) => {
+          if (!name) return;
+
+          const availableTopics = chapterId
+            ? topics.filter(t => toId(t.unit_id) === chapterId)
+            : topics;
+
+          let match = matchTopicInList(availableTopics, name);
+
+          if (!match && !chapterId) {
+            match = matchTopicInList(topics, name);
+          }
+
+          if (match) {
+            const matchUnitId = toId(match.unit_id);
+            if (chapterId && matchUnitId && matchUnitId !== chapterId) {
+              return;
+            }
+
+            ensureUnitFromTopic(match);
+
+            const topicId = toId(match.id);
+            if (topicId) {
+              topicIdSet.add(topicId);
+            }
+          }
+        };
+
+        const considerSubtopic = (name: string) => {
+          if (!name) return;
+
+          const relatedSubtopics = topicIdSet.size > 0
+            ? subtopics.filter(s => topicIdSet.has(toId(s.topic_id)))
+            : [];
+
+          let match = matchSubtopicInList(relatedSubtopics, name);
+
+          if (!match) {
+            match = matchSubtopicInList(subtopics, name);
+          }
+
+          if (!match) return;
+
+          const parentTopic = topics.find(t => toId(t.id) === toId(match.topic_id));
+          if (!parentTopic) return;
+
+          const parentUnitId = toId(parentTopic.unit_id);
+          if (chapterId && parentUnitId && parentUnitId !== chapterId) {
+            return;
+          }
+
+          ensureUnitFromTopic(parentTopic);
+
+          const parentTopicId = toId(parentTopic.id);
+          if (parentTopicId) {
+            topicIdSet.add(parentTopicId);
+          }
+
+          const subtopicId = toId(match.id);
+          if (subtopicId) {
+            subtopicIdSet.add(subtopicId);
+          }
+        };
+
+        subtopicNames.forEach(considerSubtopic);
+        topicNames.forEach(considerTopic);
+        subtopicNames.forEach(considerSubtopic);
+
+        if (!chapterId && topicIdSet.size > 0) {
+          const inferredTopic = topics.find(t => toId(t.id) === Array.from(topicIdSet)[0]);
+          if (inferredTopic) {
+            chapterId = toId(inferredTopic.unit_id);
+          }
+        }
+
+        if (chapterId) {
+          const validTopicIds = Array.from(topicIdSet).filter(topicId => {
+            const topic = topics.find(t => toId(t.id) === topicId);
+            return topic && toId(topic.unit_id) === chapterId;
+          });
+          topicIdSet.clear();
+          validTopicIds.forEach(id => topicIdSet.add(id));
+
+          const validSubtopicIds = Array.from(subtopicIdSet).filter(subtopicId => {
+            const subtopic = subtopics.find(s => toId(s.id) === subtopicId);
+            if (!subtopic) return false;
+            const parentTopic = topics.find(t => toId(t.id) === toId(subtopic.topic_id));
+            if (!parentTopic || toId(parentTopic.unit_id) !== chapterId) {
+              return false;
+            }
+            topicIdSet.add(toId(parentTopic.id));
+            return true;
+          });
+          subtopicIdSet.clear();
+          validSubtopicIds.forEach(id => subtopicIdSet.add(id));
+        }
+
+        mappings[q.id] = {
+          chapter_id: chapterId,
+          topic_ids: Array.from(topicIdSet),
+          subtopic_ids: Array.from(subtopicIdSet)
+        };
       });
-      
+
       console.log('Final question mappings:', mappings);
       console.log('Sample mapping for first question:', mappings[questions[0]?.id]);
-      
+
       setQuestionMappings(mappings);
     }
   }, [academicStructureLoaded, parsedData, questions, units, topics, subtopics]);
@@ -556,47 +1611,6 @@ export function QuestionsTab({
     }
   }, [units.length, topics.length, subtopics.length, questions.length, Object.keys(questionMappings).length, autoMappingInProgress]);
 
-  // Check if simulation is required based on question complexity
-  useEffect(() => {
-    if (questions.length > 0) {
-      const hasComplexQuestions = questions.some(q => 
-        q.parts && q.parts.length > 0 || 
-        q.answer_format && ['calculation', 'equation', 'chemical_structure', 'diagram', 'table', 'graph'].includes(q.answer_format) ||
-        q.answer_requirement !== undefined
-      );
-      
-      const hasDynamicAnswers = questions.some(q => 
-        q.answer_requirement || 
-        (q.parts && q.parts.some((p: any) => p.answer_requirement))
-      );
-      
-      // Check for complex dynamic field combinations
-      const hasComplexDynamicFields = questions.some(q => {
-        // Multiple alternatives with linking
-        const hasLinkedAlternatives = q.correct_answers?.some(ans => 
-          ans.linked_alternatives && ans.linked_alternatives.length > 0
-        );
-        
-        // ECF (Error Carried Forward) answers
-        const hasECF = q.correct_answers?.some(ans => ans.error_carried_forward) ||
-          q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.error_carried_forward));
-        
-        // Context-dependent answers
-        const hasContextAnswers = q.correct_answers?.some(ans => ans.context) ||
-          q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.context));
-        
-        return hasLinkedAlternatives || hasECF || hasContextAnswers;
-      });
-      
-      setSimulationRequired(
-        hasComplexQuestions || 
-        hasDynamicAnswers || 
-        hasComplexDynamicFields ||
-        questions.length > 20
-      );
-    }
-  }, [questions]);
-
   // Load simulation results from import session
   useEffect(() => {
     if (importSession?.metadata?.simulation_results) {
@@ -604,32 +1618,56 @@ export function QuestionsTab({
     }
   }, [importSession]);
 
-  const initializeFromParsedData = (data: any) => {
+  const initializeFromParsedData = async (data: any): Promise<void> => {
     try {
       setLoading(true);
-      
-      // Extract paper metadata with all available fields
+
+      // Validate input data structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid data: expected object');
+      }
+
+      if (!Array.isArray(data.questions)) {
+        throw new Error('Invalid data: questions must be an array');
+      }
+
+      if (data.questions.length === 0) {
+        throw new Error('No questions found in parsed data');
+      }
+
+      // Extract paper metadata with all available fields and validation
       const metadata = {
-        title: data.title || data.paper_name || data.paper_code || '',
-        exam_board: data.exam_board || data.board || '',
-        qualification: data.qualification || data.level || '',
-        subject: data.subject || '',
-        paper_code: data.paper_code || data.code || '',
-        paper_name: data.paper_name || data.name || '',
-        exam_year: data.exam_year || data.year || '',
-        exam_session: data.exam_session || data.session || '',
-        paper_duration: data.paper_duration || data.duration || '',
-        total_marks: parseInt(data.total_marks || '0') || 0,
+        title: String(data.title || data.paper_name || data.paper_code || 'Untitled Paper'),
+        exam_board: String(data.exam_board || data.board || 'Unknown'),
+        qualification: String(data.qualification || data.level || ''),
+        subject: String(data.subject || ''),
+        paper_code: String(data.paper_code || data.code || ''),
+        paper_name: String(data.paper_name || data.name || ''),
+        exam_year: String(data.exam_year || data.year || ''),
+        exam_session: String(data.exam_session || data.session || ''),
+        paper_duration: String(data.paper_duration || data.duration || ''),
+        total_marks: parseInt(String(data.total_marks || '0')) || 0,
         // Additional fields that might be in the parsed data
-        region: data.region || '',
-        program: data.program || '',
-        provider: data.provider || '',
-        subject_code: data.subject_code || ''
+        region: String(data.region || ''),
+        program: String(data.program || ''),
+        provider: String(data.provider || ''),
+        subject_code: String(data.subject_code || '')
       };
       setPaperMetadata(metadata);
 
-      // Process questions with enhanced extraction rules
-      const processedQuestions = processQuestions(data.questions || []);
+      // Process questions with enhanced extraction rules and error recovery
+      let processedQuestions: ProcessedQuestion[] = [];
+      try {
+        processedQuestions = processQuestions(data.questions, metadata);
+
+        if (processedQuestions.length === 0) {
+          throw new Error('No valid questions were processed');
+        }
+      } catch (processingError) {
+        console.error('Error processing questions:', processingError);
+        throw new Error(`Failed to process questions: ${processingError instanceof Error ? processingError.message : 'Unknown error'}`);
+      }
+
       setQuestions(processedQuestions);
 
       // Initialize question mappings
@@ -644,145 +1682,337 @@ export function QuestionsTab({
       setQuestionMappings(mappings);
 
       // Initialize attachments from staged attachments
-      if (stagedAttachments) {
+      if (stagedAttachments && typeof stagedAttachments === 'object') {
         setAttachments(stagedAttachments);
       }
 
       setLoading(false);
     } catch (error) {
       console.error('Error initializing questions:', error);
-      toast.error('Failed to process questions data');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process questions data';
+      toast.error(errorMessage);
       setLoading(false);
+      throw error; // Re-throw to be caught by initialization handler
     }
   };
 
-  const processQuestions = (rawQuestions: any[]): ProcessedQuestion[] => {
-    return rawQuestions.map((q, index) => {
-      const questionId = `q_${index + 1}`;
-      
-      // Enhanced question type detection
-      let questionType = q.type || 'descriptive';
-      if (q.options && q.options.length > 0) {
-        questionType = 'mcq';
-      } else if (q.answer_format === 'true_false' || 
-                 (q.question_text && q.question_text.toLowerCase().includes('true or false'))) {
-        questionType = 'tf';
-      }
-      
-      // Enhanced answer format detection for main question
-      let mainAnswerFormat = q.answer_format;
-      if (!mainAnswerFormat && q.question_text) {
-        mainAnswerFormat = detectAnswerFormat(q.question_text);
-        
-        // Additional subject-specific detection
-        const subject = paperMetadata.subject?.toLowerCase() || '';
-        const text = q.question_text.toLowerCase();
-        
-        if (subject.includes('chemistry')) {
-          if (text.includes('structure') || text.includes('draw the structure')) {
-            mainAnswerFormat = 'chemical_structure';
-          } else if (text.includes('equation') || text.includes('balanced equation')) {
-            mainAnswerFormat = 'equation';
-          }
-        } else if (subject.includes('physics')) {
-          if (text.includes('calculate') || text.includes('find the value')) {
-            mainAnswerFormat = 'calculation';
-          } else if (text.includes('graph') || text.includes('plot')) {
-            mainAnswerFormat = 'graph';
-          }
-        } else if (subject.includes('biology')) {
-          if (text.includes('diagram') || text.includes('label')) {
-            mainAnswerFormat = 'diagram';
-          } else if (text.includes('table') || text.includes('tabulate')) {
-            mainAnswerFormat = 'table';
-          }
-        } else if (subject.includes('mathematics')) {
-          if (text.includes('prove') || text.includes('show that')) {
-            mainAnswerFormat = 'calculation';
-          } else if (text.includes('construct') || text.includes('draw')) {
-            mainAnswerFormat = 'diagram';
-          }
-        }
-        
-        // IGCSE specific patterns
-        if (text.includes('name') && text.includes('and') && (text.includes('two') || text.includes('2'))) {
-          mainAnswerFormat = 'two_items';
-        } else if (text.includes('state') && text.includes('reason')) {
-          mainAnswerFormat = 'two_items_connected';
-        } else if (text.match(/\([a-d]\)/i) || text.includes('(i)') || text.includes('(ii)')) {
-          mainAnswerFormat = 'multi_line_labeled';
-        }
-      }
-      
-      // Parse answer requirement
-      const answerRequirement = q.answer_requirement || 
-        (q.correct_answers && q.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(q.correct_answers), q.marks) : undefined);
-      
-      // Process main question with all available data
-      const processedQuestion: ProcessedQuestion = {
-        id: questionId,
-        question_number: q.question_number || String(index + 1),
-        question_text: q.question_text || q.question_description || '',
-        question_type: questionType,
-        marks: parseInt(q.total_marks || q.marks || '0'),
-        topic: q.topic || q.topics?.[0] || '',
-        subtopic: q.subtopic || q.subtopics?.[0] || '',
-        difficulty: q.difficulty || determineQuestionDifficulty(q),
-        status: 'pending',
-        figure: q.figure || safeRequiresFigure(q),
-        attachments: ensureArray(q.attachments),
-        hint: q.hint || '',
-        explanation: q.explanation || '',
-        parts: [],
-        correct_answers: [],
-        options: [],
-        answer_format: mainAnswerFormat,
-        answer_requirement: answerRequirement,
-        total_alternatives: q.total_alternatives,
-        // Store original topics/subtopics for mapping
-        original_topics: ensureArray(q.topics || q.topic),
-        original_subtopics: ensureArray(q.subtopics || q.subtopic),
-        original_unit: q.unit || q.chapter || '',
-        // Initialize simulation tracking
-        simulation_flags: [],
-        simulation_notes: ''
-      };
+  // Pre-validation function to check question structure
+  const validateQuestionStructure = (question: any, index: number): { valid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    const questionNum = question.question_number || index + 1;
 
-      console.log(`Processing question ${index + 1}:`, {
-        topic: processedQuestion.topic,
-        original_topics: processedQuestion.original_topics,
-        subtopic: processedQuestion.subtopic,
-        original_subtopics: processedQuestion.original_subtopics,
-        unit: processedQuestion.original_unit,
-        answer_requirement: processedQuestion.answer_requirement
-      });
+    // Check for basic structure
+    if (!question || typeof question !== 'object') {
+      errors.push('Question must be an object');
+      return { valid: false, errors };
+    }
 
-      // Process parts if available
-      if (q.parts && Array.isArray(q.parts)) {
-        processedQuestion.parts = q.parts.map((part: any, partIndex: number) => 
-          processPart(part, partIndex, questionId)
-        );
+    // Check for parts structure if complex
+    if (question.type === 'complex' || (question.parts && Array.isArray(question.parts))) {
+      if (!Array.isArray(question.parts)) {
+        errors.push('Complex question must have parts array');
+      } else {
+        question.parts.forEach((part: any, partIdx: number) => {
+          if (!part || typeof part !== 'object') {
+            errors.push(`Part ${partIdx + 1} is invalid`);
+          } else if (!part.marks && part.marks !== 0) {
+            errors.push(`Part ${partIdx + 1} is missing marks`);
+          }
+
+          // Check subparts if they exist
+          if (part.subparts && Array.isArray(part.subparts)) {
+            part.subparts.forEach((subpart: any, subIdx: number) => {
+              if (!subpart || typeof subpart !== 'object') {
+                errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is invalid`);
+              } else if (!subpart.marks && subpart.marks !== 0) {
+                errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is missing marks`);
+              }
+            });
+          }
+        });
       }
+    }
 
-      // Process direct answers if no parts
-      if (!q.parts || q.parts.length === 0) {
-        if (q.correct_answers) {
-          processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
-        } else if (q.correct_answer) {
-          processedQuestion.correct_answers = [{
-            answer: q.correct_answer,
-            marks: processedQuestion.marks,
-            alternative_id: 1,
-            answer_requirement: answerRequirement
-          }];
-        }
-        if (q.options) {
-          processedQuestion.options = processOptions(q.options);
-        }
+    return { valid: errors.length === 0, errors };
+  };
+
+  const processQuestions = (rawQuestions: any[], paperContext: { subject?: string }): ProcessedQuestion[] => {
+    // Validate input
+    if (!Array.isArray(rawQuestions)) {
+      throw new Error('rawQuestions must be an array');
+    }
+
+    console.log(`========== STARTING QUESTIONS PROCESSING ==========`);
+    console.log(`Total questions to process: ${rawQuestions.length}`);
+    console.log(`Paper context:`, paperContext);
+
+    const normalizedSubject = paperContext.subject?.toLowerCase() || '';
+    const processedQuestions: ProcessedQuestion[] = [];
+    const validationWarnings: Array<{ question: number; errors: string[] }> = [];
+
+    // Pre-validate all questions
+    console.log(`\n[Pre-Validation] Checking question structures...`);
+    rawQuestions.forEach((q, idx) => {
+      const validation = validateQuestionStructure(q, idx);
+      if (!validation.valid) {
+        const questionNum = q?.question_number || idx + 1;
+        console.warn(`[Pre-Validation] Question ${questionNum} has structural issues:`, validation.errors);
+        validationWarnings.push({ question: questionNum, errors: validation.errors });
       }
-
-      return processedQuestion;
     });
+
+    if (validationWarnings.length > 0) {
+      console.warn(`[Pre-Validation] Found ${validationWarnings.length} questions with structural issues`);
+      console.warn(`[Pre-Validation] Detailed warnings:`, validationWarnings);
+      toast.error(`Warning: ${validationWarnings.length} question(s) have structural issues. Check console for details.`, { duration: 6000 });
+    } else {
+      console.log(`[Pre-Validation] All questions passed structural validation`);
+    }
+
+    for (let index = 0; index < rawQuestions.length; index++) {
+      try {
+        const q = rawQuestions[index];
+
+        // Skip invalid questions
+        if (!q || typeof q !== 'object') {
+          console.warn(`Skipping invalid question at index ${index}:`, q);
+          toast.error(`Warning: Question ${index + 1} has invalid structure`);
+          continue;
+        }
+
+        // Validate critical fields early
+        const questionNumber = q.question_number || index + 1;
+        console.log(`[Question ${questionNumber}] Starting processing...`);
+
+        const questionId = `q_${index + 1}`;
+
+        const rawQuestionText = ensureString(
+          q.question_text ?? q.question_description ?? q.question
+        ) || '';
+        const rawTopic = ensureString(q.topic) || ensureString(q.topics?.[0]) || '';
+        const rawSubtopic = ensureString(q.subtopic) || ensureString(q.subtopics?.[0]) || '';
+        const rawUnit = ensureString(q.unit) || ensureString(q.chapter) || '';
+        const optionsArray = Array.isArray(q.options)
+          ? q.options
+          : (q.options && typeof q.options === 'object'
+            ? Object.values(q.options)
+            : []);
+
+        // Enhanced question type detection
+        let questionType = q.type;
+        if (!questionType) {
+          if (Array.isArray(q.parts) && q.parts.length > 0) {
+            questionType = 'complex';
+          } else if (optionsArray.length > 0) {
+            questionType = 'mcq';
+          } else if (
+            q.answer_format === 'true_false' ||
+            (rawQuestionText && rawQuestionText.toLowerCase().includes('true or false')) ||
+            (optionsArray.length === 2 && optionsArray.every((opt: any) => /true|false/i.test(opt?.text || opt?.option_text)))
+          ) {
+            questionType = 'tf';
+          } else {
+            questionType = 'descriptive';
+          }
+        }
+
+        // Enhanced answer format detection for main question
+        let mainAnswerFormat = q.answer_format;
+        if (!mainAnswerFormat && rawQuestionText) {
+          mainAnswerFormat = detectAnswerFormat(rawQuestionText);
+
+          // Additional subject-specific detection
+          const text = rawQuestionText.toLowerCase();
+
+          if (normalizedSubject.includes('chemistry')) {
+            if (text.includes('structure') || text.includes('draw the structure')) {
+              mainAnswerFormat = 'chemical_structure';
+            } else if (text.includes('equation') || text.includes('balanced equation')) {
+              mainAnswerFormat = 'equation';
+            }
+          } else if (normalizedSubject.includes('physics')) {
+            if (text.includes('calculate') || text.includes('find the value')) {
+              mainAnswerFormat = 'calculation';
+            } else if (text.includes('graph') || text.includes('plot')) {
+              mainAnswerFormat = 'graph';
+            }
+          } else if (normalizedSubject.includes('biology')) {
+            if (text.includes('diagram') || text.includes('label')) {
+              mainAnswerFormat = 'diagram';
+            } else if (text.includes('table') || text.includes('tabulate')) {
+              mainAnswerFormat = 'table';
+            }
+          } else if (normalizedSubject.includes('mathematics') || normalizedSubject.includes('math')) {
+            if (text.includes('prove') || text.includes('show that')) {
+              mainAnswerFormat = 'calculation';
+            } else if (text.includes('construct') || text.includes('draw')) {
+              mainAnswerFormat = 'diagram';
+            }
+          }
+
+          // IGCSE specific patterns
+          if (text.includes('name') && text.includes('and') && (text.includes('two') || text.includes('2'))) {
+            mainAnswerFormat = 'two_items';
+          } else if (text.includes('state') && text.includes('reason')) {
+            mainAnswerFormat = 'two_items_connected';
+          } else if (text.match(/\([a-d]\)/i) || text.includes('(i)') || text.includes('(ii)')) {
+            mainAnswerFormat = 'multi_line_labeled';
+          }
+        }
+
+        // Parse answer requirement
+        let answerRequirement = q.answer_requirement ? ensureString(q.answer_requirement) ?? undefined : undefined;
+        if (!answerRequirement && q.correct_answers && Array.isArray(q.correct_answers) && q.correct_answers.length > 0) {
+          let serializedAnswers: string | null = null;
+          if (typeof q.correct_answers === 'string') {
+            serializedAnswers = q.correct_answers;
+          } else {
+            try {
+              serializedAnswers = JSON.stringify(q.correct_answers);
+            } catch (serializationError) {
+              console.warn(`Failed to stringify correct_answers for question ${index + 1}:`, serializationError);
+              try {
+                serializedAnswers = q.correct_answers
+                  .map((ans: any) => ensureString(ans?.answer) || '')
+                  .filter(Boolean)
+                  .join(' / ');
+              } catch (fallbackError) {
+                console.warn(`Fallback serialization failed for question ${index + 1}:`, fallbackError);
+              }
+            }
+          }
+
+          if (serializedAnswers) {
+            try {
+              const marksValue = parseInt(String(q.marks ?? q.total_marks ?? '0')) || 0;
+              answerRequirement = parseAnswerRequirement(serializedAnswers, marksValue);
+            } catch (parseError) {
+              console.warn(`Failed to parse answer requirement for question ${index + 1}:`, parseError);
+            }
+          }
+        }
+
+        const figureFlag = resolveFigureFlag(q);
+        const figureRequired = resolveFigureRequirement(q);
+
+        // Process main question with all available data
+        const processedQuestion: ProcessedQuestion = {
+          id: questionId,
+          question_number: ensureString(q.question_number) || String(index + 1),
+          question_text: rawQuestionText,
+          question_type: questionType,
+          marks: parseInt(String(q.total_marks ?? q.marks ?? '0')) || 0,
+          unit: rawUnit,
+          unit_id: q.unit_id ?? null,
+          topic: rawTopic,
+          topic_id: q.topic_id ?? null,
+          subtopic: rawSubtopic,
+          subtopic_id: q.subtopic_id ?? null,
+          difficulty: q.difficulty || determineQuestionDifficulty(q),
+          status: 'pending',
+          figure: figureFlag,
+          figure_required: figureRequired,
+          attachments: ensureArray(q.attachments),
+          hint: ensureString(q.hint) || '',
+          explanation: ensureString(q.explanation) || '',
+          parts: [],
+          correct_answers: [],
+          options: [],
+          answer_format: mainAnswerFormat,
+          answer_requirement: answerRequirement,
+          total_alternatives: q.total_alternatives,
+          mcq_type: q.mcq_type,
+          match_pairs: q.match_pairs || q.correct_matches,
+          left_column: q.left_column,
+          right_column: q.right_column,
+          correct_sequence: q.correct_sequence,
+          partial_credit: q.partial_credit,
+          partial_marking: q.partial_marking,
+          conditional_marking: q.conditional_marking || q.marking_conditions,
+          // Store original topics/subtopics for mapping
+          original_topics: ensureArray(q.topics || q.topic),
+          original_subtopics: ensureArray(q.subtopics || q.subtopic),
+          original_unit: rawUnit,
+          // Initialize simulation tracking
+          simulation_flags: [],
+          simulation_notes: ''
+        };
+
+        console.log(`Processing question ${index + 1}:`, {
+          topic: processedQuestion.topic,
+          original_topics: processedQuestion.original_topics,
+          subtopic: processedQuestion.subtopic,
+          original_subtopics: processedQuestion.original_subtopics,
+          unit: processedQuestion.original_unit,
+          answer_requirement: processedQuestion.answer_requirement
+        });
+
+        // Process parts if available
+        if (Array.isArray(q.parts) && q.parts.length > 0) {
+          console.log(`[Question ${questionNumber}] Processing ${q.parts.length} parts...`);
+          try {
+            processedQuestion.parts = q.parts.map((part: any, partIndex: number) => {
+              try {
+                return processPart(part, partIndex, questionId, paperContext);
+              } catch (partError) {
+                console.error(`[Question ${questionNumber}] Error processing part ${partIndex + 1}:`, partError);
+                throw new Error(`Failed to process part ${partIndex + 1}: ${partError instanceof Error ? partError.message : String(partError)}`);
+              }
+            });
+            console.log(`[Question ${questionNumber}] Successfully processed ${processedQuestion.parts.length} parts`);
+          } catch (partsError) {
+            console.error(`[Question ${questionNumber}] Critical error in parts processing:`, partsError);
+            throw partsError;
+          }
+        }
+
+        // Process direct answers if no parts
+        if (!Array.isArray(q.parts) || q.parts.length === 0) {
+          if (q.correct_answers) {
+            processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
+          } else if (q.correct_answer) {
+            processedQuestion.correct_answers = [{
+              answer: ensureString(q.correct_answer) || '',
+              marks: processedQuestion.marks,
+              alternative_id: 1,
+              answer_requirement: answerRequirement
+            }];
+          }
+
+          if (optionsArray.length > 0) {
+            processedQuestion.options = processOptions(
+              optionsArray,
+              q.correct_answers,
+              q.correct_answer
+            );
+          }
+        }
+
+        console.log(`[Question ${questionNumber}] Processing complete - pushing to array`);
+        processedQuestions.push(processedQuestion);
+      } catch (error) {
+        const questionNumber = rawQuestions[index]?.question_number || index + 1;
+        console.error(`[Question ${questionNumber}] ========== PROCESSING FAILED ==========`);
+        console.error(`[Question ${questionNumber}] Error details:`, error);
+        console.error(`[Question ${questionNumber}] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+        console.error(`[Question ${questionNumber}] Question data:`, JSON.stringify(rawQuestions[index], null, 2));
+
+        // Provide detailed error message
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const detailedMessage = `Question ${questionNumber} failed: ${errorMessage}`;
+
+        console.error(`[Question ${questionNumber}] ========================================`);
+        toast.error(detailedMessage, { duration: 5000 });
+
+        // Continue processing other questions instead of failing entirely
+      }
+    }
+
+    if (processedQuestions.length === 0) {
+      throw new Error('No valid questions could be processed');
+    }
+
+    return processedQuestions;
   };
 
   // Helper to determine question difficulty based on marks and complexity
@@ -795,20 +2025,37 @@ export function QuestionsTab({
     return 'Easy';
   };
 
-  const processPart = (part: any, partIndex: number, parentId: string): ProcessedPart => {
+  const processPart = (
+    part: any,
+    partIndex: number,
+    parentId: string,
+    paperContext: { subject?: string }
+  ): ProcessedPart => {
+    // Validate part structure
+    if (!part || typeof part !== 'object') {
+      throw new Error(`Part ${partIndex + 1} has invalid structure`);
+    }
+
     // FIXED: Ensure parts have IDs for consistent key generation
     const partId = part.id || `p${partIndex}`;
-    
+    const partLabel = part.part || String.fromCharCode(97 + partIndex);
+
+    console.log(`  [Part ${partLabel}] Processing part ${partIndex + 1}...`);
+
     // Enhanced answer format detection
     const questionText = ensureString(part.question_text || part.text || part.question || '');
     let answerFormat = part.answer_format;
-    
+
+    if (!questionText && !answerFormat) {
+      console.warn(`  [Part ${partLabel}] Warning: No question text or answer format specified`);
+    }
+
     if (!answerFormat && questionText) {
       // First try auto-detection
       answerFormat = detectAnswerFormat(questionText);
-      
+
       // Subject-specific enhancements
-      const subject = paperMetadata.subject?.toLowerCase() || '';
+      const subject = paperContext.subject?.toLowerCase() || '';
       if (subject.includes('chemistry') && questionText.toLowerCase().includes('structure')) {
         answerFormat = 'chemical_structure';
       } else if (subject.includes('physics') && questionText.toLowerCase().includes('calculate')) {
@@ -829,9 +2076,12 @@ export function QuestionsTab({
     }
     
     // Parse answer requirement for parts
-    const answerRequirement = part.answer_requirement || 
+    const answerRequirement = part.answer_requirement ||
       (part.correct_answers && part.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(part.correct_answers), part.marks) : undefined);
-    
+
+    const partFigureFlag = resolveFigureFlag(part);
+    const partFigureRequired = resolveFigureRequirement(part);
+
     const processedPart: ProcessedPart = {
       id: partId, // FIXED: Include id in processed part
       part: part.part || String.fromCharCode(97 + partIndex), // a, b, c...
@@ -839,39 +2089,82 @@ export function QuestionsTab({
       marks: parseInt(part.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
-      figure: part.figure || safeRequiresFigure(part),
+      figure: partFigureFlag,
+      figure_required: partFigureRequired,
       attachments: ensureArray(part.attachments),
       hint: part.hint,
       explanation: part.explanation,
       subparts: [],
       correct_answers: [],
       options: [],
-      requires_manual_marking: part.requires_manual_marking || 
+      requires_manual_marking: part.requires_manual_marking ||
         ['diagram', 'chemical_structure', 'table', 'graph'].includes(answerFormat || ''),
-      marking_criteria: part.marking_criteria
+      marking_criteria: part.marking_criteria,
+      mcq_type: part.mcq_type,
+      match_pairs: part.match_pairs || part.correct_matches,
+      left_column: part.left_column,
+      right_column: part.right_column,
+      correct_sequence: part.correct_sequence,
+      partial_credit: part.partial_credit,
+      partial_marking: part.partial_marking,
+      conditional_marking: part.conditional_marking || part.marking_conditions
     };
 
     // Process subparts if available
     if (part.subparts && Array.isArray(part.subparts)) {
-      processedPart.subparts = part.subparts.map((subpart: any, subpartIndex: number) => 
-        processSubpart(subpart, subpartIndex, parentId)
-      );
+      console.log(`  [Part ${partLabel}] Processing ${part.subparts.length} subparts...`);
+      try {
+        processedPart.subparts = part.subparts.map((subpart: any, subpartIndex: number) => {
+          try {
+            return processSubpart(subpart, subpartIndex, parentId, paperContext);
+          } catch (subpartError) {
+            console.error(`  [Part ${partLabel}] Error in subpart ${subpartIndex + 1}:`, subpartError);
+            throw new Error(`Subpart ${subpartIndex + 1} failed: ${subpartError instanceof Error ? subpartError.message : String(subpartError)}`);
+          }
+        });
+        console.log(`  [Part ${partLabel}] Successfully processed ${processedPart.subparts.length} subparts`);
+      } catch (subpartsError) {
+        console.error(`  [Part ${partLabel}] Critical error in subparts:`, subpartsError);
+        throw subpartsError;
+      }
     }
 
     // Process answers
     if (part.correct_answers) {
-      processedPart.correct_answers = processAnswers(part.correct_answers, answerRequirement);
+      try {
+        console.log(`  [Part ${partLabel}] Processing ${Array.isArray(part.correct_answers) ? part.correct_answers.length : 0} answers...`);
+        processedPart.correct_answers = processAnswers(part.correct_answers, answerRequirement);
+      } catch (answersError) {
+        console.error(`  [Part ${partLabel}] Error processing answers:`, answersError);
+        throw new Error(`Failed to process answers: ${answersError instanceof Error ? answersError.message : String(answersError)}`);
+      }
     }
 
     // Process options for MCQ
     if (part.options) {
-      processedPart.options = processOptions(part.options);
+      try {
+        console.log(`  [Part ${partLabel}] Processing ${Array.isArray(part.options) ? part.options.length : 0} options...`);
+        processedPart.options = processOptions(
+          part.options,
+          part.correct_answers,
+          part.correct_answer
+        );
+      } catch (optionsError) {
+        console.error(`  [Part ${partLabel}] Error processing options:`, optionsError);
+        throw new Error(`Failed to process options: ${optionsError instanceof Error ? optionsError.message : String(optionsError)}`);
+      }
     }
 
+    console.log(`  [Part ${partLabel}] Part processing complete`);
     return processedPart;
   };
 
-  const processSubpart = (subpart: any, subpartIndex: number, parentId: string): ProcessedSubpart => {
+  const processSubpart = (
+    subpart: any,
+    subpartIndex: number,
+    parentId: string,
+    paperContext: { subject?: string }
+  ): ProcessedSubpart => {
     // FIXED: Ensure subparts have IDs that match their Roman numeral designation
     const romanNumeral = Roman[subpartIndex] || `${subpartIndex}`;
     const subpartId = subpart.id || `s${subpartIndex}`;
@@ -885,48 +2178,223 @@ export function QuestionsTab({
     const answerRequirement = subpart.answer_requirement || 
       (subpart.correct_answers && subpart.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks) : undefined);
     
-    return {
+    const subpartFigureFlag = resolveFigureFlag(subpart);
+    const subpartFigureRequired = resolveFigureRequirement(subpart);
+
+    const processedSubpart: ProcessedSubpart = {
       id: subpartId, // FIXED: Include id in processed subpart
       subpart: subpartLabel,
       question_text: questionText || '',
       marks: parseInt(subpart.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
+      attachments: ensureArray(subpart.attachments),
       correct_answers: subpart.correct_answers ? processAnswers(subpart.correct_answers, answerRequirement) : [],
-      options: subpart.options ? processOptions(subpart.options) : [],
+      options: subpart.options
+        ? processOptions(subpart.options, subpart.correct_answers, subpart.correct_answer)
+        : [],
       hint: subpart.hint,
       explanation: subpart.explanation,
-      figure: subpart.figure || safeRequiresFigure(subpart) // Add figure field to track requirement
+      figure: subpartFigureFlag,
+      figure_required: subpartFigureRequired,
+      mcq_type: subpart.mcq_type,
+      match_pairs: subpart.match_pairs || subpart.correct_matches,
+      left_column: subpart.left_column,
+      right_column: subpart.right_column,
+      correct_sequence: subpart.correct_sequence,
+      partial_credit: subpart.partial_credit,
+      partial_marking: subpart.partial_marking,
+      conditional_marking: subpart.conditional_marking || subpart.marking_conditions
     };
+
+    return processedSubpart;
   };
 
   const processAnswers = (answers: any[], answerRequirement?: string): ProcessedAnswer[] => {
-    if (!Array.isArray(answers)) return [];
-    
-    return answers.map((ans, index) => ({
-      answer: ensureString(ans.answer) || '',
-      marks: parseInt(ans.marks || '1'),
-      alternative_id: ans.alternative_id || index + 1,
-      linked_alternatives: ans.linked_alternatives,
-      alternative_type: ans.alternative_type,
-      context: ans.context,
-      unit: ans.unit,
-      measurement_details: ans.measurement_details,
-      accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-      error_carried_forward: ans.error_carried_forward,
-      answer_requirement: answerRequirement || ans.answer_requirement,
-      total_alternatives: ans.total_alternatives
-    }));
+    if (!Array.isArray(answers)) {
+      console.warn('processAnswers called with non-array:', answers);
+      return [];
+    }
+
+    return answers.map((ans, index) => {
+      try {
+        // Validate answer structure
+        if (!ans || typeof ans !== 'object') {
+          console.warn(`Answer ${index + 1} has invalid structure:`, ans);
+          return {
+            answer: String(ans || ''),
+            marks: 1,
+            alternative_id: index + 1,
+            alternative_type: 'standalone',
+            answer_requirement: answerRequirement
+          };
+        }
+
+        const answerText = ensureString(ans.answer) || '';
+        if (!answerText) {
+          console.warn(`Answer ${index + 1} has no text content:`, ans);
+        }
+
+        const context = ans.context;
+
+      let processedAnswer: ProcessedAnswer = {
+        answer: answerText,
+        marks: parseInt(ans.marks || '1'),
+        alternative_id: ans.alternative_id || index + 1,
+        linked_alternatives: ans.linked_alternatives,
+        alternative_type: ans.alternative_type,
+        context: context,
+        unit: ans.unit,
+        measurement_details: ans.measurement_details,
+        accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
+        error_carried_forward: ans.error_carried_forward,
+        answer_requirement: answerRequirement || ans.answer_requirement,
+        total_alternatives: ans.total_alternatives
+      };
+
+      if (extractionRules?.forwardSlashHandling) {
+        const forwardSlashResult = parseForwardSlashAnswers(answerText);
+
+        if (forwardSlashResult.hasForwardSlash) {
+          const alternatives = extractAllValidAlternatives(answerText);
+          processedAnswer.total_alternatives = alternatives.length;
+
+          if (forwardSlashResult.validationErrors.length > 0) {
+            processedAnswer.validation_issues = forwardSlashResult.validationErrors;
+          }
+        }
+      }
+
+      if (extractionRules?.alternativeLinking) {
+        const andOrResult = parseAndOrOperators(answerText);
+
+        if (andOrResult.hasOperators) {
+          const logic = analyzeAnswerLogic(answerText);
+          processedAnswer.answer_logic = logic.type;
+          processedAnswer.required_components = extractRequiredComponents(answerText);
+          processedAnswer.optional_components = extractOptionalComponents(answerText);
+
+          if (andOrResult.validationErrors.length > 0) {
+            processedAnswer.validation_issues = [
+              ...(processedAnswer.validation_issues || []),
+              ...andOrResult.validationErrors
+            ];
+          }
+        }
+      }
+
+      if (extractionRules?.answerStructure?.requireContext || extractionRules?.contextRequired) {
+        const subjectRules = extractionRules?.subjectSpecific ? {
+          requiresUnits: extractionRules.subjectSpecific.physics || extractionRules.subjectSpecific.chemistry,
+          allowsApproximations: true,
+          requiresSignificantFigures: extractionRules.subjectSpecific.physics || extractionRules.subjectSpecific.chemistry,
+          allowsEquivalentPhrasing: true
+        } : undefined;
+
+        const validation = validateAnswerStructure(answerText, context, subjectRules);
+
+        if (!validation.isValid) {
+          processedAnswer.validation_issues = [
+            ...(processedAnswer.validation_issues || []),
+            ...validation.issues.map(issue => issue.message)
+          ];
+        }
+
+        if (!validation.hasContext && !context) {
+          processedAnswer.needs_context = true;
+        }
+      }
+
+      return processedAnswer;
+      } catch (answerError) {
+        console.error(`Error processing answer ${index + 1}:`, answerError);
+        console.error(`Answer data:`, ans);
+        // Return minimal valid answer structure
+        return {
+          answer: String(ans?.answer || ''),
+          marks: 1,
+          alternative_id: index + 1,
+          alternative_type: 'standalone',
+          answer_requirement: answerRequirement,
+          validation_issues: [`Processing error: ${answerError instanceof Error ? answerError.message : String(answerError)}`]
+        };
+      }
+    }).filter(Boolean); // Filter out any null/undefined results
   };
 
-  const processOptions = (options: any[]): ProcessedOption[] => {
+  const buildNormalizedOptionValue = (value: unknown): string[] => {
+    const strValue = ensureString(value)?.trim();
+    if (!strValue) return [];
+
+    const lower = strValue.toLowerCase();
+    const variants = new Set<string>();
+
+    variants.add(lower);
+    variants.add(lower.replace(/^option\s+/i, '').trim());
+
+    const withoutPunctuation = lower.replace(/[\.,;:()\[\]{}]/g, '').trim();
+    variants.add(withoutPunctuation);
+    variants.add(withoutPunctuation.replace(/\s+/g, ''));
+
+    return Array.from(variants).filter(Boolean);
+  };
+
+  const buildNormalizedCorrectAnswerSet = (
+    correctAnswers?: any[],
+    correctAnswer?: unknown
+  ): Set<string> => {
+    const normalized = new Set<string>();
+
+    correctAnswers?.forEach(answer => {
+      buildNormalizedOptionValue(answer?.answer).forEach(variant => normalized.add(variant));
+    });
+
+    buildNormalizedOptionValue(correctAnswer).forEach(variant => normalized.add(variant));
+
+    return normalized;
+  };
+
+  const matchesCorrectAnswer = (value: string, normalizedAnswers: Set<string>): boolean => {
+    if (!value || normalizedAnswers.size === 0) {
+      return false;
+    }
+
+    return buildNormalizedOptionValue(value).some(variant => normalizedAnswers.has(variant));
+  };
+
+  const processOptions = (
+    options: any[],
+    correctAnswers?: any[],
+    correctAnswer?: unknown
+  ): ProcessedOption[] => {
     if (!Array.isArray(options)) return [];
-    
-    return options.map((opt, index) => ({
-      label: opt.label || String.fromCharCode(65 + index), // A, B, C...
-      text: ensureString(opt.text || opt.option_text) || '',
-      is_correct: opt.is_correct || false
-    }));
+
+    const normalizedAnswers = buildNormalizedCorrectAnswerSet(correctAnswers, correctAnswer);
+
+    return options.map((opt, index) => {
+      const label = opt.label || String.fromCharCode(65 + index); // A, B, C...
+      const text = ensureString(opt.text || opt.option_text) || '';
+
+      let explicitIsCorrect: boolean | undefined;
+      if (typeof opt.is_correct === 'boolean') {
+        explicitIsCorrect = opt.is_correct;
+      } else if (typeof opt.is_correct === 'string') {
+        explicitIsCorrect = opt.is_correct.toLowerCase() === 'true';
+      } else if (typeof opt.is_correct === 'number') {
+        explicitIsCorrect = opt.is_correct === 1;
+      }
+
+      const derivedIsCorrect =
+        matchesCorrectAnswer(label, normalizedAnswers) ||
+        matchesCorrectAnswer(text, normalizedAnswers) ||
+        matchesCorrectAnswer(`option ${label}`, normalizedAnswers);
+
+      return {
+        label,
+        text,
+        is_correct: explicitIsCorrect ?? derivedIsCorrect
+      };
+    });
   };
 
   const detectQuestionType = (question: any): string => {
@@ -966,6 +2434,95 @@ export function QuestionsTab({
     }
   };
 
+  // Handler to bulk auto-fill missing answer requirements
+  const handleBulkAutoFillAnswerRequirements = () => {
+    let filledCount = 0;
+    let partFilledCount = 0;
+    let subpartFilledCount = 0;
+
+    const updatedQuestions = questions.map(question => {
+      let questionUpdated = false;
+
+      // Auto-fill main question answer requirement
+      if (!question.answer_requirement || question.answer_requirement.trim() === '') {
+        const derivedResult = deriveAnswerRequirement({
+          questionType: question.question_type,
+          answerFormat: question.answer_format,
+          correctAnswers: question.correct_answers,
+          totalAlternatives: question.total_alternatives,
+          options: question.options
+        });
+
+        if (derivedResult.answerRequirement) {
+          question.answer_requirement = derivedResult.answerRequirement;
+          filledCount++;
+          questionUpdated = true;
+        }
+      }
+
+      // Auto-fill parts
+      if (question.parts && Array.isArray(question.parts)) {
+        question.parts = question.parts.map((part: any) => {
+          if (!part.answer_requirement || part.answer_requirement.trim() === '') {
+            const partDerivedResult = deriveAnswerRequirement({
+              questionType: part.question_type || 'descriptive',
+              answerFormat: part.answer_format,
+              correctAnswers: part.correct_answers,
+              totalAlternatives: part.total_alternatives,
+              options: part.options
+            });
+
+            if (partDerivedResult.answerRequirement) {
+              part.answer_requirement = partDerivedResult.answerRequirement;
+              partFilledCount++;
+            }
+          }
+
+          // Auto-fill subparts
+          if (part.subparts && Array.isArray(part.subparts)) {
+            part.subparts = part.subparts.map((subpart: any) => {
+              if (!subpart.answer_requirement || subpart.answer_requirement.trim() === '') {
+                const subpartDerivedResult = deriveAnswerRequirement({
+                  questionType: subpart.question_type || 'descriptive',
+                  answerFormat: subpart.answer_format,
+                  correctAnswers: subpart.correct_answers,
+                  totalAlternatives: subpart.total_alternatives,
+                  options: subpart.options
+                });
+
+                if (subpartDerivedResult.answerRequirement) {
+                  subpart.answer_requirement = subpartDerivedResult.answerRequirement;
+                  subpartFilledCount++;
+                }
+              }
+              return subpart;
+            });
+          }
+
+          return part;
+        });
+      }
+
+      return question;
+    });
+
+    setQuestions(updatedQuestions);
+
+    const totalFilled = filledCount + partFilledCount + subpartFilledCount;
+    if (totalFilled > 0) {
+      let message = `Auto-filled ${filledCount} question${filledCount !== 1 ? 's' : ''}`;
+      if (partFilledCount > 0) {
+        message += `, ${partFilledCount} part${partFilledCount !== 1 ? 's' : ''}`;
+      }
+      if (subpartFilledCount > 0) {
+        message += `, ${subpartFilledCount} subpart${subpartFilledCount !== 1 ? 's' : ''}`;
+      }
+      toast.success(message);
+    } else {
+      toast.info('All questions already have answer requirements set');
+    }
+  };
+
   const handleAutoMapQuestions = async (showNotification = true) => {
     if (!dataStructureInfo || units.length === 0) {
       toast.error('Academic structure not loaded yet');
@@ -979,7 +2536,7 @@ export function QuestionsTab({
         // Auto-fill missing data from parsedData if available
         const originalIndex = parseInt(question.question_number) - 1;
         const originalQuestion = parsedData?.questions?.[originalIndex];
-        
+
         if (originalQuestion) {
           // Map missing fields
           if (!question.hint && originalQuestion.hint) {
@@ -994,12 +2551,12 @@ export function QuestionsTab({
           if (!question.subtopic && originalQuestion.subtopic) {
             question.subtopic = originalQuestion.subtopic;
           }
-          
+
           // Map answer requirement
           if (!question.answer_requirement && originalQuestion.answer_requirement) {
             question.answer_requirement = originalQuestion.answer_requirement;
           }
-          
+
           // Map parts data
           if (question.parts && originalQuestion.parts) {
             question.parts = question.parts.map((part: any, partIndex: number) => {
@@ -1037,13 +2594,10 @@ export function QuestionsTab({
             });
           }
         }
-        
+
         return question;
       });
-      
-      // Update questions with enhanced data
-      setQuestions(enhancedQuestions);
-      
+
       // Now perform the mapping
       const mappingResult = await autoMapQuestions(
         enhancedQuestions,
@@ -1053,10 +2607,134 @@ export function QuestionsTab({
         questionMappings
       );
 
+      // Merge mapping results back into questions with human-readable names
+      // ALSO auto-fill missing answer requirements
+      const questionsWithMappings = enhancedQuestions.map(question => {
+        const mapping = mappingResult.mappings[question.id];
+
+        if (mapping) {
+          // Find the unit/chapter name
+          const unit = units.find(u => u.id === mapping.chapter_id);
+          if (unit && !question.topic) {
+            question.original_unit = unit.name;
+          }
+
+          // Find topic names
+          if (mapping.topic_ids && mapping.topic_ids.length > 0) {
+            const topicNames = mapping.topic_ids
+              .map(topicId => {
+                const topic = topics.find(t => t.id === topicId);
+                return topic?.name;
+              })
+              .filter(Boolean);
+
+            if (topicNames.length > 0) {
+              question.topic = topicNames.join(', ');
+              question.original_topics = topicNames;
+            }
+          }
+
+          // Find subtopic names
+          if (mapping.subtopic_ids && mapping.subtopic_ids.length > 0) {
+            const subtopicNames = mapping.subtopic_ids
+              .map(subtopicId => {
+                const subtopic = subtopics.find(s => s.id === subtopicId);
+                return subtopic?.name;
+              })
+              .filter(Boolean);
+
+            if (subtopicNames.length > 0) {
+              question.subtopic = subtopicNames.join(', ');
+              question.original_subtopics = subtopicNames;
+            }
+          }
+        }
+
+        // Auto-fill answer requirement if missing or empty
+        if (!question.answer_requirement || question.answer_requirement.trim() === '') {
+          const derivedResult = deriveAnswerRequirement({
+            questionType: question.question_type,
+            answerFormat: question.answer_format,
+            correctAnswers: question.correct_answers,
+            totalAlternatives: question.total_alternatives,
+            options: question.options
+          });
+
+          if (derivedResult.answerRequirement) {
+            question.answer_requirement = derivedResult.answerRequirement;
+            console.log(`Auto-filled answer requirement for Q${question.question_number}: ${derivedResult.answerRequirement} (${derivedResult.confidence} confidence)`);
+          }
+        }
+
+        // Auto-fill answer requirements for parts
+        if (question.parts && Array.isArray(question.parts)) {
+          question.parts = question.parts.map((part: any) => {
+            if (!part.answer_requirement || part.answer_requirement.trim() === '') {
+              const partDerivedResult = deriveAnswerRequirement({
+                questionType: part.question_type || 'descriptive',
+                answerFormat: part.answer_format,
+                correctAnswers: part.correct_answers,
+                totalAlternatives: part.total_alternatives,
+                options: part.options
+              });
+
+              if (partDerivedResult.answerRequirement) {
+                part.answer_requirement = partDerivedResult.answerRequirement;
+              }
+            }
+
+            // Auto-fill for subparts
+            if (part.subparts && Array.isArray(part.subparts)) {
+              part.subparts = part.subparts.map((subpart: any) => {
+                if (!subpart.answer_requirement || subpart.answer_requirement.trim() === '') {
+                  const subpartDerivedResult = deriveAnswerRequirement({
+                    questionType: subpart.question_type || 'descriptive',
+                    answerFormat: subpart.answer_format,
+                    correctAnswers: subpart.correct_answers,
+                    totalAlternatives: subpart.total_alternatives,
+                    options: subpart.options
+                  });
+
+                  if (subpartDerivedResult.answerRequirement) {
+                    subpart.answer_requirement = subpartDerivedResult.answerRequirement;
+                  }
+                }
+                return subpart;
+              });
+            }
+
+            return part;
+          });
+        }
+
+        return question;
+      });
+
+      // Update both questions and mappings state
+      setQuestions(questionsWithMappings);
       setQuestionMappings(mappingResult.mappings);
-      
+
+      // Run validation after mapping to update validation errors
+      if (typeof validateQuestionsForImport === 'function') {
+        try {
+          const errors = validateQuestionsForImport(
+            questionsWithMappings,
+            mappingResult.mappings,
+            existingQuestionNumbers,
+            attachments
+          );
+          setValidationErrors(errors);
+        } catch (err) {
+          console.warn('Validation failed after auto-mapping:', err);
+        }
+      }
+
       if (showNotification) {
-        toast.success(`Auto-mapped ${mappingResult.mappedCount} out of ${questions.length} questions with all associated data`);
+        const successCount = mappingResult.mappedCount + mappingResult.enhancedCount;
+        toast.success(
+          `Auto-mapped ${successCount} question${successCount !== 1 ? 's' : ''}: ` +
+          `${mappingResult.mappedCount} newly mapped, ${mappingResult.enhancedCount} enhanced`
+        );
       }
     } catch (error) {
       console.error('Error auto-mapping questions:', error);
@@ -1070,7 +2748,371 @@ export function QuestionsTab({
 
   const handleStartSimulation = () => {
     try {
+      console.log('=== STARTING SIMULATION ===');
+      console.log('Questions count:', questions.length);
+      console.log('Paper metadata:', paperMetadata);
+      console.log('Attachments available:', Object.keys(attachments).length);
+      console.log('Attachment keys:', Object.keys(attachments));
+
+      // Debug: Log attachment details
+      Object.entries(attachments).forEach(([key, atts]) => {
+        console.log(`Attachments for ${key}:`, atts.map(a => ({
+          id: a.id,
+          file_name: a.file_name,
+          file_url_length: a.file_url?.length || 0,
+          file_url_preview: a.file_url?.substring(0, 100) + '...',
+          file_type: a.file_type
+        })));
+      });
+
+      const dataIssues: string[] = [];
+      const questionValidationErrors: Record<string, string[]> = {};
+
+      // Validate paper metadata first
+      if (!paperMetadata) {
+        console.error('ERROR: Paper metadata is missing');
+        toast.error('Cannot start simulation: Paper metadata is missing. Please go back and check the paper setup.');
+        return;
+      }
+
+      const requiredMetadataFields = ['paper_code', 'subject', 'total_marks'];
+      const missingMetadata = requiredMetadataFields.filter(field => !paperMetadata[field]);
+
+      if (missingMetadata.length > 0) {
+        console.error('ERROR: Missing required metadata fields:', missingMetadata);
+        toast.error(`Cannot start simulation: Missing required paper data (${missingMetadata.join(', ')}). Please complete the metadata tab.`);
+        return;
+      }
+
       // Transform questions data for simulation format with dynamic fields support
+      const transformedQuestionsRaw = questions.map((q, qIndex): any | null => {
+        const questionLabel = q?.question_number || `Question ${qIndex + 1}`;
+        const questionErrors: string[] = [];
+
+        console.log(`Processing ${questionLabel}:`, {
+          id: q?.id,
+          type: q?.question_type,
+          text: q?.question_text?.substring(0, 50),
+          marks: q?.marks,
+          hasCorrectAnswers: Array.isArray(q?.correct_answers) && q.correct_answers.length > 0,
+          hasOptions: Array.isArray(q?.options) && q.options.length > 0,
+          hasParts: Array.isArray(q?.parts) && q.parts.length > 0
+        });
+
+        if (!q || typeof q !== 'object') {
+          console.warn(`ERROR: Invalid question at index ${qIndex}:`, q);
+          questionErrors.push('Question data is missing or invalid');
+          dataIssues.push(`${questionLabel} is missing required fields.`);
+          questionValidationErrors[q?.id || `q${qIndex}`] = questionErrors;
+          return null;
+        }
+
+        // Validate required fields
+        if (!q.id) {
+          questionErrors.push('Missing question ID');
+        }
+        if (!q.question_text || q.question_text.trim() === '') {
+          questionErrors.push('Missing question text');
+        }
+        if (!q.question_type) {
+          questionErrors.push('Missing question type');
+        }
+        if (typeof q.marks !== 'number' || q.marks <= 0) {
+          questionErrors.push('Missing or invalid marks value');
+        }
+
+        // Validate answer data based on question type
+        if (q.question_type === 'mcq') {
+          if (!Array.isArray(q.options) || q.options.length === 0) {
+            questionErrors.push('MCQ question missing options');
+          } else {
+            const hasCorrectOption = q.options.some(opt => opt?.is_correct);
+            if (!hasCorrectOption) {
+              questionErrors.push('MCQ question has no correct answer marked');
+            }
+          }
+        } else if (q.question_type === 'tf') {
+          if (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0) {
+            questionErrors.push('True/False question missing correct answer');
+          }
+        } else if (q.question_type === 'descriptive') {
+          if (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0) {
+            questionErrors.push('Descriptive question missing correct answers');
+          }
+        }
+
+        if (questionErrors.length > 0) {
+          console.error(`VALIDATION ERRORS for ${questionLabel}:`, questionErrors);
+          questionValidationErrors[q.id] = questionErrors;
+          dataIssues.push(`${questionLabel}: ${questionErrors.join(', ')}`);
+        }
+
+        const validQuestionCorrectAnswers = filterValidStructureItems(
+          q.correct_answers,
+          `correct answer for ${questionLabel}`,
+          dataIssues
+        );
+        const validParts = filterValidStructureItems(
+          q.parts,
+          `part in ${questionLabel}`,
+          dataIssues
+        );
+        const questionOptions = Array.isArray(q.options)
+          ? q.options.filter(Boolean)
+          : [];
+
+        const questionAttachments = mergeAttachmentSources(q.attachments, attachments[q.id], q.id);
+
+        // Debug: Log merged attachments for this question
+        if (questionAttachments.length > 0) {
+          console.log(`Question ${q.question_number} attachments:`, questionAttachments.map(a => ({
+            id: a.id,
+            file_name: a.file_name,
+            file_url_length: a.file_url?.length || 0,
+            file_url_starts_with: a.file_url?.substring(0, 30),
+            file_type: a.file_type
+          })));
+        }
+
+        return {
+          id: q.id,
+          question_number: q.question_number,
+          question_description: q.question_text,
+          marks: q.marks,
+          type: q.question_type as 'mcq' | 'tf' | 'descriptive',
+          difficulty: q.difficulty,
+          topic_name: q.topic,
+          subtopic_names: [q.subtopic].filter(Boolean),
+          // Dynamic answer fields
+          answer_format: q.answer_format,
+          answer_requirement: q.answer_requirement,
+          correct_answers: validQuestionCorrectAnswers.map(ans => ({
+            answer: ans.answer,
+            marks: ans.marks,
+            alternative_id: ans.alternative_id,
+            linked_alternatives: ans.linked_alternatives,
+            alternative_type: ans.alternative_type,
+            context: ans.context,
+            unit: ans.unit,
+            measurement_details: ans.measurement_details,
+            accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
+            error_carried_forward: ans.error_carried_forward,
+            answer_requirement: ans.answer_requirement,
+            total_alternatives: ans.total_alternatives
+          })),
+          correct_answer: validQuestionCorrectAnswers[0]?.answer, // For MCQ compatibility
+          total_alternatives: q.total_alternatives,
+          subject: paperMetadata.subject, // Question-level subject context
+          figure: q.figure, // Figure requirement flag
+          unit_name: q.original_unit, // Unit/chapter context
+          status: 'pending', // Initialize status
+          options: questionOptions.map((opt, index) => ({
+            id: `opt_${index}`,
+            label: opt.label || opt.option_label || String.fromCharCode(65 + index),
+            option_text: opt.text,
+            is_correct: opt.is_correct,
+            order: index
+          })),
+          parts: validParts.map((p, pIndex) => {
+            const partKey = generateAttachmentKey(q.id, pIndex);
+            const partAttachments = mergeAttachmentSources(p.attachments, attachments[partKey], partKey);
+            const partLabel = p.part || `${String.fromCharCode(97 + pIndex)}.`;
+            const validPartCorrectAnswers = filterValidStructureItems(
+              p.correct_answers,
+              `correct answer for ${questionLabel} part ${partLabel}`,
+              dataIssues
+            );
+            const validSubparts = filterValidStructureItems(
+              p.subparts,
+              `subpart in ${questionLabel} part ${partLabel}`,
+              dataIssues
+            );
+            const partOptions = Array.isArray(p.options)
+              ? p.options.filter(Boolean)
+              : [];
+
+            return {
+              id: `${q.id}_p${pIndex}`,
+              part_label: p.part,
+              question_description: p.question_text,
+              marks: p.marks,
+              difficulty: q.difficulty,
+              type: (() => {
+                // Enhanced type detection for parts
+                if (p.options && p.options.length > 0) return 'mcq';
+                if (p.answer_format === 'true_false' || (p.question_text || '').toLowerCase().includes('true or false')) return 'tf';
+                return 'descriptive';
+              })() as 'mcq' | 'tf' | 'descriptive',
+              status: 'pending',
+              topic_id: q.original_topics?.[0], // Include topic mapping
+              unit_name: q.original_unit,
+              subtopics: q.original_subtopics?.map(st => ({ id: st, name: st })),
+              // Dynamic answer fields for parts
+              answer_format: p.answer_format,
+              answer_requirement: p.answer_requirement,
+              correct_answers: validPartCorrectAnswers.map(ans => ({
+                answer: ans.answer,
+                marks: ans.marks,
+                alternative_id: ans.alternative_id,
+                linked_alternatives: ans.linked_alternatives,
+                alternative_type: ans.alternative_type,
+                context: ans.context,
+                unit: ans.unit,
+                measurement_details: ans.measurement_details,
+                accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
+                error_carried_forward: ans.error_carried_forward,
+                answer_requirement: ans.answer_requirement,
+                total_alternatives: ans.total_alternatives
+              })),
+              correct_answer: validPartCorrectAnswers[0]?.answer, // For MCQ compatibility
+              options: partOptions.map((opt, index) => ({
+                id: `opt_${index}`,
+                label: opt.label || opt.option_label || String.fromCharCode(65 + index),
+                option_text: opt.text,
+                is_correct: opt.is_correct,
+                order: index
+              })),
+              // Subparts support for complex questions
+              subparts: validSubparts.map((sp, spIndex) => {
+                const subpartKey = generateAttachmentKey(q.id, pIndex, spIndex);
+                const subpartAttachments = mergeAttachmentSources(sp.attachments, attachments[subpartKey], subpartKey);
+                const subpartLabel = sp.subpart || `(${spIndex + 1})`;
+                const validSubpartCorrectAnswers = filterValidStructureItems(
+                  sp.correct_answers,
+                  `correct answer for ${questionLabel} part ${partLabel} subpart ${subpartLabel}`,
+                  dataIssues
+                );
+                const subpartOptions = Array.isArray(sp.options)
+                  ? sp.options.filter(Boolean)
+                  : [];
+
+                return {
+                  id: `${q.id}_p${pIndex}_s${spIndex}`,
+                  subpart_label: sp.subpart,
+                  question_description: sp.question_text,
+                  marks: sp.marks,
+                  answer_format: sp.answer_format,
+                  answer_requirement: sp.answer_requirement,
+                  correct_answers: validSubpartCorrectAnswers.map(ans => ({
+                    answer: ans.answer,
+                    marks: ans.marks,
+                    alternative_id: ans.alternative_id,
+                    linked_alternatives: ans.linked_alternatives,
+                    alternative_type: ans.alternative_type,
+                    context: ans.context,
+                    unit: ans.unit,
+                    measurement_details: ans.measurement_details,
+                    accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
+                    error_carried_forward: ans.error_carried_forward,
+                    answer_requirement: ans.answer_requirement,
+                    total_alternatives: ans.total_alternatives
+                  })),
+                  options: subpartOptions.map((opt, index) => ({
+                    id: `opt_${index}`,
+                    label: opt.label || opt.option_label || String.fromCharCode(65 + index),
+                    option_text: opt.text || opt.option_text,
+                    is_correct: opt.is_correct,
+                    order: index
+                  })),
+                  attachments: subpartAttachments,
+                  hint: sp.hint,
+                  explanation: sp.explanation,
+                  requires_manual_marking: sp.requires_manual_marking,
+                  marking_criteria: sp.marking_criteria
+                };
+              }),
+              attachments: partAttachments,
+              hint: p.hint,
+              explanation: p.explanation,
+              requires_manual_marking: p.requires_manual_marking,
+              marking_criteria: p.marking_criteria
+            };
+          }) || [],
+          attachments: questionAttachments,
+          hint: q.hint,
+          explanation: q.explanation,
+          requires_manual_marking: q.requires_manual_marking,
+          marking_criteria: q.marking_criteria,
+          // Navigation and progress tracking
+          _navigation: {
+            index: qIndex,
+            total: questions.length,
+            next: qIndex < questions.length - 1 ? questions[qIndex + 1].id : null,
+            previous: qIndex > 0 ? questions[qIndex - 1].id : null
+          }
+        };
+      });
+
+      const transformedQuestions = transformedQuestionsRaw.filter(
+        (question): question is Record<string, any> => question !== null
+      );
+
+      console.log('=== TRANSFORMATION SUMMARY ===');
+      console.log('Total questions processed:', questions.length);
+      console.log('Valid questions after transformation:', transformedQuestions.length);
+      console.log('Questions with errors:', Object.keys(questionValidationErrors).length);
+      console.log('Data issues found:', dataIssues.length);
+
+      if (transformedQuestions.length === 0) {
+        console.error('ERROR: No valid questions after transformation');
+        console.error('Data issues:', dataIssues);
+        console.error('Validation errors:', questionValidationErrors);
+
+        // Create detailed error message
+        const errorSummary = Object.entries(questionValidationErrors)
+          .slice(0, 5)
+          .map(([qId, errors]) => {
+            const q = questions.find(quest => quest.id === qId);
+            const qNum = q?.question_number || qId;
+            return `Q${qNum}: ${errors.join(', ')}`;
+          })
+          .join('\n');
+
+        toast.error(
+          `Cannot start simulation - all questions have validation errors:\n\n${errorSummary}${
+            Object.keys(questionValidationErrors).length > 5
+              ? `\n...and ${Object.keys(questionValidationErrors).length - 5} more errors`
+              : ''
+          }\n\nPlease check the console for detailed error information.`,
+          { duration: 10000 }
+        );
+        return;
+      }
+
+      // Check if we have validation errors but some valid questions
+      if (Object.keys(questionValidationErrors).length > 0) {
+        const errorCount = Object.keys(questionValidationErrors).length;
+        const validCount = transformedQuestions.length;
+
+        console.warn(`WARNING: ${errorCount} question(s) have validation errors but ${validCount} are valid`);
+        console.warn('Questions with errors:', questionValidationErrors);
+
+        // Show warning but allow simulation to continue with valid questions
+        const errorSummary = Object.entries(questionValidationErrors)
+          .slice(0, 3)
+          .map(([qId, errors]) => {
+            const q = questions.find(quest => quest.id === qId);
+            const qNum = q?.question_number || qId;
+            return `Q${qNum}: ${errors.join(', ')}`;
+          })
+          .join('\n');
+
+        toast.warning(
+          `${errorCount} question(s) have validation errors and will be skipped:\n\n${errorSummary}${
+            errorCount > 3 ? `\n...and ${errorCount - 3} more` : ''
+          }\n\nSimulation will proceed with ${validCount} valid questions.`,
+          { duration: 8000 }
+        );
+      }
+
+      if (dataIssues.length > 0) {
+        const summary = dataIssues.length === 1
+          ? dataIssues[0]
+          : `${dataIssues.length} issues detected in the question data. First issue: ${dataIssues[0]}`;
+        console.warn('Data issues:', dataIssues);
+        toast.info(`${summary} Check the console for the full list.`, { duration: 5000 });
+      }
+
       const simulationPaper = {
         id: 'preview',
         code: paperMetadata.paper_code,
@@ -1097,135 +3139,91 @@ export function QuestionsTab({
             mathematics: paperMetadata.subject?.toLowerCase().includes('math')
           }
         },
-        questions: questions.map((q, qIndex) => ({
-          id: q.id,
-          question_number: q.question_number,
-          question_description: q.question_text,
-          marks: q.marks,
-          type: q.question_type as 'mcq' | 'tf' | 'descriptive',
-          difficulty: q.difficulty,
-          topic_name: q.topic,
-          subtopic_names: [q.subtopic].filter(Boolean),
-          // Dynamic answer fields
-          answer_format: q.answer_format,
-          answer_requirement: q.answer_requirement,
-          correct_answers: q.correct_answers?.map(ans => ({
-            answer: ans.answer,
-            marks: ans.marks,
-            alternative_id: ans.alternative_id,
-            linked_alternatives: ans.linked_alternatives,
-            alternative_type: ans.alternative_type,
-            context: ans.context,
-            unit: ans.unit,
-            measurement_details: ans.measurement_details,
-            accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-            error_carried_forward: ans.error_carried_forward,
-            answer_requirement: ans.answer_requirement,
-            total_alternatives: ans.total_alternatives
-          })),
-          correct_answer: q.correct_answers?.[0]?.answer, // For MCQ compatibility
-          total_alternatives: q.total_alternatives,
-          subject: paperMetadata.subject, // Question-level subject context
-          figure: q.figure, // Figure requirement flag
-          unit_name: q.original_unit, // Unit/chapter context
-          status: 'pending', // Initialize status
-          options: q.options?.map((opt, index) => ({
-            id: `opt_${index}`,
-            label: opt.label,
-            option_text: opt.text,
-            is_correct: opt.is_correct,
-            order: index
-          })),
-          parts: q.parts?.map((p, pIndex) => ({
-            id: `${q.id}_p${pIndex}`,
-            part_label: p.part,
-            question_description: p.question_text,
-            marks: p.marks,
-            difficulty: q.difficulty,
-            type: (() => {
-              // Enhanced type detection for parts
-              if (p.options && p.options.length > 0) return 'mcq';
-              if (p.answer_format === 'true_false' || p.question_text.toLowerCase().includes('true or false')) return 'tf';
-              return 'descriptive';
-            })() as 'mcq' | 'tf' | 'descriptive',
-            status: 'pending',
-            topic_id: q.original_topics?.[0], // Include topic mapping
-            unit_name: q.original_unit,
-            subtopics: q.original_subtopics?.map(st => ({ id: st, name: st })),
-            // Dynamic answer fields for parts
-            answer_format: p.answer_format,
-            answer_requirement: p.answer_requirement,
-            correct_answers: p.correct_answers?.map(ans => ({
-              answer: ans.answer,
-              marks: ans.marks,
-              alternative_id: ans.alternative_id,
-              linked_alternatives: ans.linked_alternatives,
-              alternative_type: ans.alternative_type,
-              context: ans.context,
-              unit: ans.unit,
-              measurement_details: ans.measurement_details,
-              accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-              error_carried_forward: ans.error_carried_forward
-            })),
-            correct_answer: p.correct_answers?.[0]?.answer, // For MCQ compatibility
-            options: p.options?.map((opt, index) => ({
-              id: `opt_${index}`,
-              label: opt.label,
-              option_text: opt.text,
-              is_correct: opt.is_correct,
-              order: index
-            })),
-            // Subparts support for complex questions
-            subparts: p.subparts?.map((sp, spIndex) => ({
-              id: `${q.id}_p${pIndex}_s${spIndex}`,
-              subpart_label: sp.subpart,
-              question_description: sp.question_text,
-              marks: sp.marks,
-              answer_format: sp.answer_format,
-              answer_requirement: sp.answer_requirement,
-              correct_answers: sp.correct_answers,
-              options: sp.options
-            })),
-            attachments: attachments[generateAttachmentKey(q.id, pIndex)]?.map((att, attIndex) => ({
-              id: `att_${attIndex}`,
-              file_url: att.data || att.url || att.dataUrl || att.file_url,
-              file_name: att.name || att.fileName || att.file_name,
-              file_type: att.type || att.file_type || 'image/png'
-            })) || [],
-            hint: p.hint,
-            explanation: p.explanation,
-            requires_manual_marking: p.requires_manual_marking,
-            marking_criteria: p.marking_criteria
-          })) || [],
-          attachments: attachments[q.id]?.map((att, attIndex) => ({
-            id: `att_${attIndex}`,
-            file_url: att.data || att.url || att.dataUrl || att.file_url,
-            file_name: att.name || att.fileName || att.file_name,
-            file_type: att.type || att.file_type || 'image/png'
-          })) || [],
-          hint: q.hint,
-          explanation: q.explanation,
-          // Navigation and progress tracking
-          _navigation: {
-            index: qIndex,
-            total: questions.length,
-            next: qIndex < questions.length - 1 ? questions[qIndex + 1].id : null,
-            previous: qIndex > 0 ? questions[qIndex - 1].id : null
-          }
-        }))
+        questions: transformedQuestions
       };
-      
+
+      // Verify attachments are properly included
+      let totalAttachmentsCount = 0;
+      simulationPaper.questions.forEach(q => {
+        if (q.attachments) totalAttachmentsCount += q.attachments.length;
+        if (q.parts) {
+          q.parts.forEach((p: any) => {
+            if (p.attachments) totalAttachmentsCount += p.attachments.length;
+            if (p.subparts) {
+              p.subparts.forEach((sp: any) => {
+                if (sp.attachments) totalAttachmentsCount += sp.attachments.length;
+              });
+            }
+          });
+        }
+      });
+      console.log('Total attachments in simulation paper:', totalAttachmentsCount);
+
+      console.info('Prepared simulation paper with sanitized data.', {
+        questionCount: transformedQuestions.length,
+        issuesFound: dataIssues,
+        questionsWithAttachments: transformedQuestions.filter(q => q.attachments && q.attachments.length > 0).length
+      });
+
+      // Debug: Log first question's attachments in detail
+      const firstQuestionWithAttachments = transformedQuestions.find(q => q.attachments && q.attachments.length > 0);
+      if (firstQuestionWithAttachments) {
+        console.log('First question with attachments:', {
+          question_number: firstQuestionWithAttachments.question_number,
+          attachments: firstQuestionWithAttachments.attachments.map(a => ({
+            id: a.id,
+            file_name: a.file_name,
+            file_type: a.file_type,
+            file_url_length: a.file_url?.length,
+            file_url_is_data_url: a.file_url?.startsWith('data:'),
+            file_url_preview: a.file_url?.substring(0, 100)
+          }))
+        });
+      }
+
+      console.log('=== SIMULATION PAPER CREATED SUCCESSFULLY ===');
+      console.log('Simulation paper:', {
+        id: simulationPaper.id,
+        code: simulationPaper.code,
+        subject: simulationPaper.subject,
+        questionCount: simulationPaper.questions.length,
+        totalMarks: simulationPaper.total_marks
+      });
+
+      // Store validation errors for visual indicators
+      setSimulationValidationErrors(questionValidationErrors);
+
       setSimulationPaper(simulationPaper);
       setShowSimulation(true);
-    } catch (error) {
-      console.error('Error starting simulation:', error);
-      toast.error('Failed to start simulation. Please check question data.');
+
+      toast.success(`Simulation ready with ${transformedQuestions.length} question${transformedQuestions.length !== 1 ? 's' : ''}!`);
+    } catch (error: any) {
+      console.error('=== CRITICAL ERROR STARTING SIMULATION ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
+      console.error('Current state:', {
+        questionsCount: questions?.length,
+        paperMetadata: paperMetadata,
+        attachmentsCount: Object.keys(attachments || {}).length
+      });
+
+      // Provide specific error message
+      const errorMessage = error?.message || 'Unknown error occurred';
+      const errorDetail = errorMessage.includes('Cannot')
+        ? errorMessage
+        : `An unexpected error occurred: ${errorMessage}`;
+
+      toast.error(
+        `Failed to start simulation.\n\n${errorDetail}\n\nPlease check the browser console (F12) for detailed error information.`,
+        { duration: 10000 }
+      );
     }
   };
 
   const handleSimulationExit = async (result?: any) => {
     setShowSimulation(false);
-    
+
     // Process simulation results if provided
     if (result) {
       const simulationResult: SimulationResult = {
@@ -1242,6 +3240,18 @@ export function QuestionsTab({
       const dynamicFieldIssues: any[] = [];
       
       questions.forEach(q => {
+        // Check for missing answer requirements - CRITICAL for MCQ and other structured questions
+        if (!q.answer_requirement || q.answer_requirement.trim() === '') {
+          const questionTypeLabel = q.question_type === 'mcq' ? 'MCQ' :
+                                    q.question_type === 'tf' ? 'True/False' :
+                                    q.question_type;
+          dynamicFieldIssues.push({
+            questionId: q.id,
+            type: q.question_type === 'mcq' || q.question_type === 'tf' ? 'error' : 'warning',
+            message: `${questionTypeLabel} question missing answer requirement field`
+          });
+        }
+
         // Check for dynamic answer field issues
         if (q.answer_requirement && !q.correct_answers?.length) {
           dynamicFieldIssues.push({
@@ -1272,18 +3282,33 @@ export function QuestionsTab({
         }
         
         // Check for figure requirements - FIXED: Use consistent key format
-        if (q.figure && !attachments[q.id]?.length) {
+        const questionAttachmentAssets = mergeAttachmentSources(q.attachments, attachments[q.id], q.id);
+
+        if (q.figure && questionAttachmentAssets.length === 0) {
           dynamicFieldIssues.push({
             questionId: q.id,
             type: 'warning',
             message: 'Question requires figure but no attachment provided'
           });
         }
-        
+
         // Check parts - FIXED: Use consistent key format
         q.parts?.forEach((p, pIndex) => {
           const partKey = generateAttachmentKey(q.id, pIndex);
-          
+          const partAttachmentAssets = mergeAttachmentSources(p.attachments, attachments[partKey], partKey);
+
+          // Check for missing answer requirement in parts
+          if (!p.answer_requirement || p.answer_requirement.trim() === '') {
+            const partTypeLabel = p.question_type === 'mcq' ? 'MCQ' :
+                                  p.question_type === 'tf' ? 'True/False' :
+                                  p.question_type || 'Question';
+            dynamicFieldIssues.push({
+              questionId: q.id,
+              type: p.question_type === 'mcq' || p.question_type === 'tf' ? 'error' : 'warning',
+              message: `Part ${p.part}: ${partTypeLabel} missing answer requirement field`
+            });
+          }
+
           if (p.answer_requirement && !p.correct_answers?.length) {
             dynamicFieldIssues.push({
               questionId: q.id,
@@ -1291,14 +3316,28 @@ export function QuestionsTab({
               message: `Part ${p.part}: Dynamic requirement "${p.answer_requirement}" needs correct answers`
             });
           }
-          
-          if (p.figure && !attachments[partKey]?.length) {
+
+          if (p.figure && partAttachmentAssets.length === 0) {
             dynamicFieldIssues.push({
               questionId: q.id,
               type: 'warning',
               message: `Part ${p.part}: Requires figure but no attachment provided`
             });
           }
+
+          // Check subparts for missing answer requirements
+          p.subparts?.forEach((sp: any, spIndex: number) => {
+            if (!sp.answer_requirement || sp.answer_requirement.trim() === '') {
+              const subpartTypeLabel = sp.question_type === 'mcq' ? 'MCQ' :
+                                       sp.question_type === 'tf' ? 'True/False' :
+                                       sp.question_type || 'Question';
+              dynamicFieldIssues.push({
+                questionId: q.id,
+                type: sp.question_type === 'mcq' || sp.question_type === 'tf' ? 'error' : 'warning',
+                message: `Part ${p.part}(${sp.subpart}): ${subpartTypeLabel} missing answer requirement field`
+              });
+            }
+          });
         });
       });
       
@@ -1431,60 +3470,73 @@ export function QuestionsTab({
         }
       }
     }
-    
+
     setSimulationPaper(null);
   };
 
-  // FIXED: Updated validation function with proper error handling
+
+  // FIXED: Updated validation function with proper error handling and figure_required check
   const validateQuestionsWithAttachments = () => {
     const errors: Record<string, string[]> = {};
-    
+
     try {
       questions.forEach(question => {
         const questionErrors: string[] = [];
-        
+
         // Debug log for tracking
-        console.log(`Validating question ${question.id}`);
-        
-        // Check if question requires figure
-        if (question.figure || safeRequiresFigure(question)) {
+        console.log(`Validating question ${question.id}`, {
+          figure_required: (question as any).figure_required,
+          figure: question.figure,
+          resolvedRequirement: resolveFigureRequirement(question)
+        });
+
+        // Check if question requires figure - RESPECT THE TOGGLE and JSON data!
+        const shouldValidateFigure = resolveFigureRequirement(question);
+
+        if (shouldValidateFigure) {
           const questionAttachments = attachments[question.id];
           if (!questionAttachments || questionAttachments.length === 0) {
             questionErrors.push('Figure is required but no attachment added');
           }
         }
-        
+
         // Check parts for figure requirements
         if (question.parts && Array.isArray(question.parts)) {
           question.parts.forEach((part, partIndex) => {
             if (!part) return; // Skip null/undefined parts
-            
+
             // Generate the key that matches how it was stored
             const partKey = generateAttachmentKey(question.id, partIndex);
-            
-            if (part.figure || safeRequiresFigure(part)) {
+
+            // RESPECT THE TOGGLE for parts too!
+            const shouldValidatePartFigure = resolveFigureRequirement(part);
+
+            if (shouldValidatePartFigure) {
               const partAttachments = attachments[partKey];
               if (!partAttachments || partAttachments.length === 0) {
                 questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)}: Figure is required but no attachment added`);
               }
             }
-            
+
             // Check subparts - FIXED: Handle Roman numeral indexing properly
             if (part.subparts && Array.isArray(part.subparts)) {
               part.subparts.forEach((subpart, subpartIndex) => {
                 if (!subpart) return; // Skip null/undefined subparts
-                
-                if (subpart.figure || safeRequiresFigure(subpart)) {
+
+                // RESPECT THE TOGGLE for subparts too!
+                const shouldValidateSubpartFigure = resolveFigureRequirement(subpart);
+
+                if (shouldValidateSubpartFigure) {
                   // Try multiple possible key formats for compatibility
                   const subpartKey = generateAttachmentKey(question.id, partIndex, subpartIndex);
-                  
+
                   // Check if attachment exists with primary key
                   const hasAttachment = attachments[subpartKey] && attachments[subpartKey].length > 0;
-                  
+
                   if (!hasAttachment) {
                     // Try alternative key formats
                     let found = false;
-                    
+
                     // Check all keys that might contain this subpart's attachment
                     Object.keys(attachments).forEach(key => {
                       if (key.startsWith(question.id) && key.includes(`p${partIndex}`) && key.includes(`s${subpartIndex}`)) {
@@ -1493,7 +3545,7 @@ export function QuestionsTab({
                         }
                       }
                     });
-                    
+
                     if (!found) {
                       const subpartLabel = subpart.subpart || `(${Roman[subpartIndex] || subpartIndex})`;
                       questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)} Subpart ${subpartLabel}: Figure is required but no attachment added`);
@@ -1556,9 +3608,75 @@ export function QuestionsTab({
         toast.error('No questions to import');
         return;
       }
-      
+
       console.log('Prerequisites check passed');
-      
+
+      if (reviewWorkflowLoading) {
+        toast.info('Review progress is still syncing. Please wait a moment.');
+        return;
+      }
+
+      if (!allQuestionsReviewed) {
+        toast.error(`Please review all questions before importing. (${reviewedCount}/${totalReviewable} reviewed)`);
+        return;
+      }
+
+      if (!simulationCompleted) {
+        toast.error('Run the test simulation and confirm the results before importing.');
+        return;
+      }
+
+      if (extractionRules && (extractionRules.forwardSlashHandling || extractionRules.alternativeLinking)) {
+        console.log('Running extraction rules validation...');
+        const subject = savedPaperDetails?.subject || parsedData?.subject;
+        const preImportValidation = validateQuestionsBeforeImport(questions, subject);
+
+        if (!preImportValidation.canProceed) {
+          console.log('Pre-import validation failed:', preImportValidation.summary);
+          const report = getValidationReportSummary(preImportValidation);
+          const errorDetails = formatValidationErrors(preImportValidation.errors.slice(0, 10));
+
+          toast.error(`Extraction validation failed:\n${errorDetails.substring(0, 200)}...`, { duration: 8000 });
+
+          const showFullReport = await requestInlineConfirmation({
+            title: 'Extraction Validation Errors',
+            message: (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p>Extraction validation found {preImportValidation.summary.totalErrors} errors.</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Missing Answers: {preImportValidation.summary.missingAnswers}</li>
+                  <li>Invalid Alternatives: {preImportValidation.summary.invalidAlternatives}</li>
+                  <li>Invalid Operators: {preImportValidation.summary.invalidOperators}</li>
+                </ul>
+                <p>View the full report in the console to review every issue.</p>
+              </div>
+            ),
+            confirmText: 'View Report',
+            cancelText: 'Fix Errors',
+            confirmVariant: 'primary',
+          });
+
+          if (showFullReport) {
+            console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
+            console.log(report);
+            console.log('\n=== DETAILED ERRORS ===');
+            console.log(formatValidationErrors(preImportValidation.errors));
+            console.log('\n=== DETAILED WARNINGS ===');
+            console.log(formatValidationErrors(preImportValidation.warnings));
+          }
+
+          return;
+        } else if (preImportValidation.warnings.length > 0) {
+          console.log('Pre-import validation has warnings:', preImportValidation.summary.totalWarnings);
+          toast.warning(`${preImportValidation.summary.totalWarnings} warnings found. Check console for details.`, { duration: 5000 });
+          console.log('=== EXTRACTION VALIDATION WARNINGS ===');
+          console.log(formatValidationErrors(preImportValidation.warnings));
+        } else {
+          console.log('Pre-import validation passed successfully');
+          toast.success('Extraction validation passed', { duration: 2000 });
+        }
+      }
+
       // Perform validation with multiple fallbacks
       let errors: Record<string, string[]> = {};
       
@@ -1636,19 +3754,6 @@ export function QuestionsTab({
       }
       
       console.log('No validation errors found');
-      
-      // Check if simulation is required (make this optional for debugging)
-      if (simulationRequired && !simulationResult?.completed) {
-        console.warn('Simulation required but not completed');
-        // For debugging, make this a warning instead of blocking
-        const proceedAnyway = window.confirm(
-          'Exam simulation is recommended but not completed. Do you want to proceed anyway?'
-        );
-        if (!proceedAnyway) {
-          toast.warning('Please complete the exam simulation before importing');
-          return;
-        }
-      }
 
       // Check for unmapped questions (excluding already imported ones)
       const unmappedQuestions = questions.filter(q => {
@@ -1664,29 +3769,75 @@ export function QuestionsTab({
         console.log('Unmapped questions found:', unmappedQuestions.map(q => q.question_number));
         const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
         
-        // For debugging, make this optional
-        const proceedWithUnmapped = window.confirm(
-          `${unmappedQuestions.length} questions are not mapped to units/topics: ${unmappedNumbers}\n\nDo you want to proceed anyway?`
-        );
-        
-        if (!proceedWithUnmapped) {
-          toast.error(`Please map all questions to units and topics. Unmapped: ${unmappedNumbers}`, { duration: 5000 });
-          return;
+        // Show unmapped questions warning
+        console.log('⚠️ Showing unmapped questions dialog...');
+
+        try {
+          const proceedWithUnmapped = await requestInlineConfirmation({
+            title: 'Unmapped Questions Detected',
+            message: (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p className="font-medium">
+                  {unmappedQuestions.length} question{unmappedQuestions.length === 1 ? '' : 's'} {unmappedQuestions.length === 1 ? 'is' : 'are'} not mapped to units/topics:
+                </p>
+                <p className="text-xs bg-gray-100 dark:bg-gray-800 rounded px-2 py-1 max-h-20 overflow-y-auto">
+                  {unmappedNumbers}
+                </p>
+                <p>Questions without mapping may be harder to organize and filter later.</p>
+                <p>Do you want to proceed anyway?</p>
+              </div>
+            ),
+            confirmText: 'Proceed Anyway',
+            cancelText: 'Review Mapping',
+            confirmVariant: 'primary',
+          });
+
+          console.log('User choice:', proceedWithUnmapped ? 'Proceed' : 'Cancel');
+
+          if (!proceedWithUnmapped) {
+            toast.info(`Please map questions to units/topics: ${unmappedNumbers.substring(0, 50)}...`, { duration: 5000 });
+            return;
+          }
+
+          toast.info('Proceeding with unmapped questions - you can map them later');
+        } catch (error) {
+          console.error('Error showing unmapped dialog:', error);
+          // Fallback: warn but allow proceeding
+          toast.warning(`${unmappedQuestions.length} questions not mapped - proceeding anyway`, { duration: 3000 });
         }
       }
       
       // Check for missing figures (warning only, don't block)
       const questionsNeedingFigures = questions.filter(q => {
         try {
-          if ((q.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(q))) && !attachments[q.id]?.length) {
+          const questionRequiresFigure = resolveFigureRequirement(q);
+          const mergedQuestionAttachments = mergeAttachmentSources(q.attachments, attachments[q.id], q.id);
+          if (questionRequiresFigure && mergedQuestionAttachments.length === 0) {
             return true;
           }
           if (q.parts && Array.isArray(q.parts)) {
             return q.parts.some((part: any, index: number) => {
               if (!part) return false;
               const partKey = generateAttachmentKey(q.id, index);
-              return (part.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(part))) && 
-                     !attachments[partKey]?.length;
+              const partRequiresFigure = resolveFigureRequirement(part);
+              const mergedPartAttachments = mergeAttachmentSources(part.attachments, attachments[partKey], partKey);
+              if (partRequiresFigure && mergedPartAttachments.length === 0) {
+                return true;
+              }
+              if (Array.isArray(part.subparts)) {
+                return part.subparts.some((subpart: any, subpartIndex: number) => {
+                  if (!subpart) return false;
+                  const subpartKey = generateAttachmentKey(q.id, index, subpartIndex);
+                  const subpartRequiresFigure = resolveFigureRequirement(subpart);
+                  const mergedSubpartAttachments = mergeAttachmentSources(
+                    subpart.attachments,
+                    attachments[subpartKey],
+                    subpartKey
+                  );
+                  return subpartRequiresFigure && mergedSubpartAttachments.length === 0;
+                });
+              }
+              return false;
             });
           }
         } catch (err) {
@@ -1757,11 +3908,23 @@ export function QuestionsTab({
       });
       
       // Call the import function with the correct signature
-      const result: ImportResult = await importQuestions(importParams);
+      const result: ImportResult = await importQuestions({
+        ...importParams,
+        onProgress: (current: number, total: number) => {
+          setImportProgress({ current, total });
+        }
+      });
       
       console.log('Import result:', result);
       
       // Handle the result
+      if (result.warnings && result.warnings.length > 0) {
+        console.warn('Import completed with warnings:', result.warnings);
+        result.warnings.forEach(warning => {
+          toast.warning(warning.message, { duration: 6000 });
+        });
+      }
+
       if (result.importedQuestions.length > 0) {
         // Update import session status
         if (importSession?.id) {
@@ -1785,6 +3948,27 @@ export function QuestionsTab({
               .eq('id', importSession.id);
           } catch (error) {
             console.error('Error updating import session:', error);
+          }
+        }
+
+        // Update paper status and flags after successful import
+        if (result.importedQuestions.length > 0 && importParams.paperId) {
+          try {
+            await supabase
+              .from('papers_setup')
+              .update({
+                status: 'draft', // Ensure paper is in draft status for QA review
+                qa_status: 'pending', // Mark as pending QA
+                questions_imported: true,
+                questions_imported_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', importParams.paperId);
+
+            console.log('Paper status updated to draft with qa_status=pending');
+          } catch (error) {
+            console.error('Error updating paper status:', error);
+            // Don't fail the import if this update fails
           }
         }
         
@@ -1812,15 +3996,38 @@ export function QuestionsTab({
           { duration: 5000 }
         );
       } else if (result.errors.length > 0) {
-        // Show detailed error information
-        const errorDetails = result.errors.slice(0, 3).map((err: any) => 
-          `Question ${err.question}: ${err.error}`
-        ).join('\n');
-        
-        toast.error(
-          `Failed to import questions:\n${errorDetails}${result.errors.length > 3 ? '\n...and more errors' : ''}`,
-          { duration: 7000 }
-        );
+        // Group errors by error message for better reporting
+        const errorGroups = result.errors.reduce((acc: Record<string, any[]>, err: any) => {
+          const key = err.error || 'Unknown error';
+          if (!acc[key]) {
+            acc[key] = [];
+          }
+          acc[key].push(err);
+          return acc;
+        }, {});
+
+        const uniqueErrors = Object.keys(errorGroups);
+
+        // If all questions failed with the same error, show a consolidated message
+        if (uniqueErrors.length === 1 && result.errors.length === questions.length) {
+          const errorMsg = uniqueErrors[0];
+          toast.error(
+            `All ${result.errors.length} questions failed with the same error:\n\n${errorMsg}\n\nPlease check the browser console for detailed diagnostic information.`,
+            { duration: 10000 }
+          );
+        } else {
+          // Show grouped error summary
+          const errorSummary = uniqueErrors.slice(0, 3).map(errMsg => {
+            const count = errorGroups[errMsg].length;
+            const examples = errorGroups[errMsg].slice(0, 2).map((e: any) => e.question).join(', ');
+            return `• ${count} question${count > 1 ? 's' : ''} (e.g., Q${examples}): ${errMsg.substring(0, 60)}${errMsg.length > 60 ? '...' : ''}`;
+          }).join('\n');
+
+          toast.error(
+            `Failed to import ${result.errors.length} of ${questions.length} questions:\n\n${errorSummary}${uniqueErrors.length > 3 ? '\n\n...and more error types' : ''}`,
+            { duration: 10000 }
+          );
+        }
       } else {
         toast.warning('No questions were imported. Please check the console for details.');
       }
@@ -1874,6 +4081,16 @@ export function QuestionsTab({
     setEditingQuestion(null);
   };
 
+  const handleToggleFigureRequired = (questionId: string, required: boolean) => {
+    setQuestions(prev => prev.map(q => {
+      if (q.id === questionId || q.question_number.toString() === questionId) {
+        return { ...q, figure_required: required };
+      }
+      return q;
+    }));
+    toast.success(`Figure ${required ? 'marked as mandatory' : 'marked as optional'}`);
+  };
+
   const toggleQuestionExpanded = (questionId: string) => {
     setExpandedQuestions(prev => {
       const next = new Set(prev);
@@ -1889,6 +4106,7 @@ export function QuestionsTab({
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
+      setSnippingViewState({ ...DEFAULT_SNIPPING_VIEW_STATE });
       setPdfFile(file);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -1900,12 +4118,48 @@ export function QuestionsTab({
 
   const handleAddAttachment = (questionId: string, partIndex?: number, subpartIndex?: number) => {
     if (!pdfDataUrl) {
-      toast.error('Please upload a PDF file first to add attachments');
+      fileInputRef.current?.click();
       return;
     }
-    
+
     setAttachmentTarget({ questionId, partIndex, subpartIndex });
     setShowSnippingTool(true);
+  };
+
+  const handleQuestionUpdateFromReview = (questionId: string, updates: Partial<QuestionDisplayData>) => {
+    setQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) {
+        return q;
+      }
+
+      return {
+        ...q,
+        question_text: updates.question_text ?? q.question_text,
+        marks: updates.marks ?? q.marks,
+        unit: updates.unit ?? q.unit,
+        unit_id: updates.unit_id ?? q.unit_id,
+        difficulty: updates.difficulty ?? q.difficulty,
+        topic: updates.topic ?? q.topic,
+        topic_id: updates.topic_id ?? q.topic_id,
+        subtopic: updates.subtopic ?? q.subtopic,
+        subtopic_id: updates.subtopic_id ?? q.subtopic_id,
+        answer_format: updates.answer_format ?? q.answer_format,
+        answer_requirement: updates.answer_requirement ?? q.answer_requirement,
+        hint: updates.hint ?? q.hint,
+        explanation: updates.explanation ?? q.explanation,
+        correct_answers: updates.correct_answers ?? q.correct_answers,
+        options: updates.options ?? q.options,
+        requires_manual_marking: updates.requires_manual_marking ?? q.requires_manual_marking,
+        marking_criteria: updates.marking_criteria ?? q.marking_criteria,
+        parts: updates.parts ?? q.parts,
+        figure_required: updates.figure_required ?? q.figure_required,
+        figure: updates.figure ?? q.figure,
+      };
+    }));
+  };
+
+  const handleRequestSnippingTool = (questionId: string) => {
+    handleAddAttachment(questionId);
   };
 
   const handleAttachmentUpload = (questionId: string, partPath: string[]) => {
@@ -1965,10 +4219,10 @@ export function QuestionsTab({
 
   const handleSnippingComplete = (snippedData: any) => {
     if (!attachmentTarget) return;
-    
+
     const { questionId, partIndex, subpartIndex } = attachmentTarget;
     const attachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
-    
+
     const newAttachment = {
       id: `att_${Date.now()}`,
       type: 'image',
@@ -1979,7 +4233,10 @@ export function QuestionsTab({
       fileName: `Figure_${questionId}${partIndex !== undefined ? `_p${partIndex}` : ''}${subpartIndex !== undefined ? `_s${subpartIndex}` : ''}.png`,
       file_name: `Figure_${questionId}${partIndex !== undefined ? `_p${partIndex}` : ''}${subpartIndex !== undefined ? `_s${subpartIndex}` : ''}.png`,
       file_type: 'image/png',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      canDelete: true,
+      attachmentKey: attachmentKey,
+      originalId: `att_${Date.now()}`
     };
     
     // Store with primary key
@@ -2017,21 +4274,57 @@ export function QuestionsTab({
     toast.success('Attachment added');
   };
 
+  const handleSnippingViewStateChange = useCallback((state: { page: number; scale: number }) => {
+    setSnippingViewState(prev => {
+      if (prev.page === state.page && prev.scale === state.scale) {
+        return prev;
+      }
+      return state;
+    });
+  }, []);
+
   const handleDeleteAttachment = (attachmentKey: string, attachmentId: string) => {
-    setAttachments(prev => ({
-      ...prev,
-      [attachmentKey]: prev[attachmentKey].filter(att => att.id !== attachmentId)
-    }));
-    
+    console.log('🗑️ Deleting attachment:', { attachmentKey, attachmentId });
+
+    // Safety check: ensure attachmentKey exists
+    if (!attachments[attachmentKey]) {
+      console.error('❌ Attachment key not found:', attachmentKey);
+      console.error('Available keys:', Object.keys(attachments));
+      toast.error('Failed to delete attachment: Invalid attachment key');
+      return;
+    }
+
+    // Find the attachment to confirm it exists
+    const attachmentToDelete = attachments[attachmentKey].find(att => att.id === attachmentId);
+    if (!attachmentToDelete) {
+      console.error('❌ Attachment not found:', { attachmentId, availableIds: attachments[attachmentKey].map(a => a.id) });
+      toast.error('Failed to delete attachment: Attachment not found');
+      return;
+    }
+
+    console.log('✅ Found attachment to delete:', attachmentToDelete);
+
+    setAttachments(prev => {
+      const updated = {
+        ...prev,
+        [attachmentKey]: (prev[attachmentKey] || []).filter(att => att.id !== attachmentId)
+      };
+      console.log('📦 Updated attachments state:', {
+        key: attachmentKey,
+        before: prev[attachmentKey]?.length,
+        after: updated[attachmentKey].length
+      });
+      return updated;
+    });
+
     // Update staged attachments
     if (updateStagedAttachments) {
-      updateStagedAttachments(
-        attachmentKey, 
-        attachments[attachmentKey].filter(att => att.id !== attachmentId)
-      );
+      const filteredAttachments = attachments[attachmentKey].filter(att => att.id !== attachmentId);
+      updateStagedAttachments(attachmentKey, filteredAttachments);
+      console.log('📤 Updated staged attachments');
     }
-    
-    toast.success('Attachment deleted');
+
+    toast.success('Attachment deleted successfully');
   };
 
   // FIXED: Scroll to question function
@@ -2218,9 +4511,9 @@ export function QuestionsTab({
       mcq: questions.filter(q => q.question_type === 'mcq').length,
       descriptive: questions.filter(q => q.question_type === 'descriptive').length,
       complex: questions.filter(q => q.parts && q.parts.length > 0).length,
-      withFigures: questions.filter(q => q.figure || (q.parts && q.parts.some((p: any) => p.figure))).length,
-      withDynamicAnswers: questions.filter(q => 
-        q.answer_requirement || 
+      withFigures: questions.filter(q => q.figure_required || (q.parts && q.parts.some((p: any) => p.figure_required))).length,
+      withDynamicAnswers: questions.filter(q =>
+        q.answer_requirement ||
         (q.parts && q.parts.some((p: any) => p.answer_requirement))
       ).length,
       flaggedInSimulation: questions.filter(q => q.simulation_flags?.includes('flagged')).length
@@ -2512,18 +4805,79 @@ export function QuestionsTab({
     );
   };
 
-  if (loading) {
+  const totalReviewable = reviewSummary.total || questions.length;
+  const reviewedCount = Math.min(reviewSummary.reviewed, totalReviewable);
+  const allQuestionsReviewed = totalReviewable > 0 && reviewSummary.allReviewed;
+  const simulationCompleted = Boolean(simulationResult?.completed);
+  const canImport =
+    !isImporting &&
+    !reviewWorkflowLoading &&
+    questions.length > 0 &&
+    allQuestionsReviewed &&
+    simulationCompleted;
+
+  // Show initialization error state
+  if (initializationError) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="min-h-[400px] flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-red-200 dark:border-red-800 p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Failed to Load Questions
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                {initializationError}
+              </p>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => {
+                    setInitializationError(null);
+                    setLoading(true);
+                    window.location.reload();
+                  }}
+                  leftIcon={<RefreshCw className="h-4 w-4" />}
+                >
+                  Retry
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={onPrevious}
+                >
+                  Go Back
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // Show loading state with more information
+  if (loading || !isInitialized) {
+    return (
+      <div className="flex flex-col justify-center items-center min-h-[400px] gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <div className="text-center">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {!academicStructureLoaded ? 'Loading academic structure...' : 'Initializing questions...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show warning if academic structure failed to load but allow continuation
+  const showAcademicStructureWarning = !academicStructureLoaded && isInitialized;
+
   // Show simulation if active
   if (showSimulation && simulationPaper) {
     return (
-      <ExamSimulation
+      <UnifiedTestSimulation
         paper={simulationPaper}
         onExit={(result) => handleSimulationExit(result)}
         isQAMode={true}
@@ -2537,6 +4891,23 @@ export function QuestionsTab({
 
   return (
     <div className="space-y-6">
+      {/* Academic Structure Warning */}
+      {showAcademicStructureWarning && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-yellow-900 dark:text-yellow-100 mb-1">
+                Academic Structure Not Loaded
+              </h4>
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                Auto-mapping and topic selection may not work correctly. You can still review and import questions manually.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
 
@@ -2602,44 +4973,15 @@ export function QuestionsTab({
             )}
           </Button>
 
-          <FixIncompleteQuestionsButton
-            incompleteQuestions={questions || []}
-            onFix={async (updatedQuestions) => {
-              setQuestions(updatedQuestions);
-              toast.success('Questions updated with complete data');
-            }}
-          />
-
           <Button
             variant="outline"
-            onClick={handleStartSimulation}
+            onClick={handleBulkAutoFillAnswerRequirements}
             disabled={questions.length === 0}
-            leftIcon={<PlayCircle className="h-4 w-4" />}
-            className={cn(
-              simulationRequired && !simulationResult?.completed && 
-              "border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-            )}
-            aria-label={simulationResult?.completed ? 'Re-run exam simulation' : 'Start exam preview and test'}
-            title={simulationRequired ? 'Simulation required before import' : 'Preview paper as student would see it'}
+            title="Automatically fill missing answer requirements based on question type and format"
           >
-            {simulationResult?.completed ? 'Re-run Simulation' : 'Preview & Test'}
+            <CheckSquare className="h-4 w-4 mr-2" />
+            Auto-Fill Requirements
           </Button>
-
-          {simulationRequired && !simulationResult?.completed && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-orange-100 dark:bg-orange-900/20 rounded-full">
-              <TestTube className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              <span className="text-sm text-orange-700 dark:text-orange-300">
-                Simulation required for {(() => {
-                  const reasons = [];
-                  if (questions.some(q => q.parts && q.parts.length > 0)) reasons.push('multi-part');
-                  if (questions.some(q => q.answer_requirement || (q.parts && q.parts.some((p: any) => p.answer_requirement)))) reasons.push('dynamic answer');
-                  if (questions.some(q => q.answer_format && ['calculation', 'equation', 'chemical_structure', 'diagram', 'table', 'graph'].includes(q.answer_format))) reasons.push('complex format');
-                  if (questions.length > 20) reasons.push('large paper');
-                  return reasons.join(', ');
-                })()}
-              </span>
-            </div>
-          )}
 
           {Object.keys(validationErrors).length > 0 && (
             <Button
@@ -2715,154 +5057,67 @@ export function QuestionsTab({
       )}
 
       {/* Questions Review Section */}
-      <QuestionsReviewSection
-        questions={questions || []}
-        mappings={questionMappings}
-        dataStructureInfo={dataStructureInfo}
-        units={units}
-        topics={topics}
-        subtopics={subtopics}
-        attachments={attachments}
-        validationErrors={validationErrors}
-        existingQuestionNumbers={existingQuestionNumbers}
-        isImporting={isImporting}
-        importProgress={importProgress}
-        paperMetadata={paperMetadata}
-        editingMetadata={editingMetadata}
-        pdfDataUrl={pdfDataUrl}
-        hasIncompleteQuestions={questions.some(q => !q.question_text || q.marks === 0)}
-        existingPaperId={existingPaperId}
-        expandedQuestions={expandedQuestions}
-        editingQuestion={editingQuestion}
-        onQuestionEdit={handleEditQuestion}
-        onQuestionSave={handleSaveQuestion}
-        onQuestionCancel={handleCancelEdit}
-        onMappingUpdate={(questionId: string, field: string, value: string | string[]) => {
-          const mapping = questionMappings[questionId] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
-          const updatedMapping = { ...mapping };
-          
-          if (field === 'chapter_id') {
-            updatedMapping.chapter_id = value as string;
-            // Don't clear topics and subtopics when chapter changes if they're already populated
-            if (!mapping.topic_ids || mapping.topic_ids.length === 0) {
-              updatedMapping.topic_ids = [];
-              updatedMapping.subtopic_ids = [];
-            }
-          } else if (field === 'topic_ids') {
-            updatedMapping.topic_ids = value as string[];
-            // Only clear subtopics if no topics are selected
-            if ((value as string[]).length === 0) {
-              updatedMapping.subtopic_ids = [];
-            }
-          } else if (field === 'subtopic_ids') {
-            updatedMapping.subtopic_ids = value as string[];
-            
-            // Auto-select parent topics when subtopics are selected
-            const selectedSubtopics = subtopics.filter(s => (value as string[]).includes(s.id));
-            const parentTopicIds = [...new Set(selectedSubtopics
-              .map(s => s.topic_id || s.edu_topic_id)
-              .filter(Boolean)
-            )];
-            
-            console.log('Selected subtopics:', selectedSubtopics);
-            console.log('Parent topic IDs:', parentTopicIds);
-            
-            // Add parent topic IDs that aren't already selected
-            const newTopicIds = [...new Set([...updatedMapping.topic_ids, ...parentTopicIds])];
-            updatedMapping.topic_ids = newTopicIds;
-            
-            console.log('Updated topic IDs:', newTopicIds);
-          }
-          
-          updateQuestionMapping(questionId, updatedMapping);
-          console.log('Updated mapping for question', questionId, ':', updatedMapping);
-        }}
-        onAttachmentUpload={handleAttachmentUpload}
-        onAttachmentDelete={(key: string, attachmentId: string) => {
-          setDeleteAttachmentConfirm({ key, attachmentId });
-        }}
-        onAutoMap={() => handleAutoMapQuestions(true)}
-        onImportConfirm={handleImportQuestions}
-        onPrevious={onPrevious}
-        onToggleExpanded={toggleQuestionExpanded}
-        onExpandAll={() => {
-          const allQuestionIds = questions.map(q => q.id);
-          setExpandedQuestions(new Set(allQuestionIds));
-        }}
-        onCollapseAll={() => {
-          setExpandedQuestions(new Set());
-        }}
-        onPdfUpload={(file: File) => {
-          setPdfFile(file);
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            setPdfDataUrl(event.target?.result as string);
-          };
-          reader.readAsDataURL(file);
-        }}
-        onRemovePdf={() => {
-          setPdfFile(null);
-          setPdfDataUrl(null);
-        }}
-        onEditMetadata={() => setEditingMetadata(true)}
-        onSaveMetadata={saveMetadata}
-        onUpdateMetadata={(field: string, value: any) => {
-          setPaperMetadata((prev: any) => ({ ...prev, [field]: value }));
-        }}
-        onFixIncomplete={handleFixIncompleteQuestions}
-        confirmationStatus={confirmationStatus}
-        onSnippingComplete={(dataUrl: string, fileName: string, questionId: string, partPath: string[]) => {
-          // Convert part path to indices
-          let partIndex: number | undefined;
-          let subpartIndex: number | undefined;
-          
-          if (partPath && partPath.length > 0) {
-            const question = questions.find(q => q.id === questionId);
-            if (question && question.parts) {
-              const partId = partPath[0];
-              partIndex = question.parts.findIndex(p => p.id === partId);
-              
-              if (partPath.length > 1 && partIndex >= 0) {
-                const part = question.parts[partIndex];
-                if (part.subparts) {
-                  const subpartId = partPath[1];
-                  subpartIndex = part.subparts.findIndex(sp => sp.id === subpartId);
-                }
-              }
-            }
-          }
-          
-          const attachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
-          
-          const newAttachment = {
-            id: `att_${Date.now()}`,
-            dataUrl: dataUrl,
-            file_url: dataUrl,
-            fileName: fileName,
-            file_name: fileName,
-            file_type: 'image/png',
-            created_at: new Date().toISOString()
-          };
-          
-          setAttachments(prev => ({
-            ...prev,
-            [attachmentKey]: [...(prev[attachmentKey] || []), newAttachment]
-          }));
-          
-          if (updateStagedAttachments) {
-            updateStagedAttachments(attachmentKey, [...(attachments[attachmentKey] || []), newAttachment]);
-          }
-          
-          toast.success('Attachment added');
-        }}
-        onUpdateAttachments={(newAttachments) => {
-          setAttachments(newAttachments);
-          if (updateStagedAttachments) {
-            Object.entries(newAttachments).forEach(([key, value]) => {
-              updateStagedAttachments(key, value);
-            });
+      <QuestionImportReviewWorkflow
+        questions={(questions || []).map((q): QuestionDisplayData => ({
+          id: q.id,
+          question_number: q.question_number,
+          question_text: q.question_text || '',
+          question_type: q.question_type as 'mcq' | 'tf' | 'descriptive' | 'calculation' | 'diagram' | 'essay',
+          marks: q.marks || 0,
+          unit: q.original_unit ?? q.unit ?? null,
+          unit_id: q.unit_id ?? null,
+          difficulty: q.difficulty,
+          topic: q.topic,
+          topic_id: q.topic_id ?? null,
+          subtopic: q.subtopic,
+          subtopic_id: q.subtopic_id ?? null,
+          answer_format: q.answer_format,
+          answer_requirement: q.answer_requirement,
+          correct_answers: Array.isArray(q.correct_answers) ? q.correct_answers : (q.correct_answers ? [q.correct_answers] : []),
+          options: Array.isArray(q.options) ? q.options : [],
+          attachments: attachments[q.id] || [],
+          hint: q.hint,
+          explanation: q.explanation,
+          requires_manual_marking: q.requires_manual_marking,
+          marking_criteria: q.marking_criteria,
+          parts: Array.isArray(q.parts) ? q.parts : [],
+          figure_required: typeof q.figure_required === 'boolean' ? q.figure_required : (q.figure ?? false),
+          figure: q.figure
+        }))}
+        paperTitle={paperMetadata?.paper_title || paperMetadata?.paper_code || 'Untitled Paper'}
+        paperDuration={paperMetadata?.paper_duration}
+        totalMarks={paperMetadata?.total_marks || questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
+        importSessionId={importSession?.id}
+        subjectId={dataStructureInfo?.subject_id}
+        requireSimulation={true}
+        onQuestionUpdate={handleQuestionUpdateFromReview}
+        onRequestSnippingTool={handleRequestSnippingTool}
+        onRequestAttachmentDelete={(attachmentKey, attachmentId) => {
+          if (attachmentKey && attachmentId) {
+            setDeleteAttachmentConfirm({ key: attachmentKey, attachmentId });
           }
         }}
+        onRequestSimulation={handleStartSimulation}
+        simulationResults={simulationResult ? {
+          totalQuestions: simulationResult.totalQuestions,
+          answeredQuestions: simulationResult.answeredQuestions,
+          correctAnswers: simulationResult.correctAnswers,
+          partiallyCorrect: simulationResult.partiallyCorrect,
+          incorrectAnswers: simulationResult.incorrectAnswers,
+          totalMarks: simulationResult.totalMarks,
+          earnedMarks: simulationResult.earnedMarks,
+          percentage: simulationResult.percentage,
+          timeSpent: simulationResult.timeSpentSeconds,
+          questionResults: []
+        } : null}
+        simulationCompleted={simulationCompleted}
+        onReviewSummaryChange={(summary) => {
+          setReviewSummary(summary);
+        }}
+        onReviewLoadingChange={(isLoading) => {
+          setReviewWorkflowLoading(isLoading);
+        }}
+        validationErrors={simulationValidationErrors}
       />
 
       {/* Import Progress */}
@@ -2874,9 +5129,15 @@ export function QuestionsTab({
             </h3>
             <div className="mb-4">
               <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all"
-                  style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                  style={{
+                    width: `${
+                      importProgress.total > 0
+                        ? Math.min(100, (importProgress.current / importProgress.total) * 100)
+                        : 0
+                    }%`
+                  }}
                 />
               </div>
             </div>
@@ -2887,56 +5148,181 @@ export function QuestionsTab({
         </div>
       )}
 
-      {/* PDF Snipping Tool */}
+      {/* PDF Snipping Tool - Modal Overlay */}
       {showSnippingTool && pdfDataUrl && (
-        <PDFSnippingTool
-          pdfUrl={pdfDataUrl}
-          onComplete={handleSnippingComplete}
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-6xl max-h-[90vh] bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden">
+            <PDFSnippingTool
+              pdfUrl={pdfDataUrl}
+              onSnip={(dataUrl, fileName) => {
+                if (attachmentTarget) {
+                  handleSnippingComplete({ imageDataUrl: dataUrl, fileName });
+                }
+              }}
+              onClose={() => {
+                setShowSnippingTool(false);
+                setAttachmentTarget(null);
+              }}
+              initialPage={snippingViewState.page}
+              initialScale={snippingViewState.scale}
+              onViewStateChange={handleSnippingViewStateChange}
+              questionLabel={activeSnippingQuestionLabel ?? undefined}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Inline Confirmation Dialog */}
+      {pendingConfirmation && (
+        <ConfirmationDialog
+          isOpen={true}
           onCancel={() => {
-            setShowSnippingTool(false);
-            setAttachmentTarget(null);
+            console.log('📋 Confirmation dialog closed (cancel)');
+            pendingConfirmation.resolve(false);
+            setPendingConfirmation(null);
           }}
+          onConfirm={() => {
+            console.log('📋 Confirmation dialog confirmed');
+            pendingConfirmation.resolve(true);
+            setPendingConfirmation(null);
+          }}
+          title={pendingConfirmation.title}
+          message={pendingConfirmation.message}
+          confirmText={pendingConfirmation.confirmText}
+          cancelText={pendingConfirmation.cancelText}
+          confirmVariant={pendingConfirmation.confirmVariant ?? 'default'}
         />
       )}
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog
-        open={showConfirmDialog}
-        onClose={() => setShowConfirmDialog(false)}
+        isOpen={showConfirmDialog}
+        onCancel={() => setShowConfirmDialog(false)}
         onConfirm={confirmImport}
         title="Import Questions"
+        tone="warning"
         message={
-          <div className="space-y-3">
-            <p>Are you sure you want to import {questions.length} questions?</p>
+          <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
+            <p className="leading-6">
+              Are you sure you want to import {questions.length} question{questions.length === 1 ? '' : 's'}
+              {paperTitleForMetadata ? (
+                <>
+                  {' '}into <span className="font-semibold text-gray-900 dark:text-gray-100">{paperTitleForMetadata}</span>
+                </>
+              ) : null}?
+            </p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 p-3">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <span>Question mix</span>
+                  <span>{questions.length} total</span>
+                </div>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {questionTypeEntries.length > 0 ? (
+                    questionTypeEntries.map(([type, count]) => (
+                      <li key={type} className="flex items-center justify-between gap-2 capitalize">
+                        <span className="text-gray-700 dark:text-gray-200">{type.replace('_', ' ')}</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{count}</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-gray-500 dark:text-gray-400">No question type metadata detected</li>
+                  )}
+                </ul>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 p-3">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <span>Import metrics</span>
+                  <span className="text-gray-400">Preview</span>
+                </div>
+                <dl className="mt-2 space-y-1 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <BarChart3 className="h-4 w-4 text-blue-500" /> Total marks
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{totalQuestionMarks}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <Clock className="h-4 w-4 text-purple-500" /> Avg marks/question
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{averageMarks.toFixed(1)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <Paperclip className="h-4 w-4 text-emerald-500" /> Attachments queued
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{totalAttachments}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" /> Existing duplicates
+                    </dt>
+                    <dd className="font-medium text-gray-900 dark:text-gray-100">{existingQuestionNumbers.size}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            {structuralHighlights.length > 0 && (
+              <div className="rounded-lg border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-900/20 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-sky-800 dark:text-sky-200">
+                  <Lightbulb className="h-4 w-4" /> Key things to review
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-sky-800 dark:text-sky-100">
+                  {structuralHighlights.map((highlight) => (
+                    <span
+                      key={highlight}
+                      className="rounded-full bg-white/70 px-2 py-1 dark:bg-sky-900/60"
+                    >
+                      {highlight}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {simulationResult?.completed && (
-              <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm text-green-700 dark:text-green-300">
-                  Exam simulation completed successfully
-                </span>
+              <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900/40 dark:bg-green-900/20">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-green-600 dark:text-green-400" />
+                <div>
+                  <p className="font-medium text-green-700 dark:text-green-300">Exam simulation completed successfully</p>
+                  {simulationResult?.issues?.length ? (
+                    <p className="mt-1 text-xs text-green-700/80 dark:text-green-200/80">
+                      {simulationResult.issues.length} issue{simulationResult.issues.length === 1 ? '' : 's'} flagged during simulation.
+                    </p>
+                  ) : null}
+                </div>
               </div>
             )}
+
             {simulationResult?.issues && simulationResult.issues.length > 0 && (
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  Note: {simulationResult.issues.length} issues were found during simulation but can be addressed later.
-                </p>
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-900/50 dark:bg-yellow-900/20 dark:text-yellow-200">
+                {simulationResult.issues.length} simulation issue{simulationResult.issues.length === 1 ? '' : 's'} detected. You can address them during QA.
               </div>
             )}
+
             {simulationResult?.recommendations && simulationResult.recommendations.length > 0 && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
-                  View recommendations ({simulationResult.recommendations.length})
-                </summary>
-                <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+              <details className="rounded-lg border border-gray-200 bg-white/80 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-200">
+                <summary className="cursor-pointer font-medium">View recommendations ({simulationResult.recommendations.length})</summary>
+                <ul className="mt-2 space-y-1 text-xs leading-5">
                   {simulationResult.recommendations.map((rec, idx) => (
                     <li key={idx} className="pl-4">• {rec}</li>
                   ))}
                 </ul>
               </details>
             )}
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              This action cannot be undone.
+
+            {existingQuestionNumbers.size > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+                {existingQuestionNumbers.size} question number{existingQuestionNumbers.size === 1 ? '' : 's'} already exist in the bank and will be skipped automatically.
+              </div>
+            )}
+
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              This action cannot be undone once the questions are imported.
             </p>
           </div>
         }
@@ -2973,12 +5359,14 @@ export function QuestionsTab({
               <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                 Validation Errors
               </h3>
-              <button
-                onClick={() => setShowValidation(false)}
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 className="text-gray-400 hover:text-gray-500"
+                onClick={() => setShowValidation(false)}
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
             
             <div className="space-y-4">
@@ -3007,15 +5395,17 @@ export function QuestionsTab({
                             </p>
                           </div>
                         )}
-                        <button
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="mt-2 text-xs text-red-600 dark:text-red-400"
                           onClick={() => {
                             setShowValidation(false);
                             scrollToQuestion(questionId);
                           }}
-                          className="mt-2 text-xs text-red-600 dark:text-red-400 hover:underline"
                         >
                           Go to question →
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -3036,46 +5426,113 @@ export function QuestionsTab({
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
-        <Button
-          variant="outline"
-          onClick={onPrevious}
-          disabled={isImporting}
-        >
-          Previous
-        </Button>
-        <Button
-          onClick={() => {
-            console.log('=== NAVIGATION IMPORT BUTTON CLICKED ===');
-            console.log('Button enabled:', !isImporting && questions.length > 0);
-            console.log('Questions count:', questions.length);
-            console.log('Is importing:', isImporting);
-            console.log('Simulation required:', simulationRequired);
-            console.log('Simulation completed:', simulationResult?.completed);
-            
-            // Call the import handler directly
-            handleImportQuestions().catch(error => {
-              console.error('Error caught in button handler:', error);
-              toast.error(`Button click failed: ${error?.message || 'Unknown error'}`);
-            });
-          }}
-          disabled={isImporting || questions.length === 0}
-          className="min-w-[120px]"
-          variant="primary"
-        >
-          {isImporting ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Importing...
-            </>
-          ) : (
-            <>
-              Import Questions
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </>
-          )}
-        </Button>
+      <div className="pt-6 border-t border-gray-200 dark:border-gray-700 space-y-4">
+        <div className="bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <StatusBadge
+              status={allQuestionsReviewed ? 'success' : 'warning'}
+              text={`Reviewed ${reviewedCount}/${totalReviewable || 0}`}
+            />
+            <StatusBadge
+              status={simulationCompleted ? 'success' : 'warning'}
+              text={simulationCompleted ? 'Simulation complete' : 'Simulation pending'}
+            />
+            {reviewWorkflowLoading && (
+              <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Syncing review data…
+              </div>
+            )}
+            {!simulationCompleted && (
+              <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-300">
+                <AlertCircle className="h-4 w-4" />
+                Complete the simulation to unlock import
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+            Every question must be reviewed and a full test simulation run before importing to the live question bank.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            onClick={onPrevious}
+            disabled={isImporting}
+          >
+            Previous
+          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant={simulationCompleted ? 'outline' : 'default'}
+              onClick={handleStartSimulation}
+              disabled={questions.length === 0 || isImporting}
+              leftIcon={<PlayCircle className="h-4 w-4" />}
+              className={cn(
+                'min-w-[160px]',
+                !simulationCompleted && 'bg-orange-600 hover:bg-orange-700 border-orange-600 text-white shadow-md',
+                simulationCompleted && 'border-green-500 text-green-700 hover:bg-green-50 dark:text-green-400 dark:border-green-600 dark:hover:bg-green-900/20'
+              )}
+              aria-label={simulationCompleted ? 'Re-run test simulation to validate changes' : 'Start test simulation to validate all questions'}
+              title={simulationCompleted ? 'Re-run simulation to validate any changes' : 'Run student test simulation to validate the paper before import'}
+            >
+              {simulationCompleted ? (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Re-run Test
+                </>
+              ) : (
+                'Test & Review'
+              )}
+            </Button>
+            <Button
+              onClick={() => {
+                console.log('=== NAVIGATION IMPORT BUTTON CLICKED ===');
+                console.log('Button enabled:', canImport);
+                console.log('Questions count:', questions.length);
+                console.log('Is importing:', isImporting);
+                console.log('Simulation completed:', simulationCompleted);
+
+                handleImportQuestions().catch(error => {
+                  console.error('Error caught in button handler:', error);
+                  toast.error(`Button click failed: ${error?.message || 'Unknown error'}`);
+                });
+              }}
+              disabled={!canImport}
+              className="min-w-[140px]"
+              variant="primary"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  Import Questions
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+// Export wrapped component with Error Boundary
+export function QuestionsTab(props: QuestionsTabProps) {
+  return (
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error("QuestionsTab Error Boundary caught:", error, errorInfo);
+        toast.error("An unexpected error occurred in the Questions tab");
+      }}
+      resetKeys={[props.importSession?.id, props.existingPaperId]}
+    >
+      <QuestionsTabInner {...props} />
+    </ErrorBoundary>
   );
 }

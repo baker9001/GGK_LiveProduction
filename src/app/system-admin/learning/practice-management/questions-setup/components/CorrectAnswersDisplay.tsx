@@ -63,13 +63,30 @@ export function CorrectAnswersDisplay({
     setEditedAnswers([]);
   };
 
-  const saveAnswers = () => {
+  const saveAnswers = async () => {
+    // Validate all answers have content
     if (editedAnswers.some(a => !a.answer.trim())) {
       toast.error('All answers must have content');
       return;
     }
-    onUpdate?.(editedAnswers);
-    setIsEditing(false);
+
+    // Validate at least one answer exists
+    if (editedAnswers.length === 0) {
+      toast.error('At least one correct answer is required');
+      return;
+    }
+
+    try {
+      // Call the update function
+      if (onUpdate) {
+        await onUpdate(editedAnswers);
+        setIsEditing(false);
+        // Success message is handled by the mutation hook
+      }
+    } catch (error) {
+      console.error('Error saving answers:', error);
+      // Error message is handled by the mutation hook
+    }
   };
 
   const updateAnswer = (index: number, field: keyof CorrectAnswer, value: any) => {
@@ -93,7 +110,16 @@ export function CorrectAnswersDisplay({
 
   const removeAnswer = (index: number) => {
     if (editedAnswers.length > 1) {
-      setEditedAnswers(editedAnswers.filter((_, i) => i !== index));
+      const answerToRemove = editedAnswers[index];
+
+      // Show confirmation dialog
+      if (window.confirm(`Are you sure you want to delete this answer: "${answerToRemove.answer}"?`)) {
+        const updatedAnswers = editedAnswers.filter((_, i) => i !== index);
+        setEditedAnswers(updatedAnswers);
+        toast.success('Answer removed from the list');
+      }
+    } else {
+      toast.error('Cannot delete the last answer. At least one correct answer is required.');
     }
   };
 

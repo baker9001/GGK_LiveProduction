@@ -8,7 +8,8 @@ import { cn } from '../../../../../../lib/utils';
 interface UserAnswer {
   questionId: string;
   partId?: string;
-  answer: any;
+  subpartId?: string;
+  answer: unknown;
   isCorrect?: boolean;
   marksAwarded?: number;
   partialCredit?: {
@@ -24,6 +25,19 @@ interface QuestionOption {
   order: number;
 }
 
+interface QuestionPart {
+  id: string;
+  question_description: string;
+  marks: number;
+  type?: 'mcq' | 'tf' | 'descriptive';
+  options?: QuestionOption[];
+  correct_answer?: string;
+  subparts?: QuestionPart[];
+  answer_requirement?: string;
+  hint?: string;
+  explanation?: string;
+}
+
 interface Question {
   id: string;
   question_number: string;
@@ -33,10 +47,10 @@ interface Question {
   topic_name?: string;
   type: 'mcq' | 'tf' | 'descriptive';
   options?: QuestionOption[];
-  parts: any[];
+  parts: QuestionPart[];
   answer_format?: string;
   correct_answer?: string;
-  correct_answers?: any[];
+  correct_answers?: Array<Record<string, unknown>>;
   answer_requirement?: string;
   hint?: string;
   explanation?: string;
@@ -56,7 +70,7 @@ interface ResultsDashboardProps {
   userAnswers: Record<string, UserAnswer>;
   timeElapsed: number;
   onRetry: () => void;
-  onExit: () => void;
+  onExit: (result?: unknown) => void;
   onViewQuestion?: (questionIndex: number) => void;
 }
 
@@ -110,23 +124,70 @@ export function ResultsDashboard({
       if (question.parts.length > 0) {
         // Multi-part question
         question.parts.forEach(part => {
+          if (part.subparts && part.subparts.length > 0) {
+            part.subparts.forEach(subpart => {
+              totalQuestions++;
+              totalPossibleMarks += subpart.marks;
+
+              const subKey = `${question.id}-${part.id}-${subpart.id}`;
+              const subAnswer = userAnswers[subKey];
+
+              if (subAnswer?.answer !== undefined && subAnswer?.answer !== '') {
+                attemptedQuestions++;
+                const marksEarned = subAnswer.marksAwarded || 0;
+                earnedMarks += marksEarned;
+
+                if (subAnswer.isCorrect) {
+                  correctAnswers++;
+                } else if (marksEarned > 0) {
+                  partiallyCorrectAnswers++;
+                }
+
+                const subType = subpart.type || part.type || 'descriptive';
+                if (subType in typeStats) {
+                  typeStats[subType as keyof typeof typeStats].total++;
+                  if (subAnswer.isCorrect) {
+                    typeStats[subType as keyof typeof typeStats].correct++;
+                  } else if (marksEarned > 0) {
+                    typeStats[subType as keyof typeof typeStats].partial++;
+                  }
+                }
+              }
+
+              const rawSubDifficulty = part.difficulty || question.difficulty || 'medium';
+              const subDifficulty = String(rawSubDifficulty).toLowerCase();
+              if (subDifficulty in difficultyStats) {
+                difficultyStats[subDifficulty as keyof typeof difficultyStats].total++;
+                difficultyStats[subDifficulty as keyof typeof difficultyStats].marks += subpart.marks;
+                if (subAnswer?.isCorrect) {
+                  difficultyStats[subDifficulty as keyof typeof difficultyStats].correct++;
+                } else if ((subAnswer?.marksAwarded || 0) > 0) {
+                  difficultyStats[subDifficulty as keyof typeof difficultyStats].partial++;
+                }
+                difficultyStats[subDifficulty as keyof typeof difficultyStats].earnedMarks += subAnswer?.marksAwarded || 0;
+              }
+            });
+
+            return;
+          }
+
           totalQuestions++;
           totalPossibleMarks += part.marks;
-          
+
           const key = `${question.id}-${part.id}`;
           const answer = userAnswers[key];
-          
+
           if (answer?.answer !== undefined && answer?.answer !== '') {
             attemptedQuestions++;
             const marksEarned = answer.marksAwarded || 0;
             earnedMarks += marksEarned;
-            
+
             if (answer.isCorrect) {
               correctAnswers++;
             } else if (marksEarned > 0) {
               partiallyCorrectAnswers++;
             }
-            
+
             // Update type stats
             const partType = part.type || 'descriptive';
             if (partType in typeStats) {
@@ -138,9 +199,10 @@ export function ResultsDashboard({
               }
             }
           }
-          
+
           // Update difficulty stats
-          const difficulty = part.difficulty || question.difficulty || 'medium';
+          const rawDifficulty = part.difficulty || question.difficulty || 'medium';
+          const difficulty = String(rawDifficulty).toLowerCase();
           if (difficulty in difficultyStats) {
             difficultyStats[difficulty as keyof typeof difficultyStats].total++;
             difficultyStats[difficulty as keyof typeof difficultyStats].marks += part.marks;
@@ -182,7 +244,8 @@ export function ResultsDashboard({
         }
         
         // Update difficulty stats
-        const difficulty = question.difficulty || 'medium';
+        const rawDifficulty = question.difficulty || 'medium';
+        const difficulty = String(rawDifficulty).toLowerCase();
         if (difficulty in difficultyStats) {
           difficultyStats[difficulty as keyof typeof difficultyStats].total++;
           difficultyStats[difficulty as keyof typeof difficultyStats].marks += question.marks;
@@ -260,19 +323,36 @@ export function ResultsDashboard({
   
   const { grade, color: gradeColor, bgColor: gradeBgColor } = getGrade(stats.percentage);
 
+  const formatSubpartLabel = (index: number) => {
+    const roman = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)', '(vii)', '(viii)', '(ix)', '(x)'];
+    return roman[index] ?? `Subpart ${index + 1}`;
+  };
+
   // Get correct answer display
-  const getCorrectAnswerDisplay = (question: Question, partId?: string) => {
+  const getCorrectAnswerDisplay = (question: Question, partId?: string, subpartId?: string) => {
     if (partId) {
       const part = question.parts.find(p => p.id === partId);
       if (!part) return null;
-      
+
+      if (subpartId && part.subparts && part.subparts.length > 0) {
+        const subpart = part.subparts.find(sp => sp.id === subpartId);
+        if (!subpart) return null;
+
+        if (subpart.type === 'mcq' && subpart.options) {
+          const correct = subpart.options.find(o => o.is_correct);
+          return correct ? `Option ${correct.option_text}` : subpart.correct_answer || 'See explanation';
+        }
+
+        return subpart.correct_answer || 'See explanation';
+      }
+
       if (part.type === 'mcq' && part.options) {
         const correct = part.options.find(o => o.is_correct);
-        return correct ? `Option ${correct.option_text}` : null;
+        return correct ? `Option ${correct.option_text}` : part.correct_answer || 'See explanation';
       }
       return part.correct_answer || 'See explanation';
     }
-    
+
     if (question.type === 'mcq' && question.options) {
       const correct = question.options.find(o => o.is_correct);
       return correct ? `Option ${correct.option_text}` : null;
@@ -308,18 +388,30 @@ export function ResultsDashboard({
           const isExpanded = expandedQuestions.has(question.id);
           let questionStatus: 'correct' | 'partial' | 'incorrect' | 'unattempted' = 'unattempted';
           let questionMarks = 0;
-          let totalMarks = question.marks;
-          
+          let totalMarks = 0;
+
           if (question.parts.length > 0) {
-            totalMarks = question.parts.reduce((sum, part) => sum + part.marks, 0);
             question.parts.forEach(part => {
-              const key = `${question.id}-${part.id}`;
-              const answer = userAnswers[key];
-              if (answer?.answer !== undefined) {
-                questionMarks += answer.marksAwarded || 0;
+              if (part.subparts && part.subparts.length > 0) {
+                part.subparts.forEach(subpart => {
+                  totalMarks += subpart.marks || 0;
+                  const subKey = `${question.id}-${part.id}-${subpart.id}`;
+                  const subAnswer = userAnswers[subKey];
+                  if (subAnswer?.answer !== undefined) {
+                    questionMarks += subAnswer.marksAwarded || 0;
+                  }
+                });
+              } else {
+                totalMarks += part.marks;
+                const key = `${question.id}-${part.id}`;
+                const answer = userAnswers[key];
+                if (answer?.answer !== undefined) {
+                  questionMarks += answer.marksAwarded || 0;
+                }
               }
             });
           } else {
+            totalMarks = question.marks;
             const answer = userAnswers[question.id];
             if (answer?.answer !== undefined) {
               questionMarks = answer.marksAwarded || 0;
@@ -332,6 +424,12 @@ export function ResultsDashboard({
             questionStatus = 'partial';
           } else if (question.parts.length > 0) {
             const hasAnswer = question.parts.some(part => {
+              if (part.subparts && part.subparts.length > 0) {
+                return part.subparts.some(subpart => {
+                  const key = `${question.id}-${part.id}-${subpart.id}`;
+                  return userAnswers[key]?.answer !== undefined;
+                });
+              }
               const key = `${question.id}-${part.id}`;
               return userAnswers[key]?.answer !== undefined;
             });
@@ -421,44 +519,131 @@ export function ResultsDashboard({
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {question.parts.map((part, partIndex) => {
-                        const key = `${question.id}-${part.id}`;
-                        const answer = userAnswers[key];
-                        
+                  <div className="space-y-3">
+                    {question.parts.map((part, partIndex) => {
+                      const partKey = `${question.id}-${part.id}`;
+                      const partAnswer = userAnswers[partKey];
+                      const partLabel = String.fromCharCode(65 + partIndex);
+
+                      if (part.subparts && part.subparts.length > 0) {
                         return (
-                          <div key={part.id} className="bg-gray-50 dark:bg-gray-900 rounded p-3">
-                            <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">
-                              Part {String.fromCharCode(97 + partIndex)}
+                          <div key={part.id} className="bg-gray-50 dark:bg-gray-900 rounded p-3 space-y-3">
+                            <div className="font-medium text-gray-700 dark:text-gray-300">
+                              Part {partLabel}
                             </div>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                              {part.question_description}
-                            </p>
-                            <div className="space-y-1 text-sm">
-                              <div>
-                                <span className="font-medium">Your Answer: </span>
-                                <span className={cn(
-                                  answer?.isCorrect && "text-green-600 dark:text-green-400",
-                                  !answer?.isCorrect && answer?.answer && "text-red-600 dark:text-red-400"
-                                )}>
-                                  {answer?.answer || 'Not attempted'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="font-medium">Correct Answer: </span>
-                                <span className="text-green-600 dark:text-green-400">
-                                  {getCorrectAnswerDisplay(question, part.id)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="font-medium">Marks: </span>
-                                <span>{answer?.marksAwarded || 0}/{part.marks}</span>
-                              </div>
+                            {part.question_description && (
+                              <p className="text-sm text-gray-700 dark:text-gray-300">
+                                {part.question_description}
+                              </p>
+                            )}
+
+                            <div className="space-y-3">
+                              {part.subparts.map((subpart, subIndex) => {
+                                const subKey = `${question.id}-${part.id}-${subpart.id}`;
+                                const subAnswer = userAnswers[subKey];
+                                const marksEarned = subAnswer?.marksAwarded || 0;
+                                const answerDisplay =
+                                  subAnswer?.answer !== undefined && typeof subAnswer.answer === 'object'
+                                    ? JSON.stringify(subAnswer.answer)
+                                    : subAnswer?.answer;
+
+                                return (
+                                  <div
+                                    key={subpart.id}
+                                    className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded p-3"
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                                        Subpart {formatSubpartLabel(subIndex)}
+                                      </span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                                        {marksEarned}/{subpart.marks} marks
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                                      {subpart.question_description}
+                                    </p>
+                                    <div className="space-y-1 text-sm">
+                                      <div>
+                                        <span className="font-medium">Your Answer: </span>
+                                        <span
+                                          className={cn(
+                                            subAnswer?.isCorrect && 'text-green-600 dark:text-green-400',
+                                            !subAnswer?.isCorrect && subAnswer?.answer && 'text-red-600 dark:text-red-400'
+                                          )}
+                                        >
+                                          {answerDisplay || 'Not attempted'}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Correct Answer: </span>
+                                        <span className="text-green-600 dark:text-green-400">
+                                          {getCorrectAnswerDisplay(question, part.id, subpart.id)}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Marks: </span>
+                                        <span>{marksEarned}/{subpart.marks}</span>
+                                      </div>
+                                      {subAnswer?.partialCredit && (
+                                        <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                                          Partial Credit: {subAnswer.partialCredit.map(pc => pc.reason).join(', ')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      }
+
+                      const answerDisplay =
+                        partAnswer?.answer !== undefined && typeof partAnswer.answer === 'object'
+                          ? JSON.stringify(partAnswer.answer)
+                          : partAnswer?.answer;
+
+                      return (
+                        <div key={part.id} className="bg-gray-50 dark:bg-gray-900 rounded p-3">
+                          <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Part {partLabel}
+                          </div>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                            {part.question_description}
+                          </p>
+                          <div className="space-y-1 text-sm">
+                            <div>
+                              <span className="font-medium">Your Answer: </span>
+                              <span
+                                className={cn(
+                                  partAnswer?.isCorrect && 'text-green-600 dark:text-green-400',
+                                  !partAnswer?.isCorrect && partAnswer?.answer && 'text-red-600 dark:text-red-400'
+                                )}
+                              >
+                                {answerDisplay || 'Not attempted'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Correct Answer: </span>
+                              <span className="text-green-600 dark:text-green-400">
+                                {getCorrectAnswerDisplay(question, part.id)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Marks: </span>
+                              <span>{partAnswer?.marksAwarded || 0}/{part.marks}</span>
+                            </div>
+                            {partAnswer?.partialCredit && (
+                              <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                                Partial Credit: {partAnswer.partialCredit.map(pc => pc.reason).join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                   )}
                   
                   {(question.hint || question.explanation) && (
@@ -861,7 +1046,7 @@ export function ResultsDashboard({
           <Button
             size="lg"
             variant="secondary"
-            onClick={onExit}
+            onClick={() => onExit({ stats, userAnswers, timeElapsed })}
           >
             Exit to Questions
           </Button>

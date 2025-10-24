@@ -20,7 +20,7 @@ interface Question {
   }>;
   answer_requirement?: string;
   marks: number;
-  options?: Array<{ label: string; text: string }>;
+  options?: Array<{ label: string; text: string; is_correct?: boolean }>;
 }
 
 interface ValidationResult {
@@ -93,6 +93,75 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
     const feedback: string[] = [];
     const correctAnswers: string[] = [];
 
+    // First, check if options have is_correct flags (preferred method)
+    if (question.options && question.options.length > 0) {
+      const correctOptions = question.options
+        .filter(opt => opt.is_correct)
+        .map(opt => opt.label);
+
+      correctAnswers.push(...correctOptions);
+
+      if (correctOptions.length === 0) {
+        // No options marked as correct, fallback to other methods
+        // Continue to check correct_answer or correct_answers below
+      } else {
+        // Check user selections against correct options
+        const normalizeLabel = (label: string) => label.trim().toLowerCase();
+        const correctSelections = userSelections.filter((sel: string) =>
+          correctOptions.some(correct => normalizeLabel(correct) === normalizeLabel(sel))
+        );
+
+        if (question.answer_requirement === 'both_required' || question.answer_requirement === 'all_required') {
+          // All correct options must be selected
+          const allCorrect = correctOptions.every(opt =>
+            userSelections.some((sel: string) => normalizeLabel(sel) === normalizeLabel(opt))
+          );
+          if (allCorrect && userSelections.length === correctOptions.length) {
+            score = question.marks;
+            feedback.push('All correct answers selected!');
+          } else {
+            const missing = correctOptions.filter(opt =>
+              !userSelections.some((sel: string) => normalizeLabel(sel) === normalizeLabel(opt))
+            );
+            const extra = userSelections.filter((sel: string) =>
+              !correctOptions.some(correct => normalizeLabel(correct) === normalizeLabel(sel))
+            );
+            if (missing.length > 0) feedback.push(`Missing: ${missing.join(', ')}`);
+            if (extra.length > 0) feedback.push(`Incorrect selections: ${extra.join(', ')}`);
+          }
+        } else if (question.answer_requirement?.includes('any_')) {
+          // Any N from the correct options
+          const required = parseInt(question.answer_requirement.match(/any_(\w+)_/)?.[1] || '1');
+
+          if (correctSelections.length >= required) {
+            score = question.marks;
+            feedback.push(`Correct! You selected ${correctSelections.length} valid option(s).`);
+          } else {
+            const partialScore = (correctSelections.length / required) * question.marks;
+            score = Math.round(partialScore * 10) / 10;
+            feedback.push(`Partial credit: ${correctSelections.length} out of ${required} required.`);
+          }
+        } else {
+          // Single correct answer (default MCQ behavior)
+          if (correctSelections.length > 0) {
+            score = question.marks;
+            feedback.push('Correct answer!');
+          } else {
+            feedback.push(`Incorrect. The correct answer is ${correctOptions.join(', ')}.`);
+          }
+        }
+
+        return {
+          isCorrect: score === question.marks,
+          score,
+          maxScore: question.marks,
+          feedback,
+          correctAnswers
+        };
+      }
+    }
+
+    // Fallback: check correct_answer or correct_answers
     if (question.correct_answer) {
       // Single correct answer
       correctAnswers.push(question.correct_answer);
@@ -106,7 +175,7 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
       // Multiple correct answers
       const correctOptions = question.correct_answers.map(ca => ca.answer);
       correctAnswers.push(...correctOptions);
-      
+
       if (question.answer_requirement === 'both_required' || question.answer_requirement === 'all_required') {
         const allCorrect = correctOptions.every(opt => userSelections.includes(opt));
         if (allCorrect && userSelections.length === correctOptions.length) {
@@ -121,7 +190,7 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
       } else if (question.answer_requirement?.includes('any_')) {
         const required = parseInt(question.answer_requirement.match(/any_(\w+)_/)?.[1] || '1');
         const correctSelections = userSelections.filter((sel: string) => correctOptions.includes(sel));
-        
+
         if (correctSelections.length >= required) {
           score = question.marks;
           feedback.push(`Correct! You selected ${correctSelections.length} valid option(s).`);

@@ -1,23 +1,20 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/QuestionCard.tsx
-import React, { useState } from 'react';
-import { 
-  ChevronDown, 
-  ChevronUp, 
-  Trash2, 
-  CheckCircle, 
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  CheckCircle,
   AlertCircle,
   Plus,
   HelpCircle,
   BookOpen,
-  FileText,
-  Upload,
-  Edit,
-  Save,
-  X
+  FileText
 } from 'lucide-react';
 import { Button } from '../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { EditableField, EditableOption } from './EditableField';
+import { RichTextEditorField } from './RichTextEditorField';
 import { AttachmentManager } from './AttachmentManager';
 import { CorrectAnswersDisplay } from './CorrectAnswersDisplay';
 import { Question, SubQuestion } from '../page';
@@ -27,6 +24,14 @@ import { cn } from '../../../../../../lib/utils';
 import { supabase } from '../../../../../../lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '../../../../../../components/shared/Toast';
+import {
+  getDifficultyClassName,
+  getQuestionStatusLabel,
+  questionNeedsAttachment,
+  subQuestionNeedsAttachment
+} from '../utils/questionHelpers';
+import { EnhancedQuestionDisplay } from '../../../../../../components/shared/EnhancedQuestionDisplay';
+import { mapQuestionToDisplayData } from '../utils/questionMappers';
 
 interface QuestionCardProps {
   question: Question;
@@ -43,7 +48,7 @@ interface QuestionCardProps {
 
 export function QuestionCard({
   question,
-  questionIndex,
+  questionIndex: _questionIndex,
   topics,
   subtopics,
   units = [],
@@ -53,69 +58,74 @@ export function QuestionCard({
   showQAActions = false,
   readOnly = false
 }: QuestionCardProps) {
-  const [expandedParts, setExpandedParts] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true); // Expand/collapse entire card
+  const [expandedParts, setExpandedParts] = useState(true); // Default to expanded for better UX
   const [showValidationErrors, setShowValidationErrors] = useState(false);
-  
+  const [showEditor, setShowEditor] = useState(false);
+
   const queryClient = useQueryClient();
   const { updateField, updateSubtopics, updateCorrectAnswers } = useQuestionMutations();
   const { validateForConfirmation } = useQuestionValidation();
+
+  const reviewDisplayData = useMemo(() => mapQuestionToDisplayData(question), [question]);
+  const canEdit = !readOnly;
+
+  useEffect(() => {
+    if (!canEdit && showEditor) {
+      setShowEditor(false);
+    }
+  }, [canEdit, showEditor]);
   
   // Get validation status
   const validation = validateForConfirmation(question);
   const hasValidationErrors = !validation.isValid;
   
   // Check if question or any sub-question needs attachments (has figure)
-  const needsAttachment = question.question_description?.toLowerCase().includes('figure') || 
-                         question.question_description?.toLowerCase().includes('diagram') ||
-                         question.question_description?.toLowerCase().includes('graph') ||
-                         question.question_description?.toLowerCase().includes('image');
-  
-  const hasAttachment = question.attachments && question.attachments.length > 0;
-  const needsAttachmentWarning = needsAttachment && !hasAttachment;
+  const needsAttachmentWarning = questionNeedsAttachment(question);
   
   // Filter subtopics based on selected topic
-  const availableSubtopics = question.topic_id 
+  const availableSubtopics = question.topic_id
     ? subtopics.filter(s => s.topic_id === question.topic_id)
     : [];
-  
+
   // Get current subtopic IDs from the question data
   const currentSubtopicIds = question.subtopics?.map(s => s.id) || [];
-  
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-      case 'hard':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
-    }
-  };
-  
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'success';
-      case 'qa_review':
-        return 'warning';
-      default:
-        return 'secondary';
-    }
-  };
-  
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Confirmed';
-      case 'qa_review':
-        return 'QA Review';
-      default:
-        return 'Inactive';
-    }
-  };
 
+  const qaChecklist = [
+    {
+      label: 'Description added',
+      complete: Boolean(question.question_description?.trim())
+    },
+    {
+      label: 'Marks set',
+      complete: question.marks > 0
+    },
+    {
+      label: 'Difficulty selected',
+      complete: Boolean(question.difficulty)
+    },
+    {
+      label: 'Topic & subtopics tagged',
+      complete: Boolean(question.topic_id) && currentSubtopicIds.length > 0
+    },
+    {
+      label: 'Hint provided',
+      complete: Boolean(question.hint?.trim())
+    },
+    {
+      label: 'Explanation provided',
+      complete: Boolean(question.explanation?.trim())
+    },
+    {
+      label: 'Attachments ready',
+      complete: !needsAttachmentWarning
+    }
+  ];
+
+  const completedChecklistItems = qaChecklist.filter(item => item.complete).length;
+  const qaProgress = Math.round((completedChecklistItems / qaChecklist.length) * 100);
+  const confirmBlocked = hasValidationErrors || needsAttachmentWarning;
+  
   const getAnswerFormatLabel = (format: string) => {
     const formats: Record<string, string> = {
       'single_word': 'Single Word',
@@ -133,6 +143,27 @@ export function QuestionCard({
   };
   
   const handleFieldUpdate = async (field: string, value: any) => {
+    // If topic is being changed, auto-populate unit_id
+    if (field === 'topic_id' && value) {
+      const selectedTopic = topics.find(t => t.id === value);
+      if (selectedTopic && 'unit_id' in selectedTopic) {
+        // Update both topic_id and unit_id
+        await updateField.mutateAsync({
+          id: question.id,
+          isSubQuestion: false,
+          field: 'topic_id',
+          value
+        });
+        await updateField.mutateAsync({
+          id: question.id,
+          isSubQuestion: false,
+          field: 'unit_id',
+          value: (selectedTopic as any).unit_id
+        });
+        return;
+      }
+    }
+
     await updateField.mutateAsync({
       id: question.id,
       isSubQuestion: false,
@@ -314,106 +345,246 @@ export function QuestionCard({
       toast.error('Failed to update subtopics');
     }
   };
+
+  const handleConfirmCurrentQuestion = () => {
+    if (!onConfirm) return;
+
+    if (hasValidationErrors) {
+      setShowValidationErrors(true);
+      toast.error('Please resolve validation issues before marking this question complete');
+      return;
+    }
+
+    if (needsAttachmentWarning) {
+      toast.error('Upload the required figure or diagram before marking this question complete');
+      return;
+    }
+
+    onConfirm(question.id);
+  };
   
   return (
-    <div 
+    <div
       id={`question-${question.id}`}
       className={cn(
-        "bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/20 border overflow-hidden transition-all duration-200",
-        needsAttachmentWarning && showQAActions 
-          ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10" 
-          : "border-gray-200 dark:border-gray-700"
+        'rounded-2xl border overflow-hidden bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
+        needsAttachmentWarning && showQAActions
+          ? 'border-amber-300/80 dark:border-amber-500/70 ring-1 ring-amber-200/60 dark:ring-amber-500/30'
+          : 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
       )}
     >
-      {/* Question Header */}
-      <div className="bg-gray-800 dark:bg-gray-900 p-6 flex items-center justify-between border-b border-gray-700 dark:border-gray-800">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center justify-center w-10 h-10 bg-white/10 rounded-lg border border-white/20">
-            <span className="text-white font-bold text-lg">
-              {question.question_number}
-            </span>
-          </div>
-          <div>
-            <h3 className="text-white font-semibold text-lg">
+      {/* Question Header - Clickable to expand/collapse */}
+      <div
+        className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex flex-1 flex-wrap items-center gap-4">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            className="flex items-center justify-center w-12 h-12 rounded-xl border border-[#8CC63F]/30 bg-[#8CC63F]/10 text-[#356B1B] dark:text-[#A6E36A] dark:bg-[#8CC63F]/20 hover:bg-[#8CC63F]/20 transition-colors"
+            aria-label={isExpanded ? 'Collapse question' : 'Expand question'}
+          >
+            {isExpanded ? (
+              <ChevronUp className="h-5 w-5" />
+            ) : (
+              <ChevronDown className="h-5 w-5" />
+            )}
+          </button>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
               Question {question.question_number}
             </h3>
-            {question.parts.length > 0 && (
-              <p className="text-gray-300 text-sm">
-                {question.parts.length} part{question.parts.length !== 1 ? 's' : ''}
-              </p>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {question.parts.length > 0 && (
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {question.parts.length} part{question.parts.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              {(question.unit_name || question.topic_name || (question.subtopics && question.subtopics.length > 0)) && (
+                <span className="text-gray-400 dark:text-gray-500">•</span>
+              )}
+              {question.unit_name && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  Unit: {question.unit_name}
+                </span>
+              )}
+              {question.topic_name && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                  Topic: {question.topic_name}
+                </span>
+              )}
+              {question.subtopics && question.subtopics.length > 0 && (
+                <>
+                  {question.subtopics.map((subtopic) => (
+                    <span
+                      key={subtopic.id}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
+                    >
+                      {subtopic.name}
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
-          <div className="flex items-center space-x-2 ml-4">
-            <StatusBadge 
-              status={question.status} 
-              className="bg-white/10 border border-white/20 text-white"
-            >
-              {getStatusText(question.status)}
-            </StatusBadge>
+          <div className="flex items-center gap-2">
+            <StatusBadge
+              status={question.status}
+              showIcon
+              label={getQuestionStatusLabel(question.status)}
+              className="px-3 py-1 text-xs font-semibold"
+            />
             {hasValidationErrors && (
-              <div className="flex items-center bg-red-500/20 border border-red-300/30 rounded-full px-3 py-1">
-                <AlertCircle className="h-4 w-4 mr-1 text-red-300" />
-                <span className="text-xs text-red-200 font-medium">Incomplete</span>
-              </div>
+              <span className="inline-flex items-center gap-1 rounded-full border border-rose-300/60 bg-rose-100/80 px-3 py-1 text-xs font-medium text-rose-700 dark:border-rose-500/60 dark:bg-rose-500/10 dark:text-rose-200">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Incomplete
+              </span>
             )}
             {needsAttachmentWarning && (
-              <div className="flex items-center bg-orange-500/20 border border-orange-300/30 rounded-full px-3 py-1">
-                <AlertCircle className="h-4 w-4 mr-1 text-orange-300" />
-                <span className="text-xs text-orange-200 font-medium">Figure Required</span>
-              </div>
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/80 px-3 py-1 text-xs font-medium text-amber-800 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-200">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Figure required
+              </span>
+            )}
+            {question.attachments && question.attachments.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-blue-300/60 bg-blue-100/80 px-3 py-1 text-xs font-medium text-blue-800 dark:border-blue-500/60 dark:bg-blue-500/10 dark:text-blue-200">
+                <FileText className="h-3.5 w-3.5" />
+                {question.attachments.length} attachment{question.attachments.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            {canEdit && (
+              <Button
+                size="sm"
+                variant={showEditor ? 'default' : 'outline'}
+                className="text-xs font-semibold"
+                onClick={event => {
+                  event.stopPropagation();
+                  setShowEditor(prev => !prev);
+                }}
+              >
+                {showEditor ? 'Hide editor' : 'Edit data'}
+              </Button>
             )}
           </div>
         </div>
         
-        <div className="flex items-center space-x-3">
-          {showQAActions && question.status !== 'active' && onConfirm && (
-            <Button
-              size="sm"
-              variant="default"
-              onClick={() => {
-                if (hasValidationErrors) {
-                  setShowValidationErrors(true);
-                  toast.error('Please fix all validation errors before confirming');
-                } else if (needsAttachmentWarning) {
-                  toast.error('Please upload the required figure/diagram before confirming');
-                } else {
-                  onConfirm(question.id);
-                }
-              }}
-              leftIcon={<CheckCircle className="h-4 w-4" />}
-              disabled={needsAttachmentWarning}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              Confirm Question
-            </Button>
-          )}
-          
-          {showQAActions && question.status === 'active' && (
-            <div className="flex items-center bg-green-500/20 border border-green-300/30 rounded-full px-4 py-2">
-              <CheckCircle className="h-4 w-4 mr-2 text-green-300" />
-              <span className="text-green-200 font-medium">Confirmed</span>
-            </div>
-          )}
-          
-          {question.parts.length > 0 && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setExpandedParts(!expandedParts)}
-              className="text-white hover:bg-white/10 border border-white/20"
-            >
-              {expandedParts ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2">
+              {showQAActions && question.status === 'active' && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-emerald-100/80 px-4 py-1.5 text-sm font-semibold text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <CheckCircle className="h-4 w-4" /> QA complete
+                </span>
               )}
-            </Button>
-          )}
+
+            {!readOnly && (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                rounded="full"
+                className="text-rose-500 hover:text-rose-600 hover:bg-rose-100/70 dark:text-rose-300 dark:hover:text-rose-200 dark:hover:bg-rose-500/10"
+                onClick={() => onDelete(question)}
+                tooltip="Delete question"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+              />
+            )}
+
+            {showEditor && question.parts.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-gray-600 hover:text-[#8CC63F] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                onClick={() => setExpandedParts(!expandedParts)}
+                leftIcon={expandedParts ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              >
+                {expandedParts ? 'Hide' : 'Show'} parts
+              </Button>
+            )}
+          </div>
           
         </div>
       </div>
-      
+
+      {showQAActions && (
+        <div className="px-6 pb-6 pt-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-white via-gray-50 to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">QA progress</div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                {completedChecklistItems}/{qaChecklist.length} checks complete
+              </div>
+            </div>
+            <div>
+              <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-500 dark:bg-emerald-400"
+                  style={{ width: `${qaProgress}%` }}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {qaChecklist.map(item => (
+                  <div
+                    key={item.label}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+                      item.complete
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/60 dark:bg-emerald-900/20 dark:text-emerald-200'
+                        : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/60 dark:bg-amber-900/20 dark:text-amber-200'
+                    )}
+                  >
+                    {item.complete ? (
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    ) : (
+                      <AlertCircle className="h-3.5 w-3.5" />
+                    )}
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {confirmBlocked && (
+              <p className="text-xs text-amber-600 dark:text-amber-300">
+                Resolve the highlighted checklist items above before marking this question complete.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isExpanded && (
+        <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <EnhancedQuestionDisplay
+            question={reviewDisplayData}
+            showAttachments
+            showAnswers
+            showHints
+            showExplanations
+            highlightCorrect
+            defaultExpandedSections={{ hint: false, explanation: false, markingCriteria: false }}
+          />
+
+          {!showEditor && (
+            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+              {canEdit ? (
+                <>
+                  This read-only view mirrors the structure, metadata, and media confirmed during Paper Setup (Stage 1).
+                  Switch to <span className="font-semibold">Edit data</span> only when a correction is required.
+                </>
+              ) : (
+                <>
+                  This read-only view mirrors the structure, metadata, and media confirmed during Paper Setup (Stage 1).
+                  Editing is disabled for this paper state; please return to Paper Setup to request changes if needed.
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Enhanced Question Metadata */}
+      {showEditor && (
       <div className="bg-gray-50 dark:bg-gray-800 p-6 border-b border-gray-200 dark:border-gray-700">
         <div className="grid grid-cols-6 gap-8">
           <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 shadow-sm">
@@ -454,7 +625,7 @@ export function QuestionCard({
                 { value: 'hard', label: 'Hard' }
               ]}
               displayValue={
-                <span className={cn("px-3 py-1 rounded-full text-sm font-medium", getDifficultyColor(question.difficulty))}>
+                <span className={cn("px-3 py-1 rounded-full text-sm font-medium", getDifficultyClassName(question.difficulty))}>
                   {question.difficulty}
                 </span>
               }
@@ -467,9 +638,19 @@ export function QuestionCard({
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded">
               Unit
             </label>
-            <span className="text-base font-medium text-gray-900 dark:text-white">
-              {question.unit_name || 'Not assigned'}
-            </span>
+            <EditableField
+              value={question.unit_id}
+              onSave={(value) => handleFieldUpdate('unit_id', value)}
+              type="select"
+              options={units.map(unit => ({ value: unit.id, label: unit.name }))}
+              displayValue={
+                <span className="text-base font-medium text-gray-900 dark:text-white">
+                  {units.find(unit => unit.id === question.unit_id)?.name || question.unit_name || 'Select unit...'}
+                </span>
+              }
+              placeholder="Select unit..."
+              disabled={readOnly || units.length === 0}
+            />
           </div>
           
           <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 shadow-sm">
@@ -495,10 +676,14 @@ export function QuestionCard({
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded">
               Status
             </label>
-            <StatusBadge status={question.status} className="text-sm px-3 py-1" />
+            <StatusBadge
+              status={question.status}
+              label={getQuestionStatusLabel(question.status)}
+              className="text-sm px-3 py-1"
+            />
           </div>
         </div>
-        
+
         {/* Answer Format Display */}
         {question.answer_format && (
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -532,9 +717,10 @@ export function QuestionCard({
           </div>
         </div>
       </div>
+      )}
       
       {/* Validation Errors */}
-      {showValidationErrors && hasValidationErrors && (
+      {isExpanded && showValidationErrors && hasValidationErrors && (
         <div className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 p-4">
           <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
             Please fix the following issues before confirming:
@@ -546,9 +732,10 @@ export function QuestionCard({
           </ul>
         </div>
       )}
-      
-      {/* Question Content */}
-      <div className="p-6">
+
+      {/* Question Content - Only show when expanded */}
+      {isExpanded && showEditor && (
+      <div className="p-6 animate-in fade-in duration-200">
         <div className="mb-8">
           <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
             <FileText className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
@@ -556,15 +743,16 @@ export function QuestionCard({
           </h4>
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-700 p-6 rounded-xl border border-gray-200 dark:border-gray-600 shadow-sm">
-              <EditableField
+              <RichTextEditorField
                 value={question.question_description}
                 onSave={(value) => handleFieldUpdate('question_description', value)}
-                type="textarea"
-                rows={5}
                 minLength={10}
                 required
                 disabled={readOnly}
                 className="text-base leading-relaxed text-gray-900 dark:text-white"
+                placeholder="Describe the question..."
+                ariaLabel={`Question ${question.question_number} description editor`}
+                saveLabel="Save description"
               />
             </div>
             
@@ -601,6 +789,7 @@ export function QuestionCard({
             questionId={question.id}
             onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
             readOnly={readOnly}
+            questionDescription={question.question_description}
           />
         </div>
         
@@ -677,16 +866,16 @@ export function QuestionCard({
               Hint:
             </h4>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
-              <EditableField
+              <RichTextEditorField
                 value={question.hint || ''}
                 onSave={(value) => handleFieldUpdate('hint', value)}
-                type="textarea"
-                rows={4}
                 placeholder="Add a hint to help students..."
                 minLength={5}
                 required
                 disabled={readOnly}
-                className="text-base text-gray-900 dark:text-white"
+                className="text-base leading-relaxed text-gray-900 dark:text-white"
+                ariaLabel={`Question ${question.question_number} hint editor`}
+                saveLabel="Save hint"
               />
             </div>
           </div>
@@ -697,91 +886,138 @@ export function QuestionCard({
               Explanation:
             </h4>
             <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
-              <EditableField
+              <RichTextEditorField
                 value={question.explanation || ''}
                 onSave={(value) => handleFieldUpdate('explanation', value)}
-                type="textarea"
-                rows={4}
                 placeholder="Explain the correct answer..."
                 minLength={10}
                 required
                 disabled={readOnly}
-                className="text-base text-gray-900 dark:text-white"
+                className="text-base leading-relaxed text-gray-900 dark:text-white"
+                ariaLabel={`Question ${question.question_number} explanation editor`}
+                saveLabel="Save explanation"
               />
             </div>
           </div>
         </div>
-        
+
       </div>
-      
+      )}
+
+      {isExpanded && showQAActions && (
+        <div className="border-t border-gray-200 bg-gray-50 px-6 py-5 dark:border-gray-700 dark:bg-gray-900/40">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Publish readiness</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                {question.status === 'active'
+                  ? 'This question is QA complete and ready to be included when the paper is published.'
+                  : 'Finish the checklist requirements above, then mark this question as QA complete to include it in publishing.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {question.status !== 'active' && onConfirm && (
+                <Button
+                  size="sm"
+                  onClick={handleConfirmCurrentQuestion}
+                  disabled={confirmBlocked}
+                  title={
+                    confirmBlocked
+                      ? 'Complete the checklist items before marking QA complete'
+                      : 'Mark this question as QA complete'
+                  }
+                  leftIcon={<CheckCircle className="h-4 w-4" />}
+                >
+                  Mark QA Complete
+                </Button>
+              )}
+              {question.status === 'active' && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-emerald-100/80 px-4 py-1.5 text-sm font-semibold text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <CheckCircle className="h-4 w-4" /> Ready for publish
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sub-questions */}
-      {expandedParts && question.parts.length > 0 && (
-        <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-800/30">
+      {showEditor && question.parts.length > 0 && (
+        <div className={cn(
+          "border-t border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300",
+          expandedParts ? "max-h-[100000px] p-6 bg-gray-50 dark:bg-gray-800/30" : "max-h-0"
+        )}>
           <div className="space-y-4">
-            {question.parts.map((subQuestion) => {
-              const subNeedsAttachment = subQuestion.question_description?.toLowerCase().includes('figure') || 
-                                       subQuestion.question_description?.toLowerCase().includes('diagram') ||
-                                       subQuestion.question_description?.toLowerCase().includes('graph') ||
-                                       subQuestion.question_description?.toLowerCase().includes('image');
-              const subHasAttachment = subQuestion.attachments && subQuestion.attachments.length > 0;
-              const subNeedsAttachmentWarning = subNeedsAttachment && !subHasAttachment;
-              
+            {question.parts.map((subQuestion, partIndex) => {
+              const subNeedsAttachmentWarning = subQuestionNeedsAttachment(subQuestion);
+
               return (
-              <div key={subQuestion.id} className={cn(
-                "bg-white dark:bg-gray-800 rounded-xl border overflow-hidden shadow-sm",
-                subNeedsAttachmentWarning && showQAActions
-                  ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10"
-                  : "border-gray-200 dark:border-gray-700"
-              )}>
-                <div className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-700/50 p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                      <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">
-                        {subQuestion.part_label?.slice(-1) || 'A'}
+                <div
+                  key={subQuestion.id}
+                  className={cn(
+                    'rounded-xl border overflow-hidden bg-white/95 dark:bg-gray-900/70 shadow-sm transition-all duration-200',
+                    subNeedsAttachmentWarning && showQAActions
+                      ? 'border-amber-300/70 dark:border-amber-500/60 ring-1 ring-amber-200/50 dark:ring-amber-500/20'
+                      : 'border-gray-200 dark:border-gray-700'
+                  )}
+                >
+                  <div className="flex flex-col gap-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-100 via-white to-gray-50 px-4 py-3 dark:from-gray-800 dark:via-gray-900 dark:to-gray-900">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center justify-center w-9 h-9 rounded-lg border border-blue-200/70 bg-blue-100/70 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200">
+                        <span className="text-sm font-semibold">{subQuestion.part_label?.slice(-1) || 'A'}</span>
+                      </div>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {subQuestion.part_label}
                       </span>
+                      <StatusBadge
+                        status={subQuestion.status}
+                        label={getQuestionStatusLabel(subQuestion.status)}
+                        size="xs"
+                        showIcon
+                        className="px-2.5"
+                      />
+                      <span className="rounded-md bg-white/70 px-2 py-1 text-sm font-medium text-gray-600 dark:bg-gray-900/60 dark:text-gray-300">
+                        {subQuestion.marks} mark{subQuestion.marks !== 1 ? 's' : ''}
+                      </span>
+                      {subQuestion.answer_format && (
+                        <span className="rounded-md bg-blue-100/80 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
+                          {getAnswerFormatLabel(subQuestion.answer_format)}
+                        </span>
+                      )}
+                      {subNeedsAttachmentWarning && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/70 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
+                          <AlertCircle className="h-3.5 w-3.5" /> Figure required
+                        </span>
+                      )}
                     </div>
-                    <span className="font-semibold text-gray-900 dark:text-white">
-                      {subQuestion.part_label}
-                    </span>
-                    <StatusBadge 
-                      status={subQuestion.status} 
-                      className="bg-white/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-600 text-xs"
-                    >
-                      {getStatusText(subQuestion.status)}
-                    </StatusBadge>
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400 bg-white/50 dark:bg-gray-800/50 px-2 py-1 rounded-md">
-                      {subQuestion.marks} mark{subQuestion.marks !== 1 ? 's' : ''}
-                    </span>
-                    {subQuestion.answer_format && (
-                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-md">
-                        {getAnswerFormatLabel(subQuestion.answer_format)}
-                      </span>
+
+                    {!readOnly && (
+                      <div className="flex items-center justify-end">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          rounded="full"
+                          className="text-rose-500 hover:text-rose-600 hover:bg-rose-100/70 dark:text-rose-300 dark:hover:text-rose-200 dark:hover:bg-rose-500/10"
+                          onClick={() => onDeleteSubQuestion(subQuestion)}
+                          leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                          tooltip="Remove part"
+                        />
+                      </div>
                     )}
                   </div>
-                  
-                  {!readOnly && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onDeleteSubQuestion(subQuestion)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
                 
                 <div className="p-6 space-y-4">
                   <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                    <EditableField
+                    <RichTextEditorField
                       value={subQuestion.question_description}
                       onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'question_description', value)}
-                      type="textarea"
-                      rows={3}
                       minLength={10}
                       required
                       disabled={readOnly}
-                      className="text-base text-gray-900 dark:text-white"
+                      className="text-base leading-relaxed text-gray-900 dark:text-white"
+                      placeholder="Describe this part of the question..."
+                      ariaLabel={`Part ${subQuestion.part_label || partIndex + 1} description editor`}
+                      saveLabel="Save part description"
                     />
                   </div>
                   
@@ -828,7 +1064,10 @@ export function QuestionCard({
                             { value: 'hard', label: 'Hard' }
                           ]}
                           displayValue={
-                            <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getDifficultyColor(subQuestion.difficulty || 'medium'))}>
+                            <span className={cn(
+                              "px-2 py-1 rounded-full text-xs font-medium",
+                              getDifficultyClassName(subQuestion.difficulty || 'medium')
+                            )}>
                               {subQuestion.difficulty || 'medium'}
                             </span>
                           }
@@ -943,33 +1182,33 @@ export function QuestionCard({
                         Hint
                       </label>
                       <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <EditableField
+                        <RichTextEditorField
                           value={subQuestion.hint || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'hint', value)}
-                          type="textarea"
-                          rows={3}
                           placeholder="Add a hint..."
                           minLength={5}
                           disabled={readOnly}
-                          className="text-sm text-gray-900 dark:text-white"
+                          className="text-sm leading-relaxed text-gray-900 dark:text-white"
+                          ariaLabel={`Part ${subQuestion.part_label || partIndex + 1} hint editor`}
+                          saveLabel="Save hint"
                         />
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
                         Explanation
                       </label>
                       <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
-                        <EditableField
+                        <RichTextEditorField
                           value={subQuestion.explanation || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'explanation', value)}
-                          type="textarea"
-                          rows={3}
                           placeholder="Explain the answer..."
                           minLength={10}
                           disabled={readOnly}
-                          className="text-sm text-gray-900 dark:text-white"
+                          className="text-sm leading-relaxed text-gray-900 dark:text-white"
+                          ariaLabel={`Part ${subQuestion.part_label || partIndex + 1} explanation editor`}
+                          saveLabel="Save explanation"
                         />
                       </div>
                     </div>
@@ -988,6 +1227,7 @@ export function QuestionCard({
                       subQuestionId={subQuestion.id}
                       onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
                       readOnly={readOnly}
+                      questionDescription={subQuestion.question_description}
                     />
                   </div>
                 </div>

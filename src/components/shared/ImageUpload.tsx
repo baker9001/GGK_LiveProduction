@@ -9,6 +9,12 @@ import { useUser } from '../../contexts/UserContext';
 import { toast } from './Toast';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { getAuthenticatedUser } from '../../lib/auth';
+import {
+  getPublicUrl,
+  deleteFileFromStorage,
+  uploadFileViaEdgeFunction,
+  deleteFileViaEdgeFunction,
+} from '../../lib/storageHelpers';
 
 interface ImageUploadProps {
   id: string;
@@ -29,7 +35,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   const { user } = useUser();
 
   // Define public buckets that don't require authentication
-  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos', 'branch-logos'].includes(bucket);
+  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos', 'branch-logos', 'avatars'].includes(bucket);
 
   // Check authentication status on mount
   useEffect(() => {
@@ -73,45 +79,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   // Delete old file from storage
   const deleteOldFile = async (oldPath: string): Promise<void> => {
     if (!oldPath) return;
-
-    try {
-      // Try to delete with the stored path
-      const { error } = await supabase.storage
-        .from(bucket)
-        .remove([oldPath]);
-
-      if (error) {
-        console.warn(`Failed to delete old file at: ${oldPath}`, error);
-
-        // Try alternative paths based on bucket type
-        const bucketToSubfolder: Record<string, string> = {
-          'company-logos': 'companies',
-          'school-logos': 'schools',
-          'branch-logos': 'branches',
-          'subject-logos': 'subjects'
-        };
-
-        const expectedSubfolder = bucketToSubfolder[bucket];
-
-        if (expectedSubfolder) {
-          // Try alternative paths
-          if (oldPath.startsWith(`${expectedSubfolder}/`)) {
-            // Path has subfolder, try without it
-            const fileNameOnly = oldPath.replace(`${expectedSubfolder}/`, '');
-            await supabase.storage.from(bucket).remove([fileNameOnly]);
-          } else {
-            // Path doesn't have subfolder, try with it (for old files)
-            const withSubfolder = `${expectedSubfolder}/${oldPath}`;
-            await supabase.storage.from(bucket).remove([withSubfolder]);
-          }
-        }
-      } else {
-        console.log(`Successfully deleted old file: ${oldPath}`);
-      }
-    } catch (error) {
-      console.error('Error deleting old file:', error);
-      // Don't throw - we still want to proceed with the new upload
-    }
+    await deleteFileFromStorage(bucket, oldPath);
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,6 +90,15 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     const oldPath = value;
     const isReplacement = !!oldPath;
 
+    console.log('[ImageUpload] Starting upload:', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      bucket,
+      isReplacement,
+      oldPath,
+    });
+
     const loadingToastId = toast.loading(isReplacement ? 'Replacing image...' : 'Uploading image...');
 
     try {
@@ -129,6 +106,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
       // Validate file type
       if (!file.type.match(/^image\/(jpeg|png|jpg|svg\+xml)$/)) {
+        console.error('[ImageUpload] Invalid file type:', file.type);
         toast.dismiss(loadingToastId);
         toast.error("Please upload an image file (PNG, JPG, JPEG, or SVG)");
         return;
@@ -136,91 +114,57 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
       // Validate file size (2MB)
       if (file.size > 2 * 1024 * 1024) {
+        console.error('[ImageUpload] File too large:', file.size);
         toast.dismiss(loadingToastId);
         toast.error("File size must be less than 2MB");
         return;
       }
 
-      // Get the user ID from custom auth or context
-      const authenticatedUser = getAuthenticatedUser();
-      const userId = authenticatedUser?.id || user?.id || 'anonymous';
-      
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).slice(2)}_${Date.now()}.${fileExt}`;
-      
-      // Use flat structure for all buckets except avatars
-      let uploadPath = fileName;
-      
-      // Only use subfolder for avatars (user-specific isolation)
-      if (bucket === 'avatars' && userId !== 'anonymous') {
-        uploadPath = `${userId}/${fileName}`;
-      }
-      
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .upload(uploadPath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      // SECURE UPLOAD: Use Edge Function for server-side upload
+      // This approach:
+      // 1. Validates authentication server-side
+      // 2. Checks admin permissions via admin_users table
+      // 3. Uses service_role credentials to bypass RLS
+      // 4. Handles file validation and storage securely
+      const result = await uploadFileViaEdgeFunction(bucket, file, oldPath);
 
-      if (error) {
-        console.error('Storage upload error:', error);
-        toast.dismiss(loadingToastId);
-        
+      toast.dismiss(loadingToastId);
+
+      if (!result.success) {
+        console.error('[ImageUpload] Upload failed:', result.error);
+
         // Handle specific error cases
-        if (error.message?.includes('row level security')) {
-          toast.error("Storage permissions error. Please contact administrator.");
-        } else if (error.message?.includes('bucket')) {
-          toast.error(`Storage bucket '${bucket}' may not be configured properly.`);
-        } else if (error.message?.includes('duplicate')) {
-          // Try with a different filename
-          const altFileName = `${Math.random().toString(36).slice(2)}_${Date.now()}_alt.${fileExt}`;
-          
-          const { data: retryData, error: retryError } = await supabase.storage
-            .from(bucket)
-            .upload(altFileName, file, {
-              cacheControl: '3600',
-              upsert: false
-            });
-
-          if (retryError) {
-            toast.error("Failed to upload image. Please try again.");
-            return;
-          } else {
-            // Success on retry
-            toast.dismiss(loadingToastId);
-            
-            // Delete old file if this is a replacement
-            if (isReplacement && oldPath) {
-              await deleteOldFile(oldPath);
-            }
-            
-            toast.success(isReplacement ? 'Image replaced successfully!' : 'Image uploaded successfully!');
-            onChange(retryData.path);
-            return;
-          }
+        if (result.error?.includes('Authentication') || result.error?.includes('auth')) {
+          toast.error("Authentication error. Please log in again.");
+        } else if (result.error?.includes('Access denied') || result.error?.includes('privileges')) {
+          toast.error("You don't have permission to upload images.");
+        } else if (result.error?.includes('No Edge Function')) {
+          // Fallback to direct upload for buckets without Edge Functions
+          console.warn(`No Edge Function for ${bucket}, falling back to direct upload`);
+          await handleDirectUpload(file, oldPath, isReplacement, loadingToastId);
+          return;
+        } else if (result.error?.includes('Network error')) {
+          toast.error("Network error. Please check your connection.");
+        } else if (result.error?.includes('File size')) {
+          toast.error("File is too large. Maximum size is 2MB.");
+        } else if (result.error?.includes('file type') || result.error?.includes('Invalid file')) {
+          toast.error("Invalid file type. Please use PNG, JPG, JPEG, or SVG.");
         } else {
-          toast.error(error.message || "Failed to upload image. Please try again.");
+          // Show the actual error message from the server
+          toast.error(result.error || "Failed to upload image. Please try again.");
         }
         return;
       }
 
-      // Success! Now delete the old file if this is a replacement
-      if (isReplacement && oldPath) {
-        await deleteOldFile(oldPath);
-      }
-
-      toast.dismiss(loadingToastId);
+      // Success!
       toast.success(isReplacement ? 'Image replaced successfully!' : 'Image uploaded successfully!');
-      onChange(data.path);
-      
-      console.log(`File ${isReplacement ? 'replaced' : 'uploaded'} successfully:`, data.path);
+      onChange(result.path || null);
+
+      console.log(`File ${isReplacement ? 'replaced' : 'uploaded'} successfully via Edge Function:`, result.path);
     } catch (error) {
       console.error('Error uploading file:', error);
       toast.dismiss(loadingToastId);
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Error uploading file';
       toast.error(errorMessage);
     } finally {
@@ -231,6 +175,44 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     }
   };
 
+  // Fallback: Direct upload for buckets without Edge Functions
+  const handleDirectUpload = async (
+    file: File,
+    oldPath: string | null,
+    isReplacement: boolean,
+    loadingToastId: string
+  ) => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).slice(2)}_${Date.now()}.${fileExt}`;
+
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Storage upload error:', error);
+        toast.error(error.message || "Failed to upload image");
+        return;
+      }
+
+      // Delete old file if replacement
+      if (isReplacement && oldPath) {
+        await deleteOldFile(oldPath);
+      }
+
+      toast.dismiss(loadingToastId);
+      toast.success(isReplacement ? 'Image replaced successfully!' : 'Image uploaded successfully!');
+      onChange(data.path);
+    } catch (error) {
+      console.error('Direct upload error:', error);
+      toast.error('Upload failed');
+    }
+  };
+
   const handleRemove = async () => {
     if (!value) return;
     setShowRemoveConfirmation(true);
@@ -238,14 +220,22 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
   const confirmRemove = async () => {
     setShowRemoveConfirmation(false);
-    
+
     const oldPath = value;
     onChange(null);
 
     try {
       if (oldPath) {
-        await deleteOldFile(oldPath);
-        toast.success('Image removed successfully');
+        // SECURE DELETE: Try Edge Function first, fallback to direct delete
+        const result = await deleteFileViaEdgeFunction(bucket, oldPath);
+
+        if (result.success) {
+          toast.success('Image removed successfully');
+        } else {
+          // Fallback to direct delete
+          await deleteOldFile(oldPath);
+          toast.success('Image removed successfully');
+        }
       }
     } catch (error) {
       console.error('Error removing file:', error);
@@ -254,23 +244,12 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   };
 
   // Generate public URL with proper handling
-  const getPublicUrl = (path: string | null) => {
+  const generateDisplayUrl = (path: string | null) => {
     if (!path) return null;
-    
-    // If already a full URL, return it
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-    
-    // Get public URL from Supabase
-    const { data } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(path);
-    
-    return data?.publicUrl || null;
+    return getPublicUrl(bucket, path);
   };
 
-  const displayUrl = publicUrl || getPublicUrl(value);
+  const displayUrl = publicUrl || generateDisplayUrl(value);
   const hasAuth = isAuthenticated || isPublicBucket;
 
   // Show auth warning if not authenticated and not a public bucket
@@ -344,7 +323,6 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
                   isHovered && !uploading && "opacity-70 scale-105"
                 )}
                 onError={() => {
-                  console.error('Image load error for:', displayUrl);
                   setHasError(true);
                 }}
               />

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { initializeDyslexiaPreference } from './lib/accessibility';
 
 // Check for dark mode preference
 const darkModePreference = localStorage.getItem('darkMode');
@@ -15,6 +16,9 @@ if (darkModePreference === 'true') {
     localStorage.setItem('darkMode', 'true');
   }
 }
+
+// Initialize dyslexia-friendly font preference
+initializeDyslexiaPreference();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

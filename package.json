@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "test": "node tests/runQuestionsDataOperationsTests.cjs",
+    "preview": "vite preview",
+    "seed-test-users": "node scripts/runSeedTestUsers.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
@@ -27,6 +29,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",
+    "react-pdf": "^7.7.1",
     "react-router-dom": "^6.22.3",
     "stream-browserify": "^3.0.0",
     "tailwind-merge": "^2.2.1",

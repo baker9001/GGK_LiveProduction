@@ -4,6 +4,11 @@
  * REDESIGNED System Administrator Profile Page
  * Modern UI/UX with enhanced functionality and responsive design
  * 
+ * FIXED: Profile picture upload button now properly triggers file selection
+ * - Added proper click handler to camera button
+ * - Fixed ImageUpload component integration
+ * - Ensured file input is properly triggered
+ * 
  * Key Design Decisions:
  * 1. Card-based layout with clear visual hierarchy
  * 2. Progressive disclosure for complex settings
@@ -14,12 +19,11 @@
  * 7. Professional admin-focused design language
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { toast } from '../../../components/shared/Toast';
-import { ImageUpload } from '../../../components/shared/ImageUpload';
 import { Button } from '../../../components/shared/Button';
 import { FormField, Input, Textarea } from '../../../components/shared/FormField';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
@@ -123,6 +127,9 @@ export default function SystemAdminProfilePage() {
   const { user: currentUser } = useUser();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  
+  // File input ref for manual triggering
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Enhanced state management
   const [activeTab, setActiveTab] = useState<'overview' | 'security' | 'activity' | 'preferences'>('overview');
@@ -130,6 +137,7 @@ export default function SystemAdminProfilePage() {
   const [isEditingSecurity, setIsEditingSecurity] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<UserProfile>>({});
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // Fetch enhanced user profile data
   const {
@@ -327,8 +335,9 @@ export default function SystemAdminProfilePage() {
       }
     },
     {
-      onSuccess: () => {
+      onSuccess: (_data, _variables) => {
         queryClient.invalidateQueries(['systemAdminProfile', currentUser?.id]);
+        queryClient.invalidateQueries(['userSidebarProfile', currentUser?.id]);
         toast.success('Profile updated successfully!');
         setIsEditingProfile(false);
         setIsEditingSecurity(false);
@@ -340,9 +349,87 @@ export default function SystemAdminProfilePage() {
     }
   );
 
-  // Handle avatar changes
-  const handleAvatarChange = async (newPath: string | null) => {
-    await updateProfileMutation.mutateAsync({ avatar_url: newPath });
+  // Handle avatar upload
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !currentUser?.id) return;
+
+    // Validate file type
+    if (!file.type.match(/^image\/(jpeg|png|jpg|svg\+xml)$/)) {
+      toast.error("Please upload an image file (PNG, JPG, JPEG, or SVG)");
+      return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("File size must be less than 2MB");
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    const loadingToastId = toast.loading('Uploading profile picture...');
+
+    try {
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${currentUser.id}_${Date.now()}.${fileExt}`;
+      
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      // Update profile with new avatar URL
+      await updateProfileMutation.mutateAsync({ avatar_url: data.path });
+      
+      toast.dismiss(loadingToastId);
+      toast.success('Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast.dismiss(loadingToastId);
+      toast.error('Failed to upload profile picture');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Handle avatar removal
+  const handleAvatarRemove = async () => {
+    if (!userProfile?.avatar_url) return;
+
+    const confirmRemove = window.confirm('Are you sure you want to remove your profile picture?');
+    if (!confirmRemove) return;
+
+    const loadingToastId = toast.loading('Removing profile picture...');
+
+    try {
+      // Delete from storage
+      const { error: deleteError } = await supabase.storage
+        .from('avatars')
+        .remove([userProfile.avatar_url]);
+
+      if (deleteError) {
+        console.warn('Error deleting avatar from storage:', deleteError);
+      }
+
+      // Update profile
+      await updateProfileMutation.mutateAsync({ avatar_url: null });
+      
+      toast.dismiss(loadingToastId);
+      toast.success('Profile picture removed successfully!');
+    } catch (error) {
+      console.error('Error removing avatar:', error);
+      toast.dismiss(loadingToastId);
+      toast.error('Failed to remove profile picture');
+    }
   };
 
   // Handle profile editing
@@ -450,7 +537,7 @@ export default function SystemAdminProfilePage() {
                   <div className="w-20 h-20 rounded-2xl overflow-hidden border-4 border-[#8CC63F] shadow-lg bg-gradient-to-br from-[#8CC63F] to-[#7AB635]">
                     {userProfile.avatar_url ? (
                       <img
-                        src={getPublicUrl('user-avatars', userProfile.avatar_url) || ''}
+                        src={getPublicUrl('avatars', userProfile.avatar_url) || ''}
                         alt={`${userProfile.name}'s avatar`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -570,25 +657,59 @@ export default function SystemAdminProfilePage() {
               <div className="text-center space-y-4">
                 <div className="relative mx-auto w-32 h-32">
                   <div className="w-full h-full rounded-2xl overflow-hidden border-4 border-[#8CC63F] shadow-lg">
-                    <ImageUpload
-                      id="admin-profile-picture"
-                      bucket="user-avatars"
-                      value={userProfile.avatar_url}
-                      publicUrl={userProfile.avatar_url ? getPublicUrl('user-avatars', userProfile.avatar_url) : null}
-                      onChange={handleAvatarChange}
-                      className="w-full h-full"
-                    />
-                    {!userProfile.avatar_url && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#8CC63F] to-[#7AB635] text-white text-4xl font-bold">
+                    {userProfile.avatar_url ? (
+                      <img
+                        src={getPublicUrl('avatars', userProfile.avatar_url) || ''}
+                        alt={`${userProfile.name}'s avatar`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#8CC63F] to-[#7AB635] text-white text-4xl font-bold">
                         {userProfile.name.charAt(0).toUpperCase()}
                       </div>
                     )}
                   </div>
+                  
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                  
+                  {/* Upload button */}
                   <Tooltip content="Upload new profile picture">
-                    <button className="absolute bottom-2 right-2 w-8 h-8 bg-[#8CC63F] hover:bg-[#7AB635] text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110">
-                      <Camera className="h-4 w-4" />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingAvatar}
+                      className="absolute bottom-2 right-2 w-8 h-8 bg-[#8CC63F] hover:bg-[#7AB635] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110"
+                    >
+                      {isUploadingAvatar ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Camera className="h-4 w-4" />
+                      )}
                     </button>
                   </Tooltip>
+                  
+                  {/* Remove button - only show if avatar exists */}
+                  {userProfile.avatar_url && (
+                    <Tooltip content="Remove profile picture">
+                      <button 
+                        onClick={handleAvatarRemove}
+                        disabled={isUploadingAvatar}
+                        className="absolute bottom-2 left-2 w-8 h-8 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
+                  )}
                 </div>
                 
                 <div>

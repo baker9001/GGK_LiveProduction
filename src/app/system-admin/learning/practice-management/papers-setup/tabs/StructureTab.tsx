@@ -311,13 +311,24 @@ export default function StructureTab({
   }, []);
 
   const handleStructureChange = useCallback((metadata: StructureMetadata) => {
-    console.log('[GGK] Structure metadata received:', metadata);
+    console.log('[StructureTab] Structure metadata received:', metadata);
+    console.log('[StructureTab] Metadata contains:', {
+      hasDataStructureId: !!metadata.dataStructureId,
+      hasProgramId: !!metadata.programId,
+      hasProviderId: !!metadata.providerId,
+      hasSubjectId: !!metadata.subjectId,
+      hasRegionId: !!metadata.regionId
+    });
+
     setStructureMetadata(metadata);
-    
-    // Also mark as complete when we get the metadata
+
+    // Also mark as complete when we get the metadata with data structure ID
     if (metadata.dataStructureId) {
+      console.log('[StructureTab] Data structure ID received, marking as complete');
       setStructureComplete(true);
       setStructureCreated(true);
+    } else {
+      console.warn('[StructureTab] No data structure ID in metadata - structure not complete');
     }
   }, []);
 
@@ -391,48 +402,54 @@ export default function StructureTab({
       return;
     }
 
+    if (!structureMetadata?.dataStructureId) {
+      toast.error('Data structure was not created successfully. Please check the error messages and try refreshing the structure.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       let entityIds: any = {};
 
-      // Check if we need to fetch entity IDs
-      if (structureMetadata?.dataStructureId) {
-        if (!structureMetadata.programId) {
-          // Fetch entity IDs from the data structure
-          console.log('[GGK] Fetching entity IDs from data structure...');
-          const fetchedIds = await fetchEntityIds(structureMetadata.dataStructureId);
-          
-          entityIds = {
-            program_id: fetchedIds.program_id,
-            provider_id: fetchedIds.provider_id,
-            subject_id: fetchedIds.subject_id,
-            region_id: fetchedIds.region_id,
-            data_structure_id: structureMetadata.dataStructureId
-          };
+      // Always fetch entity IDs to ensure we have the most up-to-date data
+      // Check if we have all the entity IDs we need in structureMetadata
+      if (structureMetadata?.programId && structureMetadata?.providerId && structureMetadata?.subjectId) {
+        // Use existing IDs from structureMetadata (fast path)
+        console.log('[StructureTab] Using existing entity IDs from metadata');
+        entityIds = {
+          program_id: structureMetadata.programId,
+          provider_id: structureMetadata.providerId,
+          subject_id: structureMetadata.subjectId,
+          region_id: structureMetadata.regionId,
+          data_structure_id: structureMetadata.dataStructureId
+        };
+      } else if (structureMetadata?.dataStructureId) {
+        // Fetch entity IDs from the data structure (fallback path)
+        console.log('[StructureTab] Fetching entity IDs from data structure...');
+        const fetchedIds = await fetchEntityIds(structureMetadata.dataStructureId);
 
-          // Update local state with fetched IDs
-          setStructureMetadata(prev => ({
-            ...prev,
-            programId: fetchedIds.program_id,
-            providerId: fetchedIds.provider_id,
-            subjectId: fetchedIds.subject_id,
-            regionId: fetchedIds.region_id,
-            program: fetchedIds.program_name,
-            provider: fetchedIds.provider_name,
-            subject: fetchedIds.subject_name,
-            region: fetchedIds.region_name
-          }));
-        } else {
-          // Use existing IDs from structureMetadata
-          entityIds = {
-            program_id: structureMetadata.programId,
-            provider_id: structureMetadata.providerId,
-            subject_id: structureMetadata.subjectId,
-            region_id: structureMetadata.regionId,
-            data_structure_id: structureMetadata.dataStructureId
-          };
-        }
+        entityIds = {
+          program_id: fetchedIds.program_id,
+          provider_id: fetchedIds.provider_id,
+          subject_id: fetchedIds.subject_id,
+          region_id: fetchedIds.region_id,
+          data_structure_id: structureMetadata.dataStructureId
+        };
+
+        // Update local state with fetched IDs for future clicks
+        // Note: This update is async and won't affect this execution
+        setStructureMetadata(prev => ({
+          ...prev,
+          programId: fetchedIds.program_id,
+          providerId: fetchedIds.provider_id,
+          subjectId: fetchedIds.subject_id,
+          regionId: fetchedIds.region_id,
+          program: fetchedIds.program_name,
+          provider: fetchedIds.provider_name,
+          subject: fetchedIds.subject_name,
+          region: fetchedIds.region_name
+        }));
       } else {
         // No data structure ID - this shouldn't happen
         throw new Error('No data structure ID available. Please complete the structure setup.');
@@ -443,30 +460,43 @@ export default function StructureTab({
         throw new Error('Missing required entity IDs. Please ensure all entities are created.');
       }
 
+      console.log('[StructureTab] Proceeding with entity IDs:', entityIds);
+
       // Update import session with entity IDs
       await updateImportSession(entityIds);
 
     } catch (error: any) {
       console.error('[GGK] Error in handleNext:', error);
       toast.error(error.message || 'Failed to proceed to next step');
+    } finally {
       setLoading(false);
     }
   }, [structureComplete, structureMetadata, extractedStructure, importSession, onNext]);
 
   const updateImportSession = async (entityIds: any) => {
     try {
-      // First, get the existing metadata if any
-      const { data: existingSession, error: fetchError } = await supabase
-        .from('past_paper_import_sessions')
-        .select('metadata')
-        .eq('id', importSession.id)
-        .single();
+      console.log('[StructureTab] Starting import session update with entity IDs:', entityIds);
 
-      if (fetchError) throw fetchError;
+      // Validate entity IDs before saving
+      if (!entityIds.program_id) {
+        throw new Error('Missing program_id - cannot proceed');
+      }
+      if (!entityIds.provider_id) {
+        throw new Error('Missing provider_id - cannot proceed');
+      }
+      if (!entityIds.subject_id) {
+        throw new Error('Missing subject_id - cannot proceed');
+      }
+      if (!entityIds.data_structure_id) {
+        throw new Error('Missing data_structure_id - cannot proceed');
+      }
+
+      // Use existing metadata from importSession prop instead of fetching
+      const existingMetadata = importSession?.metadata || {};
 
       // Merge with existing metadata and ensure entity_ids are stored
       const updatedMetadata = {
-        ...(existingSession?.metadata || {}),
+        ...existingMetadata,
         structure_complete: true,
         academic_structure: {
           ...extractedStructure,
@@ -474,38 +504,54 @@ export default function StructureTab({
           uniqueTopics: Array.from(extractedStructure?.uniqueTopics || []),
           uniqueSubtopics: Array.from(extractedStructure?.uniqueSubtopics || [])
         },
-        // Store the entity IDs for use in subsequent tabs
+        // Store the entity IDs for use in subsequent tabs - THIS IS CRITICAL
         entity_ids: {
           program_id: entityIds.program_id,
           provider_id: entityIds.provider_id,
           subject_id: entityIds.subject_id,
           region_id: entityIds.region_id,
-          data_structure_id: entityIds.data_structure_id
+          data_structure_id: entityIds.data_structure_id,
+          // Store names for debugging
+          program_name: structureMetadata?.program,
+          provider_name: structureMetadata?.provider,
+          subject_name: structureMetadata?.subject,
+          region_name: structureMetadata?.region
         }
       };
 
-      console.log('[GGK] Updating import session with metadata:', updatedMetadata);
+      console.log('[StructureTab] Updated metadata to save:', JSON.stringify(updatedMetadata, null, 2));
 
       // Update the import session with structure completion in metadata
-      const { error } = await supabase
+      const { data: updatedSession, error } = await supabase
         .from('past_paper_import_sessions')
         .update({
           metadata: updatedMetadata,
           updated_at: new Date().toISOString()
         })
-        .eq('id', importSession.id);
+        .eq('id', importSession.id)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[StructureTab] Supabase error updating session:', error);
+        throw error;
+      }
+
+      if (!updatedSession || updatedSession.length === 0) {
+        throw new Error('Import session update returned no data - session may not exist');
+      }
+
+      console.log('[StructureTab] Successfully updated import session:', updatedSession[0]?.id);
+      console.log('[StructureTab] Saved entity_ids:', updatedSession[0]?.metadata?.entity_ids);
 
       toast.success('Academic structure configured successfully');
-      
-      // Navigate to metadata tab
+
+      // Navigate to metadata tab immediately (database write is already complete)
+      console.log('[StructureTab] Proceeding to next step');
       onNext();
-    } catch (error) {
-      console.error('[GGK] Error updating import session:', error);
-      throw new Error('Failed to save structure configuration');
-    } finally {
-      setLoading(false);
+    } catch (error: any) {
+      console.error('[StructureTab] Error updating import session:', error);
+      toast.error(error.message || 'Failed to save structure configuration');
+      throw error;
     }
   };
 

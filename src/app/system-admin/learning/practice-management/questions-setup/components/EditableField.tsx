@@ -46,6 +46,10 @@ export function EditableField({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setEditValue(value);
+  }, [value]);
+
+  useEffect(() => {
     if (type === 'multiselect' && Array.isArray(value)) {
       setSelectedValues(value);
     }
@@ -318,11 +322,10 @@ export function EditableField({
     );
   }
 
-  // Display mode
   const displayContent = displayValue || (
-    type === 'multiselect' 
-      ? (Array.isArray(value) && value.length > 0 
-          ? options.filter(opt => value.includes(opt.value)).map(opt => opt.label).join(', ') 
+    type === 'multiselect'
+      ? (Array.isArray(value) && value.length > 0
+          ? options.filter(opt => value.includes(opt.value)).map(opt => opt.label).join(', ')
           : placeholder)
       : (value || placeholder)
   );
@@ -389,12 +392,17 @@ export function EditableOption({
 
   return (
     <div className={cn(
-      "flex items-center space-x-3 p-3 rounded-lg border bg-white dark:bg-gray-800",
-      option.is_correct 
-        ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20" 
-        : "border-gray-200 dark:border-gray-600"
+      "flex items-center space-x-3 p-3 rounded-lg border transition-all",
+      option.is_correct
+        ? "border-green-500 dark:border-green-400 bg-green-100 dark:bg-green-900/30 ring-1 ring-green-500/20"
+        : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800"
     )}>
-      <div className="flex items-center justify-center w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full font-semibold text-sm">
+      <div className={cn(
+        "flex items-center justify-center w-8 h-8 rounded-full font-semibold text-sm",
+        option.is_correct
+          ? "bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100"
+          : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+      )}>
         {option.label}
       </div>
       

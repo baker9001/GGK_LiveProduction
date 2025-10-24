@@ -21,6 +21,7 @@ import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
 import { Select } from '../../../../../../components/shared/Select';
 import { CollapsibleSection } from '../../../../../../components/shared/CollapsibleSection';
+import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
 
@@ -139,6 +140,44 @@ export function MetadataTab({
   const [sessionEntityIds, setSessionEntityIds] = useState<EntityIds | null>(null);
   const [entityIdsStatus, setEntityIdsStatus] = useState<'loading' | 'found' | 'missing' | 'error'>('loading');
 
+  const jsonFieldChecklist = useMemo(() => {
+    const root = parsedData || {};
+    const metadataNode = root.paper_metadata || {};
+    const getFieldValue = (key: string) => {
+      const candidate = root[key];
+      if (candidate !== undefined && candidate !== null && candidate !== '') {
+        return candidate;
+      }
+      const nested = metadataNode[key];
+      if (nested !== undefined && nested !== null && nested !== '') {
+        return nested;
+      }
+      return undefined;
+    };
+
+    const fields = [
+      { id: 'paper_code', label: 'Paper code', required: true },
+      { id: 'exam_year', label: 'Exam year', required: true },
+      { id: 'exam_session', label: 'Exam session', required: true },
+      { id: 'paper_duration', label: 'Duration', required: true },
+      { id: 'total_marks', label: 'Total marks', required: true },
+      { id: 'subject', label: 'Subject', required: true },
+      { id: 'exam_board', label: 'Exam board', required: true },
+      { id: 'qualification', label: 'Qualification', required: false }
+    ];
+
+    return fields.map(field => {
+      const value = getFieldValue(field.id);
+      const present = value !== undefined && value !== null && value !== '';
+      return { ...field, value, present };
+    });
+  }, [parsedData]);
+
+  const hasMissingJsonFields = useMemo(
+    () => jsonFieldChecklist.some(field => field.required && !field.present),
+    [jsonFieldChecklist]
+  );
+
   useEffect(() => {
     if (parsedData) {
       extractMetadata();
@@ -149,29 +188,61 @@ export function MetadataTab({
 
   // Load entity IDs from import session
   useEffect(() => {
+    console.log('[MetadataTab] Checking for entity IDs in import session');
+    console.log('[MetadataTab] Import session metadata:', JSON.stringify(importSession?.metadata, null, 2));
+
     if (importSession?.metadata?.entity_ids) {
-      console.log('Found entity IDs in import session:', importSession.metadata.entity_ids);
-      setSessionEntityIds(importSession.metadata.entity_ids);
+      console.log('[MetadataTab] Found entity IDs in import session:', importSession.metadata.entity_ids);
+      const entityIds = importSession.metadata.entity_ids;
+
+      // Validate that we have all required entity IDs
+      const hasRequiredIds = entityIds.program_id && entityIds.provider_id && entityIds.subject_id;
+
+      if (!hasRequiredIds) {
+        console.warn('[MetadataTab] Entity IDs incomplete:', {
+          has_program_id: !!entityIds.program_id,
+          has_provider_id: !!entityIds.provider_id,
+          has_subject_id: !!entityIds.subject_id,
+          has_data_structure_id: !!entityIds.data_structure_id
+        });
+        setEntityIdsStatus('missing');
+        toast.warning('Some entity IDs are missing. Please complete the Academic Structure step.', {
+          duration: 5000
+        });
+        return;
+      }
+
+      setSessionEntityIds(entityIds);
       setEntityIdsStatus('found');
-      
-      if (importSession.metadata.entity_ids.data_structure_id) {
-        setDataStructureId(importSession.metadata.entity_ids.data_structure_id);
-        setRegionId(importSession.metadata.entity_ids.region_id || '');
+
+      if (entityIds.data_structure_id) {
+        console.log('[MetadataTab] Setting data structure ID:', entityIds.data_structure_id);
+        setDataStructureId(entityIds.data_structure_id);
+        setRegionId(entityIds.region_id || '');
+      } else {
+        console.warn('[MetadataTab] No data_structure_id found in entity IDs');
       }
     } else if (importSession?.metadata?.academic_structure) {
-      // Try to extract from academic structure
+      // Try to extract from academic structure (legacy format)
+      console.log('[MetadataTab] Trying to extract from academic_structure (legacy format)');
       const academicStructure = importSession.metadata.academic_structure;
       if (academicStructure?.entity_ids) {
-        console.log('Found entity IDs in academic structure:', academicStructure.entity_ids);
+        console.log('[MetadataTab] Found entity IDs in academic structure:', academicStructure.entity_ids);
         setSessionEntityIds(academicStructure.entity_ids);
         setEntityIdsStatus('found');
       } else {
-        console.warn('No entity IDs found in import session');
+        console.warn('[MetadataTab] No entity IDs found in academic_structure');
         setEntityIdsStatus('missing');
+        toast.error('Please complete the Academic Structure step before proceeding.', {
+          duration: 5000
+        });
       }
     } else {
-      console.warn('No entity IDs found in import session');
+      console.error('[MetadataTab] No entity IDs found anywhere in import session');
       setEntityIdsStatus('missing');
+      toast.error('Please complete the Academic Structure step before proceeding.', {
+        duration: 5000
+      });
     }
   }, [importSession]);
 
@@ -349,6 +420,9 @@ export function MetadataTab({
 
   const loadDataStructures = async () => {
     try {
+      console.log('[MetadataTab] Loading data structures...');
+
+      // First, try to load with inner joins (only returns complete structures)
       const { data, error } = await supabase
         .from('data_structures')
         .select(`
@@ -366,17 +440,55 @@ export function MetadataTab({
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      
-      console.log('Loaded data structures with IDs:', data);
+      if (error) {
+        // Check if it's a connection/network error
+        if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+          console.error('[MetadataTab] Network error loading data structures:', error);
+          toast.error('Unable to connect to database. Please check your connection.', {
+            duration: 5000
+          });
+          return;
+        }
+
+        // Check if it's a missing table/column error
+        if (error.message?.includes('does not exist') || error.message?.includes('column')) {
+          console.error('[MetadataTab] Schema error loading data structures:', error);
+          toast.error('Database schema error. Please contact support.', {
+            duration: 5000
+          });
+          return;
+        }
+
+        throw error;
+      }
+
+      console.log('[MetadataTab] Loaded data structures:', data?.length || 0, 'structures');
+
+      // If no data structures found, show helpful message
+      if (!data || data.length === 0) {
+        console.warn('[MetadataTab] No active data structures found in database');
+        toast.info('No data structures found. The structure from the previous step will be used.', {
+          duration: 4000
+        });
+        setDataStructures([]);
+        return;
+      }
+
       setDataStructures(data || []);
 
+      // Auto-match if we have metadata and structures
       if (metadata && data && data.length > 0 && !manualOverride) {
+        console.log('[MetadataTab] Auto-matching data structure...');
         autoMatchDataStructure(data);
       }
-    } catch (error) {
-      console.error('Error loading data structures:', error);
-      toast.error('Failed to load data structures');
+    } catch (error: any) {
+      console.error('[MetadataTab] Error loading data structures:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      toast.error(`Failed to load data structures: ${errorMessage}`, {
+        duration: 5000
+      });
+      // Set empty array to allow user to proceed
+      setDataStructures([]);
     }
   };
 
@@ -723,6 +835,45 @@ export function MetadataTab({
         </p>
       </div>
 
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">JSON Compliance Checklist</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Quick audit of required metadata fields detected in the uploaded JSON. Align these before creating or updating the
+              paper record.
+            </p>
+          </div>
+          <StatusBadge
+            status={hasMissingJsonFields ? 'pending' : 'completed'}
+            label={hasMissingJsonFields ? 'Fields missing' : 'All fields captured'}
+            showIcon
+          />
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {jsonFieldChecklist.map(field => {
+            const Icon = field.present ? CheckCircle : AlertCircle;
+            return (
+              <div
+                key={field.id}
+                className={`rounded-lg border px-3 py-3 ${field.present ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${field.present ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{field.label}</span>
+                  {field.required && (
+                    <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 ml-auto">Required</span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-300 break-words">
+                  {field.present ? String(field.value) : 'Missing in JSON payload'}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Entity IDs Status */}
       {entityIdsStatus === 'found' && sessionEntityIds && (
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
@@ -738,6 +889,49 @@ export function MetadataTab({
                 {sessionEntityIds.subject_id && <div>Subject: {sessionEntityIds.subject_id.substring(0, 8)}...</div>}
                 {sessionEntityIds.data_structure_id && <div>Structure: {sessionEntityIds.data_structure_id.substring(0, 8)}...</div>}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Missing Entity IDs Warning */}
+      {entityIdsStatus === 'missing' && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-900 dark:text-red-100">
+                Missing Entity IDs from Previous Step
+              </p>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+                The Academic Structure Configuration step was not completed properly. Please go back and ensure all entities (Program, Provider, Subject) are created and the data structure is configured.
+              </p>
+              <Button
+                onClick={onPrevious}
+                variant="outline"
+                size="sm"
+                className="mt-3 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+                leftIcon={<ChevronLeft className="h-4 w-4" />}
+              >
+                Go Back to Structure Configuration
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Entity IDs */}
+      {entityIdsStatus === 'loading' && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 animate-spin" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                Loading Entity IDs from Previous Step...
+              </p>
+              <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                Retrieving program, provider, and subject information from the import session.
+              </p>
             </div>
           </div>
         </div>

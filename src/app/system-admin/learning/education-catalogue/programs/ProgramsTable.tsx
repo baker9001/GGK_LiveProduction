@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+///home/project/src/app/system-admin/learning/education-catalogue/programs/ProgramsTable.tsx
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase';
@@ -44,11 +46,8 @@ export default function ProgramsTable() {
     status: ''
   });
 
-  useEffect(() => {
-    fetchPrograms();
-  }, []);
-
-  const fetchPrograms = async () => {
+  const fetchPrograms = useCallback(async () => {
+    setLoading(true);
     try {
       let query = supabase
         .from('programs')
@@ -77,7 +76,11 @@ export default function ProgramsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    fetchPrograms();
+  }, [fetchPrograms]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -236,7 +239,6 @@ export default function ProgramsTable() {
             code: '',
             status: ''
           });
-          fetchPrograms();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

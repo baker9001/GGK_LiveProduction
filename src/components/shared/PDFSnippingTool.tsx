@@ -1,7 +1,7 @@
 ///home/project/src/components/shared/PDFSnippingTool.tsx
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Scissors, Download, Check, FileUp, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react';
+import { X, Scissors, Check, FileUp, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, AlertCircle, RotateCcw } from 'lucide-react';
 import { Button } from './Button';
 import { toast } from './Toast';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
@@ -18,6 +18,10 @@ interface PDFSnippingToolProps {
   className?: string;
   onLoadingChange?: (loading: boolean) => void;
   onErrorChange?: (isError: boolean, message: string | null) => void;
+  initialPage?: number;
+  initialScale?: number;
+  onViewStateChange?: (state: { page: number; scale: number }) => void;
+  questionLabel?: string;
 }
 
 export function PDFSnippingTool({
@@ -26,12 +30,19 @@ export function PDFSnippingTool({
   onClose,
   onLoadingChange,
   onErrorChange,
-  className
+  className,
+  initialPage,
+  initialScale,
+  onViewStateChange,
+  questionLabel
 }: PDFSnippingToolProps) {
+  const DEFAULT_PAGE = 1;
+  const DEFAULT_SCALE = 1.5;
+
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => initialPage ?? DEFAULT_PAGE);
   const [totalPages, setTotalPages] = useState(0);
-  const [scale, setScale] = useState(1.5);
+  const [scale, setScale] = useState(() => initialScale ?? DEFAULT_SCALE);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionRect, setSelectionRect] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
   const [startPoint, setStartPoint] = useState<{ x: number, y: number } | null>(null);
@@ -39,13 +50,32 @@ export function PDFSnippingTool({
   const [pdfLoadingError, setPdfLoadingError] = useState(false);
   const [renderedPage, setRenderedPage] = useState<PDFPageProxy | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+  const [pageInputValue, setPageInputValue] = useState('');
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const renderTaskRef = useRef<any>(null);
-  
+  const lastPdfUrlRef = useRef<string | null>(null);
+  const initialViewStateRef = useRef<{ page: number; scale: number }>({
+    page: initialPage ?? DEFAULT_PAGE,
+    scale: initialScale ?? DEFAULT_SCALE
+  });
+  const hasAppliedInitialViewStateRef = useRef(false);
+  const lastEmittedViewStateRef = useRef<{ page: number; scale: number } | null>(null);
+  const isInternalUpdateRef = useRef(false);
+  const lastExternalViewStateRef = useRef<{ page: number; scale: number } | null>(null);
+
+  const clampPage = (value: number, total: number) => {
+    if (!Number.isFinite(value)) {
+      return DEFAULT_PAGE;
+    }
+    const rounded = Math.round(value);
+    const upperBound = Math.max(total, DEFAULT_PAGE);
+    return Math.min(Math.max(rounded, DEFAULT_PAGE), upperBound);
+  };
+
   // Main PDF loading and rendering function
   const loadAndRenderPdf = async (source: string | ArrayBuffer) => {
     try {
@@ -59,11 +89,17 @@ export function PDFSnippingTool({
       try {
         const loadingTask = pdfjsLib.getDocument(source);
         const pdf = await loadingTask.promise;
-        
+
         setPdfDocument(pdf);
         setTotalPages(pdf.numPages);
-        setCurrentPage(1);
-        
+        const desiredPage = clampPage(initialViewStateRef.current.page, pdf.numPages);
+        const desiredScale = initialViewStateRef.current.scale;
+
+        setCurrentPage(desiredPage);
+        setScale(desiredScale);
+        lastExternalViewStateRef.current = { page: desiredPage, scale: desiredScale };
+        hasAppliedInitialViewStateRef.current = true;
+
         onErrorChange?.(false, null);
         setIsLoading(false);
         onLoadingChange?.(false);
@@ -119,150 +155,191 @@ export function PDFSnippingTool({
     }
   };
   
-  // Load PDF from URL if provided
+  // Load PDF from URL if provided - OPTIMIZED to prevent unnecessary re-fetches
   useEffect(() => {
-    if (pdfUrl) {
-      const fetchAndLoadPdf = async () => {
-        try {
-          // Check if pdfUrl is a data URL or a regular URL
-          if (pdfUrl.startsWith('data:')) {
-            // For data URLs, convert to array buffer
-            const base64 = pdfUrl.split(',')[1];
-            if (!base64) {
-              const errorMsg = 'Invalid PDF data format';
-              setPdfLoadingError(true);
-              setErrorMessage(errorMsg);
-              onErrorChange?.(true, errorMsg);
-              throw new Error(errorMsg);
-            }
-            
-            try {
-              const binaryString = window.atob(base64);
-              
-              // Check if the binary string has content
-              if (binaryString.length === 0) {
-                const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
-                setPdfLoadingError(true);
-                setErrorMessage(errorMsg);
-                onErrorChange?.(true, errorMsg);
-                throw new Error(errorMsg);
-              }
-              
-              const len = binaryString.length;
-              const bytes = new Uint8Array(len);
-              for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              await loadAndRenderPdf(bytes.buffer);
-            } catch (decodeError) {
-              console.error('Error decoding data URL:', decodeError);
-              const errorMsg = 'Failed to decode PDF data. The file may be corrupted.';
-              setPdfLoadingError(true);
-              setErrorMessage(errorMsg);
-              onErrorChange?.(true, errorMsg);
-              throw new Error(errorMsg);
-            }
-          } else {
-            // For regular URLs, fetch the PDF
-            try {
-              const response = await fetch(pdfUrl, {
-                method: 'GET',
-                headers: {
-                  'Accept': 'application/pdf'
-                }
-              });
-              
-              if (!response.ok) {
-                if (response.status === 404) {
-                  console.error(`PDF not found: ${response.status} ${response.statusText}`);
-                  const errorMsg = 'PDF file not found in storage. Please upload again.';
-                  setPdfLoadingError(true);
-                  setErrorMessage(errorMsg);
-                  onErrorChange?.(true, errorMsg);
-                  throw new Error(errorMsg);
-                } else {
-                  console.error(`PDF fetch failed: ${response.status} ${response.statusText}`);
-                  const errorMsg = `PDF file is not accessible (HTTP ${response.status}). Please upload again.`;
-                  setPdfLoadingError(true);
-                  setErrorMessage(errorMsg);
-                  onErrorChange?.(true, errorMsg);
-                  throw new Error(errorMsg);
-                }
-              }
-              
-              // Check if the response has content
-              const contentLength = response.headers.get('content-length');
-              if (contentLength === '0') {
-                const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
-                setPdfLoadingError(true);
-                setErrorMessage(errorMsg);
-                onErrorChange?.(true, errorMsg);
-                throw new Error(errorMsg);
-              }
-              
-              const arrayBuffer = await response.arrayBuffer();
-              
-              // Verify the array buffer has content
-              if (arrayBuffer.byteLength === 0) {
-                const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
-                setPdfLoadingError(true);
-                setErrorMessage(errorMsg);
-                onErrorChange?.(true, errorMsg);
-                throw new Error(errorMsg);
-              }
-              
-              await loadAndRenderPdf(arrayBuffer);
-            } catch (fetchError) {
-              console.error('Network error fetching PDF:', fetchError);
-              const errorMsg = 'Failed to fetch PDF file. Please check your connection and try again.';
-              setPdfLoadingError(true);
-              setErrorMessage(errorMsg);
-              onErrorChange?.(true, errorMsg);
-              throw new Error(errorMsg);
-            }
+    if (!pdfUrl) return;
+
+    // Only reload if the URL actually changed
+    if (lastPdfUrlRef.current === pdfUrl) {
+      return;
+    }
+
+    lastPdfUrlRef.current = pdfUrl;
+    initialViewStateRef.current = {
+      page: initialPage ?? DEFAULT_PAGE,
+      scale: initialScale ?? DEFAULT_SCALE
+    };
+    lastExternalViewStateRef.current = null;
+    hasAppliedInitialViewStateRef.current = false;
+
+    const fetchAndLoadPdf = async () => {
+      try {
+        // Check if pdfUrl is a data URL or a regular URL
+        if (pdfUrl.startsWith('data:')) {
+          // For data URLs, convert to array buffer
+          const base64 = pdfUrl.split(',')[1];
+          if (!base64) {
+            const errorMsg = 'Invalid PDF data format';
+            setPdfLoadingError(true);
+            setErrorMessage(errorMsg);
+            onErrorChange?.(true, errorMsg);
+            throw new Error(errorMsg);
           }
-        } catch (error) {
-          console.error('Error fetching PDF:', error);
-          setPdfLoadingError(true);
-          
-          if (error instanceof Error) {
-            // Check if it's a network error
-            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-              setErrorMessage('Unable to access PDF file. Please check your connection and try again.');
-              onErrorChange?.(true, 'Unable to access PDF file. Please check your connection and try again.');
-            } else if (error.message.includes('Invalid PDF structure') ||
-                       error.message.includes('PDF header not found') ||
-                       error.message.includes('Invalid PDF') ||
-                       error.message.includes('corrupted')) {
-              setErrorMessage('The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
-              onErrorChange?.(true, 'The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
-            } else if (error.message.includes('PDF file is empty')) {
-              setErrorMessage('PDF file is empty. Please upload a valid PDF.');
-              onErrorChange?.(true, 'PDF file is empty. Please upload a valid PDF.');
-            } else if (error.message.includes('PDF file not found')) {
-              setErrorMessage('PDF file not found in storage. Please upload again.');
-              onErrorChange?.(true, 'PDF file not found in storage. Please upload again.');
-            } else {
-              setErrorMessage('Failed to load PDF file');
-              onErrorChange?.(true, 'Failed to load PDF file');
+
+          try {
+            const binaryString = window.atob(base64);
+
+            // Check if the binary string has content
+            if (binaryString.length === 0) {
+              const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
+              setPdfLoadingError(true);
+              setErrorMessage(errorMsg);
+              onErrorChange?.(true, errorMsg);
+              throw new Error(errorMsg);
             }
+
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            await loadAndRenderPdf(bytes.buffer);
+          } catch (decodeError) {
+            console.error('Error decoding data URL:', decodeError);
+            const errorMsg = 'Failed to decode PDF data. The file may be corrupted.';
+            setPdfLoadingError(true);
+            setErrorMessage(errorMsg);
+            onErrorChange?.(true, errorMsg);
+            throw new Error(errorMsg);
+          }
+        } else {
+          // For regular URLs, fetch the PDF
+          try {
+            const response = await fetch(pdfUrl, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/pdf'
+              }
+            });
+
+            if (!response.ok) {
+              if (response.status === 404) {
+                console.error(`PDF not found: ${response.status} ${response.statusText}`);
+                const errorMsg = 'PDF file not found in storage. Please upload again.';
+                setPdfLoadingError(true);
+                setErrorMessage(errorMsg);
+                onErrorChange?.(true, errorMsg);
+                throw new Error(errorMsg);
+              } else {
+                console.error(`PDF fetch failed: ${response.status} ${response.statusText}`);
+                const errorMsg = `PDF file is not accessible (HTTP ${response.status}). Please upload again.`;
+                setPdfLoadingError(true);
+                setErrorMessage(errorMsg);
+                onErrorChange?.(true, errorMsg);
+                throw new Error(errorMsg);
+              }
+            }
+
+            // Check if the response has content
+            const contentLength = response.headers.get('content-length');
+            if (contentLength === '0') {
+              const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
+              setPdfLoadingError(true);
+              setErrorMessage(errorMsg);
+              onErrorChange?.(true, errorMsg);
+              throw new Error(errorMsg);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+
+            // Verify the array buffer has content
+            if (arrayBuffer.byteLength === 0) {
+              const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
+              setPdfLoadingError(true);
+              setErrorMessage(errorMsg);
+              onErrorChange?.(true, errorMsg);
+              throw new Error(errorMsg);
+            }
+
+            await loadAndRenderPdf(arrayBuffer);
+          } catch (fetchError) {
+            console.error('Network error fetching PDF:', fetchError);
+            const errorMsg = 'Failed to fetch PDF file. Please check your connection and try again.';
+            setPdfLoadingError(true);
+            setErrorMessage(errorMsg);
+            onErrorChange?.(true, errorMsg);
+            throw new Error(errorMsg);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching PDF:', error);
+        setPdfLoadingError(true);
+
+        if (error instanceof Error) {
+          // Check if it's a network error
+          if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            setErrorMessage('Unable to access PDF file. Please check your connection and try again.');
+            onErrorChange?.(true, 'Unable to access PDF file. Please check your connection and try again.');
+          } else if (error.message.includes('Invalid PDF structure') ||
+                     error.message.includes('PDF header not found') ||
+                     error.message.includes('Invalid PDF') ||
+                     error.message.includes('corrupted')) {
+            setErrorMessage('The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
+            onErrorChange?.(true, 'The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
+          } else if (error.message.includes('PDF file is empty')) {
+            setErrorMessage('PDF file is empty. Please upload a valid PDF.');
+            onErrorChange?.(true, 'PDF file is empty. Please upload a valid PDF.');
+          } else if (error.message.includes('PDF file not found')) {
+            setErrorMessage('PDF file not found in storage. Please upload again.');
+            onErrorChange?.(true, 'PDF file not found in storage. Please upload again.');
           } else {
             setErrorMessage('Failed to load PDF file');
             onErrorChange?.(true, 'Failed to load PDF file');
           }
-          
-          // Display the error message as a toast as well
-          if (error instanceof Error) {
-            toast.error(error.message);
-          } else {
-            toast.error('Failed to load PDF file');
-          }
+        } else {
+          setErrorMessage('Failed to load PDF file');
+          onErrorChange?.(true, 'Failed to load PDF file');
         }
-      };
-      
-      fetchAndLoadPdf();
-    }
+
+        // Display the error message as a toast as well
+        if (error instanceof Error) {
+          toast.error(error.message);
+        } else {
+          toast.error('Failed to load PDF file');
+        }
+      }
+    };
+
+    fetchAndLoadPdf();
   }, [pdfUrl]);
+
+  // Sync internal state with external view state updates without causing loops
+  useEffect(() => {
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current || isInternalUpdateRef.current) {
+      return;
+    }
+
+    const nextPage = typeof initialPage === 'number'
+      ? clampPage(initialPage, totalPages || initialPage)
+      : currentPage;
+    const nextScale = typeof initialScale === 'number'
+      ? initialScale
+      : scale;
+
+    const lastExternal = lastExternalViewStateRef.current;
+    if (
+      lastExternal &&
+      lastExternal.page === nextPage &&
+      Math.abs(lastExternal.scale - nextScale) < 0.001
+    ) {
+      return;
+    }
+
+    lastExternalViewStateRef.current = { page: nextPage, scale: nextScale };
+
+    setCurrentPage(prev => (prev !== nextPage ? nextPage : prev));
+    setScale(prev => (Math.abs(prev - nextScale) > 0.001 ? nextScale : prev));
+  }, [initialPage, initialScale, pdfDocument, totalPages]);
   
   // Render the current page
   useEffect(() => {
@@ -338,6 +415,8 @@ export function PDFSnippingTool({
     if (!file) return;
 
     onLoadingChange?.(true);
+    initialViewStateRef.current = { page: DEFAULT_PAGE, scale: DEFAULT_SCALE };
+    hasAppliedInitialViewStateRef.current = false;
     // Reset error states
     setPdfLoadingError(false);
     setErrorMessage(null);
@@ -410,26 +489,34 @@ export function PDFSnippingTool({
   // Handle mouse events for selection
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
-    
+
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
+    // Get the canvas coordinates (accounting for canvas scaling)
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
     setStartPoint({ x, y });
     setIsSelecting(true);
     setSelectionRect(null);
   };
-  
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isSelecting || !startPoint || !canvasRef.current) return;
-    
+
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
+    // Get the canvas coordinates (accounting for canvas scaling)
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
     const width = x - startPoint.x;
     const height = y - startPoint.y;
-    
+
     setSelectionRect({
       x: width > 0 ? startPoint.x : x,
       y: height > 0 ? startPoint.y : y,
@@ -437,34 +524,125 @@ export function PDFSnippingTool({
       height: Math.abs(height)
     });
   };
-  
+
   const handleMouseUp = () => {
     setIsSelecting(false);
+    // Show success message if selection was made
+    if (selectionRect && selectionRect.width > 0 && selectionRect.height > 0) {
+      toast.success('Selection captured! Click "Capture Selection" to save.');
+    }
   };
   
   // Handle page navigation
   const goToPreviousPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
+    setCurrentPage(prev => {
+      if (prev <= 1) {
+        return prev;
+      }
       setSelectionRect(null);
-    }
+      return prev - 1;
+    });
   };
-  
+
   const goToNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
+    setCurrentPage(prev => {
+      if (prev >= totalPages) {
+        return prev;
+      }
       setSelectionRect(null);
+      return prev + 1;
+    });
+  };
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Allow empty string or numbers only
+    if (value === '' || /^\d+$/.test(value)) {
+      setPageInputValue(value);
     }
   };
-  
+
+  const handleGoToPage = () => {
+    if (!pageInputValue || !totalPages) return;
+
+    const pageNum = parseInt(pageInputValue, 10);
+
+    if (isNaN(pageNum)) {
+      toast.error('Please enter a valid page number');
+      return;
+    }
+
+    if (pageNum < 1 || pageNum > totalPages) {
+      toast.error(`Please enter a page number between 1 and ${totalPages}`);
+      return;
+    }
+
+    setCurrentPage(pageNum);
+    setSelectionRect(null);
+    setPageInputValue('');
+    toast.success(`Navigated to page ${pageNum}`);
+  };
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleGoToPage();
+    }
+  };
+
   // Handle zoom
   const zoomIn = () => {
     setScale(prev => Math.min(prev + 0.25, 3));
   };
-  
+
   const zoomOut = () => {
     setScale(prev => Math.max(prev - 0.25, 0.5));
   };
+
+  const resetView = () => {
+    setSelectionRect(null);
+    setScale(DEFAULT_SCALE);
+    setCurrentPage(DEFAULT_PAGE);
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+      containerRef.current.scrollLeft = 0;
+    }
+  };
+
+  // OPTIMIZED view state change emission - prevents circular updates
+  useEffect(() => {
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current) {
+      return;
+    }
+
+    const nextState = { page: currentPage, scale };
+
+    // Only emit if values actually changed
+    if (
+      !lastEmittedViewStateRef.current ||
+      lastEmittedViewStateRef.current.page !== nextState.page ||
+      Math.abs(lastEmittedViewStateRef.current.scale - nextState.scale) > 0.001
+    ) {
+      // Mark this as an internal update
+      isInternalUpdateRef.current = true;
+
+      lastEmittedViewStateRef.current = nextState;
+      initialViewStateRef.current = nextState;
+
+      // Emit the change
+      if (onViewStateChange) {
+        onViewStateChange(nextState);
+      }
+
+      // Reset the internal update flag after a brief delay
+      const timer = setTimeout(() => {
+        isInternalUpdateRef.current = false;
+      }, 150);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentPage, scale, pdfDocument]);
+
+  const isDefaultView = currentPage === DEFAULT_PAGE && Math.abs(scale - DEFAULT_SCALE) < 0.001;
   
   // Capture the selection as an image
   const captureSelection = () => {
@@ -509,9 +687,14 @@ export function PDFSnippingTool({
     <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden ${className}`}>
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
-          <Scissors className="h-5 w-5 mr-2 text-blue-500 dark:text-blue-400" />
-          PDF Snipping Tool
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <Scissors className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+          <span>PDF Snipping Tool</span>
+          {questionLabel && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+              {questionLabel}
+            </span>
+          )}
         </h3>
         <button
           onClick={onClose}
@@ -548,6 +731,28 @@ export function PDFSnippingTool({
                 Next
               </Button>
             </div>
+
+            {/* Go to Page Number */}
+            <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 pl-4">
+              <input
+                type="text"
+                value={pageInputValue}
+                onChange={handlePageInputChange}
+                onKeyDown={handlePageInputKeyDown}
+                placeholder="Go to page..."
+                disabled={isLoading || !pdfDocument}
+                className="w-28 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                onFocus={(e) => e.target.select()}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGoToPage}
+                disabled={!pageInputValue || isLoading || !pdfDocument}
+              >
+                Go
+              </Button>
+            </div>
             
             <div className="flex items-center space-x-2">
               <Button
@@ -571,9 +776,18 @@ export function PDFSnippingTool({
               >
                 +
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={resetView}
+                disabled={isLoading || isDefaultView}
+                leftIcon={<RotateCcw className="h-4 w-4" />}
+              >
+                Reset view
+              </Button>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             {/* PDF Upload Button */}
             <input

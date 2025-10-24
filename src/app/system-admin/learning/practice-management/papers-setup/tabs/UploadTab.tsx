@@ -1,6 +1,6 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/UploadTab.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, Loader2, FileJson } from 'lucide-react';
 import { supabase } from '../../../../../../lib/supabase';
 import { FileUploader } from '../../../../../../components/shared/FileUploader';
@@ -18,6 +18,7 @@ interface UploadTabProps {
   parsedData: any;
   onSelectPreviousSession: (session: any) => void;
   importSession: any;
+  onNavigateToTab: (tabId: string, options?: { message?: string }) => void;
 }
 
 export function UploadTab({
@@ -28,10 +29,13 @@ export function UploadTab({
   error,
   parsedData,
   onSelectPreviousSession,
-  importSession
+  importSession,
+  onNavigateToTab
 }: UploadTabProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isContinuing, setIsContinuing] = useState(false);
+  const continueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Handle file selection
   const handleFileSelected = async (file: File, content: string | ArrayBuffer | null) => {
@@ -49,16 +53,20 @@ export function UploadTab({
   // Delete current session and start new
   const handleDeleteSession = async () => {
     if (!importSession) return;
-    
+
     setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('past_paper_import_sessions')
         .update({ status: 'failed' })
         .eq('id', importSession.id);
-      
+
       if (error) throw error;
-      
+
+      // Clear URL parameters before reload to ensure fresh start
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState(null, '', cleanUrl);
+
       // Reload page to start fresh
       window.location.reload();
     } catch (err) {
@@ -69,29 +77,58 @@ export function UploadTab({
       setShowDeleteConfirm(false);
     }
   };
-  
+
   // Continue with existing session
   const handleContinueSession = () => {
+    if (!importSession) return;
+
+    setIsContinuing(true);
+
+    const clearLoader = () => {
+      if (continueTimeoutRef.current) {
+        clearTimeout(continueTimeoutRef.current);
+      }
+
+      continueTimeoutRef.current = setTimeout(() => {
+        setIsContinuing(false);
+        continueTimeoutRef.current = null;
+      }, 1200);
+    };
+
     // Navigate to the appropriate tab based on session state
     const params = new URLSearchParams(window.location.search);
-    
+
     if (importSession.metadata?.questions_imported) {
       params.set('tab', 'questions');
+      onNavigateToTab('questions', { message: 'Restoring your questions review...' });
     } else if (importSession.metadata?.metadata_complete) {
       params.set('tab', 'questions');
+      onNavigateToTab('questions', { message: 'Loading your saved metadata...' });
     } else if (importSession.metadata?.structure_complete) {
       params.set('tab', 'metadata');
+      onNavigateToTab('metadata', { message: 'Preparing paper metadata...' });
     } else {
       params.set('tab', 'structure');
+      onNavigateToTab('structure', { message: 'Reopening academic structure...' });
     }
-    
-    window.location.search = params.toString();
+
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+
+    clearLoader();
   };
-  
+
   // Refresh session data
   const handleRefreshSession = () => {
     window.location.reload();
   };
+
+  useEffect(() => {
+    return () => {
+      if (continueTimeoutRef.current) {
+        clearTimeout(continueTimeoutRef.current);
+      }
+    };
+  }, []);
   
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
@@ -106,11 +143,11 @@ export function UploadTab({
             <CircleCheck className="h-5 w-5 text-blue-500 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
             <div className="flex-1">
               <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                Import Session In Progress
+                Your Import Session In Progress
               </h3>
               <p className="mt-1 text-sm text-blue-700 dark:text-blue-400">
-                You have an active import session for <strong>{uploadedFile.name}</strong>. 
-                You can continue from where you left off or start a new import.
+                You have an active import session for <strong>{uploadedFile.name}</strong>.
+                You can continue from where you left off or start a new import. Other users can work on their own imports simultaneously.
               </p>
               
               {/* Show session details */}
@@ -130,8 +167,16 @@ export function UploadTab({
                   size="sm"
                   leftIcon={<ArrowRight className="h-4 w-4" />}
                   onClick={handleContinueSession}
+                  disabled={isContinuing}
                 >
-                  Continue Import
+                  {isContinuing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Resuming...
+                    </>
+                  ) : (
+                    'Continue Import'
+                  )}
                 </Button>
                 <Button
                   size="sm"
@@ -346,8 +391,16 @@ export function UploadTab({
           <Button
             onClick={handleContinueSession}
             rightIcon={<ArrowRight className="h-4 w-4 ml-1" />}
+            disabled={isContinuing}
           >
-            Continue to Next Step
+            {isContinuing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Preparing next step...
+              </>
+            ) : (
+              'Continue to Next Step'
+            )}
           </Button>
         </div>
       )}

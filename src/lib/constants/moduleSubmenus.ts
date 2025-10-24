@@ -73,17 +73,17 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
         moduleKey: 'system-admin',
         children: [
           {
-            id: 'questions-setup',
-            label: 'Questions Setup',
-            path: '/app/system-admin/learning/practice-management/questions-setup',
-            icon: 'ClipboardList',
-            moduleKey: 'system-admin'
-          },
-          {
             id: 'papers-setup',
             label: 'Papers Setup',
             path: '/app/system-admin/learning/practice-management/papers-setup',
             icon: 'FileText',
+            moduleKey: 'system-admin'
+          },
+          {
+            id: 'questions-setup',
+            label: 'Questions Setup',
+            path: '/app/system-admin/learning/practice-management/questions-setup',
+            icon: 'ClipboardList',
             moduleKey: 'system-admin'
           }
         ]
@@ -123,6 +123,13 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'entity-module'
   },
   {
+    id: 'entity-configuration',
+    label: 'Configuration',
+    path: '/app/entity-module/configuration',
+    icon: 'Settings',
+    moduleKey: 'entity-module'
+  },
+  {
     id: 'entity-organisation',
     label: 'Organisation',
     path: '/app/entity-module/organisation',
@@ -130,17 +137,17 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'entity-module'
   },
   {
-    id: 'entity-relationships',
-    label: 'Entity Relationships',
-    path: '/app/entity-module/relationships',
-    icon: 'Network',
+    id: 'entity-license-management',
+    label: 'License Management',
+    path: '/app/entity-module/license-management',
+    icon: 'Key',
     moduleKey: 'entity-module'
   },
   {
-    id: 'entity-configuration',
-    label: 'Configuration',
-    path: '/app/entity-module/configuration',
-    icon: 'Settings',
+    id: 'entity-mock-exams',
+    label: 'Mock Exams',
+    path: '/app/entity-module/mock-exams',
+    icon: 'ClipboardList',
     moduleKey: 'entity-module'
   },
   {
@@ -160,31 +167,31 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'student-module'
   },
   {
-    id: 'student-enrollment',
-    label: 'Student Enrollment',
-    path: '/app/student-module/enrollment',
-    icon: 'UserPlus',
-    moduleKey: 'student-module'
-  },
-  {
-    id: 'academic-tracking',
-    label: 'Academic Tracking',
-    path: '/app/student-module/academic-tracking',
-    icon: 'BookOpen',
+    id: 'learning-pathway',
+    label: 'Learning Pathway',
+    path: '/app/student-module/pathways',
+    icon: 'Route',
     moduleKey: 'student-module'
   },
   {
     id: 'student-performance',
-    label: 'Performance Analytics',
+    label: 'Performance',
     path: '/app/student-module/performance',
     icon: 'TrendingUp',
     moduleKey: 'student-module'
   },
   {
-    id: 'learning-pathways',
-    label: 'Learning Pathways',
-    path: '/app/student-module/pathways',
-    icon: 'Route',
+    id: 'student-assignment',
+    label: 'Assignment',
+    path: '/app/student-module/assignment',
+    icon: 'ClipboardList',
+    moduleKey: 'student-module'
+  },
+  {
+    id: 'student-practice',
+    label: 'Practice',
+    path: '/app/student-module/practice',
+    icon: 'Target',
     moduleKey: 'student-module'
   },
 
@@ -197,23 +204,32 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'teachers-module'
   },
   {
-    id: 'staff-management',
-    label: 'Staff Management',
-    path: '/app/teachers-module/staff',
+    id: 'students',
+    label: 'Students',
+    path: '/app/teachers-module/students',
     icon: 'Users',
     moduleKey: 'teachers-module'
   },
   {
-    id: 'curriculum-management',
-    label: 'Curriculum Management',
-    path: '/app/teachers-module/curriculum',
+    id: 'learning-management',
+    label: 'Learning Management',
+    path: '/app/teachers-module/learning-management',
     icon: 'BookOpen',
-    moduleKey: 'teachers-module'
+    moduleKey: 'teachers-module',
+    children: [
+      {
+        id: 'materials',
+        label: 'Materials',
+        path: '/app/teachers-module/learning-management/materials',
+        icon: 'FileText',
+        moduleKey: 'teachers-module'
+      }
+    ]
   },
   {
-    id: 'schedule-management',
-    label: 'Schedule Management',
-    path: '/app/teachers-module/schedule',
+    id: 'study-calendar',
+    label: 'Study Calendar',
+    path: '/app/teachers-module/study-calendar',
     icon: 'Calendar',
     moduleKey: 'teachers-module'
   },

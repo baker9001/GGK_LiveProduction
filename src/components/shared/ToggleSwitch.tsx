@@ -1,3 +1,5 @@
+///home/project/src/components/shared/ToggleSwitch.tsx
+
 import React from 'react';
 import { cn } from '../../lib/utils';
 
@@ -65,7 +67,7 @@ export function ToggleSwitch({
 
   const colorClasses = {
     default: {
-      on: 'bg-blue-600 dark:bg-blue-500',
+      on: 'bg-[#8CC63F] dark:bg-[#8CC63F]',
       off: 'bg-gray-200 dark:bg-gray-700'
     },
     green: {
@@ -142,7 +144,6 @@ export function ToggleSwitch({
           aria-checked={checked}
           aria-label={label || `Toggle ${checked ? activeLabel : inactiveLabel}`}
           aria-disabled={isDisabled}
-          onClick={handleClick}
           onClick={handleClick}
           onKeyDown={handleKeyDown}
           disabled={isDisabled}
