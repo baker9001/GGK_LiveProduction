@@ -3,11 +3,11 @@
  * FIXED VERSION - Complete Supabase Auth integration with proper data consistency
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { Plus, Key, Eye, EyeOff, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, Loader2, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
+import { Key, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, Loader2, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -60,6 +60,9 @@ const updateUserSchema = z.object({
   department: z.string().optional()
 });
 
+type CreateAdminUserInput = z.infer<typeof createUserSchema>;
+type UpdateAdminUserInput = z.infer<typeof updateUserSchema>;
+
 // ===== TYPE DEFINITIONS =====
 interface AdminUser {
   id: string;
@@ -98,12 +101,14 @@ interface AdminInvitation {
   name: string;
   role_id: string;
   role_name?: string;
-  status: 'pending' | 'accepted' | 'expired';
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
   expires_at: string;
   created_at: string;
   invited_by_name?: string;
-  invited_by?: string;
+  invited_by?: string | null;
   user_id?: string;
+  token?: string | null;
+  resent_at?: string | null;
 }
 
 // ===== API FUNCTIONS =====
@@ -112,11 +117,17 @@ interface AdminInvitation {
  * Check if a user with the given email already exists
  */
 async function checkUserExists(email: string): Promise<{ exists: boolean; isActive?: boolean; userName?: string }> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return { exists: false };
+  }
+
   try {
     const { data, error } = await supabase
       .from('users')
       .select('id, email, is_active, raw_user_meta_data')
-      .eq('email', email.toLowerCase())
+      .eq('email', normalizedEmail)
       .maybeSingle();
 
     if (error) {
@@ -128,10 +139,10 @@ async function checkUserExists(email: string): Promise<{ exists: boolean; isActi
       return { exists: false };
     }
 
-    return { 
-      exists: true, 
+    return {
+      exists: true,
       isActive: data.is_active || false,
-      userName: data.raw_user_meta_data?.name || email
+      userName: data.raw_user_meta_data?.name || normalizedEmail
     };
   } catch (error) {
     console.error('Error checking user existence:', error);
@@ -142,27 +153,25 @@ async function checkUserExists(email: string): Promise<{ exists: boolean; isActi
 /**
  * ENHANCED: Create admin user using improved Edge Function
  */
-async function createAdminUser(data: {
-  email: string;
-  name: string;
-  role_id: string;
-  phone?: string;
-  position?: string;
-  department?: string;
-  personal_message?: string;
-}) {
+async function createAdminUser(data: CreateAdminUserInput) {
   const currentUser = getAuthenticatedUser();
   if (!currentUser) throw new Error('Not authenticated');
 
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Supabase configuration missing. Please contact support.');
+  }
+
   try {
+    const normalizedEmail = data.email.toLowerCase();
+
     // Check if user already exists
-    const userCheck = await checkUserExists(data.email);
-    
+    const userCheck = await checkUserExists(normalizedEmail);
+
     if (userCheck.exists) {
       if (userCheck.isActive) {
-        throw new Error(`An active user with email ${data.email} already exists in the system.`);
+        throw new Error(`An active user with email ${normalizedEmail} already exists in the system.`);
       } else {
-        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate from the users list.`);
+        throw new Error(`A user with email ${normalizedEmail} exists but is inactive. Please reactivate from the users list.`);
       }
     }
 
@@ -186,7 +195,7 @@ async function createAdminUser(data: {
         'apikey': SUPABASE_ANON_KEY
       },
       body: JSON.stringify({
-        email: data.email.toLowerCase(),
+        email: normalizedEmail,
         name: data.name,
         role_id: data.role_id,
         phone: data.phone,
@@ -317,10 +326,14 @@ async function updateAdminUser(userId: string, updates: {
   }
 }
 
-async function resendInvitation(invitationId: string) {
+async function resendInvitation(invitation: AdminInvitation) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Supabase configuration missing. Please contact support.');
+  }
+
   // Get fresh session before making the request
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  
+
   if (sessionError || !sessionData?.session) {
     throw new Error('Session expired. Please refresh the page and try again.');
   }
@@ -335,12 +348,34 @@ async function resendInvitation(invitationId: string) {
       expires_at: expiresAt.toISOString(),
       resent_at: new Date().toISOString()
     })
-    .eq('id', invitationId);
+    .eq('id', invitation.id);
 
   if (error) throw error;
 
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/send-admin-invite`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${sessionData.session.access_token}`,
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({
+      email: invitation.email.toLowerCase(),
+      name: invitation.name,
+      redirect_to: `${window.location.origin}/reset-password`
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.error || errorData?.message || 'Failed to resend invitation email.';
+    throw new Error(message);
+  }
+
+  const result = await response.json().catch(() => ({ message: 'Invitation resent successfully' }));
+
   const currentUser = getAuthenticatedUser();
-  
+
   // Log the action
   try {
     await supabase
@@ -349,13 +384,72 @@ async function resendInvitation(invitationId: string) {
         user_id: currentUser?.id,
         action: 'resend_invitation',
         entity_type: 'admin_invitation',
-        entity_id: invitationId
+        entity_id: invitation.id,
+        details: {
+          email: invitation.email,
+          name: invitation.name
+        }
       });
   } catch (logError) {
     console.warn('Failed to log action:', logError);
   }
 
-  return { success: true };
+  return { success: true, message: result?.message || 'Invitation resent successfully' };
+}
+
+async function sendPasswordResetEmail(adminUser: AdminUser) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Supabase configuration missing. Please contact support.');
+  }
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError || !sessionData?.session) {
+    throw new Error('Session expired. Please refresh the page and try again.');
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/send-admin-invite`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${sessionData.session.access_token}`,
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({
+      email: adminUser.email.toLowerCase(),
+      name: adminUser.name,
+      redirect_to: `${window.location.origin}/reset-password`
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.error || errorData?.message || 'Failed to send password reset email.';
+    throw new Error(message);
+  }
+
+  const result = await response.json().catch(() => ({ message: 'Password reset email sent successfully' }));
+
+  const currentUser = getAuthenticatedUser();
+
+  try {
+    await supabase
+      .from('audit_logs')
+      .insert({
+        user_id: currentUser?.id,
+        action: 'send_password_reset',
+        entity_type: 'admin_user',
+        entity_id: adminUser.id,
+        details: {
+          email: adminUser.email,
+          name: adminUser.name
+        }
+      });
+  } catch (logError) {
+    console.warn('Failed to log password reset action:', logError);
+  }
+
+  return { success: true, message: result?.message || 'Password reset email sent successfully' };
 }
 
 // ===== MAIN COMPONENT =====
@@ -409,6 +503,14 @@ export default function UsersTab() {
     checking: false,
     exists: false
   });
+  const emailValidationCache = useRef<Record<string, { exists: boolean; isActive?: boolean; userName?: string }>>({});
+
+  // Invitation helpers
+  const [copiedInvitationId, setCopiedInvitationId] = useState<string | null>(null);
+  const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
+
+  // Password reset helper state
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
 
   // Edit form state
   const [editFormState, setEditFormState] = useState({
@@ -433,12 +535,19 @@ export default function UsersTab() {
         .from('roles')
         .select('id, name')
         .order('name');
-      
+
       if (error) throw error;
       return data || [];
     },
     { staleTime: 10 * 60 * 1000 }
   );
+
+  const roleLookup = useMemo(() => {
+    return roles.reduce((acc, role) => {
+      acc[role.id] = role.name;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [roles]);
 
   // Fetch users using the admin_users_view
   const { 
@@ -529,7 +638,7 @@ export default function UsersTab() {
   );
 
   // Fetch pending invitations
-  const { 
+  const {
     data: invitations = [],
     isLoading: invitationsLoading,
     error: invitationsError,
@@ -538,17 +647,122 @@ export default function UsersTab() {
     ['admin-invitations', showInvitations],
     async () => {
       if (!showInvitations) return [];
-      
-      // Return empty array for now as invitations table may not exist
-      // In production, implement proper invitations table query
-      return [];
+
+      const { data, error } = await supabase
+        .from('admin_invitations')
+        .select('id, email, name, role_id, status, expires_at, created_at, invited_by, user_id, token, resent_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching invitations:', error);
+        throw error;
+      }
+
+      const invitationRecords = data || [];
+
+      let invitedByLookup: Record<string, string> = {};
+      const inviterIds = Array.from(
+        new Set(
+          invitationRecords
+            .map((invitation) => invitation.invited_by)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+
+      if (inviterIds.length > 0) {
+        const { data: inviterData, error: inviterError } = await supabase
+          .from('admin_users')
+          .select('id, name')
+          .in('id', inviterIds);
+
+        if (!inviterError && inviterData) {
+          invitedByLookup = inviterData.reduce((acc, inviter) => {
+            acc[inviter.id] = inviter.name;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      }
+
+      return invitationRecords.map((invitation) => ({
+        ...invitation,
+        role_name: roleLookup[invitation.role_id] || 'Unknown Role',
+        invited_by_name: invitation.invited_by ? invitedByLookup[invitation.invited_by] : undefined
+      })) as AdminInvitation[];
     },
-    { 
+    {
       enabled: showInvitations,
       staleTime: 30 * 1000,
       retry: 1,
+      onError: (error) => {
+        console.error('Invitations query error:', error);
+        toast.error('Failed to load pending invitations.');
+      }
     }
   );
+
+  const isInvitationExpired = (invitation: AdminInvitation) => {
+    if (!invitation.expires_at) return false;
+    const expiresAt = new Date(invitation.expires_at).getTime();
+    if (Number.isNaN(expiresAt)) return false;
+    return expiresAt < Date.now();
+  };
+
+  const formatInvitationExpiry = (invitation: AdminInvitation) => {
+    if (!invitation.expires_at) return 'No expiration date set';
+    const expires = new Date(invitation.expires_at);
+
+    if (Number.isNaN(expires.getTime())) {
+      return 'Expiration date unavailable';
+    }
+
+    const diffMs = expires.getTime() - Date.now();
+
+    if (diffMs <= 0) {
+      return `Expired ${expires.toLocaleString()}`;
+    }
+
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffMinutes < 60) {
+      return `Expires in ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'}`;
+    }
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      return `Expires in ${diffHours} hour${diffHours === 1 ? '' : 's'}`;
+    }
+
+    const diffDays = Math.floor(diffHours / 24);
+    return `Expires in ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+  };
+
+  const formatTimestamp = (value?: string | null) => {
+    if (!value) return 'Unknown';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return date.toLocaleString();
+  };
+
+  const getInvitationStatusBadgeClass = (status: AdminInvitation['status'], expired: boolean) => {
+    if (expired) {
+      return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+    }
+
+    switch (status) {
+      case 'accepted':
+        return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+      case 'expired':
+        return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+      default:
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+    }
+  };
+
+  const pendingInvitationCount = useMemo(() => {
+    return invitations.filter((invitation) => invitation.status === 'pending' && !isInvitationExpired(invitation)).length;
+  }, [invitations]);
 
   // ===== MUTATIONS =====
   
@@ -572,6 +786,8 @@ export default function UsersTab() {
           position: '',
           department: ''
         });
+        emailValidationCache.current = {};
+        setEmailValidation({ checking: false, exists: false, message: undefined });
         toast.success(result.message || 'Admin user created successfully');
       },
       onError: (error: any) => {
@@ -624,12 +840,36 @@ export default function UsersTab() {
   const resendInviteMutation = useMutation(
     resendInvitation,
     {
-      onSuccess: () => {
+      onMutate: (invitation) => {
+        setResendingInvitationId(invitation.id);
+      },
+      onSuccess: (result) => {
         queryClient.invalidateQueries(['admin-invitations']);
-        toast.success('Invitation resent successfully');
+        toast.success(result?.message || 'Invitation resent successfully');
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to resend invitation');
+      },
+      onSettled: () => {
+        setResendingInvitationId(null);
+      }
+    }
+  );
+
+  const sendPasswordResetMutation = useMutation(
+    sendPasswordResetEmail,
+    {
+      onMutate: (adminUser) => {
+        setResettingUserId(adminUser.id);
+      },
+      onSuccess: (result) => {
+        toast.success(result?.message || 'Password reset email sent successfully');
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to send password reset email');
+      },
+      onSettled: () => {
+        setResettingUserId(null);
       }
     }
   );
@@ -890,46 +1130,110 @@ export default function UsersTab() {
     setShowInvitations(!showInvitations);
   };
 
-  // ===== EFFECTS =====
-  
-  // Email validation effect
-  useEffect(() => {
-    const validateEmail = async () => {
-      const email = inviteFormState.email.trim().toLowerCase();
-      
-      if (email.length < 5 || !email.includes('@')) {
-        setEmailValidation({ checking: false, exists: false });
-        return;
+  const handleCopyInvitationEmail = async (invitation: AdminInvitation) => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(invitation.email);
+      } else if (typeof document !== 'undefined') {
+        const textarea = document.createElement('textarea');
+        textarea.value = invitation.email;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } else {
+        throw new Error('Clipboard API unavailable');
       }
 
-      setEmailValidation({ checking: true, exists: false });
+      setCopiedInvitationId(invitation.id);
+      toast.success('Email copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy invitation email:', error);
+      toast.error('Failed to copy email. Please copy it manually.');
+    }
+  };
 
+  // ===== EFFECTS =====
+
+  useEffect(() => {
+    if (!copiedInvitationId) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setCopiedInvitationId(null);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copiedInvitationId]);
+
+  const formatExistingUserMessage = (
+    check: { userName?: string; isActive?: boolean },
+    email: string
+  ) => {
+    const displayName = check.userName || email;
+    return check.isActive
+      ? `User "${displayName}" already exists and is active.`
+      : `User "${displayName}" exists but is inactive. Please reactivate.`;
+  };
+
+  // Email validation effect
+  useEffect(() => {
+    const email = inviteFormState.email.trim().toLowerCase();
+
+    if (email.length < 5 || !email.includes('@')) {
+      setEmailValidation({ checking: false, exists: false, message: undefined });
+      return;
+    }
+
+    const cachedResult = emailValidationCache.current[email];
+    if (cachedResult) {
+      setEmailValidation({
+        checking: false,
+        exists: cachedResult.exists,
+        message: cachedResult.exists ? formatExistingUserMessage(cachedResult, email) : undefined
+      });
+      return;
+    }
+
+    let isCancelled = false;
+
+    setEmailValidation((prev) => ({ ...prev, checking: true }));
+
+    const timeoutId = window.setTimeout(async () => {
       try {
         const userCheck = await checkUserExists(email);
-        
+        if (isCancelled) return;
+
+        emailValidationCache.current[email] = userCheck;
+
         if (userCheck.exists) {
           setEmailValidation({
             checking: false,
             exists: true,
-            message: userCheck.isActive 
-              ? `User "${userCheck.userName}" already exists and is active.`
-              : `User "${userCheck.userName}" exists but is inactive. Please reactivate.`
+            message: formatExistingUserMessage(userCheck, email)
           });
         } else {
-          setEmailValidation({
-            checking: false,
-            exists: false,
-            message: undefined
-          });
+          setEmailValidation({ checking: false, exists: false, message: undefined });
         }
       } catch (error) {
+        if (isCancelled) return;
         console.error('Email validation error:', error);
-        setEmailValidation({ checking: false, exists: false });
+        setEmailValidation({
+          checking: false,
+          exists: false,
+          message: 'We could not validate this email at the moment.'
+        });
       }
-    };
+    }, 400);
 
-    const timeoutId = setTimeout(validateEmail, 500);
-    return () => clearTimeout(timeoutId);
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [inviteFormState.email]);
   
   useEffect(() => {
@@ -1010,11 +1314,19 @@ export default function UsersTab() {
         <div className="flex items-center gap-2">
           <StatusBadge status={row.status} />
           {row.status === 'active' && !row.email_verified && (
-            <span 
+            <span
               className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 rounded-full"
               title="Email not verified yet"
             >
               Unverified
+            </span>
+          )}
+          {row.status === 'active' && row.requires_password_change && (
+            <span
+              className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 rounded-full"
+              title="User must set their password before logging in"
+            >
+              Setup pending
             </span>
           )}
         </div>
@@ -1069,7 +1381,22 @@ export default function UsersTab() {
           <CheckCircle className="h-4 w-4" />
         </button>
       )}
-      
+
+      {row.status === 'active' && (
+        <button
+          onClick={() => sendPasswordResetMutation.mutate(row)}
+          disabled={sendPasswordResetMutation.isLoading}
+          className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 p-1 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          title="Send password reset email"
+        >
+          {sendPasswordResetMutation.isLoading && resettingUserId === row.id ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Key className="h-4 w-4" />
+          )}
+        </button>
+      )}
+
       {isSSA && !inTestMode && row.status === 'active' && row.email_verified && (
         <button
           onClick={() => handleTestAsUser(row)}
@@ -1139,7 +1466,7 @@ export default function UsersTab() {
   
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold">System Users</h2>
           <button
@@ -1150,14 +1477,154 @@ export default function UsersTab() {
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
-        
-        <Button
-          onClick={() => setIsInviteFormOpen(true)}
-          leftIcon={<Send className="h-4 w-4" />}
-        >
-          Create Admin User
-        </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={showInvitations ? 'outline' : 'secondary'}
+            onClick={() => {
+              handleToggleInvitations();
+              if (!showInvitations) {
+                refetchInvitations();
+              }
+            }}
+            leftIcon={<Mail className="h-4 w-4" />}
+          >
+            {showInvitations
+              ? 'Hide Pending Invitations'
+              : pendingInvitationCount > 0
+                ? `View Pending Invitations (${pendingInvitationCount})`
+                : 'View Pending Invitations'}
+          </Button>
+
+          <Button
+            onClick={() => setIsInviteFormOpen(true)}
+            leftIcon={<Send className="h-4 w-4" />}
+          >
+            Create Admin User
+          </Button>
+        </div>
       </div>
+
+      {!showInvitations && pendingInvitationCount > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
+          <AlertCircle className="h-5 w-5" />
+          <div>
+            <p className="font-semibold">Pending admin invitations</p>
+            <p className="text-xs text-blue-700/80 dark:text-blue-200/80">
+              {pendingInvitationCount} invitation{pendingInvitationCount === 1 ? '' : 's'} awaiting acceptance.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showInvitations && (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Pending Invitations</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Monitor outstanding invitations and resend secure setup emails when needed.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => refetchInvitations()}
+                className="p-1.5 rounded-full hover:bg-gray-100 transition-colors dark:hover:bg-gray-800"
+                title="Refresh invitations"
+              >
+                <RefreshCw className={`h-4 w-4 ${invitationsLoading ? 'animate-spin' : ''}`} />
+              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowInvitations(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3 px-4 py-4">
+            {invitationsError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+                Failed to load invitations. Please try refreshing.
+              </div>
+            ) : invitationsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500 dark:text-gray-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Loading invitations…</span>
+              </div>
+            ) : invitations.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                No pending invitations found.
+              </div>
+            ) : (
+              invitations.map((invitation) => {
+                const expired = isInvitationExpired(invitation);
+                const canResend = invitation.status === 'pending' || invitation.status === 'expired' || expired;
+
+                return (
+                  <div
+                    key={invitation.id}
+                    className="rounded-lg border border-gray-200 px-4 py-3 shadow-sm transition hover:border-[#8CC63F]/60 hover:shadow-md dark:border-gray-700 dark:hover:border-[#8CC63F]/50"
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{invitation.email}</span>
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${getInvitationStatusBadgeClass(invitation.status, expired)}`}
+                          >
+                            {expired ? 'Expired' : invitation.status.replace(/^(\w)/, (m) => m.toUpperCase())}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                          <span>Role: {invitation.role_name || roleLookup[invitation.role_id] || 'Unknown Role'}</span>
+                          <span>{formatInvitationExpiry(invitation)}</span>
+                          <span>Invited: {formatTimestamp(invitation.created_at)}</span>
+                          {invitation.resent_at && (
+                            <span>Last resent: {formatTimestamp(invitation.resent_at)}</span>
+                          )}
+                          {invitation.invited_by_name && (
+                            <span>Invited by {invitation.invited_by_name}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleCopyInvitationEmail(invitation)}
+                          className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                          title="Copy email"
+                        >
+                          {copiedInvitationId === invitation.id ? (
+                            <Check className="h-4 w-4 text-emerald-500" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => resendInviteMutation.mutate(invitation)}
+                          disabled={!canResend || resendInviteMutation.isLoading}
+                          className="rounded-full p-1.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-200"
+                          title={canResend ? 'Resend invitation email' : 'Invitation cannot be resent'}
+                        >
+                          {resendingInvitationId === invitation.id && resendInviteMutation.isLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filter Card */}
       <FilterCard
@@ -1292,10 +1759,10 @@ export default function UsersTab() {
             />
           </FormField>
 
-          <FormField 
-            id="invite-email" 
-            label="Email" 
-            required 
+          <FormField
+            id="invite-email"
+            label="Email"
+            required
             error={formErrors.email}
           >
             <div className="relative">
@@ -1307,7 +1774,13 @@ export default function UsersTab() {
                 value={inviteFormState.email}
                 onChange={(e) => setInviteFormState({ ...inviteFormState, email: e.target.value })}
                 leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
-                className={emailValidation.exists ? 'border-red-300 dark:border-red-600' : ''}
+                className={`transition-colors ${
+                  emailValidation.exists
+                    ? 'border-red-300 dark:border-red-600'
+                    : !emailValidation.checking && inviteFormState.email && !emailValidation.message
+                      ? 'border-emerald-300 dark:border-emerald-500'
+                      : ''
+                }`}
               />
               {emailValidation.checking && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -1319,15 +1792,29 @@ export default function UsersTab() {
                   <AlertCircle className="h-4 w-4 text-red-500" />
                 </div>
               )}
-              {!emailValidation.checking && !emailValidation.exists && inviteFormState.email.includes('@') && (
+              {!emailValidation.checking && inviteFormState.email && !emailValidation.exists && !emailValidation.message && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <Check className="h-4 w-4 text-emerald-500" />
                 </div>
               )}
             </div>
-            {emailValidation.exists && emailValidation.message && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                {emailValidation.message}
+            {inviteFormState.email && (
+              <p
+                className={`mt-2 text-xs ${
+                  emailValidation.checking
+                    ? 'text-gray-500 dark:text-gray-400'
+                    : emailValidation.exists
+                      ? 'text-red-600 dark:text-red-400'
+                      : emailValidation.message
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              >
+                {emailValidation.checking
+                  ? 'Checking availability…'
+                  : emailValidation.exists
+                    ? emailValidation.message
+                    : emailValidation.message || 'Email is available for a new admin account.'}
               </p>
             )}
           </FormField>
