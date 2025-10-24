@@ -1549,13 +1549,16 @@ export const insertSubQuestion = async (
       detectAnswerFormat(partQuestionDescription);
 
     // Auto-derive answer_requirement if not provided
+    // CRITICAL FIX: Pass all required parameters including answer_format and question_description
     const derivedPartAnswerRequirement = part.answer_requirement ||
       deriveAnswerRequirement({
         type: normalizedPartType,
         correct_answers: part.correct_answers || [],
         total_alternatives: part.total_alternatives,
         has_direct_answer: answerExpectation.has_direct_answer,
-        is_contextual_only: answerExpectation.is_contextual_only
+        is_contextual_only: answerExpectation.is_contextual_only,
+        answer_format: derivedPartAnswerFormat, // FIXED: Pass the derived answer format
+        question_description: partQuestionDescription // FIXED: Pass question description
       });
 
     console.log(`🎯 Answer field derivation for ${partType} ${partLabel}:`);
@@ -2344,13 +2347,16 @@ export const importQuestions = async (params: {
           questionAnswerFormat;
 
         // Auto-derive answer_requirement if not provided
+        // CRITICAL FIX: Pass all required parameters including answer_format and question_description
         const derivedAnswerRequirement = question.answer_requirement ||
           deriveAnswerRequirement({
             type: normalizedType,
             correct_answers: question.correct_answers || [],
             total_alternatives: question.total_alternatives,
             has_direct_answer: mainAnswerExpectation.has_direct_answer,
-            is_contextual_only: mainAnswerExpectation.is_contextual_only
+            is_contextual_only: mainAnswerExpectation.is_contextual_only,
+            answer_format: derivedAnswerFormat, // FIXED: Pass the derived answer format
+            question_description: questionDescription // FIXED: Pass question description
           });
 
         console.log('🎯 Answer field derivation for main question:');

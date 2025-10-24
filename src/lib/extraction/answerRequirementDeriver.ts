@@ -98,6 +98,25 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
     };
   }
 
+  // Handle complex questions - check if they have direct answers
+  // Complex questions without correct answers are contextual containers
+  if (questionType === 'complex') {
+    const hasCorrectAnswers = (correctAnswers?.length ?? 0) > 0;
+
+    if (!hasCorrectAnswers && !isContextualOnly) {
+      // Complex question with no answers but not explicitly marked contextual
+      // This is likely a container for parts - treat as not applicable
+      return {
+        answerRequirement: 'not_applicable',
+        confidence: 'high',
+        reason: 'Complex question with no correct answers - likely contextual container for parts'
+      };
+    }
+
+    // If complex question has answers, derive requirement based on answer structure
+    // (fall through to standard logic below)
+  }
+
   // Handle two_items formats - both required unless alternatives detected
   if (answerFormat === 'two_items' || answerFormat === 'two_items_connected') {
     const hasAlternatives = (correctAnswers?.length ?? 0) > 2 || (totalAlternatives ?? 0) > 1;

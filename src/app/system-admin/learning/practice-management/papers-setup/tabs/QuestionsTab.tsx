@@ -2444,13 +2444,16 @@ function QuestionsTabInner({
       let questionUpdated = false;
 
       // Auto-fill main question answer requirement
+      // CRITICAL FIX: Pass complete parameters for accurate derivation
       if (!question.answer_requirement || question.answer_requirement.trim() === '') {
         const derivedResult = deriveAnswerRequirement({
           questionType: question.question_type,
           answerFormat: question.answer_format,
           correctAnswers: question.correct_answers,
           totalAlternatives: question.total_alternatives,
-          options: question.options
+          options: question.options,
+          hasDirectAnswer: question.has_direct_answer, // FIXED: Pass answer expectation
+          isContextualOnly: question.is_contextual_only // FIXED: Pass contextual flag
         });
 
         if (derivedResult.answerRequirement) {
@@ -2464,12 +2467,15 @@ function QuestionsTabInner({
       if (question.parts && Array.isArray(question.parts)) {
         question.parts = question.parts.map((part: any) => {
           if (!part.answer_requirement || part.answer_requirement.trim() === '') {
+            // CRITICAL FIX: Pass complete parameters for parts
             const partDerivedResult = deriveAnswerRequirement({
               questionType: part.question_type || 'descriptive',
               answerFormat: part.answer_format,
               correctAnswers: part.correct_answers,
               totalAlternatives: part.total_alternatives,
-              options: part.options
+              options: part.options,
+              hasDirectAnswer: part.has_direct_answer, // FIXED: Pass answer expectation
+              isContextualOnly: part.is_contextual_only // FIXED: Pass contextual flag
             });
 
             if (partDerivedResult.answerRequirement) {
@@ -2482,12 +2488,15 @@ function QuestionsTabInner({
           if (part.subparts && Array.isArray(part.subparts)) {
             part.subparts = part.subparts.map((subpart: any) => {
               if (!subpart.answer_requirement || subpart.answer_requirement.trim() === '') {
+                // CRITICAL FIX: Pass complete parameters for subparts
                 const subpartDerivedResult = deriveAnswerRequirement({
                   questionType: subpart.question_type || 'descriptive',
                   answerFormat: subpart.answer_format,
                   correctAnswers: subpart.correct_answers,
                   totalAlternatives: subpart.total_alternatives,
-                  options: subpart.options
+                  options: subpart.options,
+                  hasDirectAnswer: subpart.has_direct_answer !== false, // FIXED: Subparts always have answers unless explicitly false
+                  isContextualOnly: subpart.is_contextual_only // FIXED: Pass contextual flag
                 });
 
                 if (subpartDerivedResult.answerRequirement) {
@@ -2651,13 +2660,16 @@ function QuestionsTabInner({
         }
 
         // Auto-fill answer requirement if missing or empty
+        // CRITICAL FIX: Pass complete parameters for accurate derivation
         if (!question.answer_requirement || question.answer_requirement.trim() === '') {
           const derivedResult = deriveAnswerRequirement({
             questionType: question.question_type,
             answerFormat: question.answer_format,
             correctAnswers: question.correct_answers,
             totalAlternatives: question.total_alternatives,
-            options: question.options
+            options: question.options,
+            hasDirectAnswer: question.has_direct_answer, // FIXED: Pass answer expectation
+            isContextualOnly: question.is_contextual_only // FIXED: Pass contextual flag
           });
 
           if (derivedResult.answerRequirement) {
@@ -2670,12 +2682,15 @@ function QuestionsTabInner({
         if (question.parts && Array.isArray(question.parts)) {
           question.parts = question.parts.map((part: any) => {
             if (!part.answer_requirement || part.answer_requirement.trim() === '') {
+              // CRITICAL FIX: Pass complete parameters for parts
               const partDerivedResult = deriveAnswerRequirement({
                 questionType: part.question_type || 'descriptive',
                 answerFormat: part.answer_format,
                 correctAnswers: part.correct_answers,
                 totalAlternatives: part.total_alternatives,
-                options: part.options
+                options: part.options,
+                hasDirectAnswer: part.has_direct_answer, // FIXED: Pass answer expectation
+                isContextualOnly: part.is_contextual_only // FIXED: Pass contextual flag
               });
 
               if (partDerivedResult.answerRequirement) {
@@ -2687,12 +2702,15 @@ function QuestionsTabInner({
             if (part.subparts && Array.isArray(part.subparts)) {
               part.subparts = part.subparts.map((subpart: any) => {
                 if (!subpart.answer_requirement || subpart.answer_requirement.trim() === '') {
+                  // CRITICAL FIX: Pass complete parameters for subparts
                   const subpartDerivedResult = deriveAnswerRequirement({
                     questionType: subpart.question_type || 'descriptive',
                     answerFormat: subpart.answer_format,
                     correctAnswers: subpart.correct_answers,
                     totalAlternatives: subpart.total_alternatives,
-                    options: subpart.options
+                    options: subpart.options,
+                    hasDirectAnswer: subpart.has_direct_answer !== false, // FIXED: Subparts always have answers unless explicitly false
+                    isContextualOnly: subpart.is_contextual_only // FIXED: Pass contextual flag
                   });
 
                   if (subpartDerivedResult.answerRequirement) {
