@@ -117,8 +117,37 @@ export function getAuthenticatedUser(): User | null {
     return null;
   }
 
+  // CRITICAL FIX: Check if we should skip Supabase session validation during grace periods
+  // This prevents session expiry issues immediately after page reload
+  const shouldSkipSupabaseCheck = (() => {
+    // Skip check if Supabase is still initializing
+    if (supabaseInitializing) {
+      console.log('[Auth] Skipping Supabase check in getAuthenticatedUser - Supabase initializing');
+      return true;
+    }
+
+    // Skip check if page was recently loaded (within 60 seconds)
+    const lastPageLoadTime = getPersistedLastPageLoadTime();
+    const timeSincePageLoad = Date.now() - lastPageLoadTime;
+    if (timeSincePageLoad < 60000) {
+      console.log('[Auth] Skipping Supabase check in getAuthenticatedUser - page recently loaded');
+      return true;
+    }
+
+    // Skip check if user recently logged in (within 60 seconds)
+    const lastLoginTime = getPersistedLastLoginTime();
+    const timeSinceLogin = Date.now() - lastLoginTime;
+    if (timeSinceLogin < 60000) {
+      console.log('[Auth] Skipping Supabase check in getAuthenticatedUser - user recently logged in');
+      return true;
+    }
+
+    return false;
+  })();
+
   // Ensure the Supabase auth session is still valid when required
-  if (isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
+  // Use grace period during initialization to allow Supabase session to load
+  if (!shouldSkipSupabaseCheck && isSupabaseSessionRequired() && !isSupabaseSessionActive(30000)) {
     console.warn('[Auth] Supabase session is missing or expired. Clearing local auth state.');
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -589,10 +618,54 @@ function getPersistedLastPageLoadTime(): number {
   }
 }
 
+// Track if Supabase is initializing (to prevent premature session checks)
+let supabaseInitializing = true;
+let supabaseSessionReady = false;
+
 // Initialize login time from storage on module load
 if (typeof window !== 'undefined') {
   lastLoginTime = getPersistedLastLoginTime();
   persistLastPageLoadTime(); // Record page load time
+
+  // Listen for Supabase session initialization
+  // This is a more robust approach than just using a timer
+  import('./supabase').then(({ supabase }) => {
+    // Check if session is already available
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        supabaseSessionReady = true;
+        supabaseInitializing = false;
+        console.log('[Auth] Supabase session found and ready');
+      } else {
+        // Session not available yet, but still mark as initialized after checking
+        setTimeout(() => {
+          supabaseInitializing = false;
+          console.log('[Auth] Supabase initialization period complete (no session found)');
+        }, 5000);
+      }
+    }).catch(() => {
+      // Error checking session, use fallback timer
+      setTimeout(() => {
+        supabaseInitializing = false;
+        console.log('[Auth] Supabase initialization period complete (error checking session)');
+      }, 5000);
+    });
+
+    // Listen for auth state changes to update session ready flag
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        supabaseSessionReady = true;
+        supabaseInitializing = false;
+        console.log('[Auth] Supabase session ready after event:', event);
+      }
+    });
+  }).catch(() => {
+    // Fallback: mark as initialized after delay
+    setTimeout(() => {
+      supabaseInitializing = false;
+      console.log('[Auth] Supabase initialization period complete (fallback)');
+    }, 5000);
+  });
 }
 
 export function startSessionMonitoring(): void {

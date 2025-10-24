@@ -54,6 +54,7 @@ let warningShown = false;
 let isRedirecting = false;
 let storageListener: ((event: StorageEvent) => void) | null = null;
 let pageLoadTime = Date.now();
+let sessionManagerInitialized = false;
 
 // BroadcastChannel for cross-tab communication
 let broadcastChannel: BroadcastChannel | null = null;
@@ -124,6 +125,7 @@ export function initializeSessionManager(): void {
     window.addEventListener('storage', storageListener);
   }
 
+  sessionManagerInitialized = true;
   console.log('[SessionManager] Initialization complete');
 }
 
@@ -325,6 +327,12 @@ function checkSessionStatus(): void {
 
   const currentPath = window.location.pathname;
   if (isPublicPage(currentPath)) return;
+
+  // CRITICAL FIX: Don't check session if session manager hasn't fully initialized
+  if (!sessionManagerInitialized) {
+    console.log('[SessionManager] Skipping check - session manager still initializing');
+    return;
+  }
 
   // CRITICAL FIX: Don't check session immediately after page load (60 second grace period)
   const timeSincePageLoad = Date.now() - pageLoadTime;
