@@ -190,6 +190,17 @@ export function deriveAnswerFormat(question: {
     return null;
   }
 
+  // Complex questions: Check if they have direct answers
+  // If not, they're contextual containers for parts - mark as not_applicable
+  if (type === 'complex') {
+    // Complex questions with no correct answers are contextual only
+    if (!correct_answers || correct_answers.length === 0) {
+      return 'not_applicable';
+    }
+    // If complex question has correct answers, derive format based on content
+    // (fall through to content-based detection below)
+  }
+
   // Check for calculation keywords
   if (desc.includes('calculate') || desc.includes('compute') || desc.includes('work out')) {
     return 'calculation';
@@ -251,10 +262,24 @@ export function deriveAnswerRequirement(question: {
   total_alternatives?: number;
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
+  answer_format?: string;
+  question_description?: string;
 }): string | null {
+  // CRITICAL FIX: Derive answer_format if not provided, so we can pass it to the sophisticated deriver
+  let answerFormat = question.answer_format;
+  if (!answerFormat) {
+    answerFormat = deriveAnswerFormat({
+      type: question.type,
+      question_description: question.question_description,
+      correct_answers: question.correct_answers,
+      has_direct_answer: question.has_direct_answer,
+      is_contextual_only: question.is_contextual_only
+    }) || undefined;
+  }
+
   const result = sophisticatedDeriver({
     questionType: question.type,
-    answerFormat: undefined,
+    answerFormat: answerFormat, // FIXED: Now passing the actual answer format
     correctAnswers: question.correct_answers,
     totalAlternatives: question.total_alternatives,
     options: undefined,
