@@ -383,20 +383,9 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
                             is_data_url: attachment.file_url?.startsWith('data:'),
                             error: e
                           });
+                          // FIXED: Hide failed images without showing error card
                           if (parent) {
-                            target.style.display = 'none';
-                            const isDataUrl = attachment.file_url?.startsWith('data:');
-                            const urlLength = attachment.file_url?.length || 0;
-                            parent.innerHTML = `
-                              <div class="flex items-center justify-center h-48 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg">
-                                <div class="text-center p-4">
-                                  <p class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Failed to load image</p>
-                                  <p class="text-xs text-red-600 dark:text-red-400 mt-1">${attachment.file_name}</p>
-                                  <p class="text-[10px] text-red-500 dark:text-red-500 mt-2">Type: ${isDataUrl ? 'Data URL' : 'Remote URL'} • Size: ${urlLength} chars</p>
-                                  <p class="text-[10px] text-red-500 dark:text-red-500 mt-1">Check browser console for details</p>
-                                </div>
-                              </div>
-                            `;
+                            parent.style.display = 'none';
                           }
                         }}
                         onLoad={() => {
