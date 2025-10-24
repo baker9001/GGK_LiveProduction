@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Check, AlertCircle, FileText, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DynamicAnswerField from './DynamicAnswerField';
+import { shouldShowAnswerInput } from '@/lib/helpers/answerExpectationHelpers';
 import {
   ComplexQuestionDisplay as ComplexQuestionType,
   ComplexQuestionPartDisplay,
@@ -167,6 +168,9 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
     const isExpanded = expandedSubparts.has(subpart.id);
     const subpartAnswer = getSubpartAnswer(part.id, subpart.id);
 
+    // Subparts always require answers
+    const showAnswer = shouldShowAnswerInput(subpart, { level: 3 });
+
     return (
       <div key={subpart.id} className="ml-8 mb-4 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
         <div className="mb-2">
@@ -193,15 +197,16 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
 
         {isExpanded && (
           <div className="mt-3 space-y-3">
-            {/* Answer format indicator */}
-            {subpart.answer_format && (
+            {/* Answer format indicator - only show if answer is expected */}
+            {showAnswer && subpart.answer_format && (
               <div className="text-xs text-gray-500 dark:text-gray-400">
                 Answer format: <span className="font-medium">{subpart.answer_format.replace(/_/g, ' ')}</span>
               </div>
             )}
 
-            {/* Answer input field */}
-            <DynamicAnswerField
+            {/* Answer input field - only show if answer is expected */}
+            {showAnswer && (
+              <DynamicAnswerField
               question={{
                 id: subpart.id,
                 type: 'descriptive',
@@ -219,6 +224,7 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
               showCorrectAnswer={showCorrectAnswers}
               disabled={disabled}
             />
+            )}
 
             {/* Hint */}
             {showHints && subpart.hint && (
@@ -256,6 +262,9 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
     const partAnswer = getPartAnswer(part.id);
     const hasSubparts = part.subparts && part.subparts.length > 0;
 
+    // Check if this part expects a direct answer
+    const showAnswer = shouldShowAnswerInput(part, { hasSubparts, level: 2 });
+
     return (
       <div key={part.id} className="mb-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <div className="bg-gray-50 dark:bg-gray-900/50 p-4">
@@ -284,8 +293,8 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
 
         {isExpanded && (
           <div className="p-4 space-y-4">
-            {/* If part has no subparts, show answer input directly */}
-            {!hasSubparts && (
+            {/* If part expects an answer, show answer input */}
+            {showAnswer && (
               <>
                 {/* Answer format indicator */}
                 {part.answer_format && (
@@ -388,6 +397,14 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
           <p className="text-gray-900 dark:text-gray-100">{question.question_text}</p>
           {question.figure && renderAttachments(question.attachments)}
+
+          {/* Show contextual indicator if applicable */}
+          {question.is_contextual_only && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+              <AlertCircle className="w-3 h-3" />
+              <span>This is contextual text - answers are expected in the parts below</span>
+            </div>
+          )}
         </div>
       )}
 

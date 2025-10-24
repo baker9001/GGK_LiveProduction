@@ -115,6 +115,10 @@ export interface QuestionMasterAdmin {
   total_alternatives: number | null;
   correct_answer: string | null; // DEPRECATED - use question_correct_answers table
 
+  // Answer expectation fields (for complex questions)
+  has_direct_answer: boolean; // Whether this question expects a direct answer
+  is_contextual_only: boolean; // Whether the question text is purely contextual/introductory
+
   // Context and analytics
   context_metadata: Record<string, any>;
   has_context_structure: boolean;
@@ -161,6 +165,10 @@ export interface SubQuestion {
   answer_requirement: AnswerRequirement | null;
   total_alternatives: number | null;
   correct_answer: string | null; // DEPRECATED - use question_correct_answers table
+
+  // Answer expectation fields (for complex questions)
+  has_direct_answer: boolean; // Whether this part/subpart expects a direct answer
+  is_contextual_only: boolean; // Whether the part text is purely contextual/introductory
 
   // Context
   context_metadata: Record<string, any>;
@@ -510,6 +518,8 @@ export interface ComplexQuestionPart {
   marks: number;
   answer_format?: AnswerFormat;
   answer_requirement?: AnswerRequirement;
+  has_direct_answer?: boolean; // Whether this part expects a direct answer
+  is_contextual_only?: boolean; // Whether this part is purely contextual
   correct_answers: QuestionCorrectAnswer[];
   options?: QuestionOption[];
   attachments?: QuestionAttachment[];

@@ -19,6 +19,7 @@ import {
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
 import { sanitizeRichText } from '../../utils/richText';
+import { shouldShowAnswerInput } from '@/lib/helpers/answerExpectationHelpers';
 
 interface CorrectAnswer {
   answer: string;
@@ -69,6 +70,8 @@ export interface QuestionPart {
   hint?: string;
   explanation?: string;
   subparts?: QuestionPart[];
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }
 
 export interface QuestionDisplayData {
@@ -605,6 +608,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
   const renderQuestionPart = (part: QuestionPart, index: number, level: number = 0): React.ReactNode => {
     const isExpanded = expandedParts.has(part.id);
     const indent = level * 24; // 24px per level
+    const hasSubparts = part.subparts && part.subparts.length > 0;
+
+    // Determine if we should show answer input for this part
+    const showAnswer = shouldShowAnswerInput(part, { hasSubparts, level: level + 2 });
 
     return (
       <div key={part.id} className="space-y-2" style={{ marginLeft: `${indent}px` }}>
@@ -651,19 +658,26 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                   className="text-sm text-gray-900 dark:text-white rich-text-display space-y-2"
                   dangerouslySetInnerHTML={{ __html: sanitizeRichText(part.question_text) }}
                 />
+                {/* Show contextual indicator if applicable */}
+                {part.is_contextual_only && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>Contextual text - answers expected in subparts below</span>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Answer Format Info */}
-            {part.answer_format && (
+            {/* Answer Format Info - only show if answer is expected */}
+            {showAnswer && part.answer_format && (
               <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                 <FileText className="h-3 w-3" />
                 <span>Answer format: {part.answer_format}</span>
               </div>
             )}
 
-            {/* MCQ Options for this part */}
-            {part.options && part.options.length > 0 && (
+            {/* MCQ Options for this part - only show if answer is expected */}
+            {showAnswer && part.options && part.options.length > 0 && (
               <div className="space-y-2">
                 {part.options.map((option, optIndex) => (
                   <div
@@ -698,8 +712,8 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
               </div>
             )}
 
-            {/* Correct Answers for this part */}
-            {renderCorrectAnswers(part.correct_answers, part.answer_requirement)}
+            {/* Correct Answers for this part - only show if answer is expected */}
+            {showAnswer && renderCorrectAnswers(part.correct_answers, part.answer_requirement)}
 
             {/* Attachments for this part */}
             {part.attachments && part.attachments.length > 0 && (

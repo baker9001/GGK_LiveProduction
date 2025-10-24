@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 // Toast import caused "Cannot access 'Rt' before initialization" error
 // All toast notifications moved to UI layer (QuestionsTab.tsx)
 import { validateMCQPaper, logValidationResults } from '@/lib/extraction/optionDataValidator';
+import { detectAnswerExpectation } from '@/lib/extraction/answerExpectationDetector';
 
 // ===== TYPES =====
 export interface QuestionMapping {
@@ -1520,6 +1521,22 @@ export const insertSubQuestion = async (
     const rawPartType = ensureString(partTypeSource)?.toLowerCase() || null;
     const normalizedPartType = rawPartType === 'mcq' || rawPartType === 'tf' ? rawPartType : 'descriptive';
 
+    // Detect answer expectation for this part/subpart
+    const hasSubparts = part.subparts && Array.isArray(part.subparts) && part.subparts.length > 0;
+    const answerExpectation = detectAnswerExpectation(
+      {
+        question_text: part.question_text || part.question_description,
+        correct_answers: part.correct_answers,
+        answer_format: part.answer_format,
+        answer_requirement: part.answer_requirement,
+        subparts: part.subparts
+      },
+      {
+        hasSubparts,
+        level: parseInt(level) >= 3 ? 'subpart' : 'part'
+      }
+    );
+
     const subQuestionData = {
       question_id: parentQuestionId,
       parent_id: parentSubId || null, // Fix: Ensure it's JS null, not empty string
@@ -1541,7 +1558,10 @@ export const insertSubQuestion = async (
       total_alternatives: part.total_alternatives || null,
       correct_answer: ensureString(part.correct_answer) || null,
       // P1 FIX: Populate figure_required field for sub-questions
-      figure_required: requiresFigure(part)
+      figure_required: requiresFigure(part),
+      // Answer expectation fields (for complex questions)
+      has_direct_answer: answerExpectation.has_direct_answer,
+      is_contextual_only: answerExpectation.is_contextual_only
     };
 
     const { data: subQuestionRecord, error: subError } = await supabase
@@ -2266,6 +2286,23 @@ export const importQuestions = async (params: {
         // Get authenticated user ID for audit fields (reuse session from pre-flight validation)
         const currentUserId = session?.user?.id || null;
 
+        // Detect answer expectation for main question
+        const hasParts = question.parts && Array.isArray(question.parts) && question.parts.length > 0;
+        const mainAnswerExpectation = detectAnswerExpectation(
+          {
+            question_text: questionDescription,
+            question_description: questionDescription,
+            correct_answers: question.correct_answers,
+            answer_format: question.answer_format,
+            answer_requirement: question.answer_requirement,
+            parts: question.parts
+          },
+          {
+            hasSubparts: hasParts,
+            level: 'main'
+          }
+        );
+
         const questionData = {
           paper_id: paperId,
           data_structure_id: dataStructureInfo.id,
@@ -2302,6 +2339,9 @@ export const importQuestions = async (params: {
           correct_answer: ensureString(question.correct_answer) || null,
           // P1 FIX: Populate figure_required field
           figure_required: requiresFigure(question),
+          // Answer expectation fields (for complex questions)
+          has_direct_answer: mainAnswerExpectation.has_direct_answer,
+          is_contextual_only: mainAnswerExpectation.is_contextual_only,
           // P1 FIX: Populate audit trail fields
           created_by: currentUserId,
           updated_by: currentUserId,
