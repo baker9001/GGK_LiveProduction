@@ -43,6 +43,18 @@ const CONTEXTUAL_PATTERNS = [
   /^(consider|observe|look at)/i,
   /produced commercially in/i,
   /as shown in/i,
+
+  // IGCSE-specific contextual patterns
+  /is a(n)? (type of|kind of|example of)/i,
+  /can be (produced|found|made|obtained)/i,
+  /was discovered (in|by)/i,
+  /(researchers|scientists|biologists?) (in|at|measured|studied)/i,
+  /histograms? of (their )?results? (are|is) shown/i,
+  /(are|is) caused by/i,
+  /(performed|conducted) an experiment/i,
+  /^fig\. \d+\.\d+ (is|shows)/i,
+  /(found|located) in (the)/i,
+  /a dna molecule has/i,
 ];
 
 /**

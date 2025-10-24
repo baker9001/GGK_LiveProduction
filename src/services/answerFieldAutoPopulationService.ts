@@ -2,6 +2,7 @@
 
 import { supabase } from '../lib/supabase';
 import { deriveAnswerFormat, deriveAnswerRequirement } from '../lib/constants/answerOptions';
+import { detectAnswerExpectation } from '../lib/extraction/answerExpectationDetector';
 
 interface QuestionData {
   id: string;
@@ -10,6 +11,8 @@ interface QuestionData {
   answer_format?: string | null;
   answer_requirement?: string | null;
   total_alternatives?: number | null;
+  has_direct_answer?: boolean | null;
+  is_contextual_only?: boolean | null;
 }
 
 interface CorrectAnswerData {
@@ -71,14 +74,44 @@ export async function autoPopulateAnswerFields(
           .eq('question_id', question.id)
           .is('sub_question_id', null);
 
+        // Get parts/subparts to check if question is contextual
+        const { data: parts } = await supabase
+          .from('sub_questions')
+          .select('id')
+          .eq('question_id', question.id);
+
+        const hasSubparts = (parts?.length || 0) > 0;
+
+        // Detect answer expectation first
+        const answerExpectation = detectAnswerExpectation(
+          {
+            question_text: question.question_description,
+            question_description: question.question_description,
+            correct_answers: correctAnswers || [],
+            answer_format: question.answer_format,
+            answer_requirement: question.answer_requirement,
+            parts: parts || []
+          },
+          {
+            hasSubparts,
+            level: 'main'
+          }
+        );
+
         const updates: Partial<QuestionData> = {};
+
+        // Always set has_direct_answer and is_contextual_only flags
+        updates.has_direct_answer = answerExpectation.has_direct_answer;
+        updates.is_contextual_only = answerExpectation.is_contextual_only;
 
         // Auto-populate answer_format if missing
         if (!question.answer_format) {
           const derivedFormat = deriveAnswerFormat({
             type: question.type,
             question_description: question.question_description,
-            correct_answers: correctAnswers || []
+            correct_answers: correctAnswers || [],
+            has_direct_answer: answerExpectation.has_direct_answer,
+            is_contextual_only: answerExpectation.is_contextual_only
           });
           if (derivedFormat) {
             updates.answer_format = derivedFormat;
@@ -90,7 +123,9 @@ export async function autoPopulateAnswerFields(
           const derivedRequirement = deriveAnswerRequirement({
             type: question.type,
             correct_answers: correctAnswers || [],
-            total_alternatives: question.total_alternatives
+            total_alternatives: question.total_alternatives,
+            has_direct_answer: answerExpectation.has_direct_answer,
+            is_contextual_only: answerExpectation.is_contextual_only
           });
           if (derivedRequirement) {
             updates.answer_requirement = derivedRequirement;
@@ -148,14 +183,44 @@ export async function autoPopulateAnswerFields(
           .eq('sub_question_id', subQuestion.id)
           .is('question_id', null);
 
+        // Get nested subparts to check if this is contextual
+        const { data: nestedSubparts } = await supabase
+          .from('sub_questions')
+          .select('id')
+          .eq('parent_id', subQuestion.id);
+
+        const hasSubparts = (nestedSubparts?.length || 0) > 0;
+
+        // Detect answer expectation
+        const answerExpectation = detectAnswerExpectation(
+          {
+            question_text: subQuestion.question_description,
+            question_description: subQuestion.question_description,
+            correct_answers: correctAnswers || [],
+            answer_format: subQuestion.answer_format,
+            answer_requirement: subQuestion.answer_requirement,
+            subparts: nestedSubparts || []
+          },
+          {
+            hasSubparts,
+            level: 'part'
+          }
+        );
+
         const updates: Partial<QuestionData> = {};
+
+        // Always set has_direct_answer and is_contextual_only flags
+        updates.has_direct_answer = answerExpectation.has_direct_answer;
+        updates.is_contextual_only = answerExpectation.is_contextual_only;
 
         // Auto-populate answer_format if missing
         if (!subQuestion.answer_format) {
           const derivedFormat = deriveAnswerFormat({
             type: subQuestion.type,
             question_description: subQuestion.question_description,
-            correct_answers: correctAnswers || []
+            correct_answers: correctAnswers || [],
+            has_direct_answer: answerExpectation.has_direct_answer,
+            is_contextual_only: answerExpectation.is_contextual_only
           });
           if (derivedFormat) {
             updates.answer_format = derivedFormat;
@@ -167,7 +232,9 @@ export async function autoPopulateAnswerFields(
           const derivedRequirement = deriveAnswerRequirement({
             type: subQuestion.type,
             correct_answers: correctAnswers || [],
-            total_alternatives: subQuestion.total_alternatives
+            total_alternatives: subQuestion.total_alternatives,
+            has_direct_answer: answerExpectation.has_direct_answer,
+            is_contextual_only: answerExpectation.is_contextual_only
           });
           if (derivedRequirement) {
             updates.answer_requirement = derivedRequirement;
@@ -233,14 +300,51 @@ export async function autoPopulateQuestionAnswerFields(
       .eq(foreignKeyField, questionId)
       .is(nullField, null);
 
+    // Get subparts to detect if contextual
+    let hasSubparts = false;
+    if (isSubQuestion) {
+      const { data: nestedSubparts } = await supabase
+        .from('sub_questions')
+        .select('id')
+        .eq('parent_id', questionId);
+      hasSubparts = (nestedSubparts?.length || 0) > 0;
+    } else {
+      const { data: parts } = await supabase
+        .from('sub_questions')
+        .select('id')
+        .eq('question_id', questionId);
+      hasSubparts = (parts?.length || 0) > 0;
+    }
+
+    // Detect answer expectation
+    const answerExpectation = detectAnswerExpectation(
+      {
+        question_text: question.question_description,
+        question_description: question.question_description,
+        correct_answers: correctAnswers || [],
+        answer_format: question.answer_format,
+        answer_requirement: question.answer_requirement
+      },
+      {
+        hasSubparts,
+        level: isSubQuestion ? 'part' : 'main'
+      }
+    );
+
     const updates: any = {};
+
+    // Always set has_direct_answer and is_contextual_only flags
+    updates.has_direct_answer = answerExpectation.has_direct_answer;
+    updates.is_contextual_only = answerExpectation.is_contextual_only;
 
     // Derive answer_format if missing
     if (!question.answer_format) {
       const derivedFormat = deriveAnswerFormat({
         type: question.type,
         question_description: question.question_description,
-        correct_answers: correctAnswers || []
+        correct_answers: correctAnswers || [],
+        has_direct_answer: answerExpectation.has_direct_answer,
+        is_contextual_only: answerExpectation.is_contextual_only
       });
       if (derivedFormat) {
         updates.answer_format = derivedFormat;
@@ -252,7 +356,9 @@ export async function autoPopulateQuestionAnswerFields(
       const derivedRequirement = deriveAnswerRequirement({
         type: question.type,
         correct_answers: correctAnswers || [],
-        total_alternatives: question.total_alternatives
+        total_alternatives: question.total_alternatives,
+        has_direct_answer: answerExpectation.has_direct_answer,
+        is_contextual_only: answerExpectation.is_contextual_only
       });
       if (derivedRequirement) {
         updates.answer_requirement = derivedRequirement;

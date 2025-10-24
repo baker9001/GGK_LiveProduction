@@ -6,6 +6,8 @@
 
 import { QuestionDisplayData } from '../../components/shared/EnhancedQuestionDisplay';
 import { deriveAnswerRequirement } from './answerRequirementDeriver';
+import { detectAnswerExpectation } from './answerExpectationDetector';
+import { deriveAnswerFormat } from '../constants/answerOptions';
 
 interface ImportedQuestion {
   question_number: string | number;
@@ -116,30 +118,56 @@ export function transformImportedQuestion(
   // Get question text
   const questionText = imported.question_text || imported.question_description || '';
 
-  // Determine if question is contextual only (no direct answer expected)
+  // Detect answer expectation using enhanced detector
   const hasSubparts = Boolean((imported.parts && imported.parts.length > 0) || (imported.subparts && imported.subparts.length > 0));
-  const hasNoAnswers = !correctAnswers || correctAnswers.length === 0;
-  const isContextualOnly = hasSubparts && hasNoAnswers && !imported.answer_format;
+  const answerExpectation = detectAnswerExpectation(
+    {
+      question_text: questionText,
+      question_description: questionText,
+      correct_answers: correctAnswers,
+      answer_format: imported.answer_format,
+      answer_requirement: imported.answer_requirement,
+      parts: imported.parts || imported.subparts
+    },
+    {
+      hasSubparts,
+      level: 'main'
+    }
+  );
+
+  const isContextualOnly = answerExpectation.is_contextual_only;
+  const hasDirectAnswer = answerExpectation.has_direct_answer;
+
+  // Auto-fill answer_format if not provided
+  let answerFormat = imported.answer_format;
+  if (!answerFormat) {
+    if (isContextualOnly) {
+      answerFormat = 'not_applicable';
+    } else {
+      // Use enhanced deriveAnswerFormat from answerOptions
+      answerFormat = deriveAnswerFormat({
+        type: questionType,
+        question_description: questionText,
+        correct_answers: correctAnswers,
+        has_direct_answer: hasDirectAnswer,
+        is_contextual_only: isContextualOnly
+      }) || undefined;
+    }
+  }
 
   // Auto-fill answer_requirement if not provided
   let answerRequirement = imported.answer_requirement;
   if (!answerRequirement) {
     const derivedResult = deriveAnswerRequirement({
       questionType: questionType,
-      answerFormat: imported.answer_format,
+      answerFormat: answerFormat,
       correctAnswers: correctAnswers,
       totalAlternatives: imported.total_alternatives,
       options: options,
       isContextualOnly: isContextualOnly,
-      hasDirectAnswer: !isContextualOnly
+      hasDirectAnswer: hasDirectAnswer
     });
     answerRequirement = derivedResult.answerRequirement;
-  }
-
-  // Set default answer_format for contextual questions if not provided
-  let answerFormat = imported.answer_format;
-  if (!answerFormat && isContextualOnly) {
-    answerFormat = 'not_applicable';
   }
 
   return {
@@ -153,6 +181,8 @@ export function transformImportedQuestion(
     subtopic: imported.subtopic,
     answer_format: answerFormat,
     answer_requirement: answerRequirement,
+    has_direct_answer: hasDirectAnswer,
+    is_contextual_only: isContextualOnly,
     correct_answers: correctAnswers,
     options: options.length > 0 ? options : undefined,
     attachments: attachments.length > 0 ? attachments : undefined,
@@ -184,30 +214,57 @@ function transformQuestionPart(
 
   const attachments = processAttachments(part.attachments || []);
 
-  // Determine if part is contextual only
+  // Detect answer expectation for this part
   const hasSubparts = Boolean(part.subparts && part.subparts.length > 0);
-  const hasNoAnswers = !correctAnswers || correctAnswers.length === 0;
-  const isContextualOnly = hasSubparts && hasNoAnswers && !part.answer_format;
+  const partText = part.question_text || part.question_description || '';
+  const answerExpectation = detectAnswerExpectation(
+    {
+      question_text: partText,
+      question_description: partText,
+      correct_answers: correctAnswers,
+      answer_format: part.answer_format,
+      answer_requirement: part.answer_requirement,
+      subparts: part.subparts
+    },
+    {
+      hasSubparts,
+      level: 'part'
+    }
+  );
+
+  const isContextualOnly = answerExpectation.is_contextual_only;
+  const hasDirectAnswer = answerExpectation.has_direct_answer;
+
+  // Auto-fill answer_format if not provided
+  let answerFormat = part.answer_format;
+  if (!answerFormat) {
+    if (isContextualOnly) {
+      answerFormat = 'not_applicable';
+    } else {
+      // Use enhanced deriveAnswerFormat
+      answerFormat = deriveAnswerFormat({
+        type: 'descriptive',
+        question_description: partText,
+        correct_answers: correctAnswers,
+        has_direct_answer: hasDirectAnswer,
+        is_contextual_only: isContextualOnly
+      }) || undefined;
+    }
+  }
 
   // Auto-fill answer_requirement if not provided
   let answerRequirement = part.answer_requirement;
   if (!answerRequirement) {
     const derivedResult = deriveAnswerRequirement({
       questionType: 'descriptive', // Parts are typically descriptive unless they have options
-      answerFormat: part.answer_format,
+      answerFormat: answerFormat,
       correctAnswers: correctAnswers,
       totalAlternatives: part.total_alternatives,
       options: options,
       isContextualOnly: isContextualOnly,
-      hasDirectAnswer: !isContextualOnly
+      hasDirectAnswer: hasDirectAnswer
     });
     answerRequirement = derivedResult.answerRequirement;
-  }
-
-  // Set default answer_format for contextual parts if not provided
-  let answerFormat = part.answer_format;
-  if (!answerFormat && isContextualOnly) {
-    answerFormat = 'not_applicable';
   }
 
   return {
@@ -217,6 +274,8 @@ function transformQuestionPart(
     marks: part.marks || 0,
     answer_format: answerFormat,
     answer_requirement: answerRequirement,
+    has_direct_answer: hasDirectAnswer,
+    is_contextual_only: isContextualOnly,
     total_alternatives: part.total_alternatives,
     correct_answers: correctAnswers,
     options: options.length > 0 ? options : undefined,

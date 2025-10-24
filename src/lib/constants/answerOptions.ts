@@ -172,9 +172,16 @@ export function deriveAnswerFormat(question: {
   type: string;
   question_description?: string;
   correct_answers?: any[];
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }): string | null {
-  const { type, question_description = '', correct_answers = [] } = question;
+  const { type, question_description = '', correct_answers = [], has_direct_answer, is_contextual_only } = question;
   const desc = question_description.toLowerCase();
+
+  // Contextual-only questions don't need answer format
+  if (is_contextual_only === true || has_direct_answer === false) {
+    return 'not_applicable';
+  }
 
   // MCQ/TF questions don't need a specific format
   if (type === 'mcq' || type === 'tf') {
@@ -236,15 +243,22 @@ export function deriveAnswerRequirement(question: {
   type: string;
   correct_answers?: any[];
   total_alternatives?: number;
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }): string | null {
-  const { type, correct_answers = [], total_alternatives } = question;
+  const { type, correct_answers = [], total_alternatives, has_direct_answer, is_contextual_only } = question;
+
+  // Contextual-only questions don't need answer requirement
+  if (is_contextual_only === true || has_direct_answer === false) {
+    return 'not_applicable';
+  }
 
   // MCQ/TF questions are single choice
   if (type === 'mcq' || type === 'tf') {
     return 'single_choice';
   }
 
-  // No correct answers - cannot determine
+  // No correct answers - cannot determine (unless contextual)
   if (correct_answers.length === 0) {
     return null;
   }
