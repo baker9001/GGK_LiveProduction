@@ -878,7 +878,22 @@ export default function UsersTab() {
   const processUsersMutation = useMutation(
     async ({ users, action }: { users: AdminUser[], action: 'deactivate' | 'delete' }) => {
       const results = [];
-      
+      let sessionToken: string | null = null;
+
+      if (action === 'delete') {
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+          throw new Error('Supabase configuration missing. Please contact support.');
+        }
+
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError || !sessionData?.session) {
+          throw new Error('Session expired. Please refresh the page and try again.');
+        }
+
+        sessionToken = sessionData.session.access_token;
+      }
+
       for (const user of users) {
         try {
           if (user.id === currentUser?.id) {
@@ -893,63 +908,74 @@ export default function UsersTab() {
                 updated_at: new Date().toISOString()
               })
               .eq('id', user.id);
-            
+
             if (error) throw error;
-            
-          } else if (action === 'delete') {
-            // Check for dependencies before deletion
-            const { data: sessions } = await supabase
-              .from('past_paper_import_sessions')
-              .select('id')
-              .eq('uploader_id', user.id)
-              .limit(1);
-            
-            if (sessions && sessions.length > 0) {
-              throw new Error(`Cannot delete user: They have uploaded past papers.`);
+
+            // Log deactivation locally
+            try {
+              await supabase
+                .from('audit_logs')
+                .insert({
+                  user_id: currentUser?.id,
+                  action: `${action}_admin_user`,
+                  entity_type: 'admin_user',
+                  entity_id: user.id,
+                  details: {
+                    email: user.email,
+                    action: action
+                  }
+                });
+            } catch (logError) {
+              console.warn('Failed to log action:', logError);
             }
-            
-            // Delete from admin_users first
-            const { error: adminError } = await supabase
-              .from('admin_users')
-              .delete()
-              .eq('id', user.id);
-            
-            if (adminError) throw adminError;
-            
-            // Delete from users table
-            const { error: userError } = await supabase
-              .from('users')
-              .delete()
-              .eq('id', user.id);
-            
-            if (userError) throw userError;
+
+            results.push({ success: true });
+            continue;
           }
-          
-          // Log the action
-          try {
-            await supabase
-              .from('audit_logs')
-              .insert({
-                user_id: currentUser?.id,
-                action: `${action}_admin_user`,
-                entity_type: 'admin_user',
-                entity_id: user.id,
-                details: {
-                  email: user.email,
-                  action: action
-                }
-              });
-          } catch (logError) {
-            console.warn('Failed to log action:', logError);
+
+          // Delete flow handled by Edge Function
+          const { data: sessions } = await supabase
+            .from('past_paper_import_sessions')
+            .select('id')
+            .eq('uploader_id', user.id)
+            .limit(1);
+
+          if (sessions && sessions.length > 0) {
+            throw new Error(`Cannot delete user: They have uploaded past papers.`);
           }
-          
+
+          if (!sessionToken) {
+            throw new Error('Session expired. Please refresh the page and try again.');
+          }
+
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-admin-user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionToken}`,
+              'apikey': SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+              user_id: user.id,
+              email: user.email,
+              deleted_by: currentUser?.email,
+              deleted_by_name: currentUser?.name
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            const message = errorData?.error || errorData?.message || 'Failed to delete admin user.';
+            throw new Error(message);
+          }
+
           results.push({ success: true });
         } catch (error: any) {
           console.error(`Error ${action}ing user:`, error);
           results.push({ success: false, error: error.message });
         }
       }
-      
+
       return { results, action };
     },
     {
