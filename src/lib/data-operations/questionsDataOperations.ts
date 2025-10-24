@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 // All toast notifications moved to UI layer (QuestionsTab.tsx)
 import { validateMCQPaper, logValidationResults } from '@/lib/extraction/optionDataValidator';
 import { detectAnswerExpectation } from '@/lib/extraction/answerExpectationDetector';
+import { deriveAnswerFormat, deriveAnswerRequirement } from '@/lib/constants/answerOptions';
 
 // ===== TYPES =====
 export interface QuestionMapping {
@@ -1509,8 +1510,6 @@ export const insertSubQuestion = async (
         ? partMapping.subtopic_ids[0] : null
     );
     
-    const partAnswerFormat = part.answer_format || detectAnswerFormat(part.question_description || part.question_text || '');
-
     // Determine sub-question type - preserve 'mcq' and 'tf' types, default to 'descriptive'
     const partTypeSource =
       part?.question_type ??
@@ -1537,6 +1536,36 @@ export const insertSubQuestion = async (
       }
     );
 
+    // Auto-derive answer_format if not provided
+    const partQuestionDescription = part.question_description || part.question_text || '';
+    const derivedPartAnswerFormat = part.answer_format ||
+      deriveAnswerFormat({
+        type: normalizedPartType,
+        question_description: partQuestionDescription,
+        correct_answers: part.correct_answers || [],
+        has_direct_answer: answerExpectation.has_direct_answer,
+        is_contextual_only: answerExpectation.is_contextual_only
+      }) ||
+      detectAnswerFormat(partQuestionDescription);
+
+    // Auto-derive answer_requirement if not provided
+    const derivedPartAnswerRequirement = part.answer_requirement ||
+      deriveAnswerRequirement({
+        type: normalizedPartType,
+        correct_answers: part.correct_answers || [],
+        total_alternatives: part.total_alternatives,
+        has_direct_answer: answerExpectation.has_direct_answer,
+        is_contextual_only: answerExpectation.is_contextual_only
+      });
+
+    console.log(`🎯 Answer field derivation for ${partType} ${partLabel}:`);
+    console.log('   Original answer_format:', part.answer_format);
+    console.log('   Derived answer_format:', derivedPartAnswerFormat);
+    console.log('   Original answer_requirement:', part.answer_requirement);
+    console.log('   Derived answer_requirement:', derivedPartAnswerRequirement);
+    console.log('   Has direct answer:', answerExpectation.has_direct_answer);
+    console.log('   Is contextual only:', answerExpectation.is_contextual_only);
+
     const subQuestionData = {
       question_id: parentQuestionId,
       parent_id: parentSubId || null, // Fix: Ensure it's JS null, not empty string
@@ -1553,8 +1582,8 @@ export const insertSubQuestion = async (
       marks: !isNaN(parseInt(part.marks)) ? parseInt(part.marks) : 0,
       difficulty: ensureString(part.difficulty) || 'Medium',
       status: 'active',
-      answer_format: partAnswerFormat,
-      answer_requirement: ensureString(part.answer_requirement) || null,
+      answer_format: derivedPartAnswerFormat,
+      answer_requirement: derivedPartAnswerRequirement,
       total_alternatives: part.total_alternatives || null,
       correct_answer: ensureString(part.correct_answer) || null,
       // P1 FIX: Populate figure_required field for sub-questions
@@ -2303,6 +2332,35 @@ export const importQuestions = async (params: {
           }
         );
 
+        // Auto-derive answer_format if not provided
+        const derivedAnswerFormat = question.answer_format ||
+          deriveAnswerFormat({
+            type: normalizedType,
+            question_description: questionDescription,
+            correct_answers: question.correct_answers || [],
+            has_direct_answer: mainAnswerExpectation.has_direct_answer,
+            is_contextual_only: mainAnswerExpectation.is_contextual_only
+          }) ||
+          questionAnswerFormat;
+
+        // Auto-derive answer_requirement if not provided
+        const derivedAnswerRequirement = question.answer_requirement ||
+          deriveAnswerRequirement({
+            type: normalizedType,
+            correct_answers: question.correct_answers || [],
+            total_alternatives: question.total_alternatives,
+            has_direct_answer: mainAnswerExpectation.has_direct_answer,
+            is_contextual_only: mainAnswerExpectation.is_contextual_only
+          });
+
+        console.log('🎯 Answer field derivation for main question:');
+        console.log('   Original answer_format:', question.answer_format);
+        console.log('   Derived answer_format:', derivedAnswerFormat);
+        console.log('   Original answer_requirement:', question.answer_requirement);
+        console.log('   Derived answer_requirement:', derivedAnswerRequirement);
+        console.log('   Has direct answer:', mainAnswerExpectation.has_direct_answer);
+        console.log('   Is contextual only:', mainAnswerExpectation.is_contextual_only);
+
         const questionData = {
           paper_id: paperId,
           data_structure_id: dataStructureInfo.id,
@@ -2333,8 +2391,8 @@ export const importQuestions = async (params: {
           status: 'active',
           year: yearOverride || new Date().getFullYear(),
           import_session_id: importSessionId || null,
-          answer_format: questionAnswerFormat,
-          answer_requirement: ensureString(question.answer_requirement) || null,
+          answer_format: derivedAnswerFormat,
+          answer_requirement: derivedAnswerRequirement,
           total_alternatives: question.total_alternatives || null,
           correct_answer: ensureString(question.correct_answer) || null,
           // P1 FIX: Populate figure_required field
