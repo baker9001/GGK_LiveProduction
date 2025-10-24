@@ -1,5 +1,7 @@
 // src/lib/constants/answerOptions.ts
 
+import { deriveAnswerRequirement as sophisticatedDeriver } from '../extraction/answerRequirementDeriver';
+
 /**
  * Centralized configuration for Answer Format and Answer Requirement options
  * Used across Papers Setup (import) and Questions Setup (QA) stages
@@ -250,9 +252,6 @@ export function deriveAnswerRequirement(question: {
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
 }): string | null {
-  // Import the sophisticated deriver dynamically to avoid circular dependencies
-  const { deriveAnswerRequirement: sophisticatedDeriver } = require('../extraction/answerRequirementDeriver');
-
   const result = sophisticatedDeriver({
     questionType: question.type,
     answerFormat: undefined,
