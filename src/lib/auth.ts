@@ -28,6 +28,8 @@ const REMEMBER_SESSION_KEY = 'ggk_remember_session';
 const SESSION_EXPIRED_NOTICE_KEY = 'ggk_session_expired_notice';
 const SUPABASE_SESSION_STORAGE_KEY = 'supabase.auth.token';
 const SUPABASE_SESSION_REQUIRED_KEY = 'ggk_supabase_session_required';
+const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
+const LAST_PAGE_LOAD_TIME_KEY = 'ggk_last_page_load_time';
 export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
 // Session durations
@@ -83,10 +85,11 @@ export function setAuthenticatedUser(user: User): void {
   }
 
   // CRITICAL FIX: Record login time to prevent session monitoring from interfering
-  lastLoginTime = Date.now();
+  const loginTime = Date.now();
+  persistLastLoginTime(loginTime);
 
   console.log(`[Auth] Session created with ${rememberMe ? '30-day' : '24-hour'} expiration`);
-  console.log(`[Auth] Login time recorded: ${new Date(lastLoginTime).toISOString()}`);
+  console.log(`[Auth] Login time recorded: ${new Date(loginTime).toISOString()}`);
 
   // SECURITY: Dispatch auth change event
   dispatchAuthChange();
@@ -183,21 +186,23 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(REMEMBER_SESSION_KEY);
   localStorage.removeItem(SUPABASE_SESSION_REQUIRED_KEY);
+  localStorage.removeItem(LAST_LOGIN_TIME_KEY);
+  localStorage.removeItem(LAST_PAGE_LOAD_TIME_KEY);
 
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
   localStorage.removeItem('last_user_id');
-  
+
   // Clear remembered email only if user explicitly logs out
   // (not on session expiration)
   if (localStorage.getItem('ggk_user_logout') === 'true') {
     localStorage.removeItem('ggk_remembered_email');
     localStorage.removeItem('ggk_user_logout');
   }
-  
+
   sessionStorage.clear();
   console.log('User logged out, all auth data cleared');
-  
+
   // SECURITY: Dispatch auth change event
   dispatchAuthChange();
 }
@@ -548,6 +553,48 @@ let isMonitoringActive = false;
 let isRedirecting = false;
 let lastLoginTime: number = 0;
 
+// Helper functions to persist login and page load times
+function persistLastLoginTime(time: number): void {
+  lastLoginTime = time;
+  try {
+    localStorage.setItem(LAST_LOGIN_TIME_KEY, time.toString());
+  } catch (error) {
+    console.warn('[Auth] Failed to persist login time:', error);
+  }
+}
+
+function getPersistedLastLoginTime(): number {
+  try {
+    const stored = localStorage.getItem(LAST_LOGIN_TIME_KEY);
+    return stored ? parseInt(stored, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function persistLastPageLoadTime(): void {
+  try {
+    localStorage.setItem(LAST_PAGE_LOAD_TIME_KEY, Date.now().toString());
+  } catch (error) {
+    console.warn('[Auth] Failed to persist page load time:', error);
+  }
+}
+
+function getPersistedLastPageLoadTime(): number {
+  try {
+    const stored = localStorage.getItem(LAST_PAGE_LOAD_TIME_KEY);
+    return stored ? parseInt(stored, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Initialize login time from storage on module load
+if (typeof window !== 'undefined') {
+  lastLoginTime = getPersistedLastLoginTime();
+  persistLastPageLoadTime(); // Record page load time
+}
+
 export function startSessionMonitoring(): void {
   // Prevent multiple intervals
   if (sessionCheckInterval) {
@@ -556,6 +603,10 @@ export function startSessionMonitoring(): void {
 
   // Reset flags
   isRedirecting = false;
+
+  // Load persisted times
+  lastLoginTime = getPersistedLastLoginTime();
+  const lastPageLoadTime = getPersistedLastPageLoadTime();
 
   // Don't start monitoring immediately - wait for app to initialize
   // CRITICAL FIX: Increased delay to 10 seconds to prevent interference with login flow
@@ -566,10 +617,18 @@ export function startSessionMonitoring(): void {
       // Skip if not monitoring or already redirecting
       if (!isMonitoringActive || isRedirecting) return;
 
-      // CRITICAL FIX: Don't monitor if user just logged in (within last 30 seconds)
+      // CRITICAL FIX: Don't monitor if user just logged in (within last 60 seconds)
       const timeSinceLogin = Date.now() - lastLoginTime;
-      if (timeSinceLogin < 30000) {
-        console.log('[SessionMonitoring] Skipping check - user just logged in');
+      if (timeSinceLogin < 60000) {
+        console.log('[SessionMonitoring] Skipping check - user recently logged in');
+        return;
+      }
+
+      // CRITICAL FIX: Don't monitor if page just loaded (within last 60 seconds)
+      // This prevents session expiry issues after page reload
+      const timeSincePageLoad = Date.now() - lastPageLoadTime;
+      if (timeSincePageLoad < 60000) {
+        console.log('[SessionMonitoring] Skipping check - page recently loaded');
         return;
       }
 
