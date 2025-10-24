@@ -30,6 +30,10 @@ import {
   getAnswerRequirementExplanation,
   validateAnswerRequirement
 } from '../../lib/extraction/answerRequirementDeriver';
+import {
+  ANSWER_FORMAT_OPTIONS,
+  ANSWER_REQUIREMENT_OPTIONS
+} from '../../lib/constants/answerOptions';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -1076,42 +1080,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const answerFormatOptions = useMemo(
     () =>
-      [
-        'single_word',
-        'single_line',
-        'two_items',
-        'two_items_connected',
-        'multi_line',
-        'multi_line_labeled',
-        'calculation',
-        'equation',
-        'chemical_structure',
-        'structural_diagram',
-        'diagram',
-        'table',
-        'graph',
-        'code',
-        'audio',
-        'file_upload',
-      ].map(value => ({
-        value,
-        label: formatOptionLabel(value),
+      ANSWER_FORMAT_OPTIONS.map(option => ({
+        value: option.value,
+        label: option.label,
       })),
     []
   );
 
   const answerRequirementOptions = useMemo(
     () =>
-      [
-        'single_choice',
-        'both_required',
-        'any_2_from',
-        'any_3_from',
-        'all_required',
-        'alternative_methods',
-      ].map(value => ({
-        value,
-        label: formatOptionLabel(value),
+      ANSWER_REQUIREMENT_OPTIONS.map(option => ({
+        value: option.value,
+        label: option.label,
       })),
     []
   );
