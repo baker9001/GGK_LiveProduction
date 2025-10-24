@@ -141,33 +141,26 @@ export function transformImportedQuestion(
   // Auto-fill answer_format if not provided
   let answerFormat = imported.answer_format;
   if (!answerFormat) {
-    if (isContextualOnly) {
-      answerFormat = 'not_applicable';
-    } else {
-      // Use enhanced deriveAnswerFormat from answerOptions
-      answerFormat = deriveAnswerFormat({
-        type: questionType,
-        question_description: questionText,
-        correct_answers: correctAnswers,
-        has_direct_answer: hasDirectAnswer,
-        is_contextual_only: isContextualOnly
-      }) || undefined;
-    }
+    // Use enhanced deriveAnswerFormat from answerOptions
+    answerFormat = deriveAnswerFormat({
+      type: questionType,
+      question_description: questionText,
+      correct_answers: correctAnswers,
+      has_direct_answer: hasDirectAnswer,
+      is_contextual_only: isContextualOnly
+    }) || undefined;
   }
 
   // Auto-fill answer_requirement if not provided
   let answerRequirement = imported.answer_requirement;
   if (!answerRequirement) {
-    const derivedResult = deriveAnswerRequirement({
-      questionType: questionType,
-      answerFormat: answerFormat,
-      correctAnswers: correctAnswers,
-      totalAlternatives: imported.total_alternatives,
-      options: options,
-      isContextualOnly: isContextualOnly,
-      hasDirectAnswer: hasDirectAnswer
+    answerRequirement = deriveAnswerRequirement({
+      type: questionType,
+      correct_answers: correctAnswers,
+      total_alternatives: imported.total_alternatives,
+      has_direct_answer: hasDirectAnswer,
+      is_contextual_only: isContextualOnly
     });
-    answerRequirement = derivedResult.answerRequirement;
   }
 
   return {
@@ -238,33 +231,27 @@ function transformQuestionPart(
   // Auto-fill answer_format if not provided
   let answerFormat = part.answer_format;
   if (!answerFormat) {
-    if (isContextualOnly) {
-      answerFormat = 'not_applicable';
-    } else {
-      // Use enhanced deriveAnswerFormat
-      answerFormat = deriveAnswerFormat({
-        type: 'descriptive',
-        question_description: partText,
-        correct_answers: correctAnswers,
-        has_direct_answer: hasDirectAnswer,
-        is_contextual_only: isContextualOnly
-      }) || undefined;
-    }
+    // Use enhanced deriveAnswerFormat
+    answerFormat = deriveAnswerFormat({
+      type: 'descriptive',
+      question_description: partText,
+      correct_answers: correctAnswers,
+      has_direct_answer: hasDirectAnswer,
+      is_contextual_only: isContextualOnly
+    }) || undefined;
   }
 
   // Auto-fill answer_requirement if not provided
   let answerRequirement = part.answer_requirement;
   if (!answerRequirement) {
-    const derivedResult = deriveAnswerRequirement({
-      questionType: 'descriptive', // Parts are typically descriptive unless they have options
-      answerFormat: answerFormat,
-      correctAnswers: correctAnswers,
-      totalAlternatives: part.total_alternatives,
-      options: options,
-      isContextualOnly: isContextualOnly,
-      hasDirectAnswer: hasDirectAnswer
+    // Parts are typically descriptive unless they have options
+    answerRequirement = deriveAnswerRequirement({
+      type: 'descriptive',
+      correct_answers: correctAnswers,
+      total_alternatives: part.total_alternatives,
+      has_direct_answer: hasDirectAnswer,
+      is_contextual_only: isContextualOnly
     });
-    answerRequirement = derivedResult.answerRequirement;
   }
 
   return {

@@ -178,9 +178,9 @@ export function deriveAnswerFormat(question: {
   const { type, question_description = '', correct_answers = [], has_direct_answer, is_contextual_only } = question;
   const desc = question_description.toLowerCase();
 
-  // Contextual-only questions don't need answer format
+  // Contextual-only questions should be marked as 'not_applicable'
   if (is_contextual_only === true || has_direct_answer === false) {
-    return null; // Return null to prevent auto-fill
+    return 'not_applicable';
   }
 
   // MCQ/TF questions don't need a specific format - return null to prevent auto-fill
@@ -239,6 +239,10 @@ export function deriveAnswerFormat(question: {
   }
 }
 
+/**
+ * Derive answer requirement using sophisticated logic from answerRequirementDeriver
+ * This is a wrapper that maintains backward compatibility while using the more advanced deriver
+ */
 export function deriveAnswerRequirement(question: {
   type: string;
   correct_answers?: any[];
@@ -246,51 +250,18 @@ export function deriveAnswerRequirement(question: {
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
 }): string | null {
-  const { type, correct_answers = [], total_alternatives, has_direct_answer, is_contextual_only } = question;
+  // Import the sophisticated deriver dynamically to avoid circular dependencies
+  const { deriveAnswerRequirement: sophisticatedDeriver } = require('../extraction/answerRequirementDeriver');
 
-  // Contextual-only questions don't need answer requirement
-  if (is_contextual_only === true || has_direct_answer === false) {
-    return null; // Return null to prevent auto-fill
-  }
+  const result = sophisticatedDeriver({
+    questionType: question.type,
+    answerFormat: undefined,
+    correctAnswers: question.correct_answers,
+    totalAlternatives: question.total_alternatives,
+    options: undefined,
+    isContextualOnly: question.is_contextual_only,
+    hasDirectAnswer: question.has_direct_answer
+  });
 
-  // MCQ/TF questions don't need answer requirement - return null to prevent auto-fill
-  if (type === 'mcq' || type === 'tf') {
-    return null;
-  }
-
-  // No correct answers - cannot determine (unless contextual)
-  if (correct_answers.length === 0) {
-    return null;
-  }
-
-  // Single correct answer
-  if (correct_answers.length === 1) {
-    return 'single_choice';
-  }
-
-  // Multiple correct answers with alternatives
-  if (total_alternatives && total_alternatives > correct_answers.length) {
-    // Check if answers have alternative_id groupings
-    const hasAlternativeGroups = correct_answers.some(a => a.alternative_id !== null && a.alternative_id !== undefined);
-
-    if (hasAlternativeGroups) {
-      return 'alternative_methods';
-    }
-
-    // Derive from count
-    if (correct_answers.length === 2) {
-      return 'any_2_from';
-    } else if (correct_answers.length === 3) {
-      return 'any_3_from';
-    }
-    return 'acceptable_variations';
-  }
-
-  // Two items that must both be correct
-  if (correct_answers.length === 2) {
-    return 'both_required';
-  }
-
-  // All items required
-  return 'all_required';
+  return result.answerRequirement;
 }
