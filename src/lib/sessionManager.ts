@@ -43,6 +43,8 @@ export const SESSION_ACTIVITY_EVENT = 'ggk-session-activity';
 const LAST_ACTIVITY_KEY = 'ggk_last_activity';
 const SESSION_WARNING_SHOWN_KEY = 'ggk_session_warning_shown';
 const LAST_AUTO_EXTEND_KEY = 'ggk_last_auto_extend';
+const LAST_PAGE_LOAD_TIME_KEY = 'ggk_last_page_load_time';
+const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
 
 // Activity tracking
 let lastActivityTime = Date.now();
@@ -51,6 +53,7 @@ let activityCheckInterval: NodeJS.Timeout | null = null;
 let warningShown = false;
 let isRedirecting = false;
 let storageListener: ((event: StorageEvent) => void) | null = null;
+let pageLoadTime = Date.now();
 
 // BroadcastChannel for cross-tab communication
 let broadcastChannel: BroadcastChannel | null = null;
@@ -62,6 +65,14 @@ export function initializeSessionManager(): void {
   if (typeof window === 'undefined') return;
 
   console.log('[SessionManager] Initializing comprehensive session management');
+
+  // Record page load time
+  pageLoadTime = Date.now();
+  try {
+    localStorage.setItem(LAST_PAGE_LOAD_TIME_KEY, pageLoadTime.toString());
+  } catch (error) {
+    console.warn('[SessionManager] Failed to persist page load time:', error);
+  }
 
   // Initialize BroadcastChannel for cross-tab sync
   try {
@@ -90,6 +101,13 @@ export function initializeSessionManager(): void {
       if (!event) return;
       if (event.key !== 'supabase.auth.token') return;
       if (!isSupabaseSessionRequired()) return;
+
+      // CRITICAL FIX: Don't check Supabase session immediately after page load
+      const timeSincePageLoad = Date.now() - pageLoadTime;
+      if (timeSincePageLoad < 60000) {
+        console.log('[SessionManager] Skipping Supabase check - page recently loaded');
+        return;
+      }
 
       const supabaseRemaining = getSupabaseSessionRemainingMinutes();
 
@@ -201,6 +219,14 @@ function recordActivity(): void {
 }
 
 /**
+ * Public function to manually record activity
+ * Useful before page reloads or navigation
+ */
+export function recordUserActivity(): void {
+  recordActivity();
+}
+
+/**
  * Check if user has been active recently
  */
 export function isUserActive(): boolean {
@@ -300,14 +326,37 @@ function checkSessionStatus(): void {
   const currentPath = window.location.pathname;
   if (isPublicPage(currentPath)) return;
 
+  // CRITICAL FIX: Don't check session immediately after page load (60 second grace period)
+  const timeSincePageLoad = Date.now() - pageLoadTime;
+  if (timeSincePageLoad < 60000) {
+    console.log('[SessionManager] Skipping check - page recently loaded');
+    return;
+  }
+
+  // CRITICAL FIX: Don't check session immediately after login (60 second grace period)
+  try {
+    const lastLoginTimeStr = localStorage.getItem(LAST_LOGIN_TIME_KEY);
+    if (lastLoginTimeStr) {
+      const lastLoginTime = parseInt(lastLoginTimeStr, 10);
+      const timeSinceLogin = Date.now() - lastLoginTime;
+      if (timeSinceLogin < 60000) {
+        console.log('[SessionManager] Skipping check - user recently logged in');
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn('[SessionManager] Failed to check login time:', error);
+  }
+
   const user = getAuthenticatedUser();
   if (!user) {
     handleSessionExpired('Your session has expired. Please sign in again to continue.');
     return;
   }
 
-  // Ensure Supabase session is also valid (for backend auth parity)
-  if (isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
+  // CRITICAL FIX: Add grace period for Supabase session validation (30 seconds)
+  // This allows time for the Supabase session to refresh after page reload
+  if (isSupabaseSessionRequired() && !isSupabaseSessionActive(30000)) {
     handleSessionExpired('Your secure session has expired. Please sign in again to continue.');
     return;
   }

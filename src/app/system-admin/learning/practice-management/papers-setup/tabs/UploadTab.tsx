@@ -8,6 +8,7 @@ import { ScrollNavigator } from '../../../../../../components/shared/ScrollNavig
 import { ProgressBar } from '../../../../../../components/shared/ProgressBar';
 import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
+import { recordUserActivity } from '../../../../../../lib/sessionManager';
 
 interface UploadTabProps {
   onFileSelected: (file: File) => void;
@@ -67,6 +68,10 @@ export function UploadTab({
       const cleanUrl = window.location.pathname;
       window.history.replaceState(null, '', cleanUrl);
 
+      // CRITICAL FIX: Record user activity before page reload to prevent session expiry
+      recordUserActivity();
+      console.log('[UploadTab] Activity recorded before page reload');
+
       // Reload page to start fresh
       window.location.reload();
     } catch (err) {
@@ -119,6 +124,10 @@ export function UploadTab({
 
   // Refresh session data
   const handleRefreshSession = () => {
+    // CRITICAL FIX: Record user activity before page reload to prevent session expiry
+    recordUserActivity();
+    console.log('[UploadTab] Activity recorded before page reload');
+
     window.location.reload();
   };
 
