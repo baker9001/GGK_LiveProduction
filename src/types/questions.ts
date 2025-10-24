@@ -45,7 +45,8 @@ export type AnswerFormat =
   | 'graph'
   | 'code'
   | 'audio'
-  | 'file_upload';
+  | 'file_upload'
+  | 'not_applicable';
 
 export type AnswerRequirement =
   | 'single_choice'
@@ -55,7 +56,8 @@ export type AnswerRequirement =
   | 'any_3_from'
   | 'all_required'
   | 'alternative_methods'
-  | 'acceptable_variations';
+  | 'acceptable_variations'
+  | 'not_applicable';
 
 export type AlternativeType =
   | 'standalone'

@@ -23,18 +23,23 @@ export type AnswerFormat =
   | 'structural_diagram'
   | 'diagram'
   | 'table'
+  | 'table_completion'
   | 'graph'
   | 'code'
   | 'audio'
-  | 'file_upload';
+  | 'file_upload'
+  | 'not_applicable';
 
 export type AnswerRequirement =
   | 'single_choice'
   | 'both_required'
+  | 'any_one_from'
   | 'any_2_from'
   | 'any_3_from'
   | 'all_required'
-  | 'alternative_methods';
+  | 'alternative_methods'
+  | 'acceptable_variations'
+  | 'not_applicable';
 
 interface CorrectAnswer {
   answer?: string;
@@ -51,6 +56,8 @@ interface DeriveAnswerRequirementParams {
   correctAnswers?: CorrectAnswer[] | null;
   totalAlternatives?: number | null;
   options?: Array<{ is_correct?: boolean }> | null;
+  isContextualOnly?: boolean;
+  hasDirectAnswer?: boolean;
 }
 
 interface AnswerRequirementResult {
@@ -68,8 +75,19 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
     answerFormat,
     correctAnswers = [],
     totalAlternatives,
-    options = []
+    options = [],
+    isContextualOnly = false,
+    hasDirectAnswer = true
   } = params;
+
+  // Handle contextual-only questions (no answer expected)
+  if (isContextualOnly || hasDirectAnswer === false) {
+    return {
+      answerRequirement: 'not_applicable',
+      confidence: 'high',
+      reason: 'Question is contextual only - no direct answer expected'
+    };
+  }
 
   // Handle MCQ and True/False - always single choice
   if (questionType === 'mcq' || questionType === 'tf') {
@@ -309,6 +327,9 @@ export function getAnswerRequirementExplanation(requirement: AnswerRequirement |
     case 'both_required':
       return 'Student must provide both required components';
 
+    case 'any_one_from':
+      return 'Student must provide any one correct answer from the available options';
+
     case 'any_2_from':
       return 'Student must provide any 2 correct answers from the available options';
 
@@ -320,6 +341,12 @@ export function getAnswerRequirementExplanation(requirement: AnswerRequirement |
 
     case 'alternative_methods':
       return 'Multiple valid solution methods are acceptable - student must complete one valid approach';
+
+    case 'acceptable_variations':
+      return 'Various forms or phrasings of the answer are acceptable';
+
+    case 'not_applicable':
+      return 'No direct answer expected - question provides context only';
 
     default:
       return 'Answer requirement not specified - requires manual review';

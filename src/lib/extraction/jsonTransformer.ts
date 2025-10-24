@@ -116,6 +116,11 @@ export function transformImportedQuestion(
   // Get question text
   const questionText = imported.question_text || imported.question_description || '';
 
+  // Determine if question is contextual only (no direct answer expected)
+  const hasSubparts = Boolean((imported.parts && imported.parts.length > 0) || (imported.subparts && imported.subparts.length > 0));
+  const hasNoAnswers = !correctAnswers || correctAnswers.length === 0;
+  const isContextualOnly = hasSubparts && hasNoAnswers && !imported.answer_format;
+
   // Auto-fill answer_requirement if not provided
   let answerRequirement = imported.answer_requirement;
   if (!answerRequirement) {
@@ -124,9 +129,17 @@ export function transformImportedQuestion(
       answerFormat: imported.answer_format,
       correctAnswers: correctAnswers,
       totalAlternatives: imported.total_alternatives,
-      options: options
+      options: options,
+      isContextualOnly: isContextualOnly,
+      hasDirectAnswer: !isContextualOnly
     });
     answerRequirement = derivedResult.answerRequirement;
+  }
+
+  // Set default answer_format for contextual questions if not provided
+  let answerFormat = imported.answer_format;
+  if (!answerFormat && isContextualOnly) {
+    answerFormat = 'not_applicable';
   }
 
   return {
@@ -138,7 +151,7 @@ export function transformImportedQuestion(
     difficulty: imported.difficulty,
     topic: imported.topic,
     subtopic: imported.subtopic,
-    answer_format: imported.answer_format,
+    answer_format: answerFormat,
     answer_requirement: answerRequirement,
     correct_answers: correctAnswers,
     options: options.length > 0 ? options : undefined,
@@ -171,6 +184,11 @@ function transformQuestionPart(
 
   const attachments = processAttachments(part.attachments || []);
 
+  // Determine if part is contextual only
+  const hasSubparts = Boolean(part.subparts && part.subparts.length > 0);
+  const hasNoAnswers = !correctAnswers || correctAnswers.length === 0;
+  const isContextualOnly = hasSubparts && hasNoAnswers && !part.answer_format;
+
   // Auto-fill answer_requirement if not provided
   let answerRequirement = part.answer_requirement;
   if (!answerRequirement) {
@@ -179,9 +197,17 @@ function transformQuestionPart(
       answerFormat: part.answer_format,
       correctAnswers: correctAnswers,
       totalAlternatives: part.total_alternatives,
-      options: options
+      options: options,
+      isContextualOnly: isContextualOnly,
+      hasDirectAnswer: !isContextualOnly
     });
     answerRequirement = derivedResult.answerRequirement;
+  }
+
+  // Set default answer_format for contextual parts if not provided
+  let answerFormat = part.answer_format;
+  if (!answerFormat && isContextualOnly) {
+    answerFormat = 'not_applicable';
   }
 
   return {
@@ -189,7 +215,7 @@ function transformQuestionPart(
     part_label: partLabel,
     question_text: part.question_text || part.question_description || '',
     marks: part.marks || 0,
-    answer_format: part.answer_format,
+    answer_format: answerFormat,
     answer_requirement: answerRequirement,
     total_alternatives: part.total_alternatives,
     correct_answers: correctAnswers,
