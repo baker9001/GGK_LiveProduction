@@ -1638,6 +1638,36 @@ export default function PapersSetupPage() {
     navigate({ search: params.toString() });
   };
 
+  // Clear session state without page reload
+  const handleClearSession = useCallback(() => {
+    // Reset all state to initial values
+    setImportSession(null);
+    setUploadedFile(null);
+    setParsedData(null);
+    setError(null);
+    setUploadProgress(0);
+    setStructureComplete(false);
+    setStructureCompleteCalled(false);
+    setExistingPaperId(null);
+    setSavedPaperDetails(null);
+    setStagedAttachments({});
+
+    // Reset tab statuses
+    setTabStatuses({
+      upload: 'pending',
+      structure: 'pending',
+      metadata: 'pending',
+      questions: 'pending',
+    });
+
+    // Navigate to upload tab
+    setActiveTab('upload');
+    const params = new URLSearchParams(location.search);
+    params.delete('session');
+    params.set('tab', 'upload');
+    navigate({ search: params.toString() }, { replace: true });
+  }, [location.search, navigate]);
+
   const getAppropriateTab = (session: any) => {
     if (session.metadata?.questions_imported) return 'questions';
     if (session.metadata?.metadata_complete) return 'questions';
@@ -1972,6 +2002,7 @@ export default function PapersSetupPage() {
                 onSelectPreviousSession={handleSelectPreviousSession}
                 importSession={importSession}
                 onNavigateToTab={handleTabChange}
+                onClearSession={handleClearSession}
               />
             </div>
           
