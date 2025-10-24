@@ -19,7 +19,7 @@ export default defineConfig({
     'process.env': {},
   },
   optimizeDeps: {
-    include: ["pdfjs-dist", "react", "react-dom", "buffer"]
+    include: ["pdfjs-dist", "react-pdf", "react", "react-dom", "buffer"]
   },
   build: {
     rollupOptions: {
@@ -36,7 +36,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'pdf-worker': ['pdfjs-dist'],
+          'pdf-libs': ['pdfjs-dist', 'react-pdf'],
           'ui-components': ['lucide-react'],
           'query': ['@tanstack/react-query'],
           'supabase': ['@supabase/supabase-js'],

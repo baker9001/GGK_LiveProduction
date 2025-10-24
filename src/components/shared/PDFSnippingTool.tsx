@@ -4,12 +4,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Scissors, Check, FileUp, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, AlertCircle, RotateCcw } from 'lucide-react';
 import { Button } from './Button';
 import { toast } from './Toast';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import PdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 
-// Set the worker source to use the local worker file
-pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorker;
+// Set the worker source to use CDN for pdfjs-dist v5.x
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 interface PDFSnippingToolProps {
   pdfUrl?: string;
