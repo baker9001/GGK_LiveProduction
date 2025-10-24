@@ -426,10 +426,17 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const autoFillAnswerFields = useCallback((question: QuestionDisplayData) => {
     const updates: Partial<QuestionDisplayData> = {};
 
-    // Auto-fill answer_format if empty
+    // Only auto-fill for descriptive and complex questions
+    // MCQ and TF questions should NOT have these fields auto-filled
+    const questionType = question.question_type || 'descriptive';
+    if (questionType === 'mcq' || questionType === 'tf') {
+      return updates; // Return empty updates for MCQ and TF questions
+    }
+
+    // Auto-fill answer_format if empty (only for descriptive/complex questions)
     if (!question.answer_format) {
       const derivedFormat = deriveAnswerFormat({
-        type: question.question_type || 'descriptive',
+        type: questionType,
         question_description: question.question_text || '',
         correct_answers: question.correct_answers || [],
         has_direct_answer: true,
@@ -441,10 +448,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
     }
 
-    // Auto-fill answer_requirement if empty
+    // Auto-fill answer_requirement if empty (only for descriptive/complex questions)
     if (!question.answer_requirement) {
       const derivedRequirement = deriveAnswerRequirement({
-        type: question.question_type || 'descriptive',
+        type: questionType,
         correct_answers: question.correct_answers || [],
         total_alternatives: question.total_alternatives,
         has_direct_answer: true,
@@ -466,8 +473,14 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   ) => {
     const updates: Partial<QuestionDisplayData> = { [field]: value };
 
-    // Auto-fill answer_format when question_type changes
-    if (field === 'question_type' && !question.answer_format) {
+    // Determine the effective question type
+    const effectiveType = (field === 'question_type' ? value : question.question_type) as string;
+
+    // Only auto-fill for descriptive and complex questions, not for MCQ or TF
+    const shouldAutoFill = effectiveType !== 'mcq' && effectiveType !== 'tf';
+
+    // Auto-fill answer_format when question_type changes (only for descriptive/complex)
+    if (field === 'question_type' && !question.answer_format && shouldAutoFill) {
       const derivedFormat = deriveAnswerFormat({
         type: value as string,
         question_description: question.question_text || '',
@@ -481,10 +494,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
     }
 
-    // Auto-fill answer_requirement when question_type or answer_format changes
-    if ((field === 'question_type' || field === 'answer_format') && !question.answer_requirement) {
+    // Auto-fill answer_requirement when question_type or answer_format changes (only for descriptive/complex)
+    if ((field === 'question_type' || field === 'answer_format') && !question.answer_requirement && shouldAutoFill) {
       const derivedRequirement = deriveAnswerRequirement({
-        type: (field === 'question_type' ? value : question.question_type) as string,
+        type: effectiveType,
         correct_answers: question.correct_answers || [],
         total_alternatives: question.total_alternatives,
         has_direct_answer: true,
@@ -510,8 +523,11 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
-    // Auto-fill answer fields if not set
-    if (!question.answer_format || !question.answer_requirement) {
+    // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    const questionType = question.question_type || 'descriptive';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+
+    if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
         ...question,
         correct_answers: answers
@@ -528,8 +544,11 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
-    // Auto-fill answer fields if not set
-    if (!question.answer_format || !question.answer_requirement) {
+    // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    const questionType = question.question_type || 'descriptive';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+
+    if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
         ...question,
         correct_answers: answers
@@ -546,8 +565,11 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
-    // Auto-fill answer fields if not set
-    if (!question.answer_format || !question.answer_requirement) {
+    // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    const questionType = question.question_type || 'descriptive';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+
+    if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
         ...question,
         correct_answers: answers

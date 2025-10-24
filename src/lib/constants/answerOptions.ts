@@ -180,12 +180,12 @@ export function deriveAnswerFormat(question: {
 
   // Contextual-only questions don't need answer format
   if (is_contextual_only === true || has_direct_answer === false) {
-    return 'not_applicable';
+    return null; // Return null to prevent auto-fill
   }
 
-  // MCQ/TF questions don't need a specific format
+  // MCQ/TF questions don't need a specific format - return null to prevent auto-fill
   if (type === 'mcq' || type === 'tf') {
-    return 'not_applicable';
+    return null;
   }
 
   // Check for calculation keywords
@@ -250,12 +250,12 @@ export function deriveAnswerRequirement(question: {
 
   // Contextual-only questions don't need answer requirement
   if (is_contextual_only === true || has_direct_answer === false) {
-    return 'not_applicable';
+    return null; // Return null to prevent auto-fill
   }
 
-  // MCQ/TF questions are single choice
+  // MCQ/TF questions don't need answer requirement - return null to prevent auto-fill
   if (type === 'mcq' || type === 'tf') {
-    return 'single_choice';
+    return null;
   }
 
   // No correct answers - cannot determine (unless contextual)
