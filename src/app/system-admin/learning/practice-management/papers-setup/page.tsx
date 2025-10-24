@@ -54,6 +54,43 @@ const IMPORT_TABS = [
 // Define the possible tab statuses
 type TabStatus = 'pending' | 'completed' | 'error' | 'active';
 
+const createDefaultExtractionRules = (): ExtractionRules => ({
+  forwardSlashHandling: true,
+  lineByLineProcessing: true,
+  alternativeLinking: true,
+  contextRequired: true,
+  figureDetection: true,
+  educationalContent: {
+    hintsRequired: true,
+    explanationsRequired: true,
+  },
+  subjectSpecific: {
+    physics: false,
+    chemistry: false,
+    biology: false,
+    mathematics: false,
+  },
+  abbreviations: {
+    ora: false,
+    owtte: false,
+    ecf: false,
+    cao: false,
+  },
+  answerStructure: {
+    validateMarks: true,
+    requireContext: true,
+    validateLinking: true,
+    acceptAlternatives: false,
+  },
+  markScheme: {
+    requiresManualMarking: true,
+    markingCriteria: true,
+    componentMarking: true,
+    levelDescriptors: true,
+  },
+  examBoard: 'Cambridge',
+});
+
 // Extraction Rules Configuration Component
 const ExtractionRulesPanel: React.FC<{
   rules: ExtractionRules;
@@ -940,42 +977,7 @@ export default function PapersSetupPage() {
   );
 
   // Enhanced extraction rules configuration with defaults based on JSON structure
-  const [extractionRules, setExtractionRules] = useState<ExtractionRules>({
-    forwardSlashHandling: true,
-    lineByLineProcessing: true,
-    alternativeLinking: true,
-    contextRequired: true,
-    figureDetection: true,
-    educationalContent: {
-      hintsRequired: true,
-      explanationsRequired: true,
-    },
-    subjectSpecific: {
-      physics: false,
-      chemistry: false,
-      biology: false,
-      mathematics: false,
-    },
-    abbreviations: {
-      ora: false,
-      owtte: false,
-      ecf: false,
-      cao: false,
-    },
-    answerStructure: {
-      validateMarks: true,
-      requireContext: true,
-      validateLinking: true,
-      acceptAlternatives: false,
-    },
-    markScheme: {
-      requiresManualMarking: true,
-      markingCriteria: true,
-      componentMarking: true,
-      levelDescriptors: true,
-    },
-    examBoard: 'Cambridge',
-  });
+  const [extractionRules, setExtractionRules] = useState<ExtractionRules>(() => createDefaultExtractionRules());
 
   useEffect(() => {
     if (!guidelineSummary) return;
@@ -1132,10 +1134,23 @@ export default function PapersSetupPage() {
       hasCheckedForSession.current = true;
       checkForExistingSession();
     }
-  }, [user]);
+  }, [user, checkForExistingSession]);
+
+  const updateSubjectRules = useCallback((subject: string) => {
+    const subjectLower = subject.toLowerCase();
+    setExtractionRules(prev => ({
+      ...prev,
+      subjectSpecific: {
+        physics: subjectLower.includes('physics'),
+        chemistry: subjectLower.includes('chemistry'),
+        biology: subjectLower.includes('biology'),
+        mathematics: subjectLower.includes('math'),
+      },
+    }));
+  }, []);
 
   // Check for existing import session
-  const checkForExistingSession = async () => {
+  const checkForExistingSession = useCallback(async () => {
     setIsLoadingSession(true);
     try {
       // Get the most recent in-progress session for the current user
@@ -1162,32 +1177,29 @@ export default function PapersSetupPage() {
         }
         
         // Update tab statuses based on session metadata
-        const newStatuses = { ...tabStatuses };
-        newStatuses.upload = 'completed';
-        
+        setTabStatuses(prev => ({
+          ...prev,
+          upload: 'completed',
+          structure: data.metadata?.structure_complete ? 'completed' : prev.structure,
+          metadata: data.metadata?.metadata_complete ? 'completed' : prev.metadata,
+          questions: data.metadata?.questions_imported ? 'completed' : prev.questions,
+        }));
+
         if (data.metadata?.structure_complete) {
-          newStatuses.structure = 'completed';
           setStructureComplete(true);
         }
-        
+
         if (data.metadata?.metadata_complete) {
-          newStatuses.metadata = 'completed';
           setExistingPaperId(data.metadata?.paper_id);
           setSavedPaperDetails(data.metadata?.paper_details);
         }
-        
-        if (data.metadata?.questions_imported) {
-          newStatuses.questions = 'completed';
-        }
-        
-        setTabStatuses(newStatuses);
-        
+
         // Show notification
         toast.success('Previous import session restored', {
           id: 'papers-setup-session-status',
           duration: 3500,
         });
-        
+
         // Update subject-specific rules based on parsed data
         if (data.raw_json?.subject) {
           updateSubjectRules(data.raw_json.subject);
@@ -1198,21 +1210,7 @@ export default function PapersSetupPage() {
     } finally {
       setIsLoadingSession(false);
     }
-  };
-
-  // Update subject-specific rules based on parsed data
-  const updateSubjectRules = (subject: string) => {
-    const subjectLower = subject.toLowerCase();
-    setExtractionRules(prev => ({
-      ...prev,
-      subjectSpecific: {
-        physics: subjectLower.includes('physics'),
-        chemistry: subjectLower.includes('chemistry'),
-        biology: subjectLower.includes('biology'),
-        mathematics: subjectLower.includes('math'),
-      },
-    }));
-  };
+  }, [user?.id, updateSubjectRules]);
 
   // Update URL with tab changes
   useEffect(() => {
@@ -1241,7 +1239,7 @@ export default function PapersSetupPage() {
       displayedSessionIdRef.current = sessionId;
       loadImportSession(sessionId);
     }
-  }, [location.search]);
+  }, [location.search, loadImportSession]);
 
   useEffect(() => {
     if (!pendingTab) {
@@ -1268,7 +1266,7 @@ export default function PapersSetupPage() {
     };
   }, [activeTab, pendingTab, isLoadingSession]);
 
-  const loadImportSession = async (sessionId: string) => {
+  const loadImportSession = useCallback(async (sessionId: string) => {
     setIsLoadingSession(true);
     try {
       const { data, error } = await supabase
@@ -1312,26 +1310,22 @@ export default function PapersSetupPage() {
         }
         
         // Update tab statuses based on session state and metadata
-        const newStatuses = { ...tabStatuses };
-        newStatuses.upload = 'completed';
-        
-        // Check metadata for completion states
+        setTabStatuses(prev => ({
+          ...prev,
+          upload: 'completed',
+          structure: data.metadata?.structure_complete ? 'completed' : prev.structure,
+          metadata: data.metadata?.metadata_complete ? 'completed' : prev.metadata,
+          questions: data.metadata?.questions_imported ? 'completed' : prev.questions,
+        }));
+
         if (data.metadata?.structure_complete) {
-          newStatuses.structure = 'completed';
           setStructureComplete(true);
         }
-        
+
         if (data.metadata?.metadata_complete) {
-          newStatuses.metadata = 'completed';
           setExistingPaperId(data.metadata?.paper_id);
           setSavedPaperDetails(data.metadata?.paper_details);
         }
-        
-        if (data.metadata?.questions_imported) {
-          newStatuses.questions = 'completed';
-        }
-        
-        setTabStatuses(newStatuses);
         
         // Navigate to appropriate tab
         if (data.metadata?.questions_imported) {
@@ -1373,7 +1367,73 @@ export default function PapersSetupPage() {
       setTransitionMessage('');
       setPendingTab(null);
     }
-  };
+  }, [location.pathname, location.search, navigate, updateSubjectRules]);
+
+  const resetWorkflowState = useCallback(() => {
+    setUploadedFile(null);
+    setParsedData(null);
+    setImportSession(null);
+    setStructureComplete(false);
+    setStructureCompleteCalled(false);
+    setExistingPaperId(null);
+    setSavedPaperDetails(null);
+    setStagedAttachments({});
+    setTabStatuses({
+      upload: 'pending',
+      structure: 'pending',
+      metadata: 'pending',
+      questions: 'pending',
+    });
+    setActiveTab('upload');
+    setError(null);
+    setUploadProgress(0);
+    setIsUploading(false);
+    setIsTabTransitioning(false);
+    setTransitionMessage('');
+    setPendingTab(null);
+    setPreviousSessionsExpanded(false);
+    setExtractionRulesExpanded(true);
+    setIsLoadingSession(false);
+    setExtractionRules(createDefaultExtractionRules());
+    displayedSessionIdRef.current = null;
+    navigate(location.pathname, { replace: true });
+  }, [navigate, location.pathname]);
+
+  const handleRefreshSession = useCallback(async () => {
+    if (!importSession?.id) return;
+
+    await loadImportSession(importSession.id);
+    toast.success('Import session refreshed', {
+      id: 'papers-setup-session-status',
+      duration: 2500,
+    });
+  }, [importSession?.id, loadImportSession]);
+
+  const handleStartNewImport = useCallback(async () => {
+    if (!importSession?.id) {
+      resetWorkflowState();
+      toast.success('Ready for a new import session.', {
+        id: 'papers-setup-session-status',
+        duration: 3000,
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from('past_paper_import_sessions')
+      .update({ status: 'failed' })
+      .eq('id', importSession.id);
+
+    if (error) {
+      throw error;
+    }
+
+    resetWorkflowState();
+    toast.success('Import session cleared. You can start a new import.', {
+      id: 'papers-setup-session-status',
+      duration: 3200,
+    });
+  }, [importSession?.id, resetWorkflowState]);
 
   const handleFileSelected = async (file: File) => {
     setUploadedFile(file);
@@ -1972,6 +2032,8 @@ export default function PapersSetupPage() {
                 onSelectPreviousSession={handleSelectPreviousSession}
                 importSession={importSession}
                 onNavigateToTab={handleTabChange}
+                onRefreshSession={handleRefreshSession}
+                onStartNewImport={handleStartNewImport}
               />
             </div>
           
