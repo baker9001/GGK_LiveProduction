@@ -154,7 +154,7 @@ function sanitizeString(input: string): string {
 
 function getUserTypes(userType: UserType): string[] {
   const typeMap: Record<UserType, string[]> = {
-    'entity_admin': ['entity', 'admin'],
+    'entity_admin': ['entity', 'admin'],  // Entity/organization admins
     'sub_entity_admin': ['entity', 'admin'],
     'school_admin': ['entity', 'admin'],
     'branch_admin': ['entity', 'admin'],
@@ -163,6 +163,8 @@ function getUserTypes(userType: UserType): string[] {
     'parent': ['parent'],
     'staff': ['staff']
   };
+  // IMPORTANT: This returns the user_type for custom users table
+  // For system admins (created via admin panel), should return ['system']
   return typeMap[userType] || ['user'];
 }
 
@@ -811,7 +813,10 @@ export const userCreationService = {
   },
 
   /**
-   * Create admin user entity
+   * Create ENTITY admin user (company/school/branch admin)
+   * IMPORTANT: This is for entity-level admins, NOT system admins
+   * System admins are created via create-admin-user-complete Edge Function
+   * which creates records in admin_users table (not entity_users)
    */
   async createAdminUser(userId: string, payload: AdminUserPayload): Promise<string> {
     const defaultPermissions = this.getDefaultPermissions(payload.admin_level);
@@ -842,6 +847,8 @@ export const userCreationService = {
       updated_at: new Date().toISOString()
     };
 
+    // IMPORTANT: entity_users table is for entity-level admins (company/school/branch)
+    // System admins (GGK Admin System users) go in admin_users table instead
     const { data, error } = await supabase
       .from('entity_users')
       .insert([adminData])
@@ -849,7 +856,7 @@ export const userCreationService = {
       .single();
 
     if (error) {
-      throw new Error(`Failed to create admin profile: ${error.message}`);
+      throw new Error(`Failed to create entity admin profile: ${error.message}`);
     }
 
     if (payload.assigned_schools?.length || payload.assigned_branches?.length) {
