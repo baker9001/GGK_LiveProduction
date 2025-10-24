@@ -1,14 +1,12 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/UploadTab.tsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, Loader2, FileJson } from 'lucide-react';
-import { supabase } from '../../../../../../lib/supabase';
+import { CheckCircle as CircleCheck, AlertCircle, ArrowRight, Trash2, RefreshCw, Loader2, FileJson } from 'lucide-react';
 import { FileUploader } from '../../../../../../components/shared/FileUploader';
 import { ScrollNavigator } from '../../../../../../components/shared/ScrollNavigator';
 import { ProgressBar } from '../../../../../../components/shared/ProgressBar';
 import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
-import { recordUserActivity } from '../../../../../../lib/sessionManager';
 
 interface UploadTabProps {
   onFileSelected: (file: File) => void;
@@ -20,6 +18,8 @@ interface UploadTabProps {
   onSelectPreviousSession: (session: any) => void;
   importSession: any;
   onNavigateToTab: (tabId: string, options?: { message?: string }) => void;
+  onRefreshSession?: () => Promise<void> | void;
+  onStartNewImport?: () => Promise<void> | void;
 }
 
 export function UploadTab({
@@ -31,12 +31,15 @@ export function UploadTab({
   parsedData,
   onSelectPreviousSession,
   importSession,
-  onNavigateToTab
+  onNavigateToTab,
+  onRefreshSession,
+  onStartNewImport
 }: UploadTabProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
   const continueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Handle file selection
   const handleFileSelected = async (file: File, content: string | ArrayBuffer | null) => {
@@ -53,27 +56,10 @@ export function UploadTab({
   
   // Delete current session and start new
   const handleDeleteSession = async () => {
-    if (!importSession) return;
-
+    if (!importSession || !onStartNewImport) return;
     setIsDeleting(true);
     try {
-      const { error } = await supabase
-        .from('past_paper_import_sessions')
-        .update({ status: 'failed' })
-        .eq('id', importSession.id);
-
-      if (error) throw error;
-
-      // Clear URL parameters before reload to ensure fresh start
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState(null, '', cleanUrl);
-
-      // CRITICAL FIX: Record user activity before page reload to prevent session expiry
-      recordUserActivity();
-      console.log('[UploadTab] Activity recorded before page reload');
-
-      // Reload page to start fresh
-      window.location.reload();
+      await onStartNewImport();
     } catch (err) {
       console.error('Error deleting session:', err);
       toast.error('Failed to delete session');
@@ -123,12 +109,18 @@ export function UploadTab({
   };
 
   // Refresh session data
-  const handleRefreshSession = () => {
-    // CRITICAL FIX: Record user activity before page reload to prevent session expiry
-    recordUserActivity();
-    console.log('[UploadTab] Activity recorded before page reload');
+  const handleRefreshSession = async () => {
+    if (!importSession || !onRefreshSession) return;
 
-    window.location.reload();
+    setIsRefreshing(true);
+    try {
+      await onRefreshSession();
+    } catch (err) {
+      console.error('Error refreshing session:', err);
+      toast.error('Failed to refresh session');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -192,8 +184,16 @@ export function UploadTab({
                   variant="outline"
                   leftIcon={<RefreshCw className="h-4 w-4" />}
                   onClick={handleRefreshSession}
+                  disabled={isRefreshing}
                 >
-                  Refresh
+                  {isRefreshing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    'Refresh'
+                  )}
                 </Button>
                 <Button
                   size="sm"
