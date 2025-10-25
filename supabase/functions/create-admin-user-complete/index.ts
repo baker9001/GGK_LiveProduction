@@ -225,8 +225,34 @@ serve(async (req) => {
       )
     }
 
-    // Step 4: Send invitation email if requested
+    // Step 4: Create invitation tracking record
+    let invitationStatusId: string | null = null
+    try {
+      const { data: inviteStatus, error: inviteStatusError } = await supabaseAdmin
+        .from('invitation_status')
+        .insert({
+          user_id: userId,
+          email: body.email.toLowerCase(),
+          user_type: 'system',
+          created_by: body.created_by || 'system',
+          metadata: {
+            role_id: body.role_id,
+            role_name: roleData.name
+          }
+        })
+        .select()
+        .single()
+
+      if (!inviteStatusError && inviteStatus) {
+        invitationStatusId = inviteStatus.id
+      }
+    } catch (inviteStatusError) {
+      console.error('Failed to create invitation status:', inviteStatusError)
+    }
+
+    // Step 5: Send invitation email if requested
     let invitationSent = false
+    let invitationError: string | null = null
     const invitationRedirectUrl = body.redirect_to || DEFAULT_RESET_REDIRECT_URL
 
     if (body.send_invitation !== false) {
@@ -244,16 +270,50 @@ serve(async (req) => {
 
         if (inviteError) {
           console.error('Invitation error:', inviteError)
+          invitationError = inviteError.message
+
+          // Update invitation status as failed
+          if (invitationStatusId) {
+            await supabaseAdmin
+              .from('invitation_status')
+              .update({
+                failed_at: new Date().toISOString(),
+                failed_reason: inviteError.message
+              })
+              .eq('id', invitationStatusId)
+          }
         } else {
           invitationSent = true
           console.log('Invitation sent successfully')
+
+          // Update invitation status as sent
+          if (invitationStatusId) {
+            await supabaseAdmin
+              .from('invitation_status')
+              .update({
+                sent_at: new Date().toISOString()
+              })
+              .eq('id', invitationStatusId)
+          }
         }
       } catch (emailError) {
         console.error('Email sending error:', emailError)
+        invitationError = emailError instanceof Error ? emailError.message : 'Unknown email error'
+
+        // Update invitation status as failed
+        if (invitationStatusId) {
+          await supabaseAdmin
+            .from('invitation_status')
+            .update({
+              failed_at: new Date().toISOString(),
+              failed_reason: invitationError
+            })
+            .eq('id', invitationStatusId)
+        }
       }
     }
 
-    // Step 5: Create audit log entry
+    // Step 6: Create audit log entry
     try {
       await supabaseAdmin
         .from('audit_logs')
@@ -268,7 +328,9 @@ serve(async (req) => {
             role_id: body.role_id,
             role_name: roleData.name,
             created_by: body.created_by || 'system',
-            invitation_sent: invitationSent
+            invitation_sent: invitationSent,
+            invitation_error: invitationError,
+            invitation_status_id: invitationStatusId
           },
           created_at: new Date().toISOString()
         })
@@ -289,10 +351,14 @@ serve(async (req) => {
           role_name: roleData.name,
           created_at: authUser.user.created_at,
           invitation_sent: invitationSent,
+          invitation_error: invitationError,
+          invitation_status_id: invitationStatusId,
           requires_email_verification: true
         },
-        message: invitationSent 
+        message: invitationSent
           ? 'Admin user created successfully. Invitation email sent with setup instructions.'
+          : invitationError
+          ? `Admin user created but invitation email failed: ${invitationError}`
           : 'Admin user created successfully. Please manually send invitation email.'
       }),
       { status: 200, headers: corsHeaders }
