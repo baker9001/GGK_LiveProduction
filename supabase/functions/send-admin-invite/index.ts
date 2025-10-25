@@ -42,12 +42,14 @@ serve(async (req) => {
       }
     )
 
-    // Generate password reset link
+    const redirectTo = body.redirect_to || DEFAULT_RESET_REDIRECT_URL
+
+    // Generate password reset link (used for custom email providers)
     const { data: resetData, error: resetError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: body.email,
       options: {
-        redirectTo: body.redirect_to || DEFAULT_RESET_REDIRECT_URL
+        redirectTo
       }
     })
 
@@ -59,9 +61,7 @@ serve(async (req) => {
       )
     }
 
-    // Here you would integrate with your email service
-    // Example with Resend (you need to add your API key as an environment variable):
-    
+    // When a custom email provider is configured, send the email manually.
     if (Deno.env.get('RESEND_API_KEY')) {
       const emailResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -124,8 +124,21 @@ serve(async (req) => {
         console.error('Email sending failed:', emailError)
       }
     } else {
-      // If no email service is configured, log the link (for development)
-      console.log('Password reset link:', resetData.properties.action_link)
+      // Fall back to Supabase managed emails when no external provider is configured
+      const { error: emailError } = await supabaseAdmin.auth.resetPasswordForEmail(body.email, {
+        redirectTo
+      })
+
+      if (emailError) {
+        console.error('Supabase reset email error:', emailError)
+        return new Response(
+          JSON.stringify({ error: emailError.message }),
+          { status: 400, headers: corsHeaders }
+        )
+      }
+
+      // Still log the generated link for debugging purposes
+      console.log('Password reset link (fallback email sent by Supabase):', resetData.properties.action_link)
     }
 
     return new Response(
