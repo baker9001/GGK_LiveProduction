@@ -152,20 +152,18 @@ function sanitizeString(input: string): string {
   return input.trim().replace(/[<>]/g, '');
 }
 
-function getUserTypes(userType: UserType): string[] {
-  const typeMap: Record<UserType, string[]> = {
-    'entity_admin': ['entity', 'admin'],  // Entity/organization admins
-    'sub_entity_admin': ['entity', 'admin'],
-    'school_admin': ['entity', 'admin'],
-    'branch_admin': ['entity', 'admin'],
-    'teacher': ['teacher', 'staff'],
-    'student': ['student'],
-    'parent': ['parent'],
-    'staff': ['staff']
+function getUserType(userType: UserType): string {
+  const typeMap: Record<UserType, string> = {
+    'entity_admin': 'entity',
+    'sub_entity_admin': 'entity',
+    'school_admin': 'entity',
+    'branch_admin': 'entity',
+    'teacher': 'teacher',
+    'student': 'student',
+    'parent': 'parent',
+    'staff': 'staff'
   };
-  // IMPORTANT: This returns the user_type for custom users table
-  // For system admins (created via admin panel), should return ['system']
-  return typeMap[userType] || ['user'];
+  return typeMap[userType] || 'user';
 }
 
 function generateUUID(): string {
@@ -559,7 +557,7 @@ export const userCreationService = {
    */
   async createUserInSupabaseAuthWithInvite(payload: CreateUserPayload): Promise<string> {
     try {
-      const userTypes = getUserTypes(payload.user_type);
+      const userType = getUserType(payload.user_type);
       const currentUser = await this.getCurrentUser();
       
       const { data: sessionData } = await supabase.auth.getSession();
@@ -739,12 +737,12 @@ export const userCreationService = {
    * Create user in custom users table
    */
   async createUserInCustomTable(authUserId: string, payload: CreateUserPayload, metadata: any): Promise<void> {
-    const userTypes = getUserTypes(payload.user_type);
-    
+    const userType = getUserType(payload.user_type);
+
     const userData = {
       id: authUserId,
       email: payload.email.toLowerCase(),
-      user_type: userTypes[0], // Only use user_type (singular)
+      user_type: userType,
       is_active: payload.is_active !== false,
       email_verified: false,
       raw_user_meta_data: metadata,
@@ -773,12 +771,12 @@ export const userCreationService = {
     console.warn('Using direct creation fallback (invitation pending)');
     
     const userId = generateUUID();
-    const userTypes = getUserTypes(payload.user_type);
-    
+    const userType = getUserType(payload.user_type);
+
     const userData = {
       id: userId,
       email: payload.email.toLowerCase(),
-      user_type: userTypes[0],
+      user_type: userType,
       is_active: payload.is_active !== false,
       email_verified: false,
       raw_user_meta_data: {
