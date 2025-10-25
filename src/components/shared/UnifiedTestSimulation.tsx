@@ -25,7 +25,8 @@ import {
   AlertCircle,
   AlertTriangle,
   BarChart3,
-  TrendingUp
+  TrendingUp,
+  MinusCircle
 } from 'lucide-react';
 import { Button } from './Button';
 import { StatusBadge } from './StatusBadge';
@@ -82,6 +83,8 @@ interface SubPart {
   requires_manual_marking?: boolean;
   marking_criteria?: string;
   type?: 'mcq' | 'tf' | 'descriptive';
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }
 
 interface SubQuestion {
@@ -107,6 +110,8 @@ interface SubQuestion {
   requires_manual_marking?: boolean;
   marking_criteria?: string;
   subparts?: SubPart[];
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }
 
 interface Question {
@@ -130,6 +135,8 @@ interface Question {
   requires_manual_marking?: boolean;
   marking_criteria?: string;
   attachments?: AttachmentAsset[];
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }
 
 interface SimulationPaper {
@@ -726,6 +733,24 @@ export function UnifiedTestSimulation({
 
   const currentQuestion = paper.questions[currentQuestionIndex];
   const totalQuestions = paper.questions.length;
+
+  const requiresAnswer = useCallback(
+    (item?: { has_direct_answer?: boolean; is_contextual_only?: boolean; answer_requirement?: string; answer_format?: string }) => {
+      if (!item) return true;
+      if (item.has_direct_answer === false) return false;
+      if (item.is_contextual_only === true) return false;
+      const requirement = typeof item.answer_requirement === 'string' ? item.answer_requirement.toLowerCase() : '';
+      if (requirement === 'not applicable' || requirement === 'not_applicable') {
+        return false;
+      }
+      const format = typeof item.answer_format === 'string' ? item.answer_format.toLowerCase() : '';
+      if (format === 'not applicable' || format === 'not_applicable') {
+        return false;
+      }
+      return true;
+    },
+    []
+  );
 
   // Parse duration string (e.g., "1 hour 15 minutes" or "75" or "75 minutes")
   const parseDuration = (durationStr: string | undefined): number => {
@@ -1747,28 +1772,35 @@ export function UnifiedTestSimulation({
                       )}
 
                       {currentQuestion.parts.length === 0 && (
-                        <div className="mb-6">
-                          <DynamicAnswerField
-                            question={{
-                              ...currentQuestion,
-                              subject: paper.subject,
-                              options: currentQuestion.options?.map((opt, optionIndex) => ({
-                                label: String.fromCharCode(65 + optionIndex),
-                                text: opt.option_text,
-                                is_correct: opt.is_correct
-                              }))
-                            }}
-                            value={userAnswers[currentQuestion.id]?.answer}
-                            onChange={(answer) => handleAnswerChange(currentQuestion.id, undefined, undefined, answer)}
-                            disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
-                            showHints={features.showHints}
-                            showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                            mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
-                          />
-                        </div>
+                        requiresAnswer(currentQuestion) ? (
+                          <div className="mb-6">
+                            <DynamicAnswerField
+                              question={{
+                                ...currentQuestion,
+                                subject: paper.subject,
+                                options: currentQuestion.options?.map((opt, optionIndex) => ({
+                                  label: String.fromCharCode(65 + optionIndex),
+                                  text: opt.option_text,
+                                  is_correct: opt.is_correct
+                                }))
+                              }}
+                              value={userAnswers[currentQuestion.id]?.answer}
+                              onChange={(answer) => handleAnswerChange(currentQuestion.id, undefined, undefined, answer)}
+                              disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
+                              showHints={features.showHints}
+                              showCorrectAnswer={features.showCorrectAnswers || isQAMode}
+                              mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                            />
+                          </div>
+                        ) : (
+                          <div className="mb-6 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                            <MinusCircle className="h-4 w-4" aria-hidden="true" />
+                            <span>Not applicable — no learner response required.</span>
+                          </div>
+                        )
                       )}
 
-                      {features.showCorrectAnswers && currentQuestion.parts.length === 0 && (
+                      {features.showCorrectAnswers && currentQuestion.parts.length === 0 && requiresAnswer(currentQuestion) && (
                         <TeacherInsights
                           correctAnswers={buildNormalisedCorrectAnswers(currentQuestion)}
                           answerRequirement={currentQuestion.answer_requirement}
@@ -1833,25 +1865,32 @@ export function UnifiedTestSimulation({
                                     </div>
                                   )}
 
-                                  <DynamicAnswerField
-                                    question={{
-                                      ...part,
-                                      subject: paper.subject,
-                                      options: part.options?.map(opt => ({
-                                        label: opt.option_text || opt.id,
-                                        text: opt.option_text,
-                                        is_correct: opt.is_correct
-                                      }))
-                                    }}
-                                    value={userAnswers[`${currentQuestion.id}-${part.id}`]?.answer}
-                                    onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, undefined, answer)}
-                                    disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
-                                    showHints={features.showHints}
-                                    showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                                    mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
-                                  />
+                                  {requiresAnswer(part) ? (
+                                    <DynamicAnswerField
+                                      question={{
+                                        ...part,
+                                        subject: paper.subject,
+                                        options: part.options?.map(opt => ({
+                                          label: opt.option_text || opt.id,
+                                          text: opt.option_text,
+                                          is_correct: opt.is_correct
+                                        }))
+                                      }}
+                                      value={userAnswers[`${currentQuestion.id}-${part.id}`]?.answer}
+                                      onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, undefined, answer)}
+                                      disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
+                                      showHints={features.showHints}
+                                      showCorrectAnswer={features.showCorrectAnswers || isQAMode}
+                                      mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                    />
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                      <MinusCircle className="h-4 w-4" aria-hidden="true" />
+                                      <span>Not applicable — no learner response required.</span>
+                                    </div>
+                                  )}
 
-                                  {features.showCorrectAnswers && (
+                                  {features.showCorrectAnswers && requiresAnswer(part) && (
                                     <TeacherInsights
                                       correctAnswers={buildNormalisedCorrectAnswers(part)}
                                       answerRequirement={part.answer_requirement}
@@ -1896,27 +1935,34 @@ export function UnifiedTestSimulation({
                                                 <AttachmentGallery attachments={subpart.attachments} />
                                               )}
 
-                                              <DynamicAnswerField
-                                                question={{
-                                                  ...subpart,
-                                                  id: subpart.id,
-                                                  type: subpart.type || 'descriptive',
-                                                  subject: paper.subject,
-                                                  options: subpart.options?.map((opt, optIndex) => ({
-                                                    label: opt?.option_text || opt?.id || String.fromCharCode(65 + optIndex),
-                                                    text: opt?.option_text || '',
-                                                    is_correct: opt?.is_correct
-                                                  }))
-                                                }}
-                                                value={userAnswers[answerKey]?.answer}
-                                                onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, subpart.id, answer)}
-                                                disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
-                                                showHints={features.showHints}
-                                                showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                                                mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
-                                              />
+                                              {requiresAnswer(subpart) ? (
+                                                <DynamicAnswerField
+                                                  question={{
+                                                    ...subpart,
+                                                    id: subpart.id,
+                                                    type: subpart.type || 'descriptive',
+                                                    subject: paper.subject,
+                                                    options: subpart.options?.map((opt, optIndex) => ({
+                                                      label: opt?.option_text || opt?.id || String.fromCharCode(65 + optIndex),
+                                                      text: opt?.option_text || '',
+                                                      is_correct: opt?.is_correct
+                                                    }))
+                                                  }}
+                                                  value={userAnswers[answerKey]?.answer}
+                                                  onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, subpart.id, answer)}
+                                                  disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
+                                                  showHints={features.showHints}
+                                                  showCorrectAnswer={features.showCorrectAnswers || isQAMode}
+                                                  mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                                />
+                                              ) : (
+                                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                                  <MinusCircle className="h-4 w-4" aria-hidden="true" />
+                                                  <span>Not applicable — no learner response required.</span>
+                                                </div>
+                                              )}
 
-                                              {features.showCorrectAnswers && (
+                                              {features.showCorrectAnswers && requiresAnswer(subpart) && (
                                                 <TeacherInsights
                                                   correctAnswers={buildNormalisedCorrectAnswers(subpart)}
                                                   answerRequirement={subpart.answer_requirement}

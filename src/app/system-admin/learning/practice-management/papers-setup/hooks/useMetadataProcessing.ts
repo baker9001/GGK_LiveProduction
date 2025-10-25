@@ -182,52 +182,91 @@ export function useMetadataProcessing(): UseMetadataProcessingReturn {
 
     try {
       // Resolve provider
-      const { data: providers } = await supabase
-        .from('edu_providers')
-        .select('id, name')
-        .ilike('name', `%${metadata.provider}%`)
-        .limit(1)
-        .single();
+      if (metadata.provider) {
+        const providerSearch = metadata.provider.trim();
+        const { data: provider } = await supabase
+          .from('edu_providers')
+          .select('id, name')
+          .ilike('name', `%${providerSearch}%`)
+          .limit(1)
+          .maybeSingle();
 
-      if (providers) {
-        ids.provider_id = providers.id;
+        if (provider?.id) {
+          ids.provider_id = provider.id;
+        }
       }
 
       // Resolve program
-      const { data: programs } = await supabase
-        .from('edu_programs')
-        .select('id, name')
-        .ilike('name', `%${metadata.program}%`)
-        .limit(1)
-        .single();
+      if (metadata.program) {
+        const programSearch = metadata.program.trim();
+        const { data: program } = await supabase
+          .from('edu_programs')
+          .select('id, name')
+          .ilike('name', `%${programSearch}%`)
+          .limit(1)
+          .maybeSingle();
 
-      if (programs) {
-        ids.program_id = programs.id;
+        if (program?.id) {
+          ids.program_id = program.id;
+        }
       }
 
       // Resolve subject
-      const { data: subjects } = await supabase
-        .from('edu_subjects')
-        .select('id, name, code')
-        .or(`name.ilike.%${metadata.subject}%,code.ilike.%${metadata.subjectCode}%`)
-        .limit(1)
-        .single();
+      const subjectCandidates = new Set<string>();
+      if (metadata.subjectCode) {
+        subjectCandidates.add(metadata.subjectCode.trim());
+      }
+      if (metadata.subject) {
+        const baseSubject = metadata.subject.trim();
+        subjectCandidates.add(baseSubject);
+        const withoutCode = baseSubject.replace(/\(.*?\)/g, '').replace(/-\s*\d+$/, '').trim();
+        if (withoutCode) subjectCandidates.add(withoutCode);
+        const hyphenSplit = baseSubject.split('-')[0]?.trim();
+        if (hyphenSplit) subjectCandidates.add(hyphenSplit);
+      }
 
-      if (subjects) {
-        ids.subject_id = subjects.id;
+      for (const candidate of subjectCandidates) {
+        if (!candidate) continue;
+
+        // Prefer exact code match when candidate looks numeric
+        if (/^\d{3,}$/.test(candidate)) {
+          const { data: subjectByCode } = await supabase
+            .from('edu_subjects')
+            .select('id, name, code')
+            .eq('code', candidate)
+            .maybeSingle();
+
+          if (subjectByCode?.id) {
+            ids.subject_id = subjectByCode.id;
+            break;
+          }
+        }
+
+        const { data: subjectByName } = await supabase
+          .from('edu_subjects')
+          .select('id, name, code')
+          .ilike('name', `%${candidate}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (subjectByName?.id) {
+          ids.subject_id = subjectByName.id;
+          break;
+        }
       }
 
       // Resolve region if provided
       if (metadata.region) {
-        const { data: regions } = await supabase
+        const regionSearch = metadata.region.trim();
+        const { data: region } = await supabase
           .from('edu_regions')
           .select('id, name')
-          .ilike('name', `%${metadata.region}%`)
+          .ilike('name', `%${regionSearch}%`)
           .limit(1)
-          .single();
+          .maybeSingle();
 
-        if (regions) {
-          ids.region_id = regions.id;
+        if (region?.id) {
+          ids.region_id = region.id;
         }
       }
 
