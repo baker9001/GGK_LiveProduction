@@ -34,6 +34,7 @@ import { ConfirmationDialog } from './ConfirmationDialog';
 import { cn } from '../../lib/utils';
 import { useAnswerValidation } from '../../hooks/useAnswerValidation';
 import DynamicAnswerField from './DynamicAnswerField';
+import { EnhancedTestResultsView } from './EnhancedTestResultsView';
 import toast from 'react-hot-toast';
 
 interface AttachmentAsset {
@@ -160,6 +161,31 @@ interface UserAnswer {
   }>;
 }
 
+interface SubPartResult {
+  id: string;
+  label: string;
+  question_text: string;
+  marks: number;
+  user_answer?: unknown;
+  is_correct: boolean;
+  marks_earned: number;
+  correct_answers: CorrectAnswer[];
+  answer_format?: string;
+}
+
+interface PartResult {
+  id: string;
+  label: string;
+  question_text: string;
+  marks: number;
+  user_answer?: unknown;
+  is_correct: boolean;
+  marks_earned: number;
+  correct_answers: CorrectAnswer[];
+  answer_format?: string;
+  subparts?: SubPartResult[];
+}
+
 interface SimulationResults {
   totalQuestions: number;
   answeredQuestions: number;
@@ -173,12 +199,21 @@ interface SimulationResults {
   questionResults: Array<{
     questionId: string;
     questionNumber: string;
+    questionText: string;
     isCorrect: boolean;
     earnedMarks: number;
     totalMarks: number;
     userAnswer: unknown;
     correctAnswers: CorrectAnswer[];
     feedback: string;
+    difficulty?: string;
+    topic_name?: string;
+    unit_name?: string;
+    subtopic_names?: string[];
+    type: 'mcq' | 'tf' | 'descriptive' | 'complex';
+    parts?: PartResult[];
+    time_spent?: number;
+    requires_manual_marking?: boolean;
   }>;
 }
 
@@ -958,49 +993,96 @@ export function UnifiedTestSimulation({
     setIsRunning(false);
 
     const questionResults = paper.questions.map(q => {
-      const getQuestionMarks = (question: Question): { earned: number; total: number } => {
+      const getQuestionMarks = (question: Question): { earned: number; total: number; parts: any[] } => {
         if (question.parts.length === 0) {
           const answer = userAnswers[question.id];
           return {
             earned: answer?.marksAwarded || 0,
-            total: question.marks
+            total: question.marks,
+            parts: []
           };
         }
 
         let totalEarned = 0;
         let totalPossible = 0;
+        const parts: any[] = [];
 
         question.parts.forEach(part => {
+          let partEarned = 0;
+          let partTotal = 0;
+          const subparts: any[] = [];
+
           if (part.subparts && part.subparts.length > 0) {
             part.subparts.forEach(subpart => {
               const key = `${question.id}-${part.id}-${subpart.id}`;
               const answer = userAnswers[key];
-              totalEarned += answer?.marksAwarded || 0;
+              const subpartEarned = answer?.marksAwarded || 0;
+
+              partEarned += subpartEarned;
+              partTotal += subpart.marks;
+              totalEarned += subpartEarned;
               totalPossible += subpart.marks;
+
+              subparts.push({
+                id: subpart.id,
+                label: subpart.subpart_label || '',
+                question_text: subpart.question_description,
+                marks: subpart.marks,
+                user_answer: answer?.answer,
+                is_correct: subpartEarned === subpart.marks && subpart.marks > 0,
+                marks_earned: subpartEarned,
+                correct_answers: subpart.correct_answers || [],
+                answer_format: subpart.answer_format
+              });
             });
           } else {
             const key = `${question.id}-${part.id}`;
             const answer = userAnswers[key];
-            totalEarned += answer?.marksAwarded || 0;
-            totalPossible += part.marks;
+            partEarned = answer?.marksAwarded || 0;
+            partTotal = part.marks;
+            totalEarned += partEarned;
+            totalPossible += partTotal;
           }
+
+          parts.push({
+            id: part.id,
+            label: part.part_label || '',
+            question_text: part.question_description,
+            marks: partTotal,
+            user_answer: subparts.length === 0 ? userAnswers[`${question.id}-${part.id}`]?.answer : undefined,
+            is_correct: partEarned === partTotal && partTotal > 0,
+            marks_earned: partEarned,
+            correct_answers: part.correct_answers || [],
+            answer_format: part.answer_format,
+            subparts: subparts.length > 0 ? subparts : undefined
+          });
         });
 
-        return { earned: totalEarned, total: totalPossible };
+        return { earned: totalEarned, total: totalPossible, parts };
       };
 
       const marks = getQuestionMarks(q);
       const isCorrect = marks.earned === marks.total && marks.total > 0;
+      const timeSpent = questionStartTimes[q.id] ? Math.floor((Date.now() - questionStartTimes[q.id]) / 1000) : 0;
 
       return {
         questionId: q.id,
         questionNumber: q.question_number,
+        questionText: q.question_description,
         isCorrect,
         earnedMarks: marks.earned,
         totalMarks: marks.total,
         userAnswer: userAnswers[q.id]?.answer,
         correctAnswers: buildNormalisedCorrectAnswers(q),
-        feedback: isCorrect ? 'Correct answer!' : marks.earned > 0 ? 'Partially correct' : 'Incorrect answer'
+        feedback: isCorrect ? 'Correct answer!' : marks.earned > 0 ? 'Partially correct' : 'Incorrect answer',
+        difficulty: q.difficulty,
+        topic_name: q.topic_name,
+        unit_name: paper.program || 'General',
+        subtopic_names: q.subtopic_names || [],
+        type: q.parts.length > 0 ? 'complex' : q.type,
+        parts: marks.parts.length > 0 ? marks.parts : undefined,
+        time_spent: timeSpent,
+        requires_manual_marking: q.requires_manual_marking
       };
     });
 
@@ -1205,155 +1287,16 @@ export function UnifiedTestSimulation({
 
   if (showResults && results) {
     return (
-      <div className={cn(
-        "min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col",
-        isFullscreen && "fixed inset-0 z-50"
-      )}>
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                onClick={handleExit}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Test Results
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {paper.code} - {paper.subject}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto p-6">
-            <div className="mb-8 text-center">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-                <Award className="h-10 w-10 text-green-600 dark:text-green-400" />
-              </div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                Test Completed!
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                {paper.code}
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-8 mb-8">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-                    {results.percentage}%
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Score</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                    {results.earnedMarks}/{results.totalMarks}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Marks</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">
-                    {results.correctAnswers}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Correct</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-gray-600 dark:text-gray-400 mb-2">
-                    {formatTime(results.timeSpent)}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Time Spent</div>
-                </div>
-              </div>
-            </div>
-
-            {showAnswersOnCompletion && (
-              <div className="space-y-4 mb-8">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Question-by-Question Results
-                </h2>
-                {results.questionResults.map((result, index) => {
-                  const question = paper.questions.find(q => q.id === result.questionId);
-                  if (!question) return null;
-
-                  return (
-                    <div
-                      key={result.questionId}
-                      className={cn(
-                        'border-2 rounded-lg p-4',
-                        result.isCorrect
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
-                          : result.earnedMarks > 0
-                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex items-center gap-3">
-                          {result.isCorrect ? (
-                            <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-                          ) : (
-                            <X className="h-6 w-6 text-red-600 dark:text-red-400" />
-                          )}
-                          <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white">
-                              Question {result.questionNumber}
-                            </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {result.feedback}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-gray-900 dark:text-white">
-                            {result.earnedMarks}/{result.totalMarks}
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">marks</div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                          {question.question_description}
-                        </p>
-                        {result.correctAnswers.length > 0 && (
-                          <div className="mt-2 p-2 bg-white/60 dark:bg-gray-800/60 rounded">
-                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Correct Answer(s):
-                            </p>
-                            <ul className="text-sm text-gray-900 dark:text-white space-y-1">
-                              {result.correctAnswers.map((ans, idx) => (
-                                <li key={idx}>• {ans.answer}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="flex justify-center gap-4">
-              <Button onClick={handleRetakeExam} variant="outline" size="lg">
-                Retake Test
-              </Button>
-              <Button onClick={handleExit} variant="default" size="lg">
-                Close Review
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <EnhancedTestResultsView
+        results={results}
+        paperCode={paper.code}
+        paperSubject={paper.subject}
+        onExit={handleExit}
+        onRetake={handleRetakeExam}
+        onExportPDF={() => {
+          toast.success('PDF export coming soon!');
+        }}
+      />
     );
   }
 
