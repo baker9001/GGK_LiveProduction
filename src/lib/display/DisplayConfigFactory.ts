@@ -390,6 +390,7 @@ export function shouldShowAnswerInput(
     has_direct_answer?: boolean;
     correct_answers?: any[];
     subparts?: any[];
+    marks?: number;
   },
   config: DisplayConfig
 ): boolean {
@@ -400,6 +401,11 @@ export function shouldShowAnswerInput(
 
   // If element explicitly has no direct answer, don't show input
   if (element.has_direct_answer === false) {
+    return false;
+  }
+
+  // CRITICAL: If element has 0 marks, it's contextual-only (no answer expected)
+  if (element.marks === 0) {
     return false;
   }
 
@@ -415,6 +421,35 @@ export function shouldShowAnswerInput(
 
   // Otherwise follow the config
   return config.element.showAnswerInput;
+}
+
+/**
+ * Helper to determine if an element is contextual-only (no answer expected)
+ */
+export function isContextualOnly(element: {
+  is_container?: boolean;
+  has_direct_answer?: boolean;
+  correct_answers?: any[];
+  subparts?: any[];
+  marks?: number;
+}): boolean {
+  // Explicit flags
+  if (element.is_container === true) return true;
+  if (element.has_direct_answer === false) return true;
+
+  // Zero marks indicates no answer expected
+  if (element.marks === 0) return true;
+
+  // Has subparts but no answers of its own
+  if (
+    element.subparts &&
+    element.subparts.length > 0 &&
+    (!element.correct_answers || element.correct_answers.length === 0)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

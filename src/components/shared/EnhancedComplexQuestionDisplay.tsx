@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronRight, Check, AlertCircle, FileText, Image as ImageIcon, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DynamicAnswerField from './DynamicAnswerField';
-import { createDisplayConfig, shouldShowAnswerInput as configShouldShowInput, type DisplayContext } from '@/lib/display/DisplayConfigFactory';
+import { createDisplayConfig, shouldShowAnswerInput as configShouldShowInput, isContextualOnly, type DisplayContext } from '@/lib/display/DisplayConfigFactory';
 import type {
   ComplexQuestionDisplay as ComplexQuestionType,
   ComplexQuestionPartDisplay,
@@ -406,6 +406,9 @@ const EnhancedComplexQuestionDisplay: React.FC<EnhancedComplexQuestionDisplayPro
     // Check if this part expects a direct answer based on flags
     const showAnswer = configShouldShowInput(part, displayConfig);
 
+    // Check if this is a contextual-only part
+    const isContextual = isContextualOnly(part);
+
     // For test/practice mode, use natural flow display (non-collapsible)
     const useNaturalFlow = context === 'practice' || context === 'test' || context === 'simulation';
 
@@ -417,10 +420,14 @@ const EnhancedComplexQuestionDisplay: React.FC<EnhancedComplexQuestionDisplayPro
             <span className="font-bold text-base text-gray-900 dark:text-gray-100">
               ({part.part_label})
             </span>
-            <span className="text-gray-900 dark:text-gray-100 leading-relaxed">
+            <span className={cn(
+              "leading-relaxed",
+              isContextual ? "text-gray-700 dark:text-gray-300 italic" : "text-gray-900 dark:text-gray-100"
+            )}>
               {part.question_text}
             </span>
-            {displayConfig.element.showMarks && (
+            {/* Only show marks if > 0 and display is enabled */}
+            {displayConfig.element.showMarks && part.marks > 0 && (
               <span className="text-sm text-gray-600 dark:text-gray-400 ml-auto whitespace-nowrap">
                 [{part.marks} {part.marks === 1 ? 'mark' : 'marks'}]
               </span>
@@ -515,10 +522,10 @@ const EnhancedComplexQuestionDisplay: React.FC<EnhancedComplexQuestionDisplayPro
               {part.question_text}
             </span>
 
-            {/* Container indicator */}
-            {displayConfig.hierarchy.showContextualIndicator && part.is_container && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-                (context)
+            {/* Contextual indicator - show for any contextual-only part */}
+            {displayConfig.hierarchy.showContextualIndicator && isContextual && (
+              <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                contextual only
               </span>
             )}
 
@@ -529,7 +536,8 @@ const EnhancedComplexQuestionDisplay: React.FC<EnhancedComplexQuestionDisplayPro
               </span>
             )}
 
-            {displayConfig.element.showMarks && (
+            {/* Only show marks if > 0 */}
+            {displayConfig.element.showMarks && part.marks > 0 && (
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 ({part.marks} {part.marks === 1 ? 'mark' : 'marks'})
               </span>
