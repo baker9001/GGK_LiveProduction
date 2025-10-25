@@ -110,6 +110,8 @@ const ExtractionRulesPanel: React.FC<{
             <div className="grid grid-cols-2 gap-4">
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-forward-slash"
+                  name="forwardSlashHandling"
                   type="checkbox"
                   checked={rules.forwardSlashHandling}
                   onChange={(e) => handleFieldChange('forwardSlashHandling', e.target.checked)}
@@ -121,6 +123,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-line-by-line"
+                  name="lineByLineProcessing"
                   type="checkbox"
                   checked={rules.lineByLineProcessing}
                   onChange={(e) => handleFieldChange('lineByLineProcessing', e.target.checked)}
@@ -132,6 +136,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-alternative-linking"
+                  name="alternativeLinking"
                   type="checkbox"
                   checked={rules.alternativeLinking}
                   onChange={(e) => handleFieldChange('alternativeLinking', e.target.checked)}
@@ -143,6 +149,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-context-required"
+                  name="contextRequired"
                   type="checkbox"
                   checked={rules.contextRequired}
                   onChange={(e) => handleFieldChange('contextRequired', e.target.checked)}
@@ -154,6 +162,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-figure-detection"
+                  name="figureDetection"
                   type="checkbox"
                   checked={rules.figureDetection}
                   onChange={(e) => handleFieldChange('figureDetection', e.target.checked)}
@@ -174,6 +184,8 @@ const ExtractionRulesPanel: React.FC<{
             <div className="grid grid-cols-2 gap-4">
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-hints-required"
+                  name="educationalContent.hintsRequired"
                   type="checkbox"
                   checked={rules.educationalContent.hintsRequired}
                   onChange={(e) => handleFieldChange('educationalContent.hintsRequired', e.target.checked)}
@@ -185,6 +197,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-explanations-required"
+                  name="educationalContent.explanationsRequired"
                   type="checkbox"
                   checked={rules.educationalContent.explanationsRequired}
                   onChange={(e) => handleFieldChange('educationalContent.explanationsRequired', e.target.checked)}
@@ -205,6 +219,8 @@ const ExtractionRulesPanel: React.FC<{
             <div className="grid grid-cols-2 gap-4">
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-subject-physics"
+                  name="subjectSpecific.physics"
                   type="checkbox"
                   checked={rules.subjectSpecific.physics}
                   onChange={(e) => handleFieldChange('subjectSpecific.physics', e.target.checked)}
@@ -214,6 +230,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-subject-chemistry"
+                  name="subjectSpecific.chemistry"
                   type="checkbox"
                   checked={rules.subjectSpecific.chemistry}
                   onChange={(e) => handleFieldChange('subjectSpecific.chemistry', e.target.checked)}
@@ -223,6 +241,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-subject-biology"
+                  name="subjectSpecific.biology"
                   type="checkbox"
                   checked={rules.subjectSpecific.biology}
                   onChange={(e) => handleFieldChange('subjectSpecific.biology', e.target.checked)}
@@ -232,6 +252,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-subject-mathematics"
+                  name="subjectSpecific.mathematics"
                   type="checkbox"
                   checked={rules.subjectSpecific.mathematics}
                   onChange={(e) => handleFieldChange('subjectSpecific.mathematics', e.target.checked)}
@@ -250,6 +272,8 @@ const ExtractionRulesPanel: React.FC<{
             <div className="grid grid-cols-2 gap-4">
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-abbr-ora"
+                  name="abbreviations.ora"
                   type="checkbox"
                   checked={rules.abbreviations.ora}
                   onChange={(e) => handleFieldChange('abbreviations.ora', e.target.checked)}
@@ -261,6 +285,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-abbr-owtte"
+                  name="abbreviations.owtte"
                   type="checkbox"
                   checked={rules.abbreviations.owtte}
                   onChange={(e) => handleFieldChange('abbreviations.owtte', e.target.checked)}
@@ -272,6 +298,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-abbr-ecf"
+                  name="abbreviations.ecf"
                   type="checkbox"
                   checked={rules.abbreviations.ecf}
                   onChange={(e) => handleFieldChange('abbreviations.ecf', e.target.checked)}
@@ -283,6 +311,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-abbr-cao"
+                  name="abbreviations.cao"
                   type="checkbox"
                   checked={rules.abbreviations.cao}
                   onChange={(e) => handleFieldChange('abbreviations.cao', e.target.checked)}
@@ -303,6 +333,8 @@ const ExtractionRulesPanel: React.FC<{
             <div className="grid grid-cols-2 gap-4">
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-validate-marks"
+                  name="answerStructure.validateMarks"
                   type="checkbox"
                   checked={rules.answerStructure.validateMarks}
                   onChange={(e) => handleFieldChange('answerStructure.validateMarks', e.target.checked)}
@@ -314,6 +346,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-require-context"
+                  name="answerStructure.requireContext"
                   type="checkbox"
                   checked={rules.answerStructure.requireContext}
                   onChange={(e) => handleFieldChange('answerStructure.requireContext', e.target.checked)}
@@ -325,6 +359,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-validate-linking"
+                  name="answerStructure.validateLinking"
                   type="checkbox"
                   checked={rules.answerStructure.validateLinking}
                   onChange={(e) => handleFieldChange('answerStructure.validateLinking', e.target.checked)}
@@ -336,6 +372,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-accept-alternatives"
+                  name="answerStructure.acceptAlternatives"
                   type="checkbox"
                   checked={rules.answerStructure.acceptAlternatives}
                   onChange={(e) => handleFieldChange('answerStructure.acceptAlternatives', e.target.checked)}
@@ -356,6 +394,8 @@ const ExtractionRulesPanel: React.FC<{
             <div className="grid grid-cols-2 gap-4">
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-manual-marking"
+                  name="markScheme.requiresManualMarking"
                   type="checkbox"
                   checked={rules.markScheme.requiresManualMarking}
                   onChange={(e) => handleFieldChange('markScheme.requiresManualMarking', e.target.checked)}
@@ -367,6 +407,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-marking-criteria"
+                  name="markScheme.markingCriteria"
                   type="checkbox"
                   checked={rules.markScheme.markingCriteria}
                   onChange={(e) => handleFieldChange('markScheme.markingCriteria', e.target.checked)}
@@ -378,6 +420,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-component-marking"
+                  name="markScheme.componentMarking"
                   type="checkbox"
                   checked={rules.markScheme.componentMarking}
                   onChange={(e) => handleFieldChange('markScheme.componentMarking', e.target.checked)}
@@ -389,6 +433,8 @@ const ExtractionRulesPanel: React.FC<{
               </label>
               <label className="flex items-center gap-2">
                 <input
+                  id="extraction-rule-level-descriptors"
+                  name="markScheme.levelDescriptors"
                   type="checkbox"
                   checked={rules.markScheme.levelDescriptors}
                   onChange={(e) => handleFieldChange('markScheme.levelDescriptors', e.target.checked)}
@@ -407,6 +453,8 @@ const ExtractionRulesPanel: React.FC<{
               Exam Board
             </h4>
             <select
+              id="extraction-rule-exam-board"
+              name="examBoard"
               value={rules.examBoard}
               onChange={(e) => handleFieldChange('examBoard', e.target.value)}
               className="w-full md:w-1/2 px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
