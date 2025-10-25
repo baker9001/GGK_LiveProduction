@@ -388,6 +388,8 @@ export function shouldShowAnswerInput(
   element: {
     is_container?: boolean;
     has_direct_answer?: boolean;
+    correct_answers?: any[];
+    subparts?: any[];
   },
   config: DisplayConfig
 ): boolean {
@@ -398,6 +400,16 @@ export function shouldShowAnswerInput(
 
   // If element explicitly has no direct answer, don't show input
   if (element.has_direct_answer === false) {
+    return false;
+  }
+
+  // CRITICAL: If element has no correct_answers array (or it's empty) and has subparts,
+  // it's a contextual-only part - don't show answer input
+  if (
+    element.subparts &&
+    element.subparts.length > 0 &&
+    (!element.correct_answers || element.correct_answers.length === 0)
+  ) {
     return false;
   }
 
