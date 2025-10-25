@@ -1,0 +1,2124 @@
+{
+  "exam_board": "Cambridge",
+  "qualification": "IGCSE",
+  "subject": "Biology - 0610",
+  "paper_code": "0610/41",
+  "paper_name": "Paper 4 Theory (Extended)",
+  "exam_year": 2016,
+  "exam_session": "October/November",
+  "paper_duration": "1 hour 15 minutes",
+  "total_marks": 80,
+  "region": "International",
+  "questions": [
+    {
+      "question_number": "1",
+      "type": "complex",
+      "topic": "Biotechnology",
+      "subtopic": "Antibiotics and Fermentation",
+      "unit": "Biotechnology and Genetic Modification",
+      "difficulty": "Medium",
+      "question_text": "Penicillin is an antibiotic.",
+      "figure": true,
+      "attachments": ["Diagram of fermenter labeled with letters P, Q, R, S, T, U showing various components"],
+      "marks": 14,
+      "parts": [
+        {
+          "part": "a",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "Explain why doctors give antibiotics to people who are ill.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "kill bacteria",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2, 3, 4, 5],
+                  "alternative_type": "one_required",
+                  "context": {
+                    "type": "process",
+                    "value": "antibiotic_action",
+                    "label": "Antibiotic action"
+                  }
+                },
+                {
+                  "answer": "damage bacteria",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1, 3, 4, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "destroy bacteria",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [1, 2, 4, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "eliminate pathogens",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [1, 2, 3, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "kill fungi",
+                  "marks": 1,
+                  "alternative_id": 5,
+                  "linked_alternatives": [1, 2, 3, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "bacteria can cause illness",
+                  "marks": 1,
+                  "alternative_id": 6,
+                  "linked_alternatives": [7, 8, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "bacteria can cause disease",
+                  "marks": 1,
+                  "alternative_id": 7,
+                  "linked_alternatives": [6, 8, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "bacteria can cause infections",
+                  "marks": 1,
+                  "alternative_id": 8,
+                  "linked_alternatives": [6, 7, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "fungi can cause illness",
+                  "marks": 1,
+                  "alternative_id": 9,
+                  "linked_alternatives": [6, 7, 8],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "prevent growth of bacteria",
+                  "marks": 1,
+                  "alternative_id": 10,
+                  "alternative_type": "standalone"
+                },
+                {
+                  "answer": "prevent reproduction of bacteria",
+                  "marks": 1,
+                  "alternative_id": 11,
+                  "alternative_type": "standalone"
+                }
+              ],
+              "hint": "Think about what antibiotics do to bacteria and why bacteria are harmful",
+              "explanation": "Antibiotics kill or damage bacteria and other pathogens that cause illness. They can also prevent the growth and reproduction of harmful microorganisms."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "Explain why it is important to complete a full treatment of antibiotics.",
+              "marks": 3,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "all bacteria need to be killed",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "all bacteria need to be destroyed",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "any remaining bacteria will reproduce",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "any remaining bacteria will multiply",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "illness would continue",
+                  "marks": 1,
+                  "alternative_id": 5,
+                  "linked_alternatives": [6],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "disease would continue",
+                  "marks": 1,
+                  "alternative_id": 6,
+                  "linked_alternatives": [5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "problem of antibiotic resistance",
+                  "marks": 1,
+                  "alternative_id": 7
+                },
+                {
+                  "answer": "antibiotics no longer effective",
+                  "marks": 1,
+                  "alternative_id": 8
+                },
+                {
+                  "answer": "new antibiotics have to be developed",
+                  "marks": 1,
+                  "alternative_id": 9
+                }
+              ],
+              "hint": "Consider what happens if some bacteria survive the treatment",
+              "explanation": "Completing the full course ensures all bacteria are killed. If treatment is stopped early, surviving bacteria can multiply and may develop antibiotic resistance."
+            }
+          ]
+        },
+        {
+          "part": "b",
+          "question_text": "Penicillin was discovered in 1928 by Alexander Fleming. Name the type of microorganism that produces the antibiotic penicillin.",
+          "marks": 1,
+          "answer_format": "single_word",
+          "correct_answers": [
+            {
+              "answer": "fungus",
+              "marks": 1,
+              "alternative_id": 1,
+              "linked_alternatives": [2],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "mould",
+              "marks": 1,
+              "alternative_id": 2,
+              "linked_alternatives": [1],
+              "alternative_type": "one_required"
+            }
+          ],
+          "hint": "Think about what organism Fleming observed contaminating his bacterial culture",
+          "explanation": "Penicillin is produced by the fungus Penicillium (specifically Penicillium notatum or Penicillium chrysogenum)."
+        },
+        {
+          "part": "c",
+          "question_text": "Penicillin is produced commercially in fermenters as shown in Fig. 1.1.",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "Describe how a fermenter can be sterilised.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "steam",
+                  "marks": 1,
+                  "alternative_id": 1
+                },
+                {
+                  "answer": "autoclave",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [3, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "high temperature and high pressure",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [2, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "high temperature",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [2, 3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "UV radiation",
+                  "marks": 1,
+                  "alternative_id": 5,
+                  "linked_alternatives": [6, 7, 8],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "gamma radiation",
+                  "marks": 1,
+                  "alternative_id": 6,
+                  "linked_alternatives": [5, 7, 8],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "X rays",
+                  "marks": 1,
+                  "alternative_id": 7,
+                  "linked_alternatives": [5, 6, 8],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "radiation",
+                  "marks": 1,
+                  "alternative_id": 8,
+                  "linked_alternatives": [5, 6, 7],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "bleach",
+                  "marks": 1,
+                  "alternative_id": 9
+                }
+              ],
+              "hint": "Think about methods that kill all microorganisms",
+              "explanation": "Fermenters can be sterilized using steam under high pressure (autoclaving), radiation (UV, gamma, or X-rays), or chemical sterilants like bleach."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "Table 1.1 shows some names of the parts of the fermenter and their functions. Complete Table 1.1. One row has been done for you.",
+              "marks": 5,
+              "answer_format": "table_completion",
+              "figure": true,
+              "attachments": ["Table with columns: letter from Fig. 1.1, name, function"],
+              "correct_answers": [
+                {
+                  "answer": "P: water jacket - maintain temperature",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "context": {
+                    "type": "position",
+                    "value": "label_P",
+                    "label": "Part P identification"
+                  }
+                },
+                {
+                  "answer": "S: paddles - mixes",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [3, 4, 5, 6],
+                  "alternative_type": "one_required",
+                  "context": {
+                    "type": "position",
+                    "value": "label_S",
+                    "label": "Part S identification"
+                  }
+                },
+                {
+                  "answer": "S: stirrers - stirs",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [2, 4, 5, 6],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "S: mixers - maintains suspension",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [2, 3, 5, 6],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "S: vanes - stops solids settling",
+                  "marks": 1,
+                  "alternative_id": 5,
+                  "linked_alternatives": [2, 3, 4, 6],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "S: paddles - keeps nutrients moving",
+                  "marks": 1,
+                  "alternative_id": 6,
+                  "linked_alternatives": [2, 3, 4, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "Q: nutrient inlet - supplies glucose",
+                  "marks": 1,
+                  "alternative_id": 7,
+                  "linked_alternatives": [8, 9, 10],
+                  "alternative_type": "one_required",
+                  "context": {
+                    "type": "position",
+                    "value": "label_Q",
+                    "label": "Part Q identification"
+                  }
+                },
+                {
+                  "answer": "Q: nutrient inlet - supplies ammonia",
+                  "marks": 1,
+                  "alternative_id": 8,
+                  "linked_alternatives": [7, 9, 10],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "Q: nutrient inlet - supplies amino acids",
+                  "marks": 1,
+                  "alternative_id": 9,
+                  "linked_alternatives": [7, 8, 10],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "Q: nutrient inlet - supplies nutrients for growth",
+                  "marks": 1,
+                  "alternative_id": 10,
+                  "linked_alternatives": [7, 8, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "R: probe - monitors temperature",
+                  "marks": 1,
+                  "alternative_id": 11,
+                  "linked_alternatives": [12, 13, 14],
+                  "alternative_type": "one_required",
+                  "context": {
+                    "type": "position",
+                    "value": "label_R",
+                    "label": "Part R identification"
+                  }
+                },
+                {
+                  "answer": "R: sensor - monitors pH",
+                  "marks": 1,
+                  "alternative_id": 12,
+                  "linked_alternatives": [11, 13, 14],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "R: data logger - monitors temperature",
+                  "marks": 1,
+                  "alternative_id": 13,
+                  "linked_alternatives": [11, 12, 14],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "R: probe - monitors pH",
+                  "marks": 1,
+                  "alternative_id": 14,
+                  "linked_alternatives": [11, 12, 13],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "U: air supply - supplies oxygen for respiration",
+                  "marks": 1,
+                  "alternative_id": 15,
+                  "context": {
+                    "type": "position",
+                    "value": "label_U",
+                    "label": "Part U identification"
+                  }
+                }
+              ],
+              "hint": "Think about the function of each component in maintaining optimal conditions for fermentation",
+              "explanation": "Each component of the fermenter has a specific role in maintaining optimal conditions for microorganism growth and product formation."
+            }
+          ]
+        },
+        {
+          "part": "d",
+          "question_text": "Describe what happens to the liquid containing penicillin after it is collected from the fermenter.",
+          "marks": 1,
+          "answer_format": "single_line",
+          "correct_answers": [
+            {
+              "answer": "penicillin is separated",
+              "marks": 1,
+              "alternative_id": 1,
+              "linked_alternatives": [2, 3, 4, 5, 6, 7, 8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "penicillin is extracted",
+              "marks": 1,
+              "alternative_id": 2,
+              "linked_alternatives": [1, 3, 4, 5, 6, 7, 8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "filtered",
+              "marks": 1,
+              "alternative_id": 3,
+              "linked_alternatives": [1, 2, 4, 5, 6, 7, 8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "centrifuged",
+              "marks": 1,
+              "alternative_id": 4,
+              "linked_alternatives": [1, 2, 3, 5, 6, 7, 8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "evaporated",
+              "marks": 1,
+              "alternative_id": 5,
+              "linked_alternatives": [1, 2, 3, 4, 6, 7, 8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "purified",
+              "marks": 1,
+              "alternative_id": 6,
+              "linked_alternatives": [1, 2, 3, 4, 5, 7, 8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "crystallised",
+              "marks": 1,
+              "alternative_id": 7,
+              "linked_alternatives": [1, 2, 3, 4, 5, 6, 8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "precipitated",
+              "marks": 1,
+              "alternative_id": 8,
+              "linked_alternatives": [1, 2, 3, 4, 5, 6, 7, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "dried",
+              "marks": 1,
+              "alternative_id": 9,
+              "linked_alternatives": [1, 2, 3, 4, 5, 6, 7, 8],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "impurities removed",
+              "marks": 1,
+              "alternative_id": 10
+            }
+          ],
+          "hint": "Think about downstream processing steps",
+          "explanation": "The penicillin must be separated and purified from the fermentation broth through processes like filtration, extraction, crystallization, and drying."
+        }
+      ],
+      "hint": "Consider the role of antibiotics in medicine and the industrial production process",
+      "explanation": "This question covers the medical use of antibiotics, importance of completing treatment, and the industrial fermentation process for producing penicillin."
+    },
+    {
+      "question_number": "2",
+      "type": "complex",
+      "topic": "Ecology",
+      "subtopic": "Populations and Conservation",
+      "unit": "Organisms and their Environment",
+      "difficulty": "Medium",
+      "question_text": "Carp are a type of fish. Researchers in Brazil measured the body lengths of a population of carp in a river in 1998 and again in 2008. Histograms of their results are shown in Fig. 2.1.",
+      "figure": true,
+      "attachments": ["Two histograms showing distribution of carp body lengths in 1998 and 2008"],
+      "marks": 14,
+      "parts": [
+        {
+          "part": "a",
+          "question_text": "Define the term population.",
+          "marks": 2,
+          "answer_format": "multi_line",
+          "correct_answers": [
+            {
+              "answer": "group of organisms from one species",
+              "marks": 1,
+              "alternative_id": 1,
+              "linked_alternatives": [2],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "number of organisms from one species",
+              "marks": 1,
+              "alternative_id": 2,
+              "linked_alternatives": [1],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "living in same area",
+              "marks": 1,
+              "alternative_id": 3,
+              "linked_alternatives": [4, 5, 6, 7],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "living in same place",
+              "marks": 1,
+              "alternative_id": 4,
+              "linked_alternatives": [3, 5, 6, 7],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "living in same environment",
+              "marks": 1,
+              "alternative_id": 5,
+              "linked_alternatives": [3, 4, 6, 7],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "living at same time",
+              "marks": 1,
+              "alternative_id": 6,
+              "linked_alternatives": [3, 4, 5, 7],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "living together",
+              "marks": 1,
+              "alternative_id": 7,
+              "linked_alternatives": [3, 4, 5, 6],
+              "alternative_type": "one_required"
+            }
+          ],
+          "hint": "Think about what defines a group of organisms as a population",
+          "explanation": "A population is a group of organisms of the same species living in the same area at the same time."
+        },
+        {
+          "part": "b",
+          "question_text": "Describe the variation in body length of the carp population in 1998. Use the data in Fig. 2.1 to support your answer.",
+          "marks": 3,
+          "answer_format": "multi_line",
+          "correct_answers": [
+            {
+              "answer": "mode is between 12.1 and 16.0 cm long",
+              "marks": 1,
+              "alternative_id": 1,
+              "linked_alternatives": [2],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "majority of fish are between 12.1 and 16.0 cm long",
+              "marks": 1,
+              "alternative_id": 2,
+              "linked_alternatives": [1],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "range varies up to 24 cm",
+              "marks": 1,
+              "alternative_id": 3,
+              "linked_alternatives": [4],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "body length varies 0 to 24 cm",
+              "marks": 1,
+              "alternative_id": 4,
+              "linked_alternatives": [3],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "very few fish are less than 4 cm",
+              "marks": 1,
+              "alternative_id": 5
+            },
+            {
+              "answer": "no fish longer than 24 cm",
+              "marks": 1,
+              "alternative_id": 6
+            },
+            {
+              "answer": "normal distribution",
+              "marks": 1,
+              "alternative_id": 7,
+              "linked_alternatives": [8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "bell-shaped curve",
+              "marks": 1,
+              "alternative_id": 8,
+              "linked_alternatives": [7, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "similar number of fish longer and shorter than the mean",
+              "marks": 1,
+              "alternative_id": 9,
+              "linked_alternatives": [7, 8],
+              "alternative_type": "one_required"
+            }
+          ],
+          "hint": "Look at the distribution pattern and identify key features",
+          "explanation": "The 1998 population shows a normal distribution with most fish between 12.1-16.0 cm, ranging from 0-24 cm."
+        },
+        {
+          "part": "c",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "The total population of carp in 1998 was 43000 fish. Calculate the total population of carp in 2008. Show your working.",
+              "marks": 2,
+              "answer_format": "calculation",
+              "correct_answers": [
+                {
+                  "answer": "34000",
+                  "marks": 2,
+                  "alternative_id": 1,
+                  "working": "4 + 8 + 10 + 6 + 4 + 2 = 34 (thousand)",
+                  "context": {
+                    "type": "calculation",
+                    "value": "population_total",
+                    "label": "Total population calculation"
+                  }
+                }
+              ],
+              "hint": "Add up all the bars from the 2008 histogram",
+              "explanation": "Sum all the values from the 2008 histogram: 4 + 8 + 10 + 6 + 4 + 2 = 34 thousand fish."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "The decrease in the carp population by 2008 was caused by overfishing. Explain how fish stocks can be sustained.",
+              "marks": 4,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "quotas",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2, 3, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "licences",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1, 3, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "permits",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [1, 2, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "limits",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [1, 2, 3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "fines for overfishing",
+                  "marks": 1,
+                  "alternative_id": 5,
+                  "linked_alternatives": [6],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "taxes",
+                  "marks": 1,
+                  "alternative_id": 6,
+                  "linked_alternatives": [5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "only adult fish caught",
+                  "marks": 1,
+                  "alternative_id": 7,
+                  "linked_alternatives": [8],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "young fish returned",
+                  "marks": 1,
+                  "alternative_id": 8,
+                  "linked_alternatives": [7],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "restrict net size",
+                  "marks": 1,
+                  "alternative_id": 9
+                },
+                {
+                  "answer": "no fishing zones",
+                  "marks": 1,
+                  "alternative_id": 10,
+                  "linked_alternatives": [11],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "no fishing seasons",
+                  "marks": 1,
+                  "alternative_id": 11,
+                  "linked_alternatives": [10],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "encourage fish farms",
+                  "marks": 1,
+                  "alternative_id": 12,
+                  "linked_alternatives": [13, 14, 15],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "nurseries",
+                  "marks": 1,
+                  "alternative_id": 13,
+                  "linked_alternatives": [12, 14, 15],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "hatcheries",
+                  "marks": 1,
+                  "alternative_id": 14,
+                  "linked_alternatives": [12, 13, 15],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "captive breeding",
+                  "marks": 1,
+                  "alternative_id": 15,
+                  "linked_alternatives": [12, 13, 14],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "international fishing agreements",
+                  "marks": 1,
+                  "alternative_id": 16,
+                  "linked_alternatives": [17],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "treaties",
+                  "marks": 1,
+                  "alternative_id": 17,
+                  "linked_alternatives": [16],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "reduce pollution",
+                  "marks": 1,
+                  "alternative_id": 18,
+                  "linked_alternatives": [19],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "reduce silting of rivers",
+                  "marks": 1,
+                  "alternative_id": 19,
+                  "linked_alternatives": [18],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "education",
+                  "marks": 1,
+                  "alternative_id": 20
+                },
+                {
+                  "answer": "restocking",
+                  "marks": 1,
+                  "alternative_id": 21,
+                  "linked_alternatives": [22],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "add more fish than removed",
+                  "marks": 1,
+                  "alternative_id": 22,
+                  "linked_alternatives": [21],
+                  "alternative_type": "one_required"
+                }
+              ],
+              "hint": "Think about different conservation methods and regulations",
+              "explanation": "Fish stocks can be sustained through quotas, fishing regulations, protected areas, fish farming, and habitat conservation."
+            }
+          ]
+        },
+        {
+          "part": "d",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "Body length is an example of continuous variation. Suggest what causes the variation in body length in a population of fish.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "genetics",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "inherited genes",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "environmental factors",
+                  "marks": 1,
+                  "alternative_id": 3
+                },
+                {
+                  "answer": "natural selection",
+                  "marks": 1,
+                  "alternative_id": 4
+                }
+              ],
+              "hint": "Consider both genetic and environmental influences",
+              "explanation": "Continuous variation is caused by both genetic factors (polygenic inheritance) and environmental factors (nutrition, temperature, etc.)."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "Continuous variation is shown with a histogram. Name the type of graph that should be used to show discontinuous variation.",
+              "marks": 1,
+              "answer_format": "single_line",
+              "correct_answers": [
+                {
+                  "answer": "bar chart",
+                  "marks": 1,
+                  "alternative_id": 1
+                }
+              ],
+              "hint": "Think about how discrete categories are displayed",
+              "explanation": "Discontinuous variation shows distinct categories with no intermediates, best displayed using a bar chart."
+            }
+          ]
+        }
+      ],
+      "hint": "This question tests understanding of populations, variation, and conservation",
+      "explanation": "The question covers population dynamics, data interpretation from histograms, conservation methods, and types of variation."
+    },
+    {
+      "question_number": "3",
+      "type": "complex",
+      "topic": "Nutrition",
+      "subtopic": "Enzymes and Digestion",
+      "unit": "Nutrition",
+      "difficulty": "Medium",
+      "question_text": "Pepsin is a protease enzyme found in the alimentary canal.",
+      "figure": true,
+      "attachments": ["Diagram showing four test tubes at different pH values with enzyme solution and cubes of cooked egg white"],
+      "marks": 13,
+      "parts": [
+        {
+          "part": "a",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "Name the product formed from the digestion of proteins by protease enzymes.",
+              "marks": 1,
+              "answer_format": "single_line",
+              "correct_answers": [
+                {
+                  "answer": "amino acids",
+                  "marks": 1,
+                  "alternative_id": 1
+                }
+              ],
+              "hint": "Think about the building blocks of proteins",
+              "explanation": "Protease enzymes break down proteins into their constituent amino acids."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "State the organ in the alimentary canal where pepsin is secreted.",
+              "marks": 1,
+              "answer_format": "single_word",
+              "correct_answers": [
+                {
+                  "answer": "stomach",
+                  "marks": 1,
+                  "alternative_id": 1
+                }
+              ],
+              "hint": "Think about where protein digestion begins",
+              "explanation": "Pepsin is secreted by the gastric glands in the stomach."
+            }
+          ]
+        },
+        {
+          "part": "b",
+          "question_text": "A biologist performed an experiment to find the optimum pH for the activity of pepsin. The enzyme activity was measured in four test-tubes. Each test-tube contained a 1cm³ cube of cooked egg white which contains protein. Fig. 3.1 shows the four test-tubes. The biologist measured the time taken for the complete digestion of the cubes of cooked egg white.",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "The biologist ensured all the cubes of cooked egg white were exactly the same size. Suggest why.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "reference to surface area",
+                  "marks": 1,
+                  "alternative_id": 1
+                },
+                {
+                  "answer": "affecting enzyme activity",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "affecting enzyme",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [2],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "allows comparison",
+                  "marks": 1,
+                  "alternative_id": 4
+                },
+                {
+                  "answer": "make experiment valid",
+                  "marks": 1,
+                  "alternative_id": 5
+                },
+                {
+                  "answer": "controlled variable",
+                  "marks": 1,
+                  "alternative_id": 6
+                }
+              ],
+              "hint": "Consider what needs to be kept constant for a fair test",
+              "explanation": "Same size ensures same surface area for enzyme action, making it a controlled variable for valid comparison."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "Temperature must be controlled in this experiment. Describe how temperature could be controlled.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "water-bath",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2, 3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "in a beaker of water",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1, 3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "incubator",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [1, 2],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "insulate test-tube",
+                  "marks": 1,
+                  "alternative_id": 4
+                },
+                {
+                  "answer": "allow solutions to equilibrate to temperature before experiment",
+                  "marks": 1,
+                  "alternative_id": 5
+                },
+                {
+                  "answer": "use a thermometer to check the temperature is constant",
+                  "marks": 1,
+                  "alternative_id": 6
+                }
+              ],
+              "hint": "Think about equipment used to maintain constant temperature",
+              "explanation": "Temperature can be controlled using a water bath or incubator, with thermometer monitoring."
+            }
+          ]
+        },
+        {
+          "part": "c",
+          "question_text": "The same experiment was performed with trypsin, another protease enzyme. Predict the optimum pH for trypsin.",
+          "marks": 1,
+          "answer_format": "single_line",
+          "correct_answers": [
+            {
+              "answer": "pH 8",
+              "marks": 1,
+              "alternative_id": 1,
+              "context": {
+                "type": "measurement",
+                "value": "pH_value",
+                "label": "pH prediction"
+              }
+            }
+          ],
+          "hint": "Trypsin works in the small intestine which is alkaline",
+          "explanation": "Trypsin has an optimum pH of around 8, suitable for the alkaline conditions in the small intestine."
+        },
+        {
+          "part": "d",
+          "question_text": "Enzymes, such as proteases, are important in digestion. Describe in detail how enzymes function, using other digestive enzymes as examples.",
+          "marks": 6,
+          "answer_format": "multi_line",
+          "correct_answers": [
+            {
+              "answer": "enzymes are protein",
+              "marks": 1,
+              "alternative_id": 1
+            },
+            {
+              "answer": "enzymes can be reused",
+              "marks": 1,
+              "alternative_id": 2,
+              "linked_alternatives": [3],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "enzymes are unchanged in the reaction",
+              "marks": 1,
+              "alternative_id": 3,
+              "linked_alternatives": [2],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "enzymes are specific",
+              "marks": 1,
+              "alternative_id": 4
+            },
+            {
+              "answer": "enzymes are catalysts",
+              "marks": 1,
+              "alternative_id": 5,
+              "linked_alternatives": [6],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "speeds up reaction",
+              "marks": 1,
+              "alternative_id": 6,
+              "linked_alternatives": [5],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "lowers the energy needed for the reaction",
+              "marks": 1,
+              "alternative_id": 7
+            },
+            {
+              "answer": "successful collisions",
+              "marks": 1,
+              "alternative_id": 8,
+              "linked_alternatives": [9, 10],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "enzyme-substrate complex",
+              "marks": 1,
+              "alternative_id": 9,
+              "linked_alternatives": [8, 10],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "ESC",
+              "marks": 1,
+              "alternative_id": 10,
+              "linked_alternatives": [8, 9],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "active site",
+              "marks": 1,
+              "alternative_id": 11
+            },
+            {
+              "answer": "enzyme and substrate fit together",
+              "marks": 1,
+              "alternative_id": 12
+            },
+            {
+              "answer": "complementary shape",
+              "marks": 1,
+              "alternative_id": 13
+            },
+            {
+              "answer": "digestive enzymes perform chemical digestion",
+              "marks": 1,
+              "alternative_id": 14,
+              "linked_alternatives": [15, 16],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "hydrolysis",
+              "marks": 1,
+              "alternative_id": 15,
+              "linked_alternatives": [14, 16],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "catabolic reactions",
+              "marks": 1,
+              "alternative_id": 16,
+              "linked_alternatives": [14, 15],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "break down large molecules into small molecules",
+              "marks": 1,
+              "alternative_id": 17,
+              "linked_alternatives": [18],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "break down insoluble molecules into soluble molecules",
+              "marks": 1,
+              "alternative_id": 18,
+              "linked_alternatives": [17],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "amylase converts starch to sugars",
+              "marks": 1,
+              "alternative_id": 19,
+              "linked_alternatives": [20],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "amylase converts starch to maltose",
+              "marks": 1,
+              "alternative_id": 20,
+              "linked_alternatives": [19],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "lipase converts lipid to fatty acids and glycerol",
+              "marks": 1,
+              "alternative_id": 21,
+              "linked_alternatives": [22],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "lipase converts fats to fatty acids and glycerol",
+              "marks": 1,
+              "alternative_id": 22,
+              "linked_alternatives": [21],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "maltase converts maltose to simple sugars",
+              "marks": 1,
+              "alternative_id": 23,
+              "linked_alternatives": [24],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "maltase converts maltose to glucose",
+              "marks": 1,
+              "alternative_id": 24,
+              "linked_alternatives": [23],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "reference to pH",
+              "marks": 1,
+              "alternative_id": 25
+            },
+            {
+              "answer": "reference to denaturation",
+              "marks": 1,
+              "alternative_id": 26
+            }
+          ],
+          "hint": "Include enzyme properties, mechanism of action, and specific examples",
+          "explanation": "Enzymes are protein catalysts that speed up reactions by lowering activation energy. They work through the lock and key mechanism with specific substrates."
+        }
+      ],
+      "hint": "Focus on enzyme structure, function, and the factors affecting enzyme activity",
+      "explanation": "This question tests understanding of digestive enzymes, experimental design, and the factors affecting enzyme activity."
+    },
+    {
+      "question_number": "4",
+      "type": "complex",
+      "topic": "Nutrition",
+      "subtopic": "Deficiency Diseases and Diabetes",
+      "unit": "Nutrition",
+      "difficulty": "Hard",
+      "question_text": "Type 1 diabetes is caused by the immune system destroying body cells.",
+      "figure": false,
+      "attachments": ["Table 4.1 showing percentage of mice with Type 1 diabetes over time for normal and vitamin D-deficient mice"],
+      "marks": 16,
+      "parts": [
+        {
+          "part": "a",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "Suggest which organ in the body is attacked by the immune system to cause Type 1 diabetes.",
+              "marks": 1,
+              "answer_format": "single_word",
+              "correct_answers": [
+                {
+                  "answer": "pancreas",
+                  "marks": 1,
+                  "alternative_id": 1
+                }
+              ],
+              "hint": "Which organ produces insulin?",
+              "explanation": "In Type 1 diabetes, the immune system attacks the insulin-producing beta cells in the pancreas."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "Antibodies are part of the immune system. Describe how antibodies function.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "recognize a specific pathogen",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "recognize a specific antigen",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "lock on antigens",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "antibody-antigen complex",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "agglutination",
+                  "marks": 1,
+                  "alternative_id": 5,
+                  "linked_alternatives": [6],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "clumping",
+                  "marks": 1,
+                  "alternative_id": 6,
+                  "linked_alternatives": [5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "destruction by phagocytes",
+                  "marks": 1,
+                  "alternative_id": 7,
+                  "linked_alternatives": [8, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "destruction by white blood cells",
+                  "marks": 1,
+                  "alternative_id": 8,
+                  "linked_alternatives": [7, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "destruction by lymphocytes",
+                  "marks": 1,
+                  "alternative_id": 9,
+                  "linked_alternatives": [7, 8],
+                  "alternative_type": "one_required"
+                }
+              ],
+              "hint": "Think about how antibodies identify and neutralize pathogens",
+              "explanation": "Antibodies recognize specific antigens, bind to them forming complexes, cause agglutination, and mark pathogens for destruction by phagocytes."
+            }
+          ]
+        },
+        {
+          "part": "b",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "Describe a cause of vitamin D deficiency in humans.",
+              "marks": 1,
+              "answer_format": "single_line",
+              "correct_answers": [
+                {
+                  "answer": "lack of sunlight",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "dark skin",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "lack of fish oils",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [4, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "lack of egg yolk",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [3, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "lack of liver",
+                  "marks": 1,
+                  "alternative_id": 5,
+                  "linked_alternatives": [3, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "unbalanced diet",
+                  "marks": 1,
+                  "alternative_id": 6
+                },
+                {
+                  "answer": "kidney disease",
+                  "marks": 1,
+                  "alternative_id": 7,
+                  "linked_alternatives": [8, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "liver disease",
+                  "marks": 1,
+                  "alternative_id": 8,
+                  "linked_alternatives": [7, 9],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "digestive disease",
+                  "marks": 1,
+                  "alternative_id": 9,
+                  "linked_alternatives": [7, 8],
+                  "alternative_type": "one_required"
+                }
+              ],
+              "hint": "Consider both dietary and environmental factors",
+              "explanation": "Vitamin D deficiency can be caused by lack of sunlight exposure, dietary insufficiency, or diseases affecting vitamin D metabolism."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "Describe the effects of vitamin D deficiency in humans.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "muscle cramps",
+                  "marks": 1,
+                  "alternative_id": 1
+                },
+                {
+                  "answer": "soft bones",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [3, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "bent bones",
+                  "marks": 1,
+                  "alternative_id": 3,
+                  "linked_alternatives": [2, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "rickets",
+                  "marks": 1,
+                  "alternative_id": 4,
+                  "linked_alternatives": [2, 3],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "stunted growth",
+                  "marks": 1,
+                  "alternative_id": 5
+                },
+                {
+                  "answer": "prone to infections",
+                  "marks": 1,
+                  "alternative_id": 6
+                },
+                {
+                  "answer": "fatigue",
+                  "marks": 1,
+                  "alternative_id": 7
+                },
+                {
+                  "answer": "reduced ability to absorb calcium ions",
+                  "marks": 1,
+                  "alternative_id": 8
+                }
+              ],
+              "hint": "Think about bone health and other body systems",
+              "explanation": "Vitamin D deficiency causes rickets (soft/bent bones), muscle problems, reduced immunity, and poor calcium absorption."
+            }
+          ]
+        },
+        {
+          "part": "c",
+          "question_text": "Scientists have found that mice can suffer from Type 1 diabetes. They also found that vitamin D affects the development of Type 1 diabetes in mice. Two groups of mice were studied. One group were normal and the other group were vitamin D-deficient. The percentage of mice in each group that developed Type 1 diabetes was recorded every fifty days. Table 4.1 shows their results. Describe the effect of vitamin D deficiency on the development of Type 1 diabetes in mice. Use the data in Table 4.1 to support your answer.",
+          "marks": 3,
+          "answer_format": "multi_line",
+          "correct_answers": [
+            {
+              "answer": "lack of vitamin D leads to more cases of type 1 diabetes in mice",
+              "marks": 1,
+              "alternative_id": 1,
+              "accepts_reverse_argument": true
+            },
+            {
+              "answer": "there is no difference in cases until after 50 days",
+              "marks": 1,
+              "alternative_id": 2,
+              "linked_alternatives": [3],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "same number of cases until after 50 days",
+              "marks": 1,
+              "alternative_id": 3,
+              "linked_alternatives": [2],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "at 100 days there are more cases in vitamin D mice",
+              "marks": 1,
+              "alternative_id": 4
+            },
+            {
+              "answer": "vitamin D mice levels off before normal mice",
+              "marks": 1,
+              "alternative_id": 5,
+              "linked_alternatives": [6],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "levels off after 150 days",
+              "marks": 1,
+              "alternative_id": 6,
+              "linked_alternatives": [5],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "comparative data quote",
+              "marks": 1,
+              "alternative_id": 7
+            }
+          ],
+          "hint": "Look for patterns and differences between the two groups",
+          "explanation": "Vitamin D deficiency leads to earlier and higher incidence of Type 1 diabetes in mice, with the deficient group showing more cases from day 100 onwards."
+        },
+        {
+          "part": "d",
+          "question_text": "Suggest the symptoms that mice with Type 1 diabetes would have.",
+          "marks": 4,
+          "answer_format": "multi_line",
+          "correct_answers": [
+            {
+              "answer": "frequent urination",
+              "marks": 1,
+              "alternative_id": 1
+            },
+            {
+              "answer": "thirst",
+              "marks": 1,
+              "alternative_id": 2
+            },
+            {
+              "answer": "hunger",
+              "marks": 1,
+              "alternative_id": 3
+            },
+            {
+              "answer": "fatigue",
+              "marks": 1,
+              "alternative_id": 4
+            },
+            {
+              "answer": "weight loss",
+              "marks": 1,
+              "alternative_id": 5
+            },
+            {
+              "answer": "itchy skin",
+              "marks": 1,
+              "alternative_id": 6
+            },
+            {
+              "answer": "wounds heal slowly",
+              "marks": 1,
+              "alternative_id": 7,
+              "linked_alternatives": [8],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "more susceptible to infection",
+              "marks": 1,
+              "alternative_id": 8,
+              "linked_alternatives": [7],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "blurred vision",
+              "marks": 1,
+              "alternative_id": 9
+            },
+            {
+              "answer": "vomiting",
+              "marks": 1,
+              "alternative_id": 10
+            },
+            {
+              "answer": "glucose in urine",
+              "marks": 1,
+              "alternative_id": 11
+            },
+            {
+              "answer": "high blood glucose",
+              "marks": 1,
+              "alternative_id": 12,
+              "linked_alternatives": [13],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "high blood sugar",
+              "marks": 1,
+              "alternative_id": 13,
+              "linked_alternatives": [12],
+              "alternative_type": "one_required"
+            }
+          ],
+          "hint": "Think about the effects of high blood glucose and lack of insulin",
+          "explanation": "Type 1 diabetes symptoms include frequent urination, excessive thirst, hunger, fatigue, weight loss, slow healing, and high blood glucose."
+        },
+        {
+          "part": "e",
+          "question_text": "Describe the treatment for human patients with Type 1 diabetes.",
+          "marks": 3,
+          "answer_format": "multi_line",
+          "correct_answers": [
+            {
+              "answer": "insulin",
+              "marks": 1,
+              "alternative_id": 1
+            },
+            {
+              "answer": "by injection",
+              "marks": 1,
+              "alternative_id": 2,
+              "linked_alternatives": [3],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "insulin pump",
+              "marks": 1,
+              "alternative_id": 3,
+              "linked_alternatives": [2],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "regular blood sugar tests",
+              "marks": 1,
+              "alternative_id": 4
+            },
+            {
+              "answer": "regular meals",
+              "marks": 1,
+              "alternative_id": 5
+            },
+            {
+              "answer": "exercise",
+              "marks": 1,
+              "alternative_id": 6,
+              "linked_alternatives": [7],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "restrict carbohydrate content of diet",
+              "marks": 1,
+              "alternative_id": 7,
+              "linked_alternatives": [6],
+              "alternative_type": "one_required"
+            }
+          ],
+          "hint": "Consider both medical treatment and lifestyle management",
+          "explanation": "Type 1 diabetes is treated with regular insulin injections or pump, blood glucose monitoring, dietary management, and regular exercise."
+        }
+      ],
+      "hint": "This question links immune function, vitamin deficiency, and diabetes",
+      "explanation": "The question explores the relationship between vitamin D deficiency and Type 1 diabetes development, along with symptoms and treatment."
+    },
+    {
+      "question_number": "5",
+      "type": "complex",
+      "topic": "Plant Biology",
+      "subtopic": "Transport and Tropisms",
+      "unit": "Transport in Plants",
+      "difficulty": "Medium",
+      "question_text": "Fig. 5.1 is an image of a germinating seed showing the growing root.",
+      "figure": true,
+      "attachments": ["Image of germinating seed with root hairs labeled J"],
+      "marks": 9,
+      "parts": [
+        {
+          "part": "a",
+          "question_text": "Describe and explain how the structures seen at J are adapted for their function.",
+          "marks": 5,
+          "answer_format": "multi_line",
+          "correct_answers": [
+            {
+              "answer": "root hair cells",
+              "marks": 1,
+              "alternative_id": 1
+            },
+            {
+              "answer": "long and thin",
+              "marks": 1,
+              "alternative_id": 2
+            },
+            {
+              "answer": "thin cell wall",
+              "marks": 1,
+              "alternative_id": 3
+            },
+            {
+              "answer": "large surface area",
+              "marks": 1,
+              "alternative_id": 4
+            },
+            {
+              "answer": "for absorption",
+              "marks": 1,
+              "alternative_id": 5
+            },
+            {
+              "answer": "water by osmosis",
+              "marks": 1,
+              "alternative_id": 6
+            },
+            {
+              "answer": "ion by active transport",
+              "marks": 1,
+              "alternative_id": 7,
+              "linked_alternatives": [8],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "nutrients by active transport",
+              "marks": 1,
+              "alternative_id": 8,
+              "linked_alternatives": [7],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "against the concentration gradient",
+              "marks": 1,
+              "alternative_id": 9
+            },
+            {
+              "answer": "protein pumps in membrane",
+              "marks": 1,
+              "alternative_id": 10
+            },
+            {
+              "answer": "require energy",
+              "marks": 1,
+              "alternative_id": 11,
+              "linked_alternatives": [12],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "ATP",
+              "marks": 1,
+              "alternative_id": 12,
+              "linked_alternatives": [11],
+              "alternative_type": "one_required"
+            },
+            {
+              "answer": "reference to many mitochondria",
+              "marks": 1,
+              "alternative_id": 13
+            }
+          ],
+          "hint": "Think about the structure-function relationship of root hair cells",
+          "explanation": "Root hair cells are adapted with long thin extensions increasing surface area for absorption of water by osmosis and minerals by active transport."
+        },
+        {
+          "part": "b",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "The root shown in Fig. 5.1 is growing downward into the soil. Name this response seen in roots.",
+              "marks": 1,
+              "answer_format": "single_line",
+              "correct_answers": [
+                {
+                  "answer": "positive gravitropism",
+                  "marks": 1,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "gravitropism",
+                  "marks": 1,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1],
+                  "alternative_type": "one_required"
+                }
+              ],
+              "hint": "What is the response to gravity called?",
+              "explanation": "Roots show positive gravitropism (also called geotropism), growing in the direction of gravity."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "Name the chemical that controls this response.",
+              "marks": 1,
+              "answer_format": "single_word",
+              "correct_answers": [
+                {
+                  "answer": "auxin",
+                  "marks": 1,
+                  "alternative_id": 1
+                }
+              ],
+              "hint": "What plant hormone controls tropisms?",
+              "explanation": "Auxin is the plant hormone that controls gravitropic responses in roots."
+            },
+            {
+              "subpart": "iii",
+              "question_text": "There are situations, either in wild plants or in laboratory experiments, where roots do not grow downwards. Suggest and explain one situation.",
+              "marks": 2,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "in space - no gravity",
+                  "marks": 2,
+                  "alternative_id": 1
+                },
+                {
+                  "answer": "in a clinostat - gravity constantly changing",
+                  "marks": 2,
+                  "alternative_id": 2
+                },
+                {
+                  "answer": "remove root tip - no auxin source",
+                  "marks": 2,
+                  "alternative_id": 3
+                },
+                {
+                  "answer": "lateral roots - searching for water/nutrients",
+                  "marks": 2,
+                  "alternative_id": 4
+                },
+                {
+                  "answer": "light source below plant - roots grow away from light",
+                  "marks": 2,
+                  "alternative_id": 5
+                },
+                {
+                  "answer": "anaerobic mud/mangrove swamp - need oxygen for respiration",
+                  "marks": 2,
+                  "alternative_id": 6
+                },
+                {
+                  "answer": "roots attaching to solid objects for support",
+                  "marks": 2,
+                  "alternative_id": 7
+                },
+                {
+                  "answer": "material too hard for root to grow through",
+                  "marks": 2,
+                  "alternative_id": 8
+                }
+              ],
+              "hint": "Think about environmental conditions or experimental manipulations",
+              "explanation": "Roots may not grow downwards in zero gravity, when the gravity stimulus is removed (clinostat), or when other factors override gravitropism."
+            }
+          ]
+        }
+      ],
+      "hint": "Focus on adaptations for absorption and plant responses to stimuli",
+      "explanation": "This question covers root hair cell adaptations for absorption and gravitropic responses in roots controlled by auxin."
+    },
+    {
+      "question_number": "6",
+      "type": "complex",
+      "topic": "Genetics",
+      "subtopic": "DNA and Genetic Engineering",
+      "unit": "Inheritance",
+      "difficulty": "Hard",
+      "question_text": "A DNA molecule has two strands as shown in Fig. 6.1.",
+      "figure": true,
+      "attachments": ["Diagram of DNA double helix with base pairing to be completed", "DNA sequences of eight plant species for comparison", "Table 6.1 with DNA sequence differences", "Classification tree Fig. 6.3 to be completed"],
+      "marks": 14,
+      "parts": [
+        {
+          "part": "a",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "Fill in the boxes on Fig. 6.1 to show the letter of the bases on strand 2 that will pair with the corresponding bases on strand 1.",
+              "marks": 2,
+              "answer_format": "diagram",
+              "correct_answers": [
+                {
+                  "answer": "T pairs with A",
+                  "marks": 0.5,
+                  "alternative_id": 1
+                },
+                {
+                  "answer": "C pairs with G",
+                  "marks": 0.5,
+                  "alternative_id": 2
+                },
+                {
+                  "answer": "A pairs with T",
+                  "marks": 0.5,
+                  "alternative_id": 3
+                },
+                {
+                  "answer": "G pairs with C",
+                  "marks": 0.5,
+                  "alternative_id": 4
+                }
+              ],
+              "hint": "Remember complementary base pairing rules",
+              "explanation": "DNA bases pair specifically: Adenine (A) with Thymine (T), and Guanine (G) with Cytosine (C)."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "State the name for the structure of a DNA molecule as shown in Fig. 6.1.",
+              "marks": 1,
+              "answer_format": "single_line",
+              "correct_answers": [
+                {
+                  "answer": "double helix",
+                  "marks": 1,
+                  "alternative_id": 1
+                }
+              ],
+              "hint": "What is the twisted ladder shape called?",
+              "explanation": "DNA has a double helix structure - two strands wound around each other."
+            }
+          ]
+        },
+        {
+          "part": "b",
+          "question_text": "The number of differences between the DNA sequences of the eight species shown in Fig. 6.2 are recorded in Table 6.1. Count the number of differences between the DNA sequences shown in Fig. 6.2 for: • species C and species D • species G and species H. Write your answers in Table 6.1.",
+          "marks": 2,
+          "answer_format": "table_completion",
+          "correct_answers": [
+            {
+              "answer": "species C and species D: 4",
+              "marks": 1,
+              "alternative_id": 1
+            },
+            {
+              "answer": "species G and species H: 3",
+              "marks": 1,
+              "alternative_id": 2
+            }
+          ],
+          "hint": "Count each position where the bases differ",
+          "explanation": "Compare the DNA sequences base by base to count the differences between species."
+        },
+        {
+          "part": "c",
+          "question_text": "The most closely related species have the fewest differences between their DNA sequences. State which two plant species shown in Table 6.1 are most distantly related to each other.",
+          "marks": 1,
+          "answer_format": "single_line",
+          "correct_answers": [
+            {
+              "answer": "species A and species D",
+              "marks": 1,
+              "alternative_id": 1
+            }
+          ],
+          "hint": "Look for the highest number in the table",
+          "explanation": "The most distantly related species have the most DNA sequence differences."
+        },
+        {
+          "part": "d",
+          "question_text": "The most closely related species have the shortest distance from a branching point on a classification tree. Use the information in Table 6.1 to complete the classification tree in Fig. 6.3. Write the letter corresponding to species B, C, D and G in the box next to the correct branch of the classification tree.",
+          "marks": 3,
+          "answer_format": "diagram",
+          "correct_answers": [
+            {
+              "answer": "Species D correctly placed",
+              "marks": 1,
+              "alternative_id": 1
+            },
+            {
+              "answer": "Species C correctly placed",
+              "marks": 1,
+              "alternative_id": 2
+            },
+            {
+              "answer": "Species G correctly placed",
+              "marks": 1,
+              "alternative_id": 3
+            },
+            {
+              "answer": "Species B correctly placed",
+              "marks": 1,
+              "alternative_id": 4
+            }
+          ],
+          "hint": "Use the number of differences to determine relationships",
+          "explanation": "Species with fewer differences should be closer on the tree, sharing more recent common ancestors."
+        },
+        {
+          "part": "e",
+          "subparts": [
+            {
+              "subpart": "i",
+              "question_text": "A modern method for improving crop productivity is to cut out sections of DNA carrying a useful gene from one organism and place them into another organism. Name the technique of inserting genes from one organism into another.",
+              "marks": 1,
+              "answer_format": "single_line",
+              "correct_answers": [
+                {
+                  "answer": "genetic engineering",
+                  "marks": 1,
+                  "alternative_id": 1
+                }
+              ],
+              "hint": "What is the process of modifying organisms' genes called?",
+              "explanation": "Genetic engineering (also called genetic modification) involves transferring genes between organisms."
+            },
+            {
+              "subpart": "ii",
+              "question_text": "A gene for producing a vaccine has been inserted into banana plants. Give two other examples in which crop plants have been changed by inserting genes. State one advantage for each example.",
+              "marks": 4,
+              "answer_format": "multi_line",
+              "correct_answers": [
+                {
+                  "answer": "drought resistant - increased yield",
+                  "marks": 2,
+                  "alternative_id": 1,
+                  "linked_alternatives": [2, 3, 4, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "salt resistant - extend range where crops can be grown",
+                  "marks": 2,
+                  "alternative_id": 2,
+                  "linked_alternatives": [1, 3, 4, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "pollution resistant - increased productivity",
+                  "marks": 2,
+                  "alternative_id": 3,
+                  "linked_alternatives": [1, 2, 4, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "metal resistant - increased yield",
+                  "marks": 2,
+                  "alternative_id": 4,
+                  "linked_alternatives": [1, 2, 3, 5],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "frost resistant - increased productivity",
+                  "marks": 2,
+                  "alternative_id": 5,
+                  "linked_alternatives": [1, 2, 3, 4],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "herbicide resistance - increased yield",
+                  "marks": 2,
+                  "alternative_id": 6
+                },
+                {
+                  "answer": "pesticide resistance - increased productivity",
+                  "marks": 2,
+                  "alternative_id": 7
+                },
+                {
+                  "answer": "crop plants produce own insecticides - less insecticide used",
+                  "marks": 2,
+                  "alternative_id": 8
+                },
+                {
+                  "answer": "vitamin enrichment - increased nutritional value",
+                  "marks": 2,
+                  "alternative_id": 9
+                },
+                {
+                  "answer": "β carotene (Golden rice) - increased nutritional value",
+                  "marks": 2,
+                  "alternative_id": 10
+                },
+                {
+                  "answer": "pathogen resistant - increased productivity",
+                  "marks": 2,
+                  "alternative_id": 11,
+                  "linked_alternatives": [12],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "Bt - less pesticide use",
+                  "marks": 2,
+                  "alternative_id": 12,
+                  "linked_alternatives": [11],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "antigens/vaccines - cheap production of medicines",
+                  "marks": 2,
+                  "alternative_id": 13
+                },
+                {
+                  "answer": "pharmaceuticals e.g. insulin - cheap production of medicines",
+                  "marks": 2,
+                  "alternative_id": 14
+                },
+                {
+                  "answer": "improved flavour - improved customer satisfaction",
+                  "marks": 2,
+                  "alternative_id": 15,
+                  "linked_alternatives": [16, 17],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "improved texture - shelf life",
+                  "marks": 2,
+                  "alternative_id": 16,
+                  "linked_alternatives": [15, 17],
+                  "alternative_type": "one_required"
+                },
+                {
+                  "answer": "ripening control - shelf life",
+                  "marks": 2,
+                  "alternative_id": 17,
+                  "linked_alternatives": [15, 16],
+                  "alternative_type": "one_required"
+                }
+              ],
+              "hint": "Think about environmental resistance, nutritional improvement, or pest resistance",
+              "explanation": "Genetic engineering can improve crop resistance to environmental stresses, pests, and diseases, enhance nutritional value, or produce useful substances."
+            }
+          ]
+        }
+      ],
+      "hint": "This question covers DNA structure, sequence comparison, and applications of genetic engineering",
+      "explanation": "The question tests understanding of DNA base pairing, using DNA sequences for classification, and practical applications of genetic engineering in agriculture."
+    }
+  ]
+}
