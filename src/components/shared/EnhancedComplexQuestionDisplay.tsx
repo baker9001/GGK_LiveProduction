@@ -227,6 +227,91 @@ const EnhancedComplexQuestionDisplay: React.FC<EnhancedComplexQuestionDisplayPro
     // Subparts always require answers
     const showAnswer = configShouldShowInput(subpart, displayConfig);
 
+    // Convert subpart index to roman numerals for natural display
+    const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+    const romanLabel = subpart.subpart_label || romanNumerals[subpartIndex] || String(subpartIndex + 1);
+
+    // For test/practice mode, use natural flow display (non-collapsible)
+    const useNaturalFlow = context === 'practice' || context === 'test' || context === 'simulation';
+
+    if (useNaturalFlow) {
+      return (
+        <div key={subpart.id} className="mb-3">
+          {/* Subpart header with natural flow - using roman numerals */}
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">
+              ({romanLabel})
+            </span>
+            <span className="text-gray-900 dark:text-gray-100 leading-relaxed">
+              {subpart.question_text}
+            </span>
+            {displayConfig.element.showMarks && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto whitespace-nowrap">
+                [{subpart.marks} {subpart.marks === 1 ? 'mark' : 'marks'}]
+              </span>
+            )}
+          </div>
+
+          {/* Attachments */}
+          {subpart.figure && renderAttachments(subpart.attachments)}
+
+          {/* Metadata (for admin/review modes) */}
+          {renderMetadata(subpart)}
+
+          {/* Answer input field - only show if answer is expected */}
+          {showAnswer && (
+            <div className="ml-6 mt-2 space-y-2">
+              <DynamicAnswerField
+                question={{
+                  id: subpart.id,
+                  type: 'descriptive',
+                  answer_format: subpart.answer_format,
+                  answer_requirement: subpart.answer_requirement,
+                  correct_answers: subpart.correct_answers,
+                  marks: subpart.marks,
+                  figure: subpart.figure,
+                  attachments: subpart.attachments?.map(a => a.description || a.file_name)
+                }}
+                value={subpartAnswer?.answer}
+                onChange={(answer) => handleSubpartAnswerChange(part.id, part.part_label, subpart.id, subpart.subpart_label, answer)}
+                mode={context}
+                showHints={displayConfig.element.showHints}
+                showCorrectAnswer={displayConfig.element.showCorrectAnswers}
+                disabled={disabled || !displayConfig.element.allowAnswerInput}
+              />
+
+              {/* Hint */}
+              {displayConfig.element.showHints && subpart.hint && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">Hint:</p>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-400">{subpart.hint}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Explanation */}
+              {displayConfig.element.showExplanations && subpart.explanation && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-1">Explanation:</p>
+                      <p className="text-sm text-green-700 dark:text-green-400">{subpart.explanation}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // For admin/review modes, use collapsible display
     return (
       <div key={subpart.id} className="ml-8 mb-4 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
         <div className="mb-2">
@@ -321,6 +406,96 @@ const EnhancedComplexQuestionDisplay: React.FC<EnhancedComplexQuestionDisplayPro
     // Check if this part expects a direct answer based on flags
     const showAnswer = configShouldShowInput(part, displayConfig);
 
+    // For test/practice mode, use natural flow display (non-collapsible)
+    const useNaturalFlow = context === 'practice' || context === 'test' || context === 'simulation';
+
+    if (useNaturalFlow) {
+      return (
+        <div key={part.id} className="mb-4">
+          {/* Part header with natural flow */}
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="font-bold text-base text-gray-900 dark:text-gray-100">
+              ({part.part_label})
+            </span>
+            <span className="text-gray-900 dark:text-gray-100 leading-relaxed">
+              {part.question_text}
+            </span>
+            {displayConfig.element.showMarks && (
+              <span className="text-sm text-gray-600 dark:text-gray-400 ml-auto whitespace-nowrap">
+                [{part.marks} {part.marks === 1 ? 'mark' : 'marks'}]
+              </span>
+            )}
+          </div>
+
+          {/* Attachments */}
+          {part.figure && renderAttachments(part.attachments)}
+
+          {/* Metadata (for admin/review modes) */}
+          {renderMetadata(part)}
+
+          {/* If part expects an answer, show answer input */}
+          {showAnswer && (
+            <div className="ml-6 mt-3 space-y-2">
+              <DynamicAnswerField
+                question={{
+                  id: part.id,
+                  type: 'descriptive',
+                  answer_format: part.answer_format,
+                  answer_requirement: part.answer_requirement,
+                  correct_answers: part.correct_answers,
+                  marks: part.marks,
+                  figure: part.figure,
+                  attachments: part.attachments?.map(a => a.description || a.file_name)
+                }}
+                value={partAnswer?.answer}
+                onChange={(answer) => handlePartAnswerChange(part.id, part.part_label, answer)}
+                mode={context}
+                showHints={displayConfig.element.showHints}
+                showCorrectAnswer={displayConfig.element.showCorrectAnswers}
+                disabled={disabled || !displayConfig.element.allowAnswerInput}
+              />
+
+              {/* Hint */}
+              {displayConfig.element.showHints && part.hint && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">Hint:</p>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-400">{part.hint}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Explanation */}
+              {displayConfig.element.showExplanations && part.explanation && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-1">Explanation:</p>
+                      <p className="text-sm text-green-700 dark:text-green-400">{part.explanation}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Render subparts if they exist */}
+          {hasSubparts && (
+            <div className="ml-6 mt-3 space-y-3">
+              {part.subparts!.map((subpart, subpartIndex) =>
+                renderSubpart(part, subpart, subpartIndex)
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // For admin/review modes, use collapsible display
     return (
       <div key={part.id} className="mb-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <div className="bg-gray-50 dark:bg-gray-900/50 p-4">
