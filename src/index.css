@@ -11,8 +11,8 @@
 }
 
 .dark {
-  --brand-accent-contrast: #0f2610;
-  --brand-accent-muted-contrast: #f1f7ed;
+  --brand-accent-contrast: #f4faef;
+  --brand-accent-muted-contrast: #dbead0;
 }
 
 .brand-select {
