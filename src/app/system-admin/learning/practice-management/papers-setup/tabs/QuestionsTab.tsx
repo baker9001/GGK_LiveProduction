@@ -13,14 +13,14 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { 
-  AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X, 
-  ChevronDown, ChevronRight, FileText, Image, Upload, Scissors, 
+import {
+  AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X,
+  ChevronDown, ChevronRight, FileText, Image, Upload, Scissors,
   Trash2, Eye, Link, BarChart3, Paperclip, Clock, Hash, Database,
   Loader2, Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
   Calculator, PenTool, Table, Code, Mic, LineChart, FileUp,
   HelpCircle, BookOpen, Lightbulb, Target, Award, PlayCircle,
-  Flag, CheckSquare, FileCheck, ShieldCheck
+  Flag, CheckSquare, FileCheck, ShieldCheck, MinusCircle
 } from 'lucide-react';
 
 // Import shared components
@@ -120,7 +120,8 @@ const answerFormatConfig = {
   graph: { icon: LineChart, color: 'teal', label: 'Graph', hint: 'Plot graph with labeled axes' },
   code: { icon: Code, color: 'gray', label: 'Code', hint: 'Write programming code' },
   audio: { icon: Mic, color: 'red', label: 'Audio Recording', hint: 'Record audio response' },
-  file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
+  file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' },
+  not_applicable: { icon: MinusCircle, color: 'gray', label: 'Not applicable', hint: 'No learner response is required' }
 };
 
 const DEFAULT_SNIPPING_VIEW_STATE = { page: 1, scale: 1.5 } as const;
@@ -290,6 +291,8 @@ interface ProcessedQuestion {
   answer_format?: string;
   answer_requirement?: string;
   total_alternatives?: number;
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
   parts?: ProcessedPart[];
   correct_answers?: ProcessedAnswer[];
   options?: ProcessedOption[];
@@ -335,6 +338,8 @@ interface ProcessedPart {
   partial_credit?: any;
   partial_marking?: any;
   conditional_marking?: any;
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }
 
 interface ProcessedSubpart {
@@ -359,6 +364,8 @@ interface ProcessedSubpart {
   partial_credit?: any;
   partial_marking?: any;
   conditional_marking?: any;
+  has_direct_answer?: boolean;
+  is_contextual_only?: boolean;
 }
 
 interface ProcessedAnswer {
@@ -1818,6 +1825,9 @@ function QuestionsTabInner({
 
         // Enhanced answer format detection for main question
         let mainAnswerFormat = q.answer_format;
+        if (typeof mainAnswerFormat === 'string' && mainAnswerFormat.toLowerCase() === 'not applicable') {
+          mainAnswerFormat = 'not_applicable';
+        }
         if (!mainAnswerFormat && rawQuestionText) {
           mainAnswerFormat = detectAnswerFormat(rawQuestionText);
 
@@ -1860,8 +1870,14 @@ function QuestionsTabInner({
           }
         }
 
+        const hasDirectAnswer = q.has_direct_answer !== false;
+        const isContextualOnly = q.is_contextual_only === true;
+
         // Parse answer requirement
         let answerRequirement = q.answer_requirement ? ensureString(q.answer_requirement) ?? undefined : undefined;
+        if (typeof answerRequirement === 'string' && answerRequirement.toLowerCase() === 'not applicable') {
+          answerRequirement = 'not_applicable';
+        }
         if (!answerRequirement && q.correct_answers && Array.isArray(q.correct_answers) && q.correct_answers.length > 0) {
           let serializedAnswers: string | null = null;
           if (typeof q.correct_answers === 'string') {
@@ -1892,6 +1908,12 @@ function QuestionsTabInner({
           }
         }
 
+        const expectsDirectAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable';
+        if (!expectsDirectAnswer) {
+          answerRequirement = 'not_applicable';
+          mainAnswerFormat = 'not_applicable';
+        }
+
         const figureFlag = resolveFigureFlag(q);
         const figureRequired = resolveFigureRequirement(q);
 
@@ -1920,6 +1942,8 @@ function QuestionsTabInner({
           options: [],
           answer_format: mainAnswerFormat,
           answer_requirement: answerRequirement,
+          has_direct_answer: expectsDirectAnswer,
+          is_contextual_only: isContextualOnly,
           total_alternatives: q.total_alternatives,
           mcq_type: q.mcq_type,
           match_pairs: q.match_pairs || q.correct_matches,
@@ -1968,23 +1992,25 @@ function QuestionsTabInner({
 
         // Process direct answers if no parts
         if (!Array.isArray(q.parts) || q.parts.length === 0) {
-          if (q.correct_answers) {
-            processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
-          } else if (q.correct_answer) {
-            processedQuestion.correct_answers = [{
-              answer: ensureString(q.correct_answer) || '',
-              marks: processedQuestion.marks,
-              alternative_id: 1,
-              answer_requirement: answerRequirement
-            }];
-          }
+          if (expectsDirectAnswer) {
+            if (q.correct_answers) {
+              processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
+            } else if (q.correct_answer) {
+              processedQuestion.correct_answers = [{
+                answer: ensureString(q.correct_answer) || '',
+                marks: processedQuestion.marks,
+                alternative_id: 1,
+                answer_requirement: answerRequirement
+              }];
+            }
 
-          if (optionsArray.length > 0) {
-            processedQuestion.options = processOptions(
-              optionsArray,
-              q.correct_answers,
-              q.correct_answer
-            );
+            if (optionsArray.length > 0) {
+              processedQuestion.options = processOptions(
+                optionsArray,
+                q.correct_answers,
+                q.correct_answer
+              );
+            }
           }
         }
 
@@ -2036,25 +2062,24 @@ function QuestionsTabInner({
       throw new Error(`Part ${partIndex + 1} has invalid structure`);
     }
 
-    // FIXED: Ensure parts have IDs for consistent key generation
     const partId = part.id || `p${partIndex}`;
     const partLabel = part.part || String.fromCharCode(97 + partIndex);
 
     console.log(`  [Part ${partLabel}] Processing part ${partIndex + 1}...`);
 
-    // Enhanced answer format detection
     const questionText = ensureString(part.question_text || part.text || part.question || '');
     let answerFormat = part.answer_format;
+    if (typeof answerFormat === 'string' && answerFormat.toLowerCase() === 'not applicable') {
+      answerFormat = 'not_applicable';
+    }
 
     if (!questionText && !answerFormat) {
       console.warn(`  [Part ${partLabel}] Warning: No question text or answer format specified`);
     }
 
     if (!answerFormat && questionText) {
-      // First try auto-detection
       answerFormat = detectAnswerFormat(questionText);
 
-      // Subject-specific enhancements
       const subject = paperContext.subject?.toLowerCase() || '';
       if (subject.includes('chemistry') && questionText.toLowerCase().includes('structure')) {
         answerFormat = 'chemical_structure';
@@ -2065,8 +2090,7 @@ function QuestionsTabInner({
       } else if (subject.includes('mathematics') && questionText.toLowerCase().includes('prove')) {
         answerFormat = 'calculation';
       }
-      
-      // IGCSE specific patterns for parts
+
       const textLower = questionText.toLowerCase();
       if (textLower.includes('name') && textLower.includes('two')) {
         answerFormat = 'two_items';
@@ -2074,17 +2098,30 @@ function QuestionsTabInner({
         answerFormat = 'two_items_connected';
       }
     }
-    
-    // Parse answer requirement for parts
-    const answerRequirement = part.answer_requirement ||
-      (part.correct_answers && part.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(part.correct_answers), part.marks) : undefined);
+
+    const hasDirectAnswer = part.has_direct_answer !== false;
+    const isContextualOnly = part.is_contextual_only === true;
+
+    let answerRequirement = part.answer_requirement ||
+      (part.correct_answers && part.correct_answers.length > 0
+        ? parseAnswerRequirement(JSON.stringify(part.correct_answers), part.marks)
+        : undefined);
+    if (typeof answerRequirement === 'string' && answerRequirement.toLowerCase() === 'not applicable') {
+      answerRequirement = 'not_applicable';
+    }
+
+    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable';
+    if (!expectsAnswer) {
+      answerFormat = 'not_applicable';
+      answerRequirement = 'not_applicable';
+    }
 
     const partFigureFlag = resolveFigureFlag(part);
     const partFigureRequired = resolveFigureRequirement(part);
 
     const processedPart: ProcessedPart = {
-      id: partId, // FIXED: Include id in processed part
-      part: part.part || String.fromCharCode(97 + partIndex), // a, b, c...
+      id: partId,
+      part: partLabel,
       question_text: questionText || '',
       marks: parseInt(part.marks || '0'),
       answer_format: answerFormat || 'single_line',
@@ -2097,8 +2134,9 @@ function QuestionsTabInner({
       subparts: [],
       correct_answers: [],
       options: [],
-      requires_manual_marking: part.requires_manual_marking ||
-        ['diagram', 'chemical_structure', 'table', 'graph'].includes(answerFormat || ''),
+      requires_manual_marking: expectsAnswer && (
+        part.requires_manual_marking || ['diagram', 'chemical_structure', 'table', 'graph'].includes(answerFormat || '')
+      ),
       marking_criteria: part.marking_criteria,
       mcq_type: part.mcq_type,
       match_pairs: part.match_pairs || part.correct_matches,
@@ -2107,10 +2145,11 @@ function QuestionsTabInner({
       correct_sequence: part.correct_sequence,
       partial_credit: part.partial_credit,
       partial_marking: part.partial_marking,
-      conditional_marking: part.conditional_marking || part.marking_conditions
+      conditional_marking: part.conditional_marking || part.marking_conditions,
+      has_direct_answer: expectsAnswer,
+      is_contextual_only: isContextualOnly
     };
 
-    // Process subparts if available
     if (part.subparts && Array.isArray(part.subparts)) {
       console.log(`  [Part ${partLabel}] Processing ${part.subparts.length} subparts...`);
       try {
@@ -2129,8 +2168,7 @@ function QuestionsTabInner({
       }
     }
 
-    // Process answers
-    if (part.correct_answers) {
+    if (expectsAnswer && part.correct_answers) {
       try {
         console.log(`  [Part ${partLabel}] Processing ${Array.isArray(part.correct_answers) ? part.correct_answers.length : 0} answers...`);
         processedPart.correct_answers = processAnswers(part.correct_answers, answerRequirement);
@@ -2140,8 +2178,7 @@ function QuestionsTabInner({
       }
     }
 
-    // Process options for MCQ
-    if (part.options) {
+    if (expectsAnswer && part.options) {
       try {
         console.log(`  [Part ${partLabel}] Processing ${Array.isArray(part.options) ? part.options.length : 0} options...`);
         processedPart.options = processOptions(
@@ -2165,32 +2202,48 @@ function QuestionsTabInner({
     parentId: string,
     paperContext: { subject?: string }
   ): ProcessedSubpart => {
-    // FIXED: Ensure subparts have IDs that match their Roman numeral designation
     const romanNumeral = Roman[subpartIndex] || `${subpartIndex}`;
     const subpartId = subpart.id || `s${subpartIndex}`;
     const subpartLabel = subpart.subpart || `(${romanNumeral})`;
-    
-    // Fix: Ensure we pass a string to detectAnswerFormat
+
     const questionText = ensureString(subpart.question_text || subpart.text || subpart.question || '');
-    const answerFormat = subpart.answer_format || (questionText ? detectAnswerFormat(questionText) : 'single_line');
-    
-    // Parse answer requirement for subparts
-    const answerRequirement = subpart.answer_requirement || 
-      (subpart.correct_answers && subpart.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks) : undefined);
-    
+    let answerFormat = subpart.answer_format || (questionText ? detectAnswerFormat(questionText) : 'single_line');
+    if (typeof answerFormat === 'string' && answerFormat.toLowerCase() === 'not applicable') {
+      answerFormat = 'not_applicable';
+    }
+
+    const hasDirectAnswer = subpart.has_direct_answer !== false;
+    const isContextualOnly = subpart.is_contextual_only === true;
+
+    let answerRequirement = subpart.answer_requirement ||
+      (subpart.correct_answers && subpart.correct_answers.length > 0
+        ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks)
+        : undefined);
+    if (typeof answerRequirement === 'string' && answerRequirement.toLowerCase() === 'not applicable') {
+      answerRequirement = 'not_applicable';
+    }
+
+    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable';
+    if (!expectsAnswer) {
+      answerFormat = 'not_applicable';
+      answerRequirement = 'not_applicable';
+    }
+
     const subpartFigureFlag = resolveFigureFlag(subpart);
     const subpartFigureRequired = resolveFigureRequirement(subpart);
 
     const processedSubpart: ProcessedSubpart = {
-      id: subpartId, // FIXED: Include id in processed subpart
+      id: subpartId,
       subpart: subpartLabel,
       question_text: questionText || '',
       marks: parseInt(subpart.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
       attachments: ensureArray(subpart.attachments),
-      correct_answers: subpart.correct_answers ? processAnswers(subpart.correct_answers, answerRequirement) : [],
-      options: subpart.options
+      correct_answers: expectsAnswer && subpart.correct_answers
+        ? processAnswers(subpart.correct_answers, answerRequirement)
+        : [],
+      options: expectsAnswer && subpart.options
         ? processOptions(subpart.options, subpart.correct_answers, subpart.correct_answer)
         : [],
       hint: subpart.hint,
@@ -2204,7 +2257,9 @@ function QuestionsTabInner({
       correct_sequence: subpart.correct_sequence,
       partial_credit: subpart.partial_credit,
       partial_marking: subpart.partial_marking,
-      conditional_marking: subpart.conditional_marking || subpart.marking_conditions
+      conditional_marking: subpart.conditional_marking || subpart.marking_conditions,
+      has_direct_answer: expectsAnswer,
+      is_contextual_only: isContextualOnly
     };
 
     return processedSubpart;
@@ -2807,6 +2862,15 @@ function QuestionsTabInner({
         const questionLabel = q?.question_number || `Question ${qIndex + 1}`;
         const questionErrors: string[] = [];
 
+        const normalizedRequirement = typeof q?.answer_requirement === 'string'
+          ? q.answer_requirement.toLowerCase()
+          : '';
+        const questionExpectsAnswer =
+          q?.has_direct_answer !== false &&
+          q?.is_contextual_only !== true &&
+          normalizedRequirement !== 'not_applicable' &&
+          normalizedRequirement !== 'not applicable';
+
         console.log(`Processing ${questionLabel}:`, {
           id: q?.id,
           type: q?.question_type,
@@ -2850,11 +2914,11 @@ function QuestionsTabInner({
             }
           }
         } else if (q.question_type === 'tf') {
-          if (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0) {
+          if (questionExpectsAnswer && (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0)) {
             questionErrors.push('True/False question missing correct answer');
           }
         } else if (q.question_type === 'descriptive') {
-          if (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0) {
+          if (questionExpectsAnswer && (!Array.isArray(q.correct_answers) || q.correct_answers.length === 0)) {
             questionErrors.push('Descriptive question missing correct answers');
           }
         }
@@ -2904,6 +2968,8 @@ function QuestionsTabInner({
           // Dynamic answer fields
           answer_format: q.answer_format,
           answer_requirement: q.answer_requirement,
+          has_direct_answer: Boolean(q.has_direct_answer),
+          is_contextual_only: Boolean(q.is_contextual_only),
           correct_answers: validQuestionCorrectAnswers.map(ans => ({
             answer: ans.answer,
             marks: ans.marks,
@@ -2968,6 +3034,8 @@ function QuestionsTabInner({
               // Dynamic answer fields for parts
               answer_format: p.answer_format,
               answer_requirement: p.answer_requirement,
+              has_direct_answer: Boolean(p.has_direct_answer),
+              is_contextual_only: Boolean(p.is_contextual_only),
               correct_answers: validPartCorrectAnswers.map(ans => ({
                 answer: ans.answer,
                 marks: ans.marks,
@@ -3011,6 +3079,8 @@ function QuestionsTabInner({
                   marks: sp.marks,
                   answer_format: sp.answer_format,
                   answer_requirement: sp.answer_requirement,
+                  has_direct_answer: Boolean(sp.has_direct_answer),
+                  is_contextual_only: Boolean(sp.is_contextual_only),
                   correct_answers: validSubpartCorrectAnswers.map(ans => ({
                     answer: ans.answer,
                     marks: ans.marks,
@@ -3258,8 +3328,10 @@ function QuestionsTabInner({
       const dynamicFieldIssues: any[] = [];
       
       questions.forEach(q => {
+        const questionNeedsAnswer = isAnswerExpected(q);
+
         // Check for missing answer requirements - CRITICAL for MCQ and other structured questions
-        if (!q.answer_requirement || q.answer_requirement.trim() === '') {
+        if (questionNeedsAnswer && (!q.answer_requirement || q.answer_requirement.trim() === '')) {
           const questionTypeLabel = q.question_type === 'mcq' ? 'MCQ' :
                                     q.question_type === 'tf' ? 'True/False' :
                                     q.question_type;
@@ -3271,7 +3343,7 @@ function QuestionsTabInner({
         }
 
         // Check for dynamic answer field issues
-        if (q.answer_requirement && !q.correct_answers?.length) {
+        if (questionNeedsAnswer && q.answer_requirement && !q.correct_answers?.length) {
           dynamicFieldIssues.push({
             questionId: q.id,
             type: 'warning',
@@ -3312,11 +3384,12 @@ function QuestionsTabInner({
 
         // Check parts - FIXED: Use consistent key format
         q.parts?.forEach((p, pIndex) => {
+          const partNeedsAnswer = isAnswerExpected(p);
           const partKey = generateAttachmentKey(q.id, pIndex);
           const partAttachmentAssets = mergeAttachmentSources(p.attachments, attachments[partKey], partKey);
 
           // Check for missing answer requirement in parts
-          if (!p.answer_requirement || p.answer_requirement.trim() === '') {
+          if (partNeedsAnswer && (!p.answer_requirement || p.answer_requirement.trim() === '')) {
             const partTypeLabel = p.question_type === 'mcq' ? 'MCQ' :
                                   p.question_type === 'tf' ? 'True/False' :
                                   p.question_type || 'Question';
@@ -3327,7 +3400,7 @@ function QuestionsTabInner({
             });
           }
 
-          if (p.answer_requirement && !p.correct_answers?.length) {
+          if (partNeedsAnswer && p.answer_requirement && !p.correct_answers?.length) {
             dynamicFieldIssues.push({
               questionId: q.id,
               type: 'warning',
@@ -3345,6 +3418,9 @@ function QuestionsTabInner({
 
           // Check subparts for missing answer requirements
           p.subparts?.forEach((sp: any, spIndex: number) => {
+            if (!isAnswerExpected(sp) || (sp.answer_requirement && sp.answer_requirement.trim() !== '')) {
+              return;
+            }
             if (!sp.answer_requirement || sp.answer_requirement.trim() === '') {
               const subpartTypeLabel = sp.question_type === 'mcq' ? 'MCQ' :
                                        sp.question_type === 'tf' ? 'True/False' :
@@ -4394,10 +4470,37 @@ function QuestionsTabInner({
     return hasError ? 'error' : 'warning';
   };
 
+  const normalizeAnswerFormatKey = (format?: string): string => {
+    if (!format) return 'single_line';
+    const normalized = format.trim().toLowerCase();
+    if (normalized === 'not applicable' || normalized === 'not_applicable') {
+      return 'not_applicable';
+    }
+    return format;
+  };
+
   // Helper to get answer format configuration
   const getAnswerFormatInfo = (format: string) => {
-    return answerFormatConfig[format as keyof typeof answerFormatConfig] || 
+    const key = normalizeAnswerFormatKey(format);
+    return answerFormatConfig[key as keyof typeof answerFormatConfig] ||
            answerFormatConfig.single_line;
+  };
+
+  const isAnswerExpected = (item: any): boolean => {
+    if (!item) return true;
+    if (item.has_direct_answer === false) return false;
+    if (item.is_contextual_only === true) return false;
+    const requirement = typeof item.answer_requirement === 'string'
+      ? item.answer_requirement.toLowerCase()
+      : '';
+    if (requirement === 'not applicable' || requirement === 'not_applicable') {
+      return false;
+    }
+    const format = typeof item.answer_format === 'string' ? item.answer_format.toLowerCase() : '';
+    if (format === 'not applicable' || format === 'not_applicable') {
+      return false;
+    }
+    return true;
   };
 
   // Helper to determine question complexity
@@ -4410,9 +4513,19 @@ function QuestionsTabInner({
 
   // Enhanced render function for dynamic answer display
   const renderDynamicAnswerDisplay = (item: any, isEditing: boolean = false) => {
+    const expectsAnswer = isAnswerExpected(item);
+
+    if (!expectsAnswer) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <MinusCircle className="h-4 w-4" aria-hidden="true" />
+          <span>Not applicable &mdash; no learner response required.</span>
+        </div>
+      );
+    }
+
     if (!item.correct_answers || item.correct_answers.length === 0) {
       if (isEditing) {
-        // Allow adding answers in edit mode
         return (
           <DynamicAnswerField
             question={{
@@ -4436,7 +4549,7 @@ function QuestionsTabInner({
                     const partIndex = parseInt(tail[0]);
                     return {
                       ...obj,
-                      parts: obj.parts.map((p: any, i: number) => 
+                      parts: obj.parts.map((p: any, i: number) =>
                         i === partIndex ? updateAnswers(p, tail.slice(1)) : p
                       )
                     };
@@ -4445,21 +4558,21 @@ function QuestionsTabInner({
                     const subpartIndex = parseInt(tail[0]);
                     return {
                       ...obj,
-                      subparts: obj.subparts.map((s: any, i: number) => 
+                      subparts: obj.subparts.map((s: any, i: number) =>
                         i === subpartIndex ? updateAnswers(s, tail.slice(1)) : s
                       )
                     };
                   }
                   return obj;
                 };
-                
+
                 setEditingQuestion(updateAnswers(editingQuestion, []));
               }
             }}
           />
         );
       }
-      
+
       return (
         <div className="text-sm text-gray-500 dark:text-gray-400 italic">
           No correct answer provided
@@ -4478,7 +4591,7 @@ function QuestionsTabInner({
           marks: item.marks,
           correct_answers: item.correct_answers
         }}
-        mode={isEditing ? "admin" : "review"}
+        mode={isEditing ? 'admin' : 'review'}
         showCorrectAnswer={true}
         onChange={(newAnswers) => {
           if (editingQuestion && isEditing) {
@@ -4491,7 +4604,7 @@ function QuestionsTabInner({
                 const partIndex = parseInt(tail[0]);
                 return {
                   ...obj,
-                  parts: obj.parts.map((p: any, i: number) => 
+                  parts: obj.parts.map((p: any, i: number) =>
                     i === partIndex ? updateAnswers(p, tail.slice(1)) : p
                   )
                 };
@@ -4500,14 +4613,14 @@ function QuestionsTabInner({
                 const subpartIndex = parseInt(tail[0]);
                 return {
                   ...obj,
-                  subparts: obj.subparts.map((s: any, i: number) => 
+                  subparts: obj.subparts.map((s: any, i: number) =>
                     i === subpartIndex ? updateAnswers(s, tail.slice(1)) : s
                   )
                 };
               }
               return obj;
             };
-            
+
             setEditingQuestion(updateAnswers(editingQuestion, []));
           }
         }}
