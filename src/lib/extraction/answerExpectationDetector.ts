@@ -67,6 +67,11 @@ const QUESTION_PATTERNS = [
   /^(name|state|describe|explain|calculate|define|suggest|give|identify)/i,
   /^(compare|contrast|discuss|evaluate|analyze)/i,
   /complete (table|the|fig)/i,
+  // IGCSE-specific question patterns
+  /(describe|explain|state|name|give|suggest|calculate).+\./i,
+  /use (the )?data (in|from)/i,
+  /support your answer/i,
+  /show (your )?working/i,
 ];
 
 /**
@@ -93,13 +98,21 @@ export function detectAnswerExpectation(
   }
 
   // RULE 2: If has correct_answers, must expect an answer
+  // THIS IS THE HIGHEST PRIORITY RULE - Data always overrides text analysis
   if (element.correct_answers && element.correct_answers.length > 0) {
-    return {
-      has_direct_answer: true,
-      is_contextual_only: false,
-      confidence: 'high',
-      reason: 'Has correct_answers array'
-    };
+    // Filter out empty or null answers
+    const validAnswers = element.correct_answers.filter(ans =>
+      ans && (ans.answer || ans.text) && String(ans.answer || ans.text).trim().length > 0
+    );
+
+    if (validAnswers.length > 0) {
+      return {
+        has_direct_answer: true,
+        is_contextual_only: false,
+        confidence: 'high',
+        reason: `Has ${validAnswers.length} valid correct_answer(s) - data overrides text analysis`
+      };
+    }
   }
 
   // RULE 3: If has answer_format specified, expects an answer
@@ -126,6 +139,7 @@ export function detectAnswerExpectation(
   }
 
   // RULE 5: Has subparts but no answers - likely contextual
+  // Only apply if we're certain there are NO valid answers
   if (hasSubparts && (!element.correct_answers || element.correct_answers.length === 0)) {
     // Check if text has question indicators
     const hasQuestionIndicators = QUESTION_PATTERNS.some(pattern => pattern.test(text));
@@ -137,30 +151,50 @@ export function detectAnswerExpectation(
         confidence: 'high',
         reason: 'Has subparts, no correct answers, and no question indicators in text'
       };
+    } else {
+      // Has question indicators but no answers - might be missing data
+      return {
+        has_direct_answer: true,
+        is_contextual_only: false,
+        confidence: 'medium',
+        reason: 'Has question indicators in text, assuming answer required despite no correct_answers'
+      };
     }
   }
 
   // RULE 6: Analyze text content
+  // NOTE: This should only apply when we don't have definitive data (correct_answers)
   const contextualScore = analyzeContextualContent(text);
   const questionScore = analyzeQuestionContent(text);
 
-  // If contextual score is much higher than question score
-  if (contextualScore > questionScore * 1.5 && hasSubparts) {
+  // If contextual score is much higher than question score AND has subparts
+  // Only mark as contextual if we're very confident (score > 4)
+  if (contextualScore > questionScore * 1.5 && hasSubparts && contextualScore > 4) {
     return {
       has_direct_answer: false,
       is_contextual_only: true,
-      confidence: contextualScore > 3 ? 'high' : 'medium',
-      reason: `Text appears contextual (score: ${contextualScore} vs ${questionScore})`
+      confidence: contextualScore > 5 ? 'high' : 'medium',
+      reason: `Text appears strongly contextual (score: ${contextualScore} vs ${questionScore})`
     };
   }
 
-  // If question score is higher or equal
+  // If question score is higher or equal, assume answer required
   if (questionScore >= contextualScore) {
     return {
       has_direct_answer: true,
       is_contextual_only: false,
       confidence: questionScore > 2 ? 'high' : 'medium',
-      reason: `Text contains question indicators (score: ${questionScore})`
+      reason: `Text contains question indicators (score: ${questionScore} vs ${contextualScore})`
+    };
+  }
+
+  // If scores are close and we don't have subparts, assume answer required
+  if (!hasSubparts) {
+    return {
+      has_direct_answer: true,
+      is_contextual_only: false,
+      confidence: 'medium',
+      reason: 'No subparts and ambiguous text - defaulting to answer required'
     };
   }
 

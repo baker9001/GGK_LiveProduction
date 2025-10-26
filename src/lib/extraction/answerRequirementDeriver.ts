@@ -80,13 +80,26 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
     hasDirectAnswer = true
   } = params;
 
+  // CRITICAL SAFEGUARD: Check if we have valid correct_answers
+  const validAnswers = (correctAnswers || []).filter(ans =>
+    ans && ans.answer && String(ans.answer).trim().length > 0
+  );
+  const hasValidAnswers = validAnswers.length > 0;
+
   // Handle contextual-only questions (no answer expected)
-  if (isContextualOnly || hasDirectAnswer === false) {
+  // BUT only if there are truly no valid answers
+  if ((isContextualOnly || hasDirectAnswer === false) && !hasValidAnswers) {
     return {
       answerRequirement: 'not_applicable',
       confidence: 'high',
       reason: 'Question is contextual only - no direct answer expected'
     };
+  }
+
+  // If we have valid answers but flags say contextual, prioritize the data
+  if (hasValidAnswers && (isContextualOnly || hasDirectAnswer === false)) {
+    console.warn('Answer requirement deriver: Ignoring contextual flags because valid correct_answers exist');
+    // Continue with normal derivation logic
   }
 
   // Handle MCQ and True/False - always single choice
@@ -101,9 +114,7 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
   // Handle complex questions - check if they have direct answers
   // Complex questions without correct answers are contextual containers
   if (questionType === 'complex') {
-    const hasCorrectAnswers = (correctAnswers?.length ?? 0) > 0;
-
-    if (!hasCorrectAnswers && !isContextualOnly) {
+    if (!hasValidAnswers && !isContextualOnly) {
       // Complex question with no answers but not explicitly marked contextual
       // This is likely a container for parts - treat as not applicable
       return {
@@ -119,7 +130,7 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
 
   // Handle two_items formats - both required unless alternatives detected
   if (answerFormat === 'two_items' || answerFormat === 'two_items_connected') {
-    const hasAlternatives = (correctAnswers?.length ?? 0) > 2 || (totalAlternatives ?? 0) > 1;
+    const hasAlternatives = validAnswers.length > 2 || (totalAlternatives ?? 0) > 1;
 
     if (hasAlternatives) {
       return {
@@ -137,7 +148,7 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
   }
 
   // Analyze correct answers to determine requirement
-  const answersCount = correctAnswers?.length ?? 0;
+  const answersCount = validAnswers.length;
 
   if (answersCount === 0) {
     // No correct answers - use format-based defaults
@@ -145,23 +156,23 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
   }
 
   // Check for alternative types and linked alternatives
-  const hasLinkedAlternatives = correctAnswers?.some(ans =>
+  const hasLinkedAlternatives = validAnswers.some(ans =>
     ans.linked_alternatives && ans.linked_alternatives.length > 0
-  ) ?? false;
+  );
 
-  const hasAlternativeTypes = correctAnswers?.some(ans =>
+  const hasAlternativeTypes = validAnswers.some(ans =>
     ans.alternative_type && ans.alternative_type !== 'standalone'
-  ) ?? false;
+  );
 
   const uniqueAlternativeIds = new Set(
-    correctAnswers?.map(ans => ans.alternative_id).filter(id => id != null) ?? []
+    validAnswers.map(ans => ans.alternative_id).filter(id => id != null)
   );
 
   const hasMultipleAlternatives = uniqueAlternativeIds.size > 1 || (totalAlternatives ?? 0) > 1;
 
   // Alternative methods detected (different solution approaches)
   if (hasAlternativeTypes || hasMultipleAlternatives) {
-    const alternativeType = correctAnswers?.find(ans => ans.alternative_type)?.alternative_type;
+    const alternativeType = validAnswers.find(ans => ans.alternative_type)?.alternative_type;
 
     if (alternativeType === 'one_required' || alternativeType === 'any_from') {
       // Check how many alternatives
@@ -248,7 +259,7 @@ export function deriveAnswerRequirement(params: DeriveAnswerRequirementParams): 
 
   // Single answer - use format-based inference
   if (answersCount === 1) {
-    const singleAnswer = correctAnswers[0];
+    const singleAnswer = validAnswers[0];
 
     // Check if single answer has variations (acceptable alternatives)
     if (singleAnswer?.acceptable_variations && singleAnswer.acceptable_variations.length > 0) {

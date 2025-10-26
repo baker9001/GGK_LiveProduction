@@ -180,9 +180,21 @@ export function deriveAnswerFormat(question: {
   const { type, question_description = '', correct_answers = [], has_direct_answer, is_contextual_only } = question;
   const desc = question_description.toLowerCase();
 
+  // CRITICAL SAFEGUARD: If there are valid correct_answers, NEVER return 'not_applicable'
+  const validAnswers = correct_answers.filter(ans =>
+    ans && (ans.answer || ans.text) && String(ans.answer || ans.text).trim().length > 0
+  );
+  const hasValidAnswers = validAnswers.length > 0;
+
   // Contextual-only questions should be marked as 'not_applicable'
-  if (is_contextual_only === true || has_direct_answer === false) {
+  // BUT only if they truly have no answers
+  if ((is_contextual_only === true || has_direct_answer === false) && !hasValidAnswers) {
     return 'not_applicable';
+  }
+
+  // If we have valid answers but flags say no answer, the flags are wrong - ignore them
+  if (hasValidAnswers && (is_contextual_only === true || has_direct_answer === false)) {
+    console.warn('Answer format derivation: has_direct_answer/is_contextual_only flags conflict with correct_answers data - prioritizing data');
   }
 
   // MCQ/TF questions don't need a specific format - return null to prevent auto-fill
@@ -194,7 +206,7 @@ export function deriveAnswerFormat(question: {
   // If not, they're contextual containers for parts - mark as not_applicable
   if (type === 'complex') {
     // Complex questions with no correct answers are contextual only
-    if (!correct_answers || correct_answers.length === 0) {
+    if (!hasValidAnswers) {
       return 'not_applicable';
     }
     // If complex question has correct answers, derive format based on content
@@ -265,6 +277,24 @@ export function deriveAnswerRequirement(question: {
   answer_format?: string;
   question_description?: string;
 }): string | null {
+  // CRITICAL SAFEGUARD: Check if we have valid correct_answers
+  const validAnswers = (question.correct_answers || []).filter(ans =>
+    ans && (ans.answer || ans.text) && String(ans.answer || ans.text).trim().length > 0
+  );
+  const hasValidAnswers = validAnswers.length > 0;
+
+  // If we have valid answers but flags say no answer, override the flags
+  let hasDirectAnswer = question.has_direct_answer;
+  let isContextualOnly = question.is_contextual_only;
+
+  if (hasValidAnswers) {
+    if (isContextualOnly === true || hasDirectAnswer === false) {
+      console.warn('Answer requirement derivation: has_direct_answer/is_contextual_only flags conflict with correct_answers data - prioritizing data');
+      hasDirectAnswer = true;
+      isContextualOnly = false;
+    }
+  }
+
   // CRITICAL FIX: Derive answer_format if not provided, so we can pass it to the sophisticated deriver
   let answerFormat = question.answer_format;
   if (!answerFormat) {
@@ -272,20 +302,26 @@ export function deriveAnswerRequirement(question: {
       type: question.type,
       question_description: question.question_description,
       correct_answers: question.correct_answers,
-      has_direct_answer: question.has_direct_answer,
-      is_contextual_only: question.is_contextual_only
+      has_direct_answer: hasDirectAnswer,
+      is_contextual_only: isContextualOnly
     }) || undefined;
   }
 
   const result = sophisticatedDeriver({
     questionType: question.type,
-    answerFormat: answerFormat, // FIXED: Now passing the actual answer format
-    correctAnswers: question.correct_answers,
+    answerFormat: answerFormat,
+    correctAnswers: validAnswers,
     totalAlternatives: question.total_alternatives,
     options: undefined,
-    isContextualOnly: question.is_contextual_only,
-    hasDirectAnswer: question.has_direct_answer
+    isContextualOnly: isContextualOnly,
+    hasDirectAnswer: hasDirectAnswer
   });
+
+  // FINAL SAFEGUARD: Never return 'not_applicable' if we have valid answers
+  if (result.answerRequirement === 'not_applicable' && hasValidAnswers) {
+    console.warn('Answer requirement derivation returned not_applicable despite having valid answers - defaulting to all_required');
+    return 'all_required';
+  }
 
   return result.answerRequirement;
 }
