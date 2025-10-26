@@ -2099,18 +2099,32 @@ function QuestionsTabInner({
       }
     }
 
-    const hasDirectAnswer = part.has_direct_answer !== false;
-    const isContextualOnly = part.is_contextual_only === true;
+    // CRITICAL FIX: Detect empty/contextual parts BEFORE answer expectation logic
+    // If part has no question text, no answers, and 0 marks, it's contextual-only
+    const hasCorrectAnswers = part.correct_answers && Array.isArray(part.correct_answers) && part.correct_answers.length > 0;
+    const marks = parseInt(part.marks || '0');
+    const isEmpty = !questionText.trim() && !hasCorrectAnswers && marks === 0;
+
+    let hasDirectAnswer = part.has_direct_answer !== false;
+    let isContextualOnly = part.is_contextual_only === true;
+
+    // Auto-detect contextual-only parts
+    if (isEmpty && !part.has_direct_answer && !part.is_contextual_only) {
+      hasDirectAnswer = false;
+      isContextualOnly = true;
+      console.log(`  [Part ${partLabel}] Auto-detected as contextual-only (empty part)`);
+    }
 
     let answerRequirement = part.answer_requirement ||
-      (part.correct_answers && part.correct_answers.length > 0
+      (hasCorrectAnswers
         ? parseAnswerRequirement(JSON.stringify(part.correct_answers), part.marks)
         : undefined);
     if (typeof answerRequirement === 'string' && answerRequirement.toLowerCase() === 'not applicable') {
       answerRequirement = 'not_applicable';
     }
 
-    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable';
+    // FIX: Treat undefined answerRequirement as not applicable for expectsAnswer check
+    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable' && answerRequirement !== undefined;
     if (!expectsAnswer) {
       answerFormat = 'not_applicable';
       answerRequirement = 'not_applicable';
@@ -2124,8 +2138,8 @@ function QuestionsTabInner({
       part: partLabel,
       question_text: questionText || '',
       marks: parseInt(part.marks || '0'),
-      answer_format: answerFormat || 'single_line',
-      answer_requirement: answerRequirement,
+      answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
+      answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       figure: partFigureFlag,
       figure_required: partFigureRequired,
       attachments: ensureArray(part.attachments),
@@ -2207,23 +2221,36 @@ function QuestionsTabInner({
     const subpartLabel = subpart.subpart || `(${romanNumeral})`;
 
     const questionText = ensureString(subpart.question_text || subpart.text || subpart.question || '');
-    let answerFormat = subpart.answer_format || (questionText ? detectAnswerFormat(questionText) : 'single_line');
+    let answerFormat = subpart.answer_format || (questionText ? detectAnswerFormat(questionText) : undefined);
     if (typeof answerFormat === 'string' && answerFormat.toLowerCase() === 'not applicable') {
       answerFormat = 'not_applicable';
     }
 
-    const hasDirectAnswer = subpart.has_direct_answer !== false;
-    const isContextualOnly = subpart.is_contextual_only === true;
+    // CRITICAL FIX: Detect empty/contextual subparts BEFORE answer expectation logic
+    const hasCorrectAnswers = subpart.correct_answers && Array.isArray(subpart.correct_answers) && subpart.correct_answers.length > 0;
+    const marks = parseInt(subpart.marks || '0');
+    const isEmpty = !questionText.trim() && !hasCorrectAnswers && marks === 0;
+
+    let hasDirectAnswer = subpart.has_direct_answer !== false;
+    let isContextualOnly = subpart.is_contextual_only === true;
+
+    // Auto-detect contextual-only subparts
+    if (isEmpty && !subpart.has_direct_answer && !subpart.is_contextual_only) {
+      hasDirectAnswer = false;
+      isContextualOnly = true;
+      console.log(`  [Subpart ${subpartLabel}] Auto-detected as contextual-only (empty subpart)`);
+    }
 
     let answerRequirement = subpart.answer_requirement ||
-      (subpart.correct_answers && subpart.correct_answers.length > 0
+      (hasCorrectAnswers
         ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks)
         : undefined);
     if (typeof answerRequirement === 'string' && answerRequirement.toLowerCase() === 'not applicable') {
       answerRequirement = 'not_applicable';
     }
 
-    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable';
+    // FIX: Treat undefined answerRequirement as not applicable for expectsAnswer check
+    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable' && answerRequirement !== undefined;
     if (!expectsAnswer) {
       answerFormat = 'not_applicable';
       answerRequirement = 'not_applicable';
@@ -2237,8 +2264,8 @@ function QuestionsTabInner({
       subpart: subpartLabel,
       question_text: questionText || '',
       marks: parseInt(subpart.marks || '0'),
-      answer_format: answerFormat || 'single_line',
-      answer_requirement: answerRequirement,
+      answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
+      answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       attachments: ensureArray(subpart.attachments),
       correct_answers: expectsAnswer && subpart.correct_answers
         ? processAnswers(subpart.correct_answers, answerRequirement)
