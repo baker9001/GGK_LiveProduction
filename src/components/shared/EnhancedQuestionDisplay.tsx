@@ -613,6 +613,16 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
     // Determine if we should show answer input for this part
     const showAnswer = shouldShowAnswerInput(part, { hasSubparts, level: level + 2 });
 
+    // Calculate total marks: if part has subparts, sum their marks; otherwise use part's direct marks
+    const calculatePartMarks = (part: QuestionPart): number => {
+      if (part.subparts && part.subparts.length > 0) {
+        return part.subparts.reduce((total, subpart) => total + (subpart.marks || 0), 0);
+      }
+      return part.marks || 0;
+    };
+
+    const displayMarks = calculatePartMarks(part);
+
     return (
       <div key={part.id} className="space-y-2" style={{ marginLeft: `${indent}px` }}>
         {/* Part Header */}
@@ -636,8 +646,8 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                {part.marks} mark{part.marks !== 1 ? 's' : ''}
+              <span className="text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold">
+                {displayMarks} mark{displayMarks !== 1 ? 's' : ''}
               </span>
               {isExpanded ? (
                 <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />

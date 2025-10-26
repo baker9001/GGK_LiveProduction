@@ -2620,13 +2620,14 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         >
                                           <Input
                                             id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-label`}
-                                            value={subpart.part_label ?? subpart.part ?? ''}
+                                            value={subpart.part_label || subpart.part || String.fromCharCode(105 + subIndex)}
                                             onChange={(event) =>
                                               handleSubpartFieldChange(question, partIndex, subIndex, {
                                                 part_label: event.target.value,
                                                 part: event.target.value
                                               })
                                             }
+                                            placeholder={`e.g., ${String.fromCharCode(105 + subIndex)}`}
                                           />
                                         </FormField>
                                         <FormField
