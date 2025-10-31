@@ -823,6 +823,7 @@ export default function TeacherMaterialsPage() {
       {/* Preview Modal */}
       {previewMaterial && (
         <MaterialPreview
+          materialId={previewMaterial.id}
           fileType={previewMaterial.type}
           fileUrl={previewMaterial.file_url}
           mimeType={previewMaterial.mime_type}

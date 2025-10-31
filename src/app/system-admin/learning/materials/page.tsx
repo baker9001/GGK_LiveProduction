@@ -1240,6 +1240,7 @@ export default function MaterialManagementPage() {
       {/* Enhanced Material Preview */}
       {previewMaterial && (
         <MaterialPreview
+          materialId={previewMaterial.id}
           fileType={previewMaterial.type}
           fileUrl={getFileUrl(previewMaterial.file_path)}
           mimeType={previewMaterial.mime_type}
