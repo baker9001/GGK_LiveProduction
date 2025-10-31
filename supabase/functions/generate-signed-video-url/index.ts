@@ -96,20 +96,30 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Create admin client early so it's available for all operations
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
     // Rate limiting check
     if (!checkRateLimit(user.id)) {
       console.warn(`Rate limit exceeded for user: ${user.id}`);
 
-      // Log suspicious activity
-      await supabaseAdmin.from("suspicious_video_activity").insert({
-        user_id: user.id,
-        material_id: materialId,
-        activity_type: "rapid_token_requests",
-        severity: "medium",
-        details: { message: "Exceeded rate limit for video token requests" },
-        ip_address: req.headers.get("x-forwarded-for") || "unknown",
-        user_agent: req.headers.get("user-agent") || "unknown",
-      });
+      // Log suspicious activity (wrapped in try-catch to not block response)
+      try {
+        await supabaseAdmin.from("suspicious_video_activity").insert({
+          user_id: user.id,
+          material_id: materialId,
+          activity_type: "rapid_token_requests",
+          severity: "medium",
+          details: { message: "Exceeded rate limit for video token requests" },
+          ip_address: req.headers.get("x-forwarded-for") || "unknown",
+          user_agent: req.headers.get("user-agent") || "unknown",
+        });
+      } catch (logError) {
+        console.error("Failed to log rate limit violation:", logError);
+      }
 
       return new Response(
         JSON.stringify({
@@ -121,11 +131,6 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
-
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
 
     const { data: material, error: materialError } = await supabaseAdmin
       .from("materials")
@@ -206,19 +211,23 @@ Deno.serve(async (req: Request) => {
       .gte("last_heartbeat", new Date(Date.now() - 600000).toISOString()); // Active in last 10 minutes
 
     if (activeSessions && activeSessions.length >= 2) {
-      // Log suspicious activity - multiple concurrent sessions
-      await supabaseAdmin.from("suspicious_video_activity").insert({
-        user_id: user.id,
-        material_id: materialId,
-        activity_type: "multiple_concurrent_sessions",
-        severity: "high",
-        details: {
-          active_sessions: activeSessions.length,
-          message: "User attempting to stream same video on multiple devices",
-        },
-        ip_address: req.headers.get("x-forwarded-for") || "unknown",
-        user_agent: req.headers.get("user-agent") || "unknown",
-      });
+      // Log suspicious activity - multiple concurrent sessions (wrapped in try-catch)
+      try {
+        await supabaseAdmin.from("suspicious_video_activity").insert({
+          user_id: user.id,
+          material_id: materialId,
+          activity_type: "multiple_concurrent_sessions",
+          severity: "high",
+          details: {
+            active_sessions: activeSessions.length,
+            message: "User attempting to stream same video on multiple devices",
+          },
+          ip_address: req.headers.get("x-forwarded-for") || "unknown",
+          user_agent: req.headers.get("user-agent") || "unknown",
+        });
+      } catch (logError) {
+        console.error("Failed to log concurrent session violation:", logError);
+      }
 
       return new Response(
         JSON.stringify({
