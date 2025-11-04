@@ -623,48 +623,47 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
     const displayMarks = calculatePartMarks(part);
 
-    // Generate fallback label if not provided
+    // Generate fallback label ONLY if not provided - otherwise preserve exact database value
     const getPartLabel = (label: string | undefined, idx: number): string => {
-      if (!label || label === 'undefined') {
+      if (!label || label === 'undefined' || label.trim() === '') {
         // Generate label from index: 0 -> a, 1 -> b, etc.
         const letter = String.fromCharCode(97 + idx);
         return `Part (${letter})`;
       }
 
-      // If already in correct format, return as is
-      if (label.toLowerCase().startsWith('part')) {
-        return label;
-      }
-
-      // Otherwise, add "Part" prefix
-      return `Part (${label})`;
+      // Return the exact label from database as-is
+      return label;
     };
 
-    // Get short label for badge (just the letter)
+    // Get short label for badge (extract letter/number from label)
     const getShortLabel = (label: string | undefined, idx: number): string => {
-      if (!label || label === 'undefined') {
+      if (!label || label === 'undefined' || label.trim() === '') {
         return String.fromCharCode(97 + idx);
       }
 
-      // Try to extract from parentheses
-      const match = label.match(/\(([a-z0-9]+)\)/i);
+      // Try to extract from parentheses: "Part (a)" -> "a", "(i)" -> "i"
+      const match = label.match(/\(([a-z0-9ivx]+)\)/i);
       if (match) {
         return match[1].toLowerCase();
       }
 
       // Try to extract from "Part a", "Part 1", etc.
-      const partMatch = label.match(/Part\s+([a-z0-9]+)/i);
+      const partMatch = label.match(/Part\s+([a-z0-9ivx]+)/i);
       if (partMatch) {
         return partMatch[1].toLowerCase();
       }
 
-      // If it's just a letter or number
-      if (/^[a-z0-9]+$/i.test(label.trim())) {
+      // If it's just a letter or number or roman numeral
+      if (/^[a-z0-9ivx]+$/i.test(label.trim())) {
         return label.trim().toLowerCase();
       }
 
-      // Default: use the last character or generate from index
-      return label.trim().charAt(label.trim().length - 1) || String.fromCharCode(97 + idx);
+      // Default: use the first character if it's a letter/number, otherwise generate from index
+      const firstChar = label.trim().charAt(0);
+      if (/[a-z0-9ivx]/i.test(firstChar)) {
+        return firstChar.toLowerCase();
+      }
+      return String.fromCharCode(97 + idx);
     };
 
     const displayLabel = getPartLabel(part.part_label, index);

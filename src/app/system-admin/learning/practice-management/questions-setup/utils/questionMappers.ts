@@ -70,15 +70,15 @@ const buildPartsTree = (parts: SubQuestion[]): QuestionPart[] => {
     const orderValue = Number.isFinite(part.order_index) ? Number(part.order_index) : index;
     orderMap.set(part.id, orderValue);
 
-    // Generate a proper fallback label if part_label is missing, empty, or 'undefined'
+    // ONLY generate fallback label if part_label is truly missing/null/undefined
+    // DO NOT modify existing labels - preserve exactly as stored in database
     let displayLabel = part.part_label;
-    if (!displayLabel || displayLabel.trim() === '' || displayLabel === 'undefined') {
+    if (!displayLabel || displayLabel === 'undefined' || displayLabel.trim() === '') {
+      // Generate fallback only when necessary
       const letter = String.fromCharCode(97 + index);
       displayLabel = `Part (${letter})`;
-    } else if (!displayLabel.toLowerCase().startsWith('part')) {
-      // If label doesn't start with "Part", format it properly
-      displayLabel = `Part (${displayLabel})`;
     }
+    // Otherwise, use the exact label from the database as-is
 
     partMap.set(part.id, {
       id: part.id,
