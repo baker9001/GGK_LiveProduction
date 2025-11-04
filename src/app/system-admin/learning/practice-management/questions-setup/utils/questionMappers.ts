@@ -70,9 +70,19 @@ const buildPartsTree = (parts: SubQuestion[]): QuestionPart[] => {
     const orderValue = Number.isFinite(part.order_index) ? Number(part.order_index) : index;
     orderMap.set(part.id, orderValue);
 
+    // Generate a proper fallback label if part_label is missing, empty, or 'undefined'
+    let displayLabel = part.part_label;
+    if (!displayLabel || displayLabel.trim() === '' || displayLabel === 'undefined') {
+      const letter = String.fromCharCode(97 + index);
+      displayLabel = `Part (${letter})`;
+    } else if (!displayLabel.toLowerCase().startsWith('part')) {
+      // If label doesn't start with "Part", format it properly
+      displayLabel = `Part (${displayLabel})`;
+    }
+
     partMap.set(part.id, {
       id: part.id,
-      part_label: part.part_label || `Part ${String.fromCharCode(97 + index)}`,
+      part_label: displayLabel,
       question_text: part.question_description || '',
       marks: part.marks,
       answer_format: part.answer_format || 'single_line',

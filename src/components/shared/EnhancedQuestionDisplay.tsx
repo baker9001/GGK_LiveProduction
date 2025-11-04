@@ -623,6 +623,53 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
     const displayMarks = calculatePartMarks(part);
 
+    // Generate fallback label if not provided
+    const getPartLabel = (label: string | undefined, idx: number): string => {
+      if (!label || label === 'undefined') {
+        // Generate label from index: 0 -> a, 1 -> b, etc.
+        const letter = String.fromCharCode(97 + idx);
+        return `Part (${letter})`;
+      }
+
+      // If already in correct format, return as is
+      if (label.toLowerCase().startsWith('part')) {
+        return label;
+      }
+
+      // Otherwise, add "Part" prefix
+      return `Part (${label})`;
+    };
+
+    // Get short label for badge (just the letter)
+    const getShortLabel = (label: string | undefined, idx: number): string => {
+      if (!label || label === 'undefined') {
+        return String.fromCharCode(97 + idx);
+      }
+
+      // Try to extract from parentheses
+      const match = label.match(/\(([a-z0-9]+)\)/i);
+      if (match) {
+        return match[1].toLowerCase();
+      }
+
+      // Try to extract from "Part a", "Part 1", etc.
+      const partMatch = label.match(/Part\s+([a-z0-9]+)/i);
+      if (partMatch) {
+        return partMatch[1].toLowerCase();
+      }
+
+      // If it's just a letter or number
+      if (/^[a-z0-9]+$/i.test(label.trim())) {
+        return label.trim().toLowerCase();
+      }
+
+      // Default: use the last character or generate from index
+      return label.trim().charAt(label.trim().length - 1) || String.fromCharCode(97 + idx);
+    };
+
+    const displayLabel = getPartLabel(part.part_label, index);
+    const shortLabel = getShortLabel(part.part_label, index);
+
     return (
       <div key={part.id} className="space-y-2" style={{ marginLeft: `${indent}px` }}>
         {/* Part Header */}
@@ -632,11 +679,11 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         >
           <div className="flex items-start gap-3 flex-1">
             <div className="flex-shrink-0 h-9 w-9 rounded-xl border-2 border-[#8CC63F]/40 bg-[#8CC63F]/15 text-[#356B1B] dark:border-[#8CC63F]/30 dark:bg-[#8CC63F]/10 dark:text-[#A6E36A] flex items-center justify-center text-sm font-bold shadow-sm">
-              {part.part_label?.match(/\(([a-z0-9]+)\)/i)?.[1] || part.part_label?.replace(/Part\s*/i, '').trim() || part.part_label}
+              {shortLabel}
             </div>
             <div className="flex-1 text-left">
               <p className="text-base text-gray-900 dark:text-white font-bold tracking-tight">
-                {part.part_label?.toLowerCase().startsWith('part') ? part.part_label : `Part ${part.part_label}`}
+                {displayLabel}
               </p>
               {!isExpanded && part.question_text && (
                 <div
