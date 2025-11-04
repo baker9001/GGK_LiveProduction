@@ -81,6 +81,18 @@ const QUESTION_SELECT_CLAUSE = `
       topic_id
     )
   ),
+  question_correct_answers(
+    id,
+    answer,
+    marks,
+    alternative_id,
+    linked_alternatives,
+    alternative_type,
+    context_type,
+    context_value,
+    context_label,
+    created_at
+  ),
   question_options(
     id,
     option_text,
@@ -116,6 +128,18 @@ const QUESTION_SELECT_CLAUSE = `
         name,
         topic_id
       )
+    ),
+    question_correct_answers(
+      id,
+      answer,
+      marks,
+      alternative_id,
+      linked_alternatives,
+      alternative_type,
+      context_type,
+      context_value,
+      context_label,
+      created_at
     ),
     question_options(
       id,

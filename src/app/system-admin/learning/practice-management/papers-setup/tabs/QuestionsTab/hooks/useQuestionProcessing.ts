@@ -151,10 +151,20 @@ export const requiresFigure = (question: any): boolean => {
 
 /**
  * Detect answer format from question
+ * PRIORITY ORDER:
+ * 1. Explicit answer_format field from JSON (highest priority)
+ * 2. Presence of options array (MCQ detection)
+ * 3. Question type indicators
+ * 4. Question text analysis (fallback)
  */
 export const detectAnswerFormat = (question: any): string => {
-  if (question.answer_format) return question.answer_format;
+  // CRITICAL FIX: Prioritize explicit answer_format from JSON
+  // This preserves the original format specified in imported questions
+  if (question.answer_format && question.answer_format !== '' && question.answer_format !== 'undefined') {
+    return question.answer_format;
+  }
 
+  // Check for MCQ indicators
   if (question.options && Array.isArray(question.options) && question.options.length > 0) {
     return 'mcq';
   }
@@ -163,7 +173,8 @@ export const detectAnswerFormat = (question: any): string => {
     return 'mcq';
   }
 
-  const questionText = ensureString(question.question_text || '').toLowerCase();
+  // Analyze question text for format hints
+  const questionText = ensureString(question.question_text || question.question_description || '').toLowerCase();
 
   if (questionText.includes('calculate') || questionText.includes('work out')) {
     return 'calculation';
@@ -173,14 +184,23 @@ export const detectAnswerFormat = (question: any): string => {
     return 'diagram';
   }
 
-  if (questionText.includes('table')) {
-    return 'table';
+  if (questionText.includes('table') || questionText.includes('complete table')) {
+    return 'table_completion';
   }
 
   if (questionText.includes('graph') || questionText.includes('plot')) {
     return 'graph';
   }
 
+  if (questionText.includes('explain') || questionText.includes('describe')) {
+    return 'multi_line';
+  }
+
+  if (questionText.includes('state') || questionText.includes('name') || questionText.includes('give')) {
+    return 'single_line';
+  }
+
+  // Default fallback
   return 'single_line';
 };
 
@@ -203,6 +223,28 @@ export function useQuestionProcessing(): UseQuestionProcessingReturn {
   }, [questions]);
 
   const sanitizeQuestion = useCallback((question: any): ProcessedQuestion => {
+    // CRITICAL FIX: Detect answer format while preserving JSON field priority
+    const detectedAnswerFormat = detectAnswerFormat(question);
+
+    // CRITICAL FIX: Preserve answer_requirement from JSON or provide meaningful default
+    let answerRequirement = question.answer_requirement;
+    if (!answerRequirement || answerRequirement === '' || answerRequirement === 'undefined') {
+      // Derive based on answer format and correct answers presence
+      if (question.correct_answers && Array.isArray(question.correct_answers) && question.correct_answers.length > 0) {
+        if (question.correct_answers.length === 1) {
+          answerRequirement = 'Single correct answer required';
+        } else {
+          answerRequirement = `Accept any valid answer from ${question.correct_answers.length} alternatives`;
+        }
+      } else if (detectedAnswerFormat === 'multi_line') {
+        answerRequirement = 'Detailed explanation required';
+      } else if (detectedAnswerFormat === 'calculation') {
+        answerRequirement = 'Show working and final answer';
+      } else {
+        answerRequirement = 'Provide a clear and accurate answer';
+      }
+    }
+
     return {
       id: question.id || `q_${Date.now()}_${Math.random()}`,
       question_number: ensureString(question.question_number || question.number),
@@ -222,8 +264,8 @@ export function useQuestionProcessing(): UseQuestionProcessingReturn {
       attachments: ensureArray(question.attachments),
       hint: question.hint,
       explanation: question.explanation,
-      answer_format: detectAnswerFormat(question),
-      answer_requirement: question.answer_requirement,
+      answer_format: detectedAnswerFormat,
+      answer_requirement: answerRequirement,
       total_alternatives: question.total_alternatives,
       parts: ensureArray(question.parts),
       correct_answers: ensureArray(question.correct_answers),

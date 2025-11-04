@@ -34,6 +34,8 @@ const mapCorrectAnswersForDisplay = (answers?: CorrectAnswer[], fallback?: strin
         answer: fallback,
         marks: undefined,
         alternative_id: undefined,
+        linked_alternatives: undefined,
+        alternative_type: undefined,
         context: undefined
       }
     ];
@@ -43,6 +45,8 @@ const mapCorrectAnswersForDisplay = (answers?: CorrectAnswer[], fallback?: strin
     answer: answer.answer,
     marks: answer.marks,
     alternative_id: answer.alternative_id,
+    linked_alternatives: answer.linked_alternatives,
+    alternative_type: answer.alternative_type,
     context:
       answer.context_type || answer.context_value || answer.context_label
         ? {
@@ -71,8 +75,8 @@ const buildPartsTree = (parts: SubQuestion[]): QuestionPart[] => {
       part_label: part.part_label || `Part ${String.fromCharCode(97 + index)}`,
       question_text: part.question_description || '',
       marks: part.marks,
-      answer_format: part.answer_format,
-      answer_requirement: part.answer_requirement,
+      answer_format: part.answer_format || 'single_line',
+      answer_requirement: part.answer_requirement || 'Provide a clear answer',
       total_alternatives: part.total_alternatives,
       correct_answers: mapCorrectAnswersForDisplay(part.correct_answers, part.correct_answer),
       options: mapOptionsForDisplay(part.options),
@@ -130,6 +134,25 @@ const normalizeQuestionType = (
 export const mapQuestionToDisplayData = (question: Question): QuestionDisplayData => {
   const primarySubtopic = question.subtopics?.[0];
 
+  // CRITICAL FIX: Ensure answer_format and answer_requirement have meaningful defaults
+  const answerFormat = question.answer_format || 'single_line';
+
+  let answerRequirement = question.answer_requirement;
+  if (!answerRequirement || answerRequirement === '' || answerRequirement === 'undefined') {
+    const correctAnswersCount = question.correct_answers?.length || 0;
+    if (correctAnswersCount > 1) {
+      answerRequirement = `Accept any valid answer from ${correctAnswersCount} alternatives`;
+    } else if (correctAnswersCount === 1) {
+      answerRequirement = 'Single correct answer required';
+    } else if (answerFormat === 'multi_line') {
+      answerRequirement = 'Detailed explanation required';
+    } else if (answerFormat === 'calculation') {
+      answerRequirement = 'Show working and final answer';
+    } else {
+      answerRequirement = 'Provide a clear and accurate answer';
+    }
+  }
+
   return {
     id: question.id,
     question_number: question.question_number,
@@ -143,8 +166,8 @@ export const mapQuestionToDisplayData = (question: Question): QuestionDisplayDat
     topic_id: question.topic_id ?? null,
     subtopic: primarySubtopic?.name,
     subtopic_id: primarySubtopic?.id ?? null,
-    answer_format: question.answer_format,
-    answer_requirement: question.answer_requirement,
+    answer_format: answerFormat,
+    answer_requirement: answerRequirement,
     correct_answers: mapCorrectAnswersForDisplay(
       question.correct_answers,
       question.correct_answer || undefined
