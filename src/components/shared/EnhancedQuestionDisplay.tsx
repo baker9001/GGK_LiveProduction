@@ -628,15 +628,15 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         {/* Part Header */}
         <button
           onClick={() => togglePart(part.id)}
-          className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg p-3 flex items-start justify-between hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          className="w-full bg-gradient-to-r from-gray-100 via-white to-gray-50 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 rounded-xl p-4 flex items-start justify-between hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 border border-gray-200 dark:border-gray-600 shadow-sm"
         >
           <div className="flex items-start gap-3 flex-1">
-            <div className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
-              {part.part_label}
+            <div className="flex-shrink-0 h-9 w-9 rounded-xl border-2 border-[#8CC63F]/40 bg-[#8CC63F]/15 text-[#356B1B] dark:border-[#8CC63F]/30 dark:bg-[#8CC63F]/10 dark:text-[#A6E36A] flex items-center justify-center text-sm font-bold shadow-sm">
+              {part.part_label?.match(/\(([a-z0-9]+)\)/i)?.[1] || part.part_label?.replace(/Part\s*/i, '').trim() || part.part_label}
             </div>
             <div className="flex-1 text-left">
-              <p className="text-sm text-gray-900 dark:text-white font-medium">
-                Part {part.part_label}
+              <p className="text-base text-gray-900 dark:text-white font-bold tracking-tight">
+                {part.part_label?.toLowerCase().startsWith('part') ? part.part_label : `Part ${part.part_label}`}
               </p>
               {!isExpanded && part.question_text && (
                 <div

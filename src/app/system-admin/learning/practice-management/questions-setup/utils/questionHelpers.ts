@@ -114,3 +114,106 @@ export const naturalSort = (a: string, b: string): number => {
   return 0;
 };
 
+/**
+ * Format part label with consistent styling
+ * Converts various input formats to standardized display format
+ * @param label The part label (e.g., "a", "Part a", "(a)", "i", etc.)
+ * @param index Fallback index if no label provided
+ * @returns Formatted part label (e.g., "Part (a)")
+ */
+export const formatPartLabel = (label?: string | null, index?: number): string => {
+  if (!label && typeof index === 'number') {
+    // Generate label from index: 0 -> a, 1 -> b, etc.
+    const letter = String.fromCharCode(97 + index);
+    return `Part (${letter})`;
+  }
+
+  if (!label) {
+    return 'Part';
+  }
+
+  // Clean the label
+  let cleanLabel = label.trim();
+
+  // If already in format "Part (x)" or "Part x", return as is
+  if (/^Part\s*\([a-z0-9]+\)$/i.test(cleanLabel)) {
+    return cleanLabel;
+  }
+
+  // Extract the actual letter/number from various formats
+  let match = cleanLabel.match(/\(([a-z0-9]+)\)/i);
+  if (match) {
+    return `Part (${match[1].toLowerCase()})`;
+  }
+
+  // Try to extract from "Part a", "Part 1", etc.
+  match = cleanLabel.match(/Part\s+([a-z0-9]+)/i);
+  if (match) {
+    return `Part (${match[1].toLowerCase()})`;
+  }
+
+  // If it's just a letter or number, wrap it
+  if (/^[a-z0-9]+$/i.test(cleanLabel)) {
+    return `Part (${cleanLabel.toLowerCase()})`;
+  }
+
+  // Default: return what we have with "Part" prefix if missing
+  if (!cleanLabel.toLowerCase().startsWith('part')) {
+    return `Part ${cleanLabel}`;
+  }
+
+  return cleanLabel;
+};
+
+/**
+ * Get the short label for part badge display
+ * Extracts just the letter/number for compact display
+ * @param label The part label
+ * @param index Fallback index
+ * @returns Short label (e.g., "a", "i", "1")
+ */
+export const getPartShortLabel = (label?: string | null, index?: number): string => {
+  if (!label && typeof index === 'number') {
+    return String.fromCharCode(97 + index);
+  }
+
+  if (!label) {
+    return '?';
+  }
+
+  // Try to extract from parentheses
+  let match = label.match(/\(([a-z0-9]+)\)/i);
+  if (match) {
+    return match[1].toLowerCase();
+  }
+
+  // Try to extract from "Part a", "Part 1", etc.
+  match = label.match(/Part\s+([a-z0-9]+)/i);
+  if (match) {
+    return match[1].toLowerCase();
+  }
+
+  // If it's just a letter or number
+  if (/^[a-z0-9]+$/i.test(label.trim())) {
+    return label.trim().toLowerCase();
+  }
+
+  // Default: take last character or first character
+  const cleaned = label.trim();
+  return cleaned.charAt(cleaned.length - 1) || cleaned.charAt(0) || '?';
+};
+
+/**
+ * Sort sub-questions by their part labels naturally
+ * Handles alphabetical (a, b, c) and roman numerals (i, ii, iii)
+ */
+export const sortSubQuestionsByLabel = (parts: SubQuestion[]): SubQuestion[] => {
+  return [...parts].sort((a, b) => {
+    const labelA = getPartShortLabel(a.part_label, 0);
+    const labelB = getPartShortLabel(b.part_label, 0);
+
+    // Use natural sort for the labels
+    return naturalSort(labelA, labelB);
+  });
+};
+

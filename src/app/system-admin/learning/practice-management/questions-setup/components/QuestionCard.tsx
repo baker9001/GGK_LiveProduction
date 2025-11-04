@@ -28,7 +28,9 @@ import {
   getDifficultyClassName,
   getQuestionStatusLabel,
   questionNeedsAttachment,
-  subQuestionNeedsAttachment
+  subQuestionNeedsAttachment,
+  formatPartLabel,
+  getPartShortLabel
 } from '../utils/questionHelpers';
 import {
   ANSWER_FORMAT_OPTIONS,
@@ -1124,11 +1126,11 @@ export function QuestionCard({
                 >
                   <div className="flex flex-col gap-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-100 via-white to-gray-50 px-4 py-3 dark:from-gray-800 dark:via-gray-900 dark:to-gray-900">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex items-center justify-center w-9 h-9 rounded-lg border border-blue-200/70 bg-blue-100/70 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200">
-                        <span className="text-sm font-semibold">{subQuestion.part_label?.slice(-1) || 'A'}</span>
+                      <div className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-[#8CC63F]/40 bg-[#8CC63F]/15 text-[#356B1B] dark:border-[#8CC63F]/30 dark:bg-[#8CC63F]/10 dark:text-[#A6E36A] shadow-sm">
+                        <span className="text-base font-bold uppercase">{getPartShortLabel(subQuestion.part_label, partIndex)}</span>
                       </div>
-                      <span className="font-semibold text-gray-900 dark:text-white">
-                        {subQuestion.part_label}
+                      <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+                        {formatPartLabel(subQuestion.part_label, partIndex)}
                       </span>
                       <StatusBadge
                         status={subQuestion.status}
