@@ -30,6 +30,9 @@ const SUPABASE_SESSION_STORAGE_KEY = 'supabase.auth.token';
 const SUPABASE_SESSION_REQUIRED_KEY = 'ggk_supabase_session_required';
 const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
 const LAST_PAGE_LOAD_TIME_KEY = 'ggk_last_page_load_time';
+const DELIBERATE_RELOAD_KEY = 'ggk_deliberate_reload';
+const RELOAD_REASON_KEY = 'ggk_reload_reason';
+const EXTENDED_GRACE_PERIOD_KEY = 'ggk_extended_grace_period';
 export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
 // Session durations
@@ -593,6 +596,30 @@ function getPersistedLastPageLoadTime(): number {
 if (typeof window !== 'undefined') {
   lastLoginTime = getPersistedLastLoginTime();
   persistLastPageLoadTime(); // Record page load time
+
+  // Check if this is a deliberate reload and extend grace period
+  try {
+    const reloadMarker = localStorage.getItem(DELIBERATE_RELOAD_KEY);
+    const reloadReason = localStorage.getItem(RELOAD_REASON_KEY);
+
+    if (reloadMarker) {
+      const reloadTime = parseInt(reloadMarker, 10);
+      const timeSinceReload = Date.now() - reloadTime;
+
+      // If reload marker is less than 5 seconds old, this is a deliberate reload
+      if (timeSinceReload < 5000) {
+        console.log(`[Auth] Detected deliberate reload: ${reloadReason || 'unknown'}`);
+        // Store extended grace period marker
+        localStorage.setItem(EXTENDED_GRACE_PERIOD_KEY, Date.now().toString());
+      }
+
+      // Clean up reload marker
+      localStorage.removeItem(DELIBERATE_RELOAD_KEY);
+      localStorage.removeItem(RELOAD_REASON_KEY);
+    }
+  } catch (error) {
+    console.warn('[Auth] Failed to check reload marker:', error);
+  }
 }
 
 export function startSessionMonitoring(): void {
@@ -624,11 +651,32 @@ export function startSessionMonitoring(): void {
         return;
       }
 
-      // CRITICAL FIX: Don't monitor if page just loaded (within last 60 seconds)
+      // CRITICAL FIX: Don't monitor if page just loaded (60-120 seconds depending on reload type)
       // This prevents session expiry issues after page reload
       const timeSincePageLoad = Date.now() - lastPageLoadTime;
-      if (timeSincePageLoad < 60000) {
-        console.log('[SessionMonitoring] Skipping check - page recently loaded');
+      let gracePerioddMs = 60000; // Default 60 seconds
+
+      // Check if we should use extended grace period for deliberate reloads
+      try {
+        const extendedGracePeriod = localStorage.getItem(EXTENDED_GRACE_PERIOD_KEY);
+        if (extendedGracePeriod) {
+          const extendedGraceTime = parseInt(extendedGracePeriod, 10);
+          const timeSinceExtendedGrace = Date.now() - extendedGraceTime;
+
+          if (timeSinceExtendedGrace < 120000) {
+            gracePerioddMs = 120000; // Extended to 120 seconds for deliberate reloads
+            console.log('[SessionMonitoring] Using extended grace period for deliberate reload');
+          } else {
+            // Clean up expired extended grace period marker
+            localStorage.removeItem(EXTENDED_GRACE_PERIOD_KEY);
+          }
+        }
+      } catch (error) {
+        console.warn('[SessionMonitoring] Failed to check extended grace period:', error);
+      }
+
+      if (timeSincePageLoad < gracePerioddMs) {
+        console.log(`[SessionMonitoring] Skipping check - page recently loaded (${Math.round(timeSincePageLoad/1000)}s ago, grace period: ${Math.round(gracePerioddMs/1000)}s)`);
         return;
       }
 

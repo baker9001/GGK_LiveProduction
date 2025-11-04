@@ -68,9 +68,17 @@ export function UploadTab({
       const cleanUrl = window.location.pathname;
       window.history.replaceState(null, '', cleanUrl);
 
-      // CRITICAL FIX: Record user activity before page reload to prevent session expiry
+      // CRITICAL FIX: Set reload marker BEFORE page reload to prevent session expiry
+      const reloadTime = Date.now();
+      localStorage.setItem('ggk_deliberate_reload', reloadTime.toString());
+      localStorage.setItem('ggk_reload_reason', 'start_new_import');
+
+      // Record user activity before page reload
       recordUserActivity();
-      console.log('[UploadTab] Activity recorded before page reload');
+      console.log('[UploadTab] Activity recorded and reload marker set before page reload');
+
+      // Small delay to ensure localStorage writes complete
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       // Reload page to start fresh
       window.location.reload();
@@ -123,10 +131,18 @@ export function UploadTab({
   };
 
   // Refresh session data
-  const handleRefreshSession = () => {
-    // CRITICAL FIX: Record user activity before page reload to prevent session expiry
+  const handleRefreshSession = async () => {
+    // CRITICAL FIX: Set reload marker BEFORE page reload to prevent session expiry
+    const reloadTime = Date.now();
+    localStorage.setItem('ggk_deliberate_reload', reloadTime.toString());
+    localStorage.setItem('ggk_reload_reason', 'refresh_session');
+
+    // Record user activity before page reload
     recordUserActivity();
-    console.log('[UploadTab] Activity recorded before page reload');
+    console.log('[UploadTab] Activity recorded and reload marker set before page reload');
+
+    // Small delay to ensure localStorage writes complete
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     window.location.reload();
   };

@@ -45,6 +45,8 @@ const SESSION_WARNING_SHOWN_KEY = 'ggk_session_warning_shown';
 const LAST_AUTO_EXTEND_KEY = 'ggk_last_auto_extend';
 const LAST_PAGE_LOAD_TIME_KEY = 'ggk_last_page_load_time';
 const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
+const DELIBERATE_RELOAD_KEY = 'ggk_deliberate_reload';
+const RELOAD_REASON_KEY = 'ggk_reload_reason';
 
 // Activity tracking
 let lastActivityTime = Date.now();
@@ -66,10 +68,42 @@ export function initializeSessionManager(): void {
 
   console.log('[SessionManager] Initializing comprehensive session management');
 
+  // Check if this is a deliberate reload
+  let isDeliberateReload = false;
+  let reloadReason = 'unknown';
+  try {
+    const reloadMarker = localStorage.getItem(DELIBERATE_RELOAD_KEY);
+    reloadReason = localStorage.getItem(RELOAD_REASON_KEY) || 'unknown';
+
+    if (reloadMarker) {
+      const reloadTime = parseInt(reloadMarker, 10);
+      const timeSinceReload = Date.now() - reloadTime;
+
+      // If reload marker is less than 5 seconds old, this is a deliberate reload
+      if (timeSinceReload < 5000) {
+        isDeliberateReload = true;
+        console.log(`[SessionManager] Detected deliberate reload: ${reloadReason}`);
+      }
+
+      // Clean up reload marker
+      localStorage.removeItem(DELIBERATE_RELOAD_KEY);
+      localStorage.removeItem(RELOAD_REASON_KEY);
+    }
+  } catch (error) {
+    console.warn('[SessionManager] Failed to check reload marker:', error);
+  }
+
   // Record page load time
   pageLoadTime = Date.now();
   try {
     localStorage.setItem(LAST_PAGE_LOAD_TIME_KEY, pageLoadTime.toString());
+
+    // If this is a deliberate reload, extend the grace period
+    if (isDeliberateReload) {
+      console.log('[SessionManager] Extending grace period for deliberate reload');
+      // Store a flag that we should use extended grace period
+      localStorage.setItem('ggk_extended_grace_period', pageLoadTime.toString());
+    }
   } catch (error) {
     console.warn('[SessionManager] Failed to persist page load time:', error);
   }
@@ -103,9 +137,30 @@ export function initializeSessionManager(): void {
       if (!isSupabaseSessionRequired()) return;
 
       // CRITICAL FIX: Don't check Supabase session immediately after page load
+      // Extended to 120 seconds if this was a deliberate reload
       const timeSincePageLoad = Date.now() - pageLoadTime;
-      if (timeSincePageLoad < 60000) {
-        console.log('[SessionManager] Skipping Supabase check - page recently loaded');
+      let gracePerioddMs = 60000; // Default 60 seconds
+
+      // Check if we should use extended grace period
+      try {
+        const extendedGracePeriod = localStorage.getItem('ggk_extended_grace_period');
+        if (extendedGracePeriod) {
+          const extendedGraceTime = parseInt(extendedGracePeriod, 10);
+          const timeSinceExtendedGrace = Date.now() - extendedGraceTime;
+
+          if (timeSinceExtendedGrace < 120000) {
+            gracePerioddMs = 120000; // Extended to 120 seconds
+          } else {
+            // Clean up expired extended grace period marker
+            localStorage.removeItem('ggk_extended_grace_period');
+          }
+        }
+      } catch (error) {
+        console.warn('[SessionManager] Failed to check extended grace period:', error);
+      }
+
+      if (timeSincePageLoad < gracePerioddMs) {
+        console.log(`[SessionManager] Skipping Supabase check - page recently loaded (${Math.round(timeSincePageLoad/1000)}s ago, grace period: ${Math.round(gracePerioddMs/1000)}s)`);
         return;
       }
 
@@ -327,9 +382,31 @@ function checkSessionStatus(): void {
   if (isPublicPage(currentPath)) return;
 
   // CRITICAL FIX: Don't check session immediately after page load (60 second grace period)
+  // Extended to 120 seconds if this was a deliberate reload
   const timeSincePageLoad = Date.now() - pageLoadTime;
-  if (timeSincePageLoad < 60000) {
-    console.log('[SessionManager] Skipping check - page recently loaded');
+  let gracePerioddMs = 60000; // Default 60 seconds
+
+  // Check if we should use extended grace period
+  try {
+    const extendedGracePeriod = localStorage.getItem('ggk_extended_grace_period');
+    if (extendedGracePeriod) {
+      const extendedGraceTime = parseInt(extendedGracePeriod, 10);
+      const timeSinceExtendedGrace = Date.now() - extendedGraceTime;
+
+      if (timeSinceExtendedGrace < 120000) {
+        gracePerioddMs = 120000; // Extended to 120 seconds
+        console.log('[SessionManager] Using extended grace period for deliberate reload');
+      } else {
+        // Clean up expired extended grace period marker
+        localStorage.removeItem('ggk_extended_grace_period');
+      }
+    }
+  } catch (error) {
+    console.warn('[SessionManager] Failed to check extended grace period:', error);
+  }
+
+  if (timeSincePageLoad < gracePerioddMs) {
+    console.log(`[SessionManager] Skipping check - page recently loaded (${Math.round(timeSincePageLoad/1000)}s ago, grace period: ${Math.round(gracePerioddMs/1000)}s)`);
     return;
   }
 
