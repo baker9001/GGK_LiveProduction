@@ -171,7 +171,7 @@ export function collectAnswerableItems(
       answerableItems.push({
         id: subpart.id,
         type: 'subpart',
-        label: subpart.part_label || '',
+        label: subpart.subpart_label || '',
         text: subpart.question_description,
         marks: subpart.marks,
         level: subpart.level,

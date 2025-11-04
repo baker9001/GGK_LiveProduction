@@ -271,8 +271,85 @@ function transformQuestionPart(
     explanation: part.explanation,
     // Nested subparts
     subparts: part.subparts ?
-      part.subparts.map((sub, idx) => transformQuestionPart(sub, partId, idx)) :
+      part.subparts.map((sub, idx) => transformQuestionSubpart(sub, partId, idx)) :
       undefined
+  };
+}
+
+/**
+ * Transform a question subpart (similar to transformQuestionPart but uses subpart_label)
+ */
+function transformQuestionSubpart(
+  subpart: ImportedQuestionPart,
+  parentId: string,
+  index: number
+): any {
+  const subpartLabel = subpart.subpart || subpart.part || String.fromCharCode(105 + index); // i, ii, iii, etc.
+  const subpartId = `${parentId}-${subpartLabel}`;
+
+  const correctAnswers = processCorrectAnswers(subpart.correct_answers || []);
+  const options = mapOptionsWithCorrectAnswers(subpart.options, correctAnswers);
+
+  const attachments = processAttachments(subpart.attachments || []);
+
+  // Detect answer expectation for this subpart
+  const subpartText = subpart.question_text || subpart.question_description || '';
+  const answerExpectation = detectAnswerExpectation(
+    {
+      question_text: subpartText,
+      question_description: subpartText,
+      correct_answers: correctAnswers,
+      answer_format: subpart.answer_format,
+      answer_requirement: subpart.answer_requirement,
+      subparts: undefined // Subparts don't have nested subparts
+    },
+    {
+      hasSubparts: false,
+      level: 'subpart'
+    }
+  );
+
+  const hasDirectAnswer = answerExpectation.has_direct_answer ?? true; // Subparts typically have direct answers
+  const isContextualOnly = answerExpectation.is_contextual_only ?? false;
+
+  // Derive answer format if not provided
+  let answerFormat = subpart.answer_format;
+  if (!answerFormat) {
+    answerFormat = deriveAnswerFormat({
+      type: subpart.type || 'descriptive',
+      options: options,
+      has_direct_answer: hasDirectAnswer,
+      is_contextual_only: isContextualOnly
+    }) || undefined;
+  }
+
+  // Auto-fill answer_requirement if not provided
+  let answerRequirement = subpart.answer_requirement;
+  if (!answerRequirement) {
+    answerRequirement = deriveAnswerRequirement({
+      type: 'descriptive',
+      correct_answers: correctAnswers,
+      total_alternatives: subpart.total_alternatives,
+      has_direct_answer: hasDirectAnswer,
+      is_contextual_only: isContextualOnly
+    });
+  }
+
+  return {
+    id: subpartId,
+    subpart_label: subpartLabel,
+    question_text: subpart.question_text || subpart.question_description || '',
+    marks: subpart.marks || 0,
+    answer_format: answerFormat,
+    answer_requirement: answerRequirement,
+    has_direct_answer: hasDirectAnswer,
+    is_contextual_only: isContextualOnly,
+    total_alternatives: subpart.total_alternatives,
+    correct_answers: correctAnswers,
+    options: options.length > 0 ? options : undefined,
+    attachments: attachments.length > 0 ? attachments : undefined,
+    hint: subpart.hint,
+    explanation: subpart.explanation
   };
 }
 

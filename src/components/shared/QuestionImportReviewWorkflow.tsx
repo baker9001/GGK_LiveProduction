@@ -2708,7 +2708,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                       <div className="flex items-center justify-between gap-3">
                                         <div>
                                           <h6 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                            Subpart {(subpart.part_label || subpart.part || String.fromCharCode(97 + subIndex)).toUpperCase()}
+                                            Subpart {(subpart.subpart_label || String.fromCharCode(105 + subIndex)).toUpperCase()}
                                           </h6>
                                           <p className="text-xs text-gray-600 dark:text-gray-400">
                                             {subpart.marks ?? 0} mark{subpart.marks === 1 ? '' : 's'} • {subpart.answer_format || 'format not set'}
@@ -2737,11 +2737,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         >
                                           <Input
                                             id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-label`}
-                                            value={subpart.part_label || subpart.part || String.fromCharCode(105 + subIndex)}
+                                            value={subpart.subpart_label || String.fromCharCode(105 + subIndex)}
                                             onChange={(event) =>
                                               handleSubpartFieldChange(question, partIndex, subIndex, {
-                                                part_label: event.target.value,
-                                                part: event.target.value
+                                                subpart_label: event.target.value
                                               })
                                             }
                                             placeholder={`e.g., ${String.fromCharCode(105 + subIndex)}`}
@@ -2817,7 +2816,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                           placeholder="Detail the prompt for this subpart"
                                           ariaLabel="Subpart question text editor"
                                         />
-                                        {renderInlineAttachments(subpart.attachments, `Subpart ${(subpart.part_label || subpart.part || String.fromCharCode(105 + subIndex)).toUpperCase()}`)}
+                                        {renderInlineAttachments(subpart.attachments, `Subpart ${(subpart.subpart_label || String.fromCharCode(105 + subIndex)).toUpperCase()}`)}
                                       </FormField>
                                       <div className="grid gap-3 md:grid-cols-2">
                                         <FormField
