@@ -13,6 +13,7 @@ interface ImportedQuestion {
   question_number: string | number;
   type: string;
   mcq_type?: string;
+  question_type?: string;
   topic?: string;
   subtopic?: string;
   unit?: string;
@@ -30,7 +31,7 @@ interface ImportedQuestion {
     text: string;
     is_correct?: boolean;
   }>;
-  correct_answer?: string;
+  correct_answer?: string | string[];
   correct_answers?: ImportedCorrectAnswer[];
   answer_format?: string;
   answer_requirement?: string;
@@ -44,6 +45,7 @@ interface ImportedQuestionPart {
   subpart?: string;
   question_text?: string;
   question_description?: string;
+  type?: string;
   marks: number;
   answer_format?: string;
   answer_requirement?: string;
@@ -54,6 +56,7 @@ interface ImportedQuestionPart {
     text: string;
     is_correct?: boolean;
   }>;
+  correct_answer?: string | string[];
   hint?: string;
   explanation?: string;
   figure?: boolean;
@@ -74,6 +77,87 @@ interface ImportedCorrectAnswer {
   accepts_reverse_argument?: boolean;
   error_carried_forward?: boolean;
   marking_criteria?: string;
+}
+
+interface NormalizeCorrectAnswerParams {
+  correct_answers?: ImportedCorrectAnswer[] | null;
+  correct_answer?: string | string[] | null;
+  questionType?: string | null;
+  marks?: number | null;
+  total_marks?: number | null;
+}
+
+function normalizeImportedCorrectAnswers(params: NormalizeCorrectAnswerParams): ImportedCorrectAnswer[] {
+  const {
+    correct_answers: correctAnswers,
+    correct_answer: singleAnswer,
+    questionType,
+    marks,
+    total_marks
+  } = params;
+
+  if (Array.isArray(correctAnswers) && correctAnswers.length > 0) {
+    return correctAnswers;
+  }
+
+  if (!singleAnswer) {
+    return [];
+  }
+
+  const normalizedType = (questionType || '').toLowerCase();
+  if (normalizedType === 'mcq' || normalizedType === 'tf' || normalizedType === 'true_false') {
+    return [];
+  }
+
+  const fallbackAnswers = Array.isArray(singleAnswer) ? singleAnswer : [singleAnswer];
+  const validAnswers = fallbackAnswers
+    .map(answer => {
+      if (typeof answer === 'number') {
+        return String(answer);
+      }
+      return (answer || '').trim();
+    })
+    .filter(answer => answer.length > 0);
+
+  if (validAnswers.length === 0) {
+    return [];
+  }
+
+  const totalMarks = typeof marks === 'number' && marks > 0
+    ? marks
+    : typeof total_marks === 'number' && total_marks > 0
+    ? total_marks
+    : null;
+
+  const marksPerAnswer = (() => {
+    if (!totalMarks) {
+      return 1;
+    }
+
+    const average = totalMarks / validAnswers.length;
+    if (!Number.isFinite(average) || average <= 0) {
+      return 1;
+    }
+
+    const rounded = Math.round(average);
+    if (rounded >= 1) {
+      return rounded;
+    }
+
+    const floored = Math.floor(average);
+    if (floored >= 1) {
+      return floored;
+    }
+
+    return 1;
+  })();
+
+  return validAnswers.map((answer, index) => ({
+    answer,
+    marks: marksPerAnswer,
+    alternative_id: index + 1,
+    alternative_type: 'standalone'
+  }));
 }
 
 /**
@@ -106,11 +190,22 @@ export function transformImportedQuestion(
     questionType = 'complex';
   }
 
-  // Process correct answers
-  const correctAnswers = processCorrectAnswers(imported.correct_answers || []);
+  // Process correct answers (supports both correct_answers array and single correct_answer fallback)
+  const normalizedCorrectAnswers = normalizeImportedCorrectAnswers({
+    correct_answers: imported.correct_answers,
+    correct_answer: imported.correct_answer,
+    questionType,
+    marks: imported.marks,
+    total_marks: imported.total_marks
+  });
+  const correctAnswers = processCorrectAnswers(normalizedCorrectAnswers);
 
   // Process options for MCQ/TF questions
-  const options = mapOptionsWithCorrectAnswers(imported.options, correctAnswers);
+  const options = mapOptionsWithCorrectAnswers(
+    imported.options,
+    correctAnswers,
+    imported.correct_answer
+  );
 
   // Process attachments
   const attachments = processAttachments(imported.attachments || []);
@@ -202,8 +297,15 @@ function transformQuestionPart(
   const partLabel = part.part || part.subpart || String.fromCharCode(97 + index); // a, b, c, etc.
   const partId = `${parentNumber}-${partLabel}`;
 
-  const correctAnswers = processCorrectAnswers(part.correct_answers || []);
-  const options = mapOptionsWithCorrectAnswers(part.options, correctAnswers);
+  const normalizedPartType = part.type || 'descriptive';
+  const normalizedCorrectAnswers = normalizeImportedCorrectAnswers({
+    correct_answers: part.correct_answers,
+    correct_answer: part.correct_answer,
+    questionType: normalizedPartType,
+    marks: part.marks
+  });
+  const correctAnswers = processCorrectAnswers(normalizedCorrectAnswers);
+  const options = mapOptionsWithCorrectAnswers(part.options, correctAnswers, part.correct_answer);
 
   const attachments = processAttachments(part.attachments || []);
 
@@ -232,13 +334,14 @@ function transformQuestionPart(
   let answerFormat = part.answer_format;
   if (!answerFormat) {
     // Use enhanced deriveAnswerFormat
-    answerFormat = deriveAnswerFormat({
-      type: 'descriptive',
-      question_description: partText,
-      correct_answers: correctAnswers,
-      has_direct_answer: hasDirectAnswer,
-      is_contextual_only: isContextualOnly
-    }) || undefined;
+    answerFormat =
+      deriveAnswerFormat({
+        type: normalizedPartType || 'descriptive',
+        question_description: partText,
+        correct_answers: correctAnswers,
+        has_direct_answer: hasDirectAnswer,
+        is_contextual_only: isContextualOnly
+      }) || undefined;
   }
 
   // Auto-fill answer_requirement if not provided
@@ -287,8 +390,15 @@ function transformQuestionSubpart(
   const subpartLabel = subpart.subpart || subpart.part || String.fromCharCode(105 + index); // i, ii, iii, etc.
   const subpartId = `${parentId}-${subpartLabel}`;
 
-  const correctAnswers = processCorrectAnswers(subpart.correct_answers || []);
-  const options = mapOptionsWithCorrectAnswers(subpart.options, correctAnswers);
+  const normalizedSubpartType = subpart.type || 'descriptive';
+  const normalizedCorrectAnswers = normalizeImportedCorrectAnswers({
+    correct_answers: subpart.correct_answers,
+    correct_answer: subpart.correct_answer,
+    questionType: normalizedSubpartType,
+    marks: subpart.marks
+  });
+  const correctAnswers = processCorrectAnswers(normalizedCorrectAnswers);
+  const options = mapOptionsWithCorrectAnswers(subpart.options, correctAnswers, subpart.correct_answer);
 
   const attachments = processAttachments(subpart.attachments || []);
 
@@ -315,12 +425,14 @@ function transformQuestionSubpart(
   // Derive answer format if not provided
   let answerFormat = subpart.answer_format;
   if (!answerFormat) {
-    answerFormat = deriveAnswerFormat({
-      type: subpart.type || 'descriptive',
-      options: options,
-      has_direct_answer: hasDirectAnswer,
-      is_contextual_only: isContextualOnly
-    }) || undefined;
+    answerFormat =
+      deriveAnswerFormat({
+        type: normalizedSubpartType || 'descriptive',
+        question_description: subpartText,
+        correct_answers: correctAnswers,
+        has_direct_answer: hasDirectAnswer,
+        is_contextual_only: isContextualOnly
+      }) || undefined;
   }
 
   // Auto-fill answer_requirement if not provided
@@ -404,13 +516,30 @@ function processCorrectAnswers(answers: ImportedCorrectAnswer[]): Array<any> {
 
 function mapOptionsWithCorrectAnswers(
   importedOptions: ImportedQuestion['options'],
-  correctAnswers: ReturnType<typeof processCorrectAnswers>
+  correctAnswers: ReturnType<typeof processCorrectAnswers>,
+  fallbackCorrectAnswer?: ImportedQuestion['correct_answer']
 ): Array<{ label: string; text: string; is_correct: boolean }> {
   if (!importedOptions || importedOptions.length === 0) {
     return [];
   }
 
   const normalizedCorrectAnswers = buildNormalizedAnswerSet(correctAnswers);
+
+  // Include fallback correct_answer values (commonly used for MCQ imports)
+  const fallbackValues: string[] = Array.isArray(fallbackCorrectAnswer)
+    ? fallbackCorrectAnswer
+    : fallbackCorrectAnswer
+    ? [fallbackCorrectAnswer]
+    : [];
+
+  fallbackValues.forEach(value => {
+    if (typeof value !== 'string') return;
+    generateNormalizationVariants(value).forEach(variant => {
+      if (variant) {
+        normalizedCorrectAnswers.add(variant);
+      }
+    });
+  });
 
   return importedOptions.map(option => {
     const isCorrectFromAnswers = [option.label, option.text]
