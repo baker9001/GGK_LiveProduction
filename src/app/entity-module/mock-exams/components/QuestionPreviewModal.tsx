@@ -372,7 +372,12 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
                 {displayQuestion.sub_questions.map((subQ: any, index: number) => {
                   const isExpanded = expandedParts.has(subQ.id);
                   const hasAttachments = subQ.attachments && subQ.attachments.length > 0;
-                  const indent = (subQ.level - 1) * 20;
+                  const indent = (subQ.level - 1) * 24;
+
+                  // Format part label based on level
+                  const partLabel = subQ.sub_question_number || String.fromCharCode(97 + index);
+                  const isSubpart = subQ.level > 1;
+                  const levelLabel = isSubpart ? 'Subpart' : 'Part';
 
                   return (
                     <div
@@ -380,60 +385,67 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
                       className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden"
                       style={{ marginLeft: `${indent}px` }}
                     >
-                      <div className="p-4">
-                        <div className="flex items-start gap-3">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-[#8CC63F] text-white text-xs font-semibold flex-shrink-0">
-                            {subQ.sub_question_number || String.fromCharCode(97 + index)}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <p className={`text-sm text-gray-900 dark:text-gray-100 ${!isExpanded && (subQ.description?.length > 100 || hasAttachments) ? 'line-clamp-2' : ''}`}>
-                                {subQ.description || 'No description'}
-                              </p>
-                              {(subQ.description?.length > 100 || hasAttachments) && (
-                                <button
-                                  onClick={() => {
-                                    const newExpanded = new Set(expandedParts);
-                                    if (isExpanded) {
-                                      newExpanded.delete(subQ.id);
-                                    } else {
-                                      newExpanded.add(subQ.id);
-                                    }
-                                    setExpandedParts(newExpanded);
-                                  }}
-                                  className="text-xs text-[#8CC63F] hover:text-[#7AB635] font-medium whitespace-nowrap flex-shrink-0"
-                                >
-                                  {isExpanded ? 'Show Less' : 'View'}
-                                </button>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 flex-wrap">
-                              {subQ.marks !== null && (
-                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                                  <span className="font-semibold">{subQ.marks}</span>
-                                  <span>mark{subQ.marks !== 1 ? 's' : ''}</span>
-                                </span>
-                              )}
-                              {subQ.type && (
-                                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                  {subQ.type}
-                                </span>
-                              )}
-                              {hasAttachments && (
-                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                                  <ImageIcon className="h-3 w-3" />
-                                  {subQ.attachments.length} attachment{subQ.attachments.length !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </div>
-
-                            {isExpanded && hasAttachments && (
-                              <div className="mt-4">
-                                {renderAttachments(subQ.attachments)}
-                              </div>
+                      {/* Part/Subpart Header */}
+                      <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-[#8CC63F] text-white text-sm font-bold flex-shrink-0">
+                              {partLabel}
+                            </span>
+                            <span className="text-base font-bold text-gray-900 dark:text-white">
+                              {levelLabel} {partLabel}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {subQ.marks !== null && (
+                              <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[#8CC63F]/10 text-[#8CC63F] dark:bg-[#8CC63F]/20 font-semibold border border-[#8CC63F]/20">
+                                {subQ.marks} mark{subQ.marks !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {subQ.type && (
+                              <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium">
+                                {subQ.type.toUpperCase()}
+                              </span>
+                            )}
+                            {hasAttachments && (
+                              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-medium">
+                                <ImageIcon className="h-3 w-3" />
+                                {subQ.attachments.length}
+                              </span>
                             )}
                           </div>
                         </div>
+                      </div>
+
+                      {/* Part/Subpart Content */}
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className={`text-sm text-gray-900 dark:text-gray-100 leading-relaxed ${!isExpanded && (subQ.description?.length > 100 || hasAttachments) ? 'line-clamp-3' : ''}`}>
+                            {subQ.description || 'No description'}
+                          </div>
+                          {(subQ.description?.length > 100 || hasAttachments) && (
+                            <button
+                              onClick={() => {
+                                const newExpanded = new Set(expandedParts);
+                                if (isExpanded) {
+                                  newExpanded.delete(subQ.id);
+                                } else {
+                                  newExpanded.add(subQ.id);
+                                }
+                                setExpandedParts(newExpanded);
+                              }}
+                              className="text-xs text-[#8CC63F] hover:text-[#7AB635] font-semibold whitespace-nowrap flex-shrink-0 underline"
+                            >
+                              {isExpanded ? 'Show Less' : 'View Full'}
+                            </button>
+                          )}
+                        </div>
+
+                        {isExpanded && hasAttachments && (
+                          <div className="mt-4">
+                            {renderAttachments(subQ.attachments)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

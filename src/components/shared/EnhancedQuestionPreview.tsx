@@ -112,59 +112,72 @@ export function EnhancedQuestionPreview({
     return (
       <div
         key={part.id}
-        className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700"
+        className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
       >
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-semibold text-[#8CC63F]">
-              {part.part_label}
-            </span>
-            <span className="text-sm px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-              {part.marks} mark{part.marks !== 1 ? 's' : ''}
-            </span>
-            {part.difficulty && (
-              <span className={`text-xs px-2 py-0.5 rounded-full ${getDifficultyColor(part.difficulty)}`}>
-                {part.difficulty}
+        {/* Part Header */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-[#8CC63F] text-white text-sm font-bold flex-shrink-0">
+                {part.part_label}
               </span>
-            )}
-            {part.type && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-                {part.type.toUpperCase()}
+              <span className="text-base font-bold text-gray-900 dark:text-white">
+                Part {part.part_label}
               </span>
-            )}
-          </div>
-        </div>
-
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
-            {part.question_description}
-          </p>
-        </div>
-
-        {part.attachments && part.attachments.length > 0 && (
-          <div className="mt-4 space-y-3">
-            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-              Attachments
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {part.attachments.map((attachment, idx) => renderAttachment(attachment, idx))}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {part.marks && (
+                <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[#8CC63F]/10 text-[#8CC63F] dark:bg-[#8CC63F]/20 font-semibold border border-[#8CC63F]/20">
+                  {part.marks} mark{part.marks !== 1 ? 's' : ''}
+                </span>
+              )}
+              {part.difficulty && (
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${getDifficultyColor(part.difficulty)}`}>
+                  {part.difficulty}
+                </span>
+              )}
+              {part.type && (
+                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium">
+                  {part.type.toUpperCase()}
+                </span>
+              )}
             </div>
           </div>
-        )}
+        </div>
 
-        {part.hint && (
-          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">Hint</p>
-            <p className="text-sm text-blue-800 dark:text-blue-200">{part.hint}</p>
+        {/* Part Content */}
+        <div className="p-4">
+          <div className="prose prose-sm dark:prose-invert max-w-none mb-4">
+            <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap leading-relaxed">
+              {part.question_description}
+            </p>
           </div>
-        )}
 
-        {part.explanation && (
-          <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-            <p className="text-xs font-medium text-green-900 dark:text-green-100 mb-1">Explanation</p>
-            <p className="text-sm text-green-800 dark:text-green-200">{part.explanation}</p>
-          </div>
-        )}
+          {part.attachments && part.attachments.length > 0 && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                Attachments
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {part.attachments.map((attachment, idx) => renderAttachment(attachment, idx))}
+              </div>
+            </div>
+          )}
+
+          {part.hint && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">Hint</p>
+              <p className="text-sm text-blue-800 dark:text-blue-200">{part.hint}</p>
+            </div>
+          )}
+
+          {part.explanation && (
+            <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <p className="text-xs font-medium text-green-900 dark:text-green-100 mb-1">Explanation</p>
+              <p className="text-sm text-green-800 dark:text-green-200">{part.explanation}</p>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
