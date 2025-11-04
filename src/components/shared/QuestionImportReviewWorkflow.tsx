@@ -15,7 +15,10 @@ import {
   Image as ImageIcon,
   AlertCircle,
   List,
-  Paperclip
+  Paperclip,
+  Scissors,
+  ZoomIn,
+  FileText
 } from 'lucide-react';
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
@@ -120,7 +123,7 @@ interface QuestionImportReviewWorkflowProps {
   onReviewLoadingChange?: (isLoading: boolean) => void;
   requireSimulation?: boolean;
   onQuestionUpdate?: (questionId: string, updates: Partial<QuestionDisplayData>) => void;
-  onRequestSnippingTool?: (questionId: string) => void;
+  onRequestSnippingTool?: (questionId: string, context?: { partIndex?: number; subpartIndex?: number }) => void;
   onRequestAttachmentDelete?: (attachmentKey: string, attachmentId: string) => void;
   onRequestSimulation?: () => void;
   simulationResults?: SimulationResults | null;
@@ -1110,6 +1113,82 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             </div>
           </div>
         ))}
+      </div>
+    );
+  };
+
+  // Render inline attachment display with preview
+  const renderInlineAttachments = (
+    attachments: any[] | undefined,
+    contextLabel: string
+  ) => {
+    if (!attachments || attachments.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mt-3 space-y-2">
+        <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <ImageIcon className="h-3.5 w-3.5" />
+          Attached Figure{attachments.length > 1 ? 's' : ''} for {contextLabel}
+        </h5>
+        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-wrap gap-3">
+            {attachments.map((attachment, index) => {
+              const imageSrc = attachment.url || attachment.file_url || attachment.dataUrl || attachment.data;
+              const fileName = attachment.file_name || `Attachment ${index + 1}`;
+              const isImage = imageSrc && (
+                attachment.file_type?.startsWith('image/') ||
+                imageSrc.startsWith('data:image/') ||
+                /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileName)
+              );
+
+              return (
+                <div
+                  key={attachment.id || index}
+                  className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all shadow-sm hover:shadow-md"
+                  style={{ maxWidth: '200px' }}
+                >
+                  {isImage && imageSrc ? (
+                    <div className="relative">
+                      <img
+                        src={imageSrc}
+                        alt={fileName}
+                        className="w-full h-auto object-contain"
+                        style={{ maxHeight: '150px' }}
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <button
+                          className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-full p-2 shadow-lg hover:scale-110 transition-transform"
+                          onClick={() => {
+                            // Preview image in a modal or new window
+                            const preview = window.open('', '_blank');
+                            if (preview) {
+                              preview.document.write(`<img src="${imageSrc}" style="max-width: 100%; height: auto;" />`);
+                            }
+                          }}
+                          title="Preview image"
+                        >
+                          <ZoomIn className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-4 text-gray-500 dark:text-gray-400">
+                      <FileText className="h-8 w-8 mb-2" />
+                      <p className="text-xs text-center truncate w-full px-2">{fileName}</p>
+                    </div>
+                  )}
+                  <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-[10px] text-gray-600 dark:text-gray-400 truncate" title={fileName}>
+                      {fileName}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     );
   };
@@ -2107,6 +2186,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                           placeholder="Compose the full question stem..."
                           ariaLabel="Question text editor"
                         />
+                        {renderInlineAttachments(question.attachments, `Question ${question.question_number}`)}
                       </FormField>
 
                       <FormField
@@ -2444,6 +2524,42 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 />
                               </FormField>
                             </div>
+                            {partRequiresFigure && (
+                              <div
+                                className={cn(
+                                  'rounded-lg border p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between',
+                                  partHasAttachments
+                                    ? 'border-green-200 bg-green-50 dark:border-green-700/60 dark:bg-green-900/15'
+                                    : 'border-amber-300 bg-amber-50 dark:border-amber-500 dark:bg-amber-900/20'
+                                )}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <ImageIcon
+                                    className={cn(
+                                      'h-4 w-4',
+                                      partHasAttachments ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+                                    )}
+                                  />
+                                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200">
+                                    {partHasAttachments ? 'Figure attached to this part' : 'This part requires a supporting figure'}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant={partHasAttachments ? 'outline' : 'default'}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    if (onRequestSnippingTool) {
+                                      onRequestSnippingTool(question.id, { partIndex });
+                                    } else {
+                                      toast.error('Snipping tool is not available');
+                                    }
+                                  }}
+                                >
+                                  <Scissors className="h-3.5 w-3.5 mr-1" /> Launch snipping tool
+                                </Button>
+                              </div>
+                            )}
                             <FormField
                               id={`question-${question.id}-part-${partIndex}-text`}
                               label="Part question text"
@@ -2457,6 +2573,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 placeholder="Write the content for this part"
                                 ariaLabel="Part question text editor"
                               />
+                              {renderInlineAttachments(part.attachments, `Part ${part.part_label || part.part || String.fromCharCode(97 + partIndex)}`)}
                             </FormField>
                             <div className="grid gap-3 md:grid-cols-2">
                               <FormField
@@ -2649,6 +2766,42 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                           />
                                         </FormField>
                                       </div>
+                                      {subRequiresFigure && (
+                                        <div
+                                          className={cn(
+                                            'rounded-lg border p-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between',
+                                            subHasAttachments
+                                              ? 'border-green-200 bg-green-50 dark:border-green-700/60 dark:bg-green-900/15'
+                                              : 'border-amber-300 bg-amber-50 dark:border-amber-500 dark:bg-amber-900/20'
+                                          )}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <ImageIcon
+                                              className={cn(
+                                                'h-3.5 w-3.5',
+                                                subHasAttachments ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+                                              )}
+                                            />
+                                            <p className="text-xs font-medium text-gray-800 dark:text-gray-200">
+                                              {subHasAttachments ? 'Figure attached to this subpart' : 'This subpart requires a supporting figure'}
+                                            </p>
+                                          </div>
+                                          <Button
+                                            size="sm"
+                                            variant={subHasAttachments ? 'outline' : 'default'}
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              if (onRequestSnippingTool) {
+                                                onRequestSnippingTool(question.id, { partIndex, subpartIndex: subIndex });
+                                              } else {
+                                                toast.error('Snipping tool is not available');
+                                              }
+                                            }}
+                                          >
+                                            <Scissors className="h-3.5 w-3.5 mr-1" /> Launch snipping tool
+                                          </Button>
+                                        </div>
+                                      )}
                                       <FormField
                                         id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-text`}
                                         label="Subpart question text"
@@ -2664,6 +2817,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                           placeholder="Detail the prompt for this subpart"
                                           ariaLabel="Subpart question text editor"
                                         />
+                                        {renderInlineAttachments(subpart.attachments, `Subpart ${(subpart.part_label || subpart.part || String.fromCharCode(105 + subIndex)).toUpperCase()}`)}
                                       </FormField>
                                       <div className="grid gap-3 md:grid-cols-2">
                                         <FormField
