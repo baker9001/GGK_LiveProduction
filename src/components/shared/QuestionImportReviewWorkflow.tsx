@@ -2708,7 +2708,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                       <div className="flex items-center justify-between gap-3">
                                         <div>
                                           <h6 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                            Subpart {(subpart.subpart_label || String.fromCharCode(105 + subIndex)).toUpperCase()}
+                                            Subpart {(() => {
+                                              const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+                                              return (subpart.subpart_label || romanNumerals[subIndex] || String(subIndex + 1)).toUpperCase();
+                                            })()}
                                           </h6>
                                           <p className="text-xs text-gray-600 dark:text-gray-400">
                                             {subpart.marks ?? 0} mark{subpart.marks === 1 ? '' : 's'} • {subpart.answer_format || 'format not set'}
@@ -2737,13 +2740,19 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         >
                                           <Input
                                             id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-label`}
-                                            value={subpart.subpart_label || String.fromCharCode(105 + subIndex)}
+                                            value={(() => {
+                                              const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+                                              return subpart.subpart_label || romanNumerals[subIndex] || String(subIndex + 1);
+                                            })()}
                                             onChange={(event) =>
                                               handleSubpartFieldChange(question, partIndex, subIndex, {
                                                 subpart_label: event.target.value
                                               })
                                             }
-                                            placeholder={`e.g., ${String.fromCharCode(105 + subIndex)}`}
+                                            placeholder={(() => {
+                                              const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+                                              return `e.g., ${romanNumerals[subIndex] || String(subIndex + 1)}`;
+                                            })()}
                                           />
                                         </FormField>
                                         <FormField
@@ -2816,7 +2825,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                           placeholder="Detail the prompt for this subpart"
                                           ariaLabel="Subpart question text editor"
                                         />
-                                        {renderInlineAttachments(subpart.attachments, `Subpart ${(subpart.subpart_label || String.fromCharCode(105 + subIndex)).toUpperCase()}`)}
+                                        {renderInlineAttachments(subpart.attachments, `Subpart ${(() => {
+                                          const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+                                          return (subpart.subpart_label || romanNumerals[subIndex] || String(subIndex + 1)).toUpperCase();
+                                        })()}`)}
                                       </FormField>
                                       <div className="grid gap-3 md:grid-cols-2">
                                         <FormField

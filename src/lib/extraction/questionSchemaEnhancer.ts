@@ -74,10 +74,13 @@ export function enhanceSubpart(subpart: any, index: number): EnhancedSubpart {
     level: 'subpart'
   });
 
+  // Use proper roman numerals for subpart labels
+  const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+
   return {
     ...subpart,
     subpart_id: subpart.subpart_id || `subpart_${index}`,
-    subpart_label: subpart.subpart_label || String.fromCharCode(105 + index), // i, ii, iii...
+    subpart_label: subpart.subpart_label || romanNumerals[index] || String(index + 1),
     is_container: false, // Subparts never contain other elements
     has_direct_answer: true, // Subparts always require answers
   };

@@ -387,7 +387,9 @@ function transformQuestionSubpart(
   parentId: string,
   index: number
 ): any {
-  const subpartLabel = subpart.subpart || subpart.part || String.fromCharCode(105 + index); // i, ii, iii, etc.
+  // Use proper roman numerals for subpart labels
+  const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+  const subpartLabel = subpart.subpart || subpart.part || romanNumerals[index] || String(index + 1);
   const subpartId = `${parentId}-${subpartLabel}`;
 
   const normalizedSubpartType = subpart.type || 'descriptive';
