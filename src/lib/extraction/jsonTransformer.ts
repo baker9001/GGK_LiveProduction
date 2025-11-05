@@ -424,9 +424,17 @@ function transformQuestionSubpart(
   const hasDirectAnswer = answerExpectation.has_direct_answer ?? true; // Subparts typically have direct answers
   const isContextualOnly = answerExpectation.is_contextual_only ?? false;
 
-  // Derive answer format if not provided
+  // CRITICAL FIX: Prioritize explicit answer_format from JSON, with proper validation
+  // Check if answer_format exists and is a non-empty, valid string
   let answerFormat = subpart.answer_format;
-  if (!answerFormat) {
+  const isValidAnswerFormat = answerFormat &&
+    typeof answerFormat === 'string' &&
+    answerFormat.trim() !== '' &&
+    answerFormat !== 'undefined' &&
+    answerFormat !== 'null';
+
+  if (!isValidAnswerFormat) {
+    // Only derive if not provided or invalid
     answerFormat =
       deriveAnswerFormat({
         type: normalizedSubpartType || 'descriptive',
@@ -437,9 +445,17 @@ function transformQuestionSubpart(
       }) || undefined;
   }
 
-  // Auto-fill answer_requirement if not provided
+  // CRITICAL FIX: Prioritize explicit answer_requirement from JSON, with proper validation
+  // Check if answer_requirement exists and is a non-empty, valid string
   let answerRequirement = subpart.answer_requirement;
-  if (!answerRequirement) {
+  const isValidAnswerRequirement = answerRequirement &&
+    typeof answerRequirement === 'string' &&
+    answerRequirement.trim() !== '' &&
+    answerRequirement !== 'undefined' &&
+    answerRequirement !== 'null';
+
+  if (!isValidAnswerRequirement) {
+    // Only derive if not provided or invalid
     answerRequirement = deriveAnswerRequirement({
       type: 'descriptive',
       correct_answers: correctAnswers,
@@ -461,6 +477,8 @@ function transformQuestionSubpart(
     total_alternatives: subpart.total_alternatives,
     correct_answers: correctAnswers,
     options: options.length > 0 ? options : undefined,
+    figure: subpart.figure || false, // Preserve figure flag from JSON
+    figure_required: subpart.figure_required || false, // Preserve figure_required flag
     attachments: attachments.length > 0 ? attachments : undefined,
     hint: subpart.hint,
     explanation: subpart.explanation
@@ -609,16 +627,21 @@ function generateNormalizationVariants(value: string): string[] {
 
 /**
  * Process attachments array
+ *
+ * CRITICAL FIX: Do NOT create attachment objects from JSON descriptions.
+ * The "attachments" field in JSON contains placeholder descriptions like
+ * "Fig. 1.1 showing test tubes" which are NOT actual uploaded files.
+ *
+ * Actual attachments should only be added when users upload files via the snipping tool.
+ * The JSON descriptions are just metadata indicating what figures are EXPECTED,
+ * not what has been ATTACHED.
+ *
+ * Return empty array to ensure figure status shows "requires figure" not "figure attached"
  */
 function processAttachments(attachments: string[]): Array<any> {
-  if (!attachments || attachments.length === 0) return [];
-
-  return attachments.map((attachment, index) => ({
-    id: `attachment-${index + 1}`,
-    file_name: attachment,
-    description: attachment,
-    preview: null // Will be populated when actual files are uploaded
-  }));
+  // Always return empty array - attachments must be added by user via snipping tool
+  // The attachments array from JSON is just descriptive metadata, not actual files
+  return [];
 }
 
 /**
