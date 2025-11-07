@@ -20,8 +20,8 @@ export function useCreateAdmin(onSuccess?: (data: AdminUser) => void) {
     }),
     onSuccess: (data) => {
       toast.success('Admin created successfully!');
-      queryClient.invalidateQueries(['admins']); // Invalidate the admin list
-      queryClient.invalidateQueries(['adminHierarchy']); // Invalidate hierarchy if it depends on admin list
+      queryClient.invalidateQueries({ queryKey: ['admins'] }); // Invalidate the admin list
+      queryClient.invalidateQueries({ queryKey: ['adminHierarchy'] }); // Invalidate hierarchy if it depends on admin list
       onSuccess?.(data);
     },
     onError: (error: any) => {
@@ -43,9 +43,9 @@ export function useUpdateAdmin(onSuccess?: (data: AdminUser) => void) {
       }),
     onSuccess: (data) => {
       toast.success('Admin updated successfully!');
-      queryClient.invalidateQueries(['admins']); // Invalidate the admin list
-      queryClient.invalidateQueries(['admin', data.id]); // Invalidate specific admin details
-      queryClient.invalidateQueries(['adminHierarchy']); // Invalidate hierarchy
+      queryClient.invalidateQueries({ queryKey: ['admins'] }); // Invalidate the admin list
+      queryClient.invalidateQueries({ queryKey: ['admin', data.id] }); // Invalidate specific admin details
+      queryClient.invalidateQueries({ queryKey: ['adminHierarchy'] }); // Invalidate hierarchy
       onSuccess?.(data);
     },
     onError: (error: any) => {
@@ -63,8 +63,8 @@ export function useDeleteAdmin(onSuccess?: (userId: string) => void) {
     mutationFn: (userId: string) => adminService.deleteAdmin(userId, user?.id || ''),
     onSuccess: (userId) => {
       toast.success('Admin deactivated successfully!');
-      queryClient.invalidateQueries(['admins']); // Invalidate the admin list
-      queryClient.invalidateQueries(['adminHierarchy']); // Invalidate hierarchy
+      queryClient.invalidateQueries({ queryKey: ['admins'] }); // Invalidate the admin list
+      queryClient.invalidateQueries({ queryKey: ['adminHierarchy'] }); // Invalidate hierarchy
       onSuccess?.(userId);
     },
     onError: (error: any) => {
@@ -82,8 +82,8 @@ export function useRestoreAdmin(onSuccess?: (userId: string) => void) {
     mutationFn: (userId: string) => adminService.restoreAdmin(userId, user?.id || ''),
     onSuccess: (userId) => {
       toast.success('Admin restored successfully!');
-      queryClient.invalidateQueries(['admins']); // Invalidate the admin list
-      queryClient.invalidateQueries(['adminHierarchy']); // Invalidate hierarchy
+      queryClient.invalidateQueries({ queryKey: ['admins'] }); // Invalidate the admin list
+      queryClient.invalidateQueries({ queryKey: ['adminHierarchy'] }); // Invalidate hierarchy
       onSuccess?.(userId);
     },
     onError: (error: any) => {

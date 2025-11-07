@@ -310,7 +310,7 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['licenses']);
+      queryClient.invalidateQueries({ queryKey: ['licenses'] });
       onSuccess?.();
       onClose();
       setIsSubmittingForm(false);

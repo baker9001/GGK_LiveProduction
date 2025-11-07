@@ -37,7 +37,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
   Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key,
@@ -395,9 +395,9 @@ export default function CompaniesTab() {
   // ===== QUERIES =====
   
   // Fetch regions
-  const { data: regions = [] } = useQuery<Region[]>(
-    ['regions'],
-    async () => {
+  const { data: regions = [] } = useQuery<Region[]>({
+    queryKey: ['regions'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('regions')
         .select('id, name, status')
@@ -407,15 +407,13 @@ export default function CompaniesTab() {
       if (error) throw error;
       return data || [];
     },
-    {
-      staleTime: 10 * 60 * 1000,
-    }
-  );
+    staleTime: 10 * 60 * 1000
+  });
 
   // Fetch countries for filter
-  const { data: filterCountries = [] } = useQuery<Country[]>(
-    ['filter-countries', filters.region_ids],
-    async () => {
+  const { data: filterCountries = [] } = useQuery<Country[]>({
+    queryKey: ['filter-countries', filters.region_ids],
+    queryFn: async () => {
       let query = supabase
         .from('countries')
         .select('id, name, region_id, status')
@@ -434,15 +432,13 @@ export default function CompaniesTab() {
         status: country.status?.toLowerCase() as 'active' | 'inactive'
       }));
     },
-    {
-      staleTime: 5 * 60 * 1000,
-    }
-  );
+    staleTime: 5 * 60 * 1000
+  });
 
   // Fetch countries for form
-  const { data: formCountries = [] } = useQuery<Country[]>(
-    ['form-countries', formState.region_id],
-    async () => {
+  const { data: formCountries = [] } = useQuery<Country[]>({
+    queryKey: ['form-countries', formState.region_id],
+    queryFn: async () => {
       if (!formState.region_id) return [];
 
       const { data, error } = await supabase
@@ -453,17 +449,15 @@ export default function CompaniesTab() {
         .order('name');
 
       if (error) throw error;
-      
+
       return (data || []).map(country => ({
         ...country,
         status: country.status?.toLowerCase() as 'active' | 'inactive'
       }));
     },
-    {
-      enabled: !!formState.region_id,
-      staleTime: 5 * 60 * 1000,
-    }
-  );
+    enabled: !!formState.region_id,
+    staleTime: 5 * 60 * 1000
+  });
 
   // Fetch companies with filters
   const { 
@@ -471,9 +465,9 @@ export default function CompaniesTab() {
     isLoading, 
     isFetching,
     refetch: refetchCompanies
-  } = useQuery<Company[]>(
-    ['companies', filters],
-    async () => {
+  } = useQuery<Company[]>({
+    queryKey: ['companies', filters],
+    queryFn: async () => {
       let query = supabase
         .from('companies')
         .select(`
@@ -548,12 +542,10 @@ export default function CompaniesTab() {
         admin_count: adminCountMap.get(company.id) || 0
       }));
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000,
-      refetchInterval: 30 * 1000
-    }
-  );
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 30 * 1000
+  });
 
   // ===== MUTATIONS =====
   
@@ -593,7 +585,7 @@ export default function CompaniesTab() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       setIsFormOpen(false);
       setEditingCompany(null);
       setFormErrors({});
@@ -1038,7 +1030,7 @@ export default function CompaniesTab() {
       }
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
 
       if (result.type === 'created' && result.user?.temporary_password) {
         // Show password modal for new users with generated password
@@ -1255,7 +1247,7 @@ export default function CompaniesTab() {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
 
       if (data.password) {
         setGeneratedPassword(data.password);
@@ -1325,7 +1317,7 @@ export default function CompaniesTab() {
       return companies;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       setIsConfirmDialogOpen(false);
       setCompaniesToDelete([]);
       toast.success('Company(s) deleted successfully');
@@ -1350,7 +1342,7 @@ export default function CompaniesTab() {
       return { entityUserId };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       if (selectedCompanyForView?.id) {
         fetchCompanyAdmins(selectedCompanyForView.id);
       }

@@ -484,7 +484,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['academic-years']);
+      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
       setIsFormOpen(false);
       setEditingYear(null);
       setFormErrors({});
@@ -523,7 +523,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
       return years;
     },
     onSuccess: (deletedYears) => {
-      queryClient.invalidateQueries(['academic-years']);
+      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
       setIsConfirmDialogOpen(false);
       setYearsToDelete([]);
       setSelectedRows([]);

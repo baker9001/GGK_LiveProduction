@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, Loader2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
 import dayjs from 'dayjs';
 import { supabase } from '../../../lib/supabase';
@@ -142,9 +142,9 @@ export default function LicenseManagementPage() {
     data: rawLicenses = [], 
     isLoading, 
     isFetching 
-  } = useQuery<License[]>(
-    ['licenses', filters],
-    async () => {
+  } = useQuery<License[]>({
+    queryKey: ['licenses', filters],
+    queryFn: async () => {
       let query = supabase
         .from('licenses')
         .select(`
@@ -219,11 +219,9 @@ export default function LicenseManagementPage() {
 
       return formattedLicenses;
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
   
   // Group licenses by company
   const groupedLicenses: CompanyLicenses[] = React.useMemo(() => {
@@ -374,8 +372,8 @@ export default function LicenseManagementPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['licenses']);
-      queryClient.invalidateQueries(['licenseActions']);
+      queryClient.invalidateQueries({ queryKey: ['licenses'] });
+      queryClient.invalidateQueries({ queryKey: ['licenseActions'] });
       setIsActionFormOpen(false);
       setSelectedAction(null);
       setEditingLicense(null);
@@ -414,7 +412,7 @@ export default function LicenseManagementPage() {
       return licenses;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['licenses']);
+      queryClient.invalidateQueries({ queryKey: ['licenses'] });
       setIsConfirmDialogOpen(false);
       setLicensesToDelete([]);
       toast.success('License(s) deleted successfully');
@@ -1003,7 +1001,7 @@ export default function LicenseManagementPage() {
           setEditingLicense(null);
           setSelectedCompanyId(null);
         }}
-        onSuccess={() => queryClient.invalidateQueries(['licenses'])}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['licenses'] })}
         editingLicense={editingLicense}
       />
       

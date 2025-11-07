@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
@@ -64,9 +64,9 @@ export default function DataStructurePage() {
   const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
 
   // Fetch regions with React Query
-  const { data: regions = [] } = useQuery<Option[]>(
-    ['regions'],
-    async () => {
+  const { data: regions = [] } = useQuery<Option[]>({
+    queryKey: ['regions'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('regions')
         .select('id, name')
@@ -76,17 +76,15 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    }
-  );
+    staleTime: 10 * 60 * 1000 // 10 minutes
+  });
 
   // Fetch programs with React Query
-  const { data: programs = [] } = useQuery<Option[]>(
-    ['programs', formRegionId],
-    async () => {
+  const { data: programs = [] } = useQuery<Option[]>({
+    queryKey: ['programs', formRegionId],
+    queryFn: async () => {
       if (!formRegionId) return [];
-      
+
       const { data, error } = await supabase
         .from('programs')
         .select('id, name')
@@ -96,18 +94,16 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: !!formRegionId,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: !!formRegionId,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Fetch providers with React Query
-  const { data: providers = [] } = useQuery<Option[]>(
-    ['providers', formRegionId, formProgramId],
-    async () => {
+  const { data: providers = [] } = useQuery<Option[]>({
+    queryKey: ['providers', formRegionId, formProgramId],
+    queryFn: async () => {
       if (!formRegionId || !formProgramId) return [];
-      
+
       const { data, error } = await supabase
         .from('providers')
         .select('id, name')
@@ -117,18 +113,16 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: !!formRegionId && !!formProgramId,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: !!formRegionId && !!formProgramId,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Fetch subjects with React Query
-  const { data: subjects = [] } = useQuery<Option[]>(
-    ['subjects', formRegionId, formProgramId, formProviderId],
-    async () => {
+  const { data: subjects = [] } = useQuery<Option[]>({
+    queryKey: ['subjects', formRegionId, formProgramId, formProviderId],
+    queryFn: async () => {
       if (!formRegionId || !formProgramId || !formProviderId) return [];
-      
+
       const { data, error } = await supabase
         .from('edu_subjects')
         .select('id, name, code, status')
@@ -138,20 +132,18 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: !!formRegionId && !!formProgramId && !!formProviderId,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: !!formRegionId && !!formProgramId && !!formProviderId,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Fetch data structures with React Query
-  const { 
-    data: dataStructures = [], 
-    isLoading, 
-    isFetching 
-  } = useQuery<DataStructure[]>(
-    ['data-structures', filters],
-    async () => {
+  const {
+    data: dataStructures = [],
+    isLoading,
+    isFetching
+  } = useQuery<DataStructure[]>({
+    queryKey: ['data-structures', filters],
+    queryFn: async () => {
       let query = supabase
         .from('data_structures')
         .select(`
@@ -202,11 +194,9 @@ export default function DataStructurePage() {
         subject_name: subjectMap.get(item.subject_id) ?? 'Unknown Subject'
       }));
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Create/update data structure mutation
   const mutation = useMutation({
@@ -251,7 +241,7 @@ export default function DataStructurePage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['data-structures']);
+      queryClient.invalidateQueries({ queryKey: ['data-structures'] });
       setIsFormOpen(false);
       setEditingStructure(null);
       resetFormState();
@@ -276,7 +266,7 @@ export default function DataStructurePage() {
       return structures;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['data-structures']);
+      queryClient.invalidateQueries({ queryKey: ['data-structures'] });
       setIsConfirmDialogOpen(false);
       setStructuresToDelete([]);
       toast.success('Structure(s) deleted successfully');

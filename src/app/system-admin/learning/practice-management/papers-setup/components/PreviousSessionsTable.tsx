@@ -46,9 +46,9 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
     isLoading,
     isFetching,
     refetch,
-  } = useQuery<ImportSession[]>(
-    ['previous-import-sessions', user?.id],
-    async () => {
+  } = useQuery<ImportSession[]>({
+    queryKey: ['previous-import-sessions', user?.id],
+    queryFn: async () => {
       if (!user?.id) {
         return [];
       }
@@ -117,12 +117,10 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
         json_hash: session.json_hash || null
       }));
     },
-    {
-      enabled: !!user?.id,
-      staleTime: 2 * 60 * 1000, // 2 minutes
-      refetchOnWindowFocus: false,
-    }
-  );
+    enabled: !!user?.id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+  });
 
   const handleViewJson = (session: ImportSession) => {
     if (!session.raw_json) {

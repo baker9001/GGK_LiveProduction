@@ -246,9 +246,9 @@ export default function StudentProfileSettingsPage() {
     isLoading,
     isError,
     error
-  } = useQuery<StudentProfileData>(
-    ['student-profile', user?.id],
-    async () => {
+  } = useQuery<StudentProfileData>({
+    queryKey: ['student-profile', user?.id],
+    queryFn: async () => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -358,12 +358,10 @@ export default function StudentProfileSettingsPage() {
         branchName
       } satisfies StudentProfileData;
     },
-    {
-      enabled: !!user?.id,
-      staleTime: 60 * 1000,
-      retry: 2
-    }
-  );
+    enabled: !!user?.id,
+    staleTime: 60 * 1000,
+    retry: 2
+  });
 
   // -------------------------------------------------------------------------
   // Mutations

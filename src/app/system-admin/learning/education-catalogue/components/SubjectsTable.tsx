@@ -54,14 +54,14 @@ export default function SubjectsTable() {
   });
 
   // Simple direct query to fetch subjects
-  const { 
-    data: subjects = [], 
-    isLoading, 
+  const {
+    data: subjects = [],
+    isLoading,
     isFetching,
-    refetch 
-  } = useQuery<Subject[]>(
-    ['subjects-debug'],
-    async () => {
+    refetch
+  } = useQuery<Subject[]>({
+    queryKey: ['subjects-debug'],
+    queryFn: async () => {
       console.log('Fetching subjects directly...');
       const { data, error } = await supabase
         .from('edu_subjects')
@@ -72,14 +72,12 @@ export default function SubjectsTable() {
         console.error('Error fetching subjects:', error);
         throw error;
       }
-      
+
       console.log('Subjects data:', data);
       return data || [];
     },
-    {
-      staleTime: 0, // Don't cache for debugging
-    }
-  );
+    staleTime: 0 // Don't cache for debugging
+  });
   
   // Mutation for creating/updating subjects
   const mutation = useMutation({
@@ -137,7 +135,7 @@ export default function SubjectsTable() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['subjects']);
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
       refetch();
       setIsFormOpen(false);
       setEditingSubject(null);
@@ -192,7 +190,7 @@ export default function SubjectsTable() {
       return subjects;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['subjects']);
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
       refetch();
       setIsConfirmDialogOpen(false);
       setSubjectsToDelete([]);

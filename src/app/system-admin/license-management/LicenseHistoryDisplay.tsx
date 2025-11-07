@@ -25,9 +25,9 @@ export function LicenseHistoryDisplay({ licenseId }: LicenseHistoryDisplayProps)
     data: actions = [], 
     isLoading, 
     isFetching 
-  } = useQuery<LicenseAction[]>(
-    ['licenseActions', licenseId],
-    async () => {
+  } = useQuery<LicenseAction[]>({
+    queryKey: ['licenseActions', licenseId],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('license_actions')
         .select('*')
@@ -37,10 +37,8 @@ export function LicenseHistoryDisplay({ licenseId }: LicenseHistoryDisplayProps)
       if (error) throw error;
       return data || [];
     },
-    {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   const getRowClassName = (action: LicenseAction) => {
     switch (action.action_type) {

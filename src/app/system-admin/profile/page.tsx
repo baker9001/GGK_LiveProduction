@@ -146,9 +146,9 @@ export default function SystemAdminProfilePage() {
     isError,
     error,
     refetch,
-  } = useQuery<UserProfile>(
-    ['systemAdminProfile', currentUser?.id],
-    async () => {
+  } = useQuery<UserProfile>({
+    queryKey: ['systemAdminProfile', currentUser?.id],
+    queryFn: async () => {
       if (!currentUser?.id) {
         throw new Error('User not authenticated');
       }
@@ -218,23 +218,21 @@ export default function SystemAdminProfilePage() {
 
       return profile;
     },
-    {
-      enabled: !!currentUser?.id,
-      staleTime: 2 * 60 * 1000,
-      onError: (err) => {
-        console.error('Error fetching system admin profile:', err);
-        toast.error('Failed to load profile data');
-      },
-    }
-  );
+    enabled: !!currentUser?.id,
+    staleTime: 2 * 60 * 1000,
+    onError: (err) => {
+      console.error('Error fetching system admin profile:', err);
+      toast.error('Failed to load profile data');
+    },
+  });
 
   // Fetch profile statistics
   const { data: profileStats } = useProfileStats(currentUser?.id || '');
 
   // Fetch recent activity
-  const { data: recentActivity = [] } = useQuery<ActivityLog[]>(
-    ['recentActivity', currentUser?.id],
-    async () => {
+  const { data: recentActivity = [] } = useQuery<ActivityLog[]>({
+    queryKey: ['recentActivity', currentUser?.id],
+    queryFn: async () => {
       // Mock data - replace with actual audit log queries
       return [
         {
@@ -260,8 +258,8 @@ export default function SystemAdminProfilePage() {
         }
       ];
     },
-    { enabled: !!currentUser?.id }
-  );
+    enabled: !!currentUser?.id
+  });
 
   // Enhanced update mutation
   const updateProfileMutation = useMutation({
@@ -335,8 +333,8 @@ export default function SystemAdminProfilePage() {
       }
     },
     onSuccess: (_data, _variables) => {
-      queryClient.invalidateQueries(['systemAdminProfile', currentUser?.id]);
-      queryClient.invalidateQueries(['userSidebarProfile', currentUser?.id]);
+      queryClient.invalidateQueries({ queryKey: ['systemAdminProfile', currentUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ['userSidebarProfile', currentUser?.id] });
       toast.success('Profile updated successfully!');
       setIsEditingProfile(false);
       setIsEditingSecurity(false);

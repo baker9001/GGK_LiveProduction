@@ -187,14 +187,14 @@ export default function TeacherProfilePage() {
   }, [user]);
 
   // Fetch teacher profile data
-  const { 
-    data: profileData, 
-    isLoading, 
+  const {
+    data: profileData,
+    isLoading,
     error,
-    refetch 
-  } = useQuery<TeacherProfileData>(
-    ['teacher-profile', user?.id],
-    async () => {
+    refetch
+  } = useQuery<TeacherProfileData>({
+    queryKey: ['teacher-profile', user?.id],
+    queryFn: async () => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -279,12 +279,10 @@ export default function TeacherProfilePage() {
         department_name: teacherData.departments?.name
       } as TeacherProfileData;
     },
-    {
-      enabled: !!user?.id && user?.role === 'TEACHER',
-      staleTime: 2 * 60 * 1000,
-      retry: 2
-    }
-  );
+    enabled: !!user?.id && user?.role === 'TEACHER',
+    staleTime: 2 * 60 * 1000,
+    retry: 2
+  });
 
   // Initialize form data when profile data is loaded
   useEffect(() => {
@@ -348,7 +346,7 @@ export default function TeacherProfilePage() {
       return validatedData;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['teacher-profile', user?.id]);
+      queryClient.invalidateQueries({ queryKey: ['teacher-profile', user?.id] });
       setIsEditing(false);
       setFormErrors({});
       toast.success('Profile updated successfully!');

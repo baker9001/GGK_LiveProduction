@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../../lib/supabase';
@@ -81,9 +81,9 @@ export default function CitiesTab() {
   });
 
   // Fetch regions with React Query
-  const { data: regions = [] } = useQuery<Region[]>(
-    ['regions'],
-    async () => {
+  const { data: regions = [] } = useQuery<Region[]>({
+    queryKey: ['regions'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('regions')
         .select('*')
@@ -93,20 +93,18 @@ export default function CitiesTab() {
       if (error) throw error;
       return data || [];
     },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    }
-  );
+    staleTime: 10 * 60 * 1000 // 10 minutes
+  });
 
   // Fetch countries based on selected regions
-  const { data: filterCountries = [] } = useQuery<Country[]>(
-    ['countries', filters.region_ids],
-    async () => {
+  const { data: filterCountries = [] } = useQuery<Country[]>({
+    queryKey: ['countries', filters.region_ids],
+    queryFn: async () => {
       // Ensure regionIds are strings and filter out any invalid values
-      const validRegionIds = filters.region_ids.filter(id => 
+      const validRegionIds = filters.region_ids.filter(id =>
         typeof id === 'string' && id.trim() !== ''
       );
-      
+
       if (validRegionIds.length === 0) {
         return [];
       }
@@ -121,18 +119,16 @@ export default function CitiesTab() {
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: filters.region_ids.length > 0,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: filters.region_ids.length > 0,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Fetch countries for form
-  const { data: formCountries = [] } = useQuery<Country[]>(
-    ['formCountries', formState.region_id],
-    async () => {
+  const { data: formCountries = [] } = useQuery<Country[]>({
+    queryKey: ['formCountries', formState.region_id],
+    queryFn: async () => {
       if (!formState.region_id) return [];
-      
+
       const { data, error } = await supabase
         .from('countries')
         .select('*')
@@ -143,20 +139,18 @@ export default function CitiesTab() {
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: !!formState.region_id,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: !!formState.region_id,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Fetch cities with React Query
   const { 
     data: cities = [], 
     isLoading, 
     isFetching 
-  } = useQuery<City[]>(
-    ['cities', filters],
-    async () => {
+  } = useQuery<City[]>({
+    queryKey: ['cities', filters],
+    queryFn: async () => {
       let query = supabase
         .from('cities')
         .select(`
@@ -194,11 +188,9 @@ export default function CitiesTab() {
 
       return formattedData;
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Create/update city mutation
   const cityMutation = useMutation({
@@ -232,7 +224,7 @@ export default function CitiesTab() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['cities']);
+      queryClient.invalidateQueries({ queryKey: ['cities'] });
       setIsFormOpen(false);
       setEditingCity(null);
       setFormErrors({});
@@ -267,7 +259,7 @@ export default function CitiesTab() {
       return cities;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['cities']);
+      queryClient.invalidateQueries({ queryKey: ['cities'] });
       setIsConfirmDialogOpen(false);
       setCitiesToDelete([]);
       toast.success('City(s) deleted successfully');

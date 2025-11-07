@@ -418,7 +418,7 @@ export function StudentForm({
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['students']);
+      queryClient.invalidateQueries({ queryKey: ['students'] });
       toast.success('Student created successfully! Invitation email sent.');
       onSuccess();
       onClose();
@@ -455,7 +455,7 @@ export function StudentForm({
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['students']);
+      queryClient.invalidateQueries({ queryKey: ['students'] });
       toast.success('Student updated successfully!');
       onSuccess();
       onClose();

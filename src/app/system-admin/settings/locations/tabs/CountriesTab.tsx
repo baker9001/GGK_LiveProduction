@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../../lib/supabase';
@@ -56,35 +56,33 @@ export default function CountriesTab() {
   const [countriesToDelete, setCountriesToDelete] = useState<Country[]>([]);
 
   // Fetch regions with React Query
-  const { data: regions = [] } = useQuery<Region[]>(
-    ['regions'],
-    async () => {
+  const { data: regions = [] } = useQuery<Region[]>({
+    queryKey: ['regions'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('regions')
         .select('*')
         .order('name');
 
       if (error) throw error;
-      
+
       // Convert status to lowercase for consistency in the frontend
       return (data || []).map(region => ({
         ...region,
         status: region.status.toLowerCase() as 'active' | 'inactive'
       }));
     },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    }
-  );
+    staleTime: 10 * 60 * 1000 // 10 minutes
+  });
 
   // Fetch countries with React Query
   const { 
     data: countries = [], 
     isLoading, 
     isFetching 
-  } = useQuery<Country[]>(
-    ['countries', filters],
-    async () => {
+  } = useQuery<Country[]>({
+    queryKey: ['countries', filters],
+    queryFn: async () => {
       let query = supabase
         .from('countries')
         .select(`
@@ -125,11 +123,9 @@ export default function CountriesTab() {
 
       return formattedData;
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
 
   // Create/update country mutation
   const countryMutation = useMutation({
@@ -163,7 +159,7 @@ export default function CountriesTab() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['countries']);
+      queryClient.invalidateQueries({ queryKey: ['countries'] });
       setIsFormOpen(false);
       setEditingCountry(null);
       setFormErrors({});
@@ -198,7 +194,7 @@ export default function CountriesTab() {
       return countries;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['countries']);
+      queryClient.invalidateQueries({ queryKey: ['countries'] });
       setIsConfirmDialogOpen(false);
       setCountriesToDelete([]);
       toast.success('Country(s) deleted successfully');
