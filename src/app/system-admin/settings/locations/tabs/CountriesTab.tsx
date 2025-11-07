@@ -163,7 +163,7 @@ export default function CountriesTab() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['countries']);
+      queryClient.invalidateQueries({ queryKey: ['countries'] });
       setIsFormOpen(false);
       setEditingCountry(null);
       setFormErrors({});
@@ -198,7 +198,7 @@ export default function CountriesTab() {
       return countries;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['countries']);
+      queryClient.invalidateQueries({ queryKey: ['countries'] });
       setIsConfirmDialogOpen(false);
       setCountriesToDelete([]);
       toast.success('Country(s) deleted successfully');

@@ -448,7 +448,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         setFormErrors({});
         setTabErrors({ basic: false, additional: false, contact: false });
         setActiveTab('basic');
-        queryClient.invalidateQueries(['schools-tab']);
+        queryClient.invalidateQueries({ queryKey: ['schools-tab'] });
         if (refreshData) refreshData();
       },
       onError: (error: any) => {
@@ -535,7 +535,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         setFormErrors({});
         setTabErrors({ basic: false, additional: false, contact: false });
         setActiveTab('basic');
-        queryClient.invalidateQueries(['schools-tab']);
+        queryClient.invalidateQueries({ queryKey: ['schools-tab'] });
         if (refreshData) refreshData();
       },
       onError: (error: any) => {
@@ -556,7 +556,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       },
       onSuccess: (_data, ids) => {
         toast.success(ids.length > 1 ? 'Schools deleted successfully' : 'School deleted successfully');
-        queryClient.invalidateQueries(['schools-tab']);
+        queryClient.invalidateQueries({ queryKey: ['schools-tab'] });
         setShowDeleteConfirmation(false);
         setDeleteContext(null);
         setSelectedSchools([]);

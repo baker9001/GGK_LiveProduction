@@ -374,8 +374,8 @@ export default function LicenseManagementPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['licenses']);
-      queryClient.invalidateQueries(['licenseActions']);
+      queryClient.invalidateQueries({ queryKey: ['licenses'] });
+      queryClient.invalidateQueries({ queryKey: ['licenseActions'] });
       setIsActionFormOpen(false);
       setSelectedAction(null);
       setEditingLicense(null);
@@ -414,7 +414,7 @@ export default function LicenseManagementPage() {
       return licenses;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['licenses']);
+      queryClient.invalidateQueries({ queryKey: ['licenses'] });
       setIsConfirmDialogOpen(false);
       setLicensesToDelete([]);
       toast.success('License(s) deleted successfully');
@@ -1003,7 +1003,7 @@ export default function LicenseManagementPage() {
           setEditingLicense(null);
           setSelectedCompanyId(null);
         }}
-        onSuccess={() => queryClient.invalidateQueries(['licenses'])}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['licenses'] })}
         editingLicense={editingLicense}
       />
       

@@ -222,8 +222,8 @@ const PracticePage: React.FC = () => {
         setSessionSummary(summary);
         const overview = await getReport(summary.sessionId);
         setReport(overview);
-        await queryClient.invalidateQueries(['practice-progress', studentId]);
-        await queryClient.invalidateQueries(['practice-gamification', studentId]);
+        await queryClient.invalidateQueries({ queryKey: ['practice-progress', studentId] });
+        await queryClient.invalidateQueries({ queryKey: ['practice-gamification', studentId] });
         setMode('results');
       }
     }

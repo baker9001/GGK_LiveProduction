@@ -335,8 +335,8 @@ export default function SystemAdminProfilePage() {
       }
     },
     onSuccess: (_data, _variables) => {
-      queryClient.invalidateQueries(['systemAdminProfile', currentUser?.id]);
-      queryClient.invalidateQueries(['userSidebarProfile', currentUser?.id]);
+      queryClient.invalidateQueries({ queryKey: ['systemAdminProfile', currentUser?.id] });
+      queryClient.invalidateQueries({ queryKey: ['userSidebarProfile', currentUser?.id] });
       toast.success('Profile updated successfully!');
       setIsEditingProfile(false);
       setIsEditingSecurity(false);

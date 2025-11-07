@@ -348,7 +348,7 @@ export default function TeacherProfilePage() {
       return validatedData;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['teacher-profile', user?.id]);
+      queryClient.invalidateQueries({ queryKey: ['teacher-profile', user?.id] });
       setIsEditing(false);
       setFormErrors({});
       toast.success('Profile updated successfully!');

@@ -143,8 +143,8 @@ export default function RolesPage() {
         }
 
         // Invalidate queries to refetch data
-        queryClient.invalidateQueries(['roles']);
-        queryClient.invalidateQueries(['rolePermissions']);
+        queryClient.invalidateQueries({ queryKey: ['roles'] });
+        queryClient.invalidateQueries({ queryKey: ['rolePermissions'] });
 
         setIsFormOpen(false);
         setEditingRole(null);
@@ -184,7 +184,7 @@ export default function RolesPage() {
       return roles;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['roles']);
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
       setIsConfirmDialogOpen(false);
       setRolesToDelete([]);
       toast.success('Role(s) deleted successfully');

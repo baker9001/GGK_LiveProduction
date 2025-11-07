@@ -424,8 +424,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     return branch;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['branches-tab']);
-      queryClient.invalidateQueries(['organization-stats']);
+      queryClient.invalidateQueries({ queryKey: ['branches-tab'] });
+      queryClient.invalidateQueries({ queryKey: ['organization-stats'] });
       if (refreshData) refreshData();
       toast.success('Branch created successfully');
       setShowCreateModal(false);
@@ -498,8 +498,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['branches-tab']);
-      queryClient.invalidateQueries(['organization-stats']);
+      queryClient.invalidateQueries({ queryKey: ['branches-tab'] });
+      queryClient.invalidateQueries({ queryKey: ['organization-stats'] });
       if (refreshData) refreshData();
       toast.success('Branch updated successfully');
       setShowEditModal(false);
@@ -528,7 +528,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     },
     onSuccess: (_data, ids) => {
       toast.success(ids.length > 1 ? 'Branches deleted successfully' : 'Branch deleted successfully');
-      queryClient.invalidateQueries(['branches-tab']);
+      queryClient.invalidateQueries({ queryKey: ['branches-tab'] });
       setShowDeleteConfirmation(false);
       setDeleteContext(null);
       setSelectedBranches([]);

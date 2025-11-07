@@ -526,7 +526,7 @@ export default function BranchesTab() {
 
       if (error) throw error;
 
-      queryClient.invalidateQueries(['branches']);
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
       toast.success('Branch(es) deleted successfully');
     } catch (error) {
       console.error('Error deleting branches:', error);
@@ -655,7 +655,7 @@ export default function BranchesTab() {
       }
 
       // Refresh the branches list using React Query
-      queryClient.invalidateQueries(['branches']);
+      queryClient.invalidateQueries({ queryKey: ['branches'] });
 
       // Close the form and reset state
       setIsFormOpen(false);

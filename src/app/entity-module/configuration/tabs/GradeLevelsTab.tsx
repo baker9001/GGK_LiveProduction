@@ -1057,8 +1057,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         }
         
         // Force refresh the data
-        await queryClient.invalidateQueries(['grade-hierarchy']);
-        await queryClient.refetchQueries(['grade-hierarchy']);
+        await queryClient.invalidateQueries({ queryKey: ['grade-hierarchy'] });
+        await queryClient.refetchQueries({ queryKey: ['grade-hierarchy'] });
         
         // Show detailed result
         if (successCount > 0 && errorCount === 0) {
@@ -1914,7 +1914,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             }
 
             // Refresh data
-            await queryClient.invalidateQueries(['grade-hierarchy']);
+            await queryClient.invalidateQueries({ queryKey: ['grade-hierarchy'] });
             setIsFormOpen(false);
             setEditingGradeLevel(null);
             setEditingSection(null);
@@ -2151,7 +2151,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             }
             
             // Refresh data
-            await queryClient.invalidateQueries(['grade-hierarchy']);
+            await queryClient.invalidateQueries({ queryKey: ['grade-hierarchy'] });
             setIsConfirmDialogOpen(false);
             setItemsToDelete({ type: 'grade', items: [] });
           } catch (error) {

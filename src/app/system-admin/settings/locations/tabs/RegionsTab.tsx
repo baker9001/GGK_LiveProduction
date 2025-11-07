@@ -106,7 +106,7 @@ export default function RegionsTab() {
     },
     onSuccess: () => {
       // Invalidate and refetch
-      queryClient.invalidateQueries(['regions']);
+      queryClient.invalidateQueries({ queryKey: ['regions'] });
 
       // Close form and reset state
       setIsFormOpen(false);
@@ -146,7 +146,7 @@ export default function RegionsTab() {
     },
     onSuccess: () => {
       // Invalidate and refetch
-      queryClient.invalidateQueries(['regions']);
+      queryClient.invalidateQueries({ queryKey: ['regions'] });
       setIsConfirmDialogOpen(false);
       setRegionsToDelete([]);
       toast.success('Region(s) deleted successfully');

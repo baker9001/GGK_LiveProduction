@@ -251,7 +251,7 @@ export default function DataStructurePage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['data-structures']);
+      queryClient.invalidateQueries({ queryKey: ['data-structures'] });
       setIsFormOpen(false);
       setEditingStructure(null);
       resetFormState();
@@ -276,7 +276,7 @@ export default function DataStructurePage() {
       return structures;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['data-structures']);
+      queryClient.invalidateQueries({ queryKey: ['data-structures'] });
       setIsConfirmDialogOpen(false);
       setStructuresToDelete([]);
       toast.success('Structure(s) deleted successfully');

@@ -294,7 +294,7 @@ export default function TeacherMaterialsPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['teacher-materials']);
+      queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
       toast.success('Material uploaded successfully');
       setIsFormOpen(false);
       setUploadedFile(null);
@@ -312,7 +312,7 @@ export default function TeacherMaterialsPage() {
       await updateTeacherMaterial(id, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['teacher-materials']);
+      queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
       toast.success('Material updated successfully');
       setIsFormOpen(false);
       setEditingMaterial(null);
@@ -331,7 +331,7 @@ export default function TeacherMaterialsPage() {
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['teacher-materials']);
+      queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
       toast.success(`Material(s) deleted successfully`);
       setIsConfirmDialogOpen(false);
       setMaterialsToDelete([]);
@@ -562,9 +562,9 @@ export default function TeacherMaterialsPage() {
               <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
               <button
                 onClick={() => {
-                  queryClient.invalidateQueries(['entity-user']);
-                  queryClient.invalidateQueries(['teacher-schools']);
-                  queryClient.invalidateQueries(['teacher-materials']);
+                  queryClient.invalidateQueries({ queryKey: ['entity-user'] });
+                  queryClient.invalidateQueries({ queryKey: ['teacher-schools'] });
+                  queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
                 }}
                 className="mt-3 text-sm font-medium text-red-800 dark:text-red-200 hover:text-red-900 dark:hover:text-red-100 underline"
               >

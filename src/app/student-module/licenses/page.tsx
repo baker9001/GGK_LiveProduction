@@ -105,7 +105,7 @@ export default function StudentLicensesPage() {
     onSuccess: (result) => {
       if (result.success) {
         toast.success('License activated successfully! You can now access the content.');
-        queryClient.invalidateQueries(['student-licenses']);
+        queryClient.invalidateQueries({ queryKey: ['student-licenses'] });
         setShowActivationDialog(false);
         setSelectedLicense(null);
       } else {
