@@ -20,6 +20,7 @@ import {
   setAuthenticatedUser,
   clearAuthenticatedUser,
   consumeSessionExpiredNotice,
+  suppressSessionExpiredNoticeOnce,
   type User,
   type UserRole
 } from '../../lib/auth';
@@ -48,7 +49,8 @@ export default function SignInPage() {
   useEffect(() => {
     console.log('[Auth] Clearing session on sign-in page load');
     
-    // Sign out from Supabase Auth
+    // Sign out from Supabase Auth without triggering a session expired notice
+    suppressSessionExpiredNoticeOnce();
     supabase.auth.signOut();
     
     // Clear local storage
@@ -96,6 +98,7 @@ export default function SignInPage() {
       const normalizedEmail = email.trim().toLowerCase();
       
       // Clear existing session
+      suppressSessionExpiredNoticeOnce();
       await supabase.auth.signOut();
       clearAuthenticatedUser();
       
@@ -145,6 +148,7 @@ export default function SignInPage() {
         setError('Please verify your email before signing in. Check your inbox for the verification link.');
         
         // Sign out since email isn't verified
+        suppressSessionExpiredNoticeOnce();
         await supabase.auth.signOut();
         setLoading(false);
         return;
@@ -183,6 +187,7 @@ export default function SignInPage() {
       if (userDataFetch) {
         // Check if account is active
         if (!userDataFetch.is_active) {
+          suppressSessionExpiredNoticeOnce();
           await supabase.auth.signOut();
           setError('Your account is inactive. Please contact support.');
           setLoading(false);
