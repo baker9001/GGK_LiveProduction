@@ -251,42 +251,43 @@ const SubjectCard = memo(({
   };
 
   return (
-    <div className="surface-card group overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-theme-elevated">
-      <div className="relative h-48 w-full overflow-hidden bg-theme-subtle dark:bg-white/10">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200 group">
+      <div className="h-48 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
         {isLoading && (
-          <div className="absolute inset-0 animate-pulse bg-theme-subtle dark:bg-white/10" />
+          <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
         )}
         <img
           src={imgSrc}
           alt={title}
-          className={`h-full w-full object-cover transition-all duration-300 ${
-            isLoading ? 'scale-95 opacity-0' : 'scale-100 opacity-100 group-hover:scale-105'
+          className={`w-full h-full object-cover transform group-hover:scale-105 transition-all duration-300 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
           }`}
           onError={handleImageError}
           onLoad={handleImageLoad}
           loading="lazy"
         />
-        <div className="absolute right-3 top-3">
-          <span className="badge-soft bg-[color:var(--color-action-primary)]/20 text-[color:var(--color-action-contrast)]">
+        <div className="absolute top-2 right-2">
+          <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-medium">
             IGCSE
           </span>
         </div>
       </div>
-      <div className="space-y-4 p-6">
-        <div>
-          <h3 className="text-xl font-semibold text-theme-primary">{title}</h3>
-          <p className="mt-2 text-sm text-theme-secondary">{description}</p>
-        </div>
-
-        {badges && badges.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+      <div className="p-6">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{description}</p>
+        {badges && (
+          <div className="flex flex-wrap gap-2 mb-4">
             {badges.map((badge, index) => (
-              <span key={index} className="badge-soft">
+              <span 
+                key={index}
+                className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full"
+              >
                 {badge}
               </span>
             ))}
           </div>
         )}
+  
       </div>
     </div>
   );
@@ -300,21 +301,21 @@ const FeatureCard = memo(({ icon, title, description }: {
   title: string;
   description: string
 }) => (
-  <div className="surface-card rounded-2xl p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-theme-elevated">
-    <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[color:var(--color-action-primary)]/12 text-[color:var(--color-action-primary)]">
+  <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
+    <div className="h-16 w-16 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-6">
       {icon}
     </div>
-    <h3 className="text-xl font-semibold text-theme-primary">{title}</h3>
-    <p className="mt-2 text-theme-secondary">{description}</p>
+    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
+    <p className="text-gray-600 dark:text-gray-400">{description}</p>
   </div>
 ));
 
 FeatureCard.displayName = 'FeatureCard';
 
 const SectionDivider = memo(() => (
-  <div aria-hidden="true" className="relative w-full py-8">
-    <div className="absolute inset-x-8 top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-transparent via-[color:var(--color-action-primary)]/25 to-transparent" />
-    <div className="relative mx-auto h-12 w-full max-w-4xl rounded-full bg-[radial-gradient(circle,rgba(100,188,70,0.18),transparent_60%)] blur-xl opacity-70" />
+  <div aria-hidden="true" className="relative w-full py-6 sm:py-8">
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-100/80 to-transparent dark:via-gray-800/70 transition-colors duration-200" />
+    <div className="relative mx-auto h-px w-full max-w-5xl bg-gray-200/80 dark:bg-gray-700/80 rounded-full" />
   </div>
 ));
 
@@ -326,50 +327,53 @@ export default function LandingPage() {
   const [showAllSubjects, setShowAllSubjects] = useState(false);
 
   return (
-    <div className="landing-surface transition-theme">
+    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
       <Navigation />
 
       {/* Hero Section */}
-      <div className="relative min-h-[92vh] overflow-hidden">
-        <div className="absolute inset-0">
+      <div className="relative h-screen">
+        <div className="absolute inset-0 overflow-hidden">
           <img
             src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=1920"
             alt="IGCSE Cambridge Edexcel Students Learning"
             className="w-full h-full object-cover"
             loading="eager"
           />
-          <div className="landing-hero__overlay" />
-          <div className="landing-hero__grid" />
+          {/* Light gray overlay for better readability */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(120deg, rgba(4, 9, 30, 0.85) 0%, rgba(8, 28, 21, 0.82) 55%, rgba(22, 58, 36, 0.75) 100%)',
+            }}
+          />
         </div>
-        <div className="relative flex h-full items-center">
-          <div className="mx-auto flex w-full max-w-6xl flex-col items-center px-4 py-20 text-center text-white sm:px-6 lg:px-8">
-            <div className="stat-bubble mb-6">
-              Cambridge &amp; Edexcel Excellence
-            </div>
-            <h1 className="font-display text-4xl font-extrabold leading-tight sm:text-5xl md:text-6xl">
-              Master IGCSE, O-Level &amp; A-Level
-              <span className="mt-2 block font-display text-4xl sm:text-5xl">with GGK Learning</span>
+        <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
+          <div className="text-center w-full text-white">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6 drop-shadow-lg">
+              Master IGCSE, O-Level & A-Level
+              <span className="block text-white drop-shadow-lg">Cambridge & Edexcel Excellence</span>
             </h1>
-            <p className="mt-5 max-w-2xl text-lg text-white/90 sm:text-xl">
-              Complete exam preparation with 10+ years of past papers, cinematic video lessons,
-              adaptive mock exams, and AI-powered personalised feedback.
+            <p className="mt-3 max-w-lg mx-auto text-xl text-white sm:mt-5 drop-shadow-lg font-medium">
+              Complete exam preparation with 10+ years of past papers, animated video lessons,
+              mock exams, and AI-powered personalized learning.
             </p>
-            <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button
                 variant="default"
                 size="lg"
                 rounded="full"
-                className="w-full min-w-[190px] sm:w-auto shadow-theme-elevated"
+                className="w-full sm:w-auto min-w-[180px]"
                 onClick={() => navigate('/signin')}
                 rightIcon={<ChevronRight />}
               >
-                Sign In
+                Signin
               </Button>
               <Button
                 variant="outline"
                 size="lg"
                 rounded="full"
-                className="w-full min-w-[190px] border-white text-white hover:bg-white/20 hover:text-white drop-shadow-lg sm:w-auto"
+                className="w-full sm:w-auto min-w-[180px] border-white text-white hover:bg-white/20 hover:text-white drop-shadow-lg"
                 leftIcon={<PlayCircle />}
               >
                 Watch Demo
@@ -397,36 +401,36 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* Exam Boards Section */}
-      <div className="py-16">
+      <div className="py-16 bg-gray-100 dark:bg-gray-800/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="heading-2 text-3xl">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
               Official Exam Board Coverage
             </h2>
-            <p className="text-xl text-theme-secondary">
+            <p className="text-xl text-gray-600 dark:text-gray-400">
               Complete syllabus coverage for all major examination boards
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="surface-card p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-theme-elevated">
-              <Award className="mx-auto mb-3 h-12 w-12 text-[color:var(--color-action-primary)]" />
-              <h3 className="font-semibold text-theme-primary">Cambridge</h3>
-              <p className="mt-2 text-sm text-theme-secondary">IGCSE &amp; A-Level</p>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">Cambridge</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
             </div>
-            <div className="surface-card p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-theme-elevated">
-              <Award className="mx-auto mb-3 h-12 w-12 text-[color:var(--color-action-primary)]" />
-              <h3 className="font-semibold text-theme-primary">Edexcel</h3>
-              <p className="mt-2 text-sm text-theme-secondary">International GCSE</p>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">Edexcel</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">International GCSE</p>
             </div>
-            <div className="surface-card p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-theme-elevated">
-              <Award className="mx-auto mb-3 h-12 w-12 text-[color:var(--color-action-primary)]" />
-              <h3 className="font-semibold text-theme-primary">AQA</h3>
-              <p className="mt-2 text-sm text-theme-secondary">GCSE &amp; A-Level</p>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">AQA</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
             </div>
-            <div className="surface-card p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-theme-elevated">
-              <Award className="mx-auto mb-3 h-12 w-12 text-[color:var(--color-action-primary)]" />
-              <h3 className="font-semibold text-theme-primary">OCR</h3>
-              <p className="mt-2 text-sm text-theme-secondary">GCSE &amp; A-Level</p>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">OCR</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
             </div>
           </div>
         </div>
@@ -435,13 +439,13 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* Enhanced Feature Highlights */}
-      <div className="py-24">
+      <div className="py-24 bg-white dark:bg-gray-900/95 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="heading-2 text-3xl text-[color:var(--color-action-primary)] mb-4">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
               Complete IGCSE & A-Level Success Platform
             </h2>
-            <p className="text-xl text-theme-secondary">
+            <p className="text-xl text-gray-600 dark:text-gray-400">
               Everything you need to excel in Cambridge and Edexcel examinations
             </p>
           </div>
@@ -473,20 +477,19 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
-      <div className="py-24">
+      <div className="py-24 bg-gray-100 dark:bg-gray-800/95 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="heading-2 text-3xl text-[color:var(--color-action-primary)] mb-4">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
               IGCSE & A-Level Subjects We Offer
             </h2>
-            <p className="text-xl text-theme-secondary mb-8">
+            <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
               Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
             </p>
             <Button
               variant="default"
               size="lg"
               rounded="full"
-              className="shadow-theme-elevated"
               onClick={() => navigate('/subjects')}
               rightIcon={<ChevronRight />}
             >
@@ -525,39 +528,39 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* Enhanced Testimonials */}
-      <div className="py-24">
+      <div className="py-24 bg-white dark:bg-gray-900/95 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="heading-2 text-3xl text-[color:var(--color-action-primary)] mb-4">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
               Success Stories from IGCSE & A-Level Students
             </h2>
-            <p className="text-xl text-theme-secondary">
+            <p className="text-xl text-gray-600 dark:text-gray-400">
               Join thousands of students achieving top grades with GGK Learning
             </p>
           </div>
-
+          
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
-                className="surface-card rounded-2xl p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-theme-elevated"
+                className="bg-gray-50 dark:bg-gray-800 rounded-xl p-8 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
               >
                 <div className="flex items-center mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
                     <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
                   ))}
-                  <span className="ml-auto rounded-full bg-[color:var(--color-action-primary)]/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-action-primary)]">
+                  <span className="ml-auto bg-[#8CC63F] text-white text-xs px-3 py-1 rounded-full font-semibold">
                     {testimonial.results}
                   </span>
                 </div>
-
+                
                 <div className="relative mb-6">
                   <Quote className="absolute -top-2 -left-2 h-8 w-8 text-[#8CC63F] opacity-20" />
-                  <p className="pl-6 italic text-theme-secondary">
+                  <p className="text-gray-700 dark:text-gray-300 italic pl-6">
                     "{testimonial.content}"
                   </p>
                 </div>
-
+                
                 <div className="flex items-center">
                   <img
                     src={testimonial.image}
@@ -566,13 +569,13 @@ export default function LandingPage() {
                     loading="lazy"
                   />
                   <div>
-                    <h4 className="font-semibold text-theme-primary">
+                    <h4 className="font-semibold text-gray-900 dark:text-white">
                       {testimonial.name}
                     </h4>
-                    <p className="text-sm text-theme-secondary">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       {testimonial.role}
                     </p>
-                    <p className="text-xs font-medium text-[color:var(--color-action-primary)]">
+                    <p className="text-xs text-[#8CC63F] font-medium">
                       {testimonial.subject}
                     </p>
                   </div>
@@ -593,22 +596,22 @@ export default function LandingPage() {
               Proven Results That Speak for Themselves
             </h2>
           </div>
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center text-white">
-              <div className="font-display text-4xl font-semibold tracking-tight">15,000+</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.2em] text-white/70">Past Papers Database</div>
+              <div className="text-3xl font-bold mb-1">15,000+</div>
+              <div className="text-xs opacity-90">Past Papers Database</div>
             </div>
             <div className="text-center text-white">
-              <div className="font-display text-4xl font-semibold tracking-tight">3,000+</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.2em] text-white/70">Video Lessons</div>
+              <div className="text-3xl font-bold mb-1">3,000+</div>
+              <div className="text-xs opacity-90">Video Lessons</div>
             </div>
             <div className="text-center text-white">
-              <div className="font-display text-4xl font-semibold tracking-tight">500+</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.2em] text-white/70">Mock Exams</div>
+              <div className="text-3xl font-bold mb-1">500+</div>
+              <div className="text-xs opacity-90">Mock Exams</div>
             </div>
             <div className="text-center text-white">
-              <div className="font-display text-4xl font-semibold tracking-tight">24/7</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.2em] text-white/70">Learning Support</div>
+              <div className="text-3xl font-bold mb-1">24/7</div>
+              <div className="text-xs opacity-90">Learning Support</div>
             </div>
           </div>
         </div>
