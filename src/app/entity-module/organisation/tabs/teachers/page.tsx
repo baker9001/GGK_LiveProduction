@@ -1018,8 +1018,14 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   // ===== MUTATIONS =====
   
   // FIXED: Update Teacher Assignments Mutation with junction table handling
-  const updateTeacherAssignmentsMutation = useMutation(
-    async ({ teacherId, assignments }: { teacherId: string; assignments: typeof assignmentFormData }) => {
+  const updateTeacherAssignmentsMutation = useMutation({
+    mutationFn: async ({
+      teacherId,
+      assignments
+    }: {
+      teacherId: string;
+      assignments: typeof assignmentFormData;
+    }) => {
       try {
         setIsAssignmentLoading(true);
         
@@ -1159,29 +1165,27 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         setIsAssignmentLoading(false);
       }
     },
-    {
-      onSuccess: () => {
-        toast.success('Teacher assignments updated successfully');
-        setShowAssignmentModal(false);
-        setSelectedTeacher(null);
-        refetchTeachers();
-        // Reset assignment form
-        setAssignmentFormData({
-          school_ids: [],
-          branch_ids: [],
-          program_ids: [],
-          subject_ids: [],
-          grade_level_ids: [],
-          section_ids: []
-        });
-        setCurrentAssignmentStep(1);
-      },
-      onError: (error: any) => {
-        console.error('Update assignments error:', error);
-        toast.error(error.message || 'Failed to update teacher assignments');
-      }
+    onSuccess: () => {
+      toast.success('Teacher assignments updated successfully');
+      setShowAssignmentModal(false);
+      setSelectedTeacher(null);
+      refetchTeachers();
+      // Reset assignment form
+      setAssignmentFormData({
+        school_ids: [],
+        branch_ids: [],
+        program_ids: [],
+        subject_ids: [],
+        grade_level_ids: [],
+        section_ids: []
+      });
+      setCurrentAssignmentStep(1);
+    },
+    onError: (error: any) => {
+      console.error('Update assignments error:', error);
+      toast.error(error.message || 'Failed to update teacher assignments');
     }
-  );
+  });
 
   // FIXED: Create Teacher with proper junction table handling
   const createTeacherMutation = useMutation({
