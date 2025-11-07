@@ -176,9 +176,9 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   }, [isEntityAdmin, isSubEntityAdmin, isSchoolAdmin, isBranchAdmin, scopeFilters, userContext]);
 
   // FIXED: Fetch students with proper active status filtering through users table
-  const { data: students = [], isLoading: isLoadingStudents, error: studentsError } = useQuery(
-    ['students', companyId, scopeFilters, activeTab],
-    async () => {
+  const { data: students = [], isLoading: isLoadingStudents, error: studentsError } = useQuery({
+    queryKey: ['students', companyId, scopeFilters, activeTab],
+    queryFn: async () => {
       try {
         if (!companyId || activeTab !== 'list') {
           return [];
@@ -271,15 +271,15 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
         return studentsWithActiveUsers.map(student => {
           const userData = usersMap.get(student.user_id);
           return {
-          ...student,
-          name: userData?.raw_user_meta_data?.name || 
-                userData?.email?.split('@')[0] || 
-                'Unknown Student',
-          email: userData?.email || '',
-          is_active: userData?.is_active ?? true,
-          school_name: student.schools?.name || 'No School Assigned',
-          branch_name: student.branches?.name || 'No Branch Assigned',
-          user_data: userData
+            ...student,
+            name: userData?.raw_user_meta_data?.name ||
+                  userData?.email?.split('@')[0] ||
+                  'Unknown Student',
+            email: userData?.email || '',
+            is_active: userData?.is_active ?? true,
+            school_name: student.schools?.name || 'No School Assigned',
+            branch_name: student.branches?.name || 'No Branch Assigned',
+            user_data: userData
           };
         }) as StudentData[];
 
@@ -288,20 +288,18 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
         throw error;
       }
     },
-    {
-      enabled: !!companyId && !isAccessControlLoading,
-      staleTime: 2 * 60 * 1000,
-      retry: (failureCount, error) => {
-        if (error.message.includes('permission')) return false;
-        return failureCount < 2;
-      }
+    enabled: !!companyId && !isAccessControlLoading,
+    staleTime: 2 * 60 * 1000,
+    retry: (failureCount, error) => {
+      if (error.message.includes('permission')) return false;
+      return failureCount < 2;
     }
-  );
+  });
 
   // Fetch available schools and grades for filters
-  const { data: availableSchools = [] } = useQuery(
-    ['schools-for-students-filter', companyId, scopeFilters],
-    async () => {
+  const { data: availableSchools = [] } = useQuery({
+    queryKey: ['schools-for-students-filter', companyId, scopeFilters],
+    queryFn: async () => {
       try {
         let schoolsQuery = supabase
           .from('schools')
@@ -315,23 +313,21 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
         }
 
         const { data, error } = await schoolsQuery;
-        
+
         if (error) {
           console.error('Schools query error:', error);
           return [];
         }
-        
+
         return data || [];
       } catch (error) {
         console.error('Error fetching schools for filter:', error);
         return [];
       }
     },
-    { 
-      enabled: !!companyId && !isAccessControlLoading,
-      staleTime: 5 * 60 * 1000
-    }
-  );
+    enabled: !!companyId && !isAccessControlLoading,
+    staleTime: 5 * 60 * 1000
+  });
 
   // Get unique grade levels from students
   const availableGrades = useMemo(() => {

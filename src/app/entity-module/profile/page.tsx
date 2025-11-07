@@ -84,13 +84,13 @@ export default function EntityProfilePage() {
   const userContext = getUserContext();
 
   // Fetch entity user profile data
-  const { 
-    data: profile, 
-    isLoading, 
-    error 
-  } = useQuery(
-    ['entity-profile', user?.id],
-    async () => {
+  const {
+    data: profile,
+    isLoading,
+    error
+  } = useQuery({
+    queryKey: ['entity-profile', user?.id],
+    queryFn: async () => {
       if (!user?.id) throw new Error('User not authenticated');
 
       const { data, error } = await supabase
@@ -123,11 +123,9 @@ export default function EntityProfilePage() {
         metadata: data.metadata || {}
       } as EntityUserProfile;
     },
-    {
-      enabled: !!user?.id,
-      staleTime: 2 * 60 * 1000,
-    }
-  );
+    enabled: !!user?.id,
+    staleTime: 2 * 60 * 1000,
+  });
 
   // Initialize form data when profile loads
   useEffect(() => {

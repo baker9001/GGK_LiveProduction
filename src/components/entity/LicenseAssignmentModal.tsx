@@ -91,9 +91,9 @@ export function LicenseAssignmentModal({
   }, [isOpen]);
 
   // Fetch available students for assignment
-  const { data: availableStudents = [], isLoading: isLoadingStudents } = useQuery(
-    ['available-students', companyId, scopeFilters, searchTerm, filterGrade, filterSchool],
-    async () => {
+  const { data: availableStudents = [], isLoading: isLoadingStudents } = useQuery({
+    queryKey: ['available-students', companyId, scopeFilters, searchTerm, filterGrade, filterSchool],
+    queryFn: async () => {
       if (!license || !isOpen) return [];
 
       return await EntityLicenseService.getAvailableStudents(
@@ -105,16 +105,14 @@ export function LicenseAssignmentModal({
         }
       );
     },
-    {
-      enabled: !!license && !!companyId && isOpen && activeTab === 'assign',
-      staleTime: 2 * 60 * 1000
-    }
-  );
+    enabled: !!license && !!companyId && isOpen && activeTab === 'assign',
+    staleTime: 2 * 60 * 1000
+  });
 
   // Fetch currently assigned students
-  const { data: assignedStudents = [], isLoading: isLoadingAssigned } = useQuery(
-    ['assigned-students', license?.id, companyId],
-    async () => {
+  const { data: assignedStudents = [], isLoading: isLoadingAssigned } = useQuery({
+    queryKey: ['assigned-students', license?.id, companyId],
+    queryFn: async () => {
       if (!license) return [];
 
       return await EntityLicenseService.getStudentsForLicense(
@@ -123,16 +121,14 @@ export function LicenseAssignmentModal({
         scopeFilters
       );
     },
-    {
-      enabled: !!license && !!companyId && isOpen,
-      staleTime: 30 * 1000
-    }
-  );
+    enabled: !!license && !!companyId && isOpen,
+    staleTime: 30 * 1000
+  });
 
   // Get available schools for filter
-  const { data: availableSchools = [] } = useQuery(
-    ['schools-for-license-filter', companyId, scopeFilters],
-    async () => {
+  const { data: availableSchools = [] } = useQuery({
+    queryKey: ['schools-for-license-filter', companyId, scopeFilters],
+    queryFn: async () => {
       if (!scopeFilters.school_ids || scopeFilters.school_ids.length === 0) return [];
 
       const { data, error } = await supabase
@@ -145,11 +141,9 @@ export function LicenseAssignmentModal({
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: !!companyId && isOpen,
-      staleTime: 5 * 60 * 1000
-    }
-  );
+    enabled: !!companyId && isOpen,
+    staleTime: 5 * 60 * 1000
+  });
 
   // Get unique grade levels from available students
   const availableGrades = useMemo(() => {

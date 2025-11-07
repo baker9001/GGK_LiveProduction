@@ -109,9 +109,9 @@ export default function LicenseManagementPage() {
   }, []);
 
   // Fetch filter options with React Query
-  const { data: filterOptions } = useQuery(
-    ['licenseFilterOptions'],
-    async () => {
+  const { data: filterOptions } = useQuery({
+    queryKey: ['licenseFilterOptions'],
+    queryFn: async () => {
       const [
         { data: companiesData },
         { data: regionsData },
@@ -134,10 +134,8 @@ export default function LicenseManagementPage() {
         subjects: subjectsData || []
       };
     },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    }
-  );
+    staleTime: 10 * 60 * 1000 // 10 minutes
+  });
 
   // Fetch licenses with React Query
   const { 
