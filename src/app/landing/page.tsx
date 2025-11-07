@@ -296,10 +296,10 @@ const SubjectCard = memo(({
 SubjectCard.displayName = 'SubjectCard';
 
 // Enhanced Feature Card
-const FeatureCard = memo(({ icon, title, description }: { 
-  icon: React.ReactNode; 
-  title: string; 
-  description: string 
+const FeatureCard = memo(({ icon, title, description }: {
+  icon: React.ReactNode;
+  title: string;
+  description: string
 }) => (
   <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
     <div className="h-16 w-16 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-6">
@@ -311,6 +311,15 @@ const FeatureCard = memo(({ icon, title, description }: {
 ));
 
 FeatureCard.displayName = 'FeatureCard';
+
+const SectionDivider = memo(() => (
+  <div aria-hidden="true" className="relative w-full py-6 sm:py-8">
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-100/80 to-transparent dark:via-gray-800/70 transition-colors duration-200" />
+    <div className="relative mx-auto h-px w-full max-w-5xl bg-gray-200/80 dark:bg-gray-700/80 rounded-full" />
+  </div>
+));
+
+SectionDivider.displayName = 'SectionDivider';
 
 // Main Landing Page Component
 export default function LandingPage() {
@@ -388,6 +397,8 @@ export default function LandingPage() {
         </div>
       </div>
 
+      <SectionDivider />
+
       {/* Exam Boards Section */}
       <div className="py-16 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -424,6 +435,8 @@ export default function LandingPage() {
         </div>
       </div>
 
+      <SectionDivider />
+
       {/* Enhanced Feature Highlights */}
       <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -459,6 +472,8 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
+
+      <SectionDivider />
 
       {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
       <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
@@ -508,6 +523,8 @@ export default function LandingPage() {
           )}
         </div>
       </div>
+
+      <SectionDivider />
 
       {/* Enhanced Testimonials */}
       <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
@@ -568,6 +585,8 @@ export default function LandingPage() {
         </div>
       </div>
 
+      <SectionDivider />
+
       {/* Statistics Section - REDUCED PADDING */}
       <div className="py-12 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -596,6 +615,8 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
+
+      <SectionDivider />
 
       {/* Footer - REDUCED PADDING */}
       <footer className="bg-gray-900 dark:bg-gray-950 text-white transition-colors duration-200">
