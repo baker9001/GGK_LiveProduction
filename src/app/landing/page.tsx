@@ -339,22 +339,23 @@ export default function LandingPage() {
             className="w-full h-full object-cover"
             loading="eager"
           />
+          {/* Light gray overlay for better readability */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(120deg, rgba(4, 9, 30, 0.82) 0%, rgba(8, 28, 21, 0.76) 55%, rgba(22, 58, 36, 0.58) 100%)',
+                'linear-gradient(120deg, rgba(4, 9, 30, 0.85) 0%, rgba(8, 28, 21, 0.82) 55%, rgba(22, 58, 36, 0.75) 100%)',
             }}
           />
         </div>
         <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
           <div className="text-center w-full text-white">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6 drop-shadow-lg">
               Master IGCSE, O-Level & A-Level
-              <span className="block text-[#8CC63F]">Cambridge & Edexcel Excellence</span>
+              <span className="block text-white drop-shadow-lg">Cambridge & Edexcel Excellence</span>
             </h1>
-            <p className="mt-3 max-w-lg mx-auto text-xl text-gray-100 sm:mt-5">
-              Complete exam preparation with 10+ years of past papers, animated video lessons, 
+            <p className="mt-3 max-w-lg mx-auto text-xl text-white sm:mt-5 drop-shadow-lg font-medium">
+              Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -372,7 +373,7 @@ export default function LandingPage() {
                 variant="outline"
                 size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[180px] border-white text-white hover:bg-white/20 hover:text-white"
+                className="w-full sm:w-auto min-w-[180px] border-white text-white hover:bg-white/20 hover:text-white drop-shadow-lg"
                 leftIcon={<PlayCircle />}
               >
                 Watch Demo
@@ -380,17 +381,17 @@ export default function LandingPage() {
             </div>
             {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
             <div className="mt-8 flex items-center justify-center gap-8">
-              <div className="text-white">
+              <div className="text-white drop-shadow-lg">
                 <div className="text-3xl font-bold">+</div>
-                <div className="text-sm opacity-90">Active Students</div>
+                <div className="text-sm opacity-95 font-semibold">Active Students</div>
               </div>
-              <div className="text-white">
+              <div className="text-white drop-shadow-lg">
                 <div className="text-3xl font-bold">%</div>
-                <div className="text-sm opacity-90">Pass Rate</div>
+                <div className="text-sm opacity-95 font-semibold">Pass Rate</div>
               </div>
-              <div className="text-white">
+              <div className="text-white drop-shadow-lg">
                 <div className="text-3xl font-bold">+</div>
-                <div className="text-sm opacity-90">Schools Trust Us</div>
+                <div className="text-sm opacity-95 font-semibold">Schools Trust Us</div>
               </div>
             </div>
           </div>
@@ -400,7 +401,7 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* Exam Boards Section */}
-      <div className="py-16 bg-gray-50 dark:bg-gray-800">
+      <div className="py-16 bg-gray-100 dark:bg-gray-800/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -438,7 +439,7 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* Enhanced Feature Highlights */}
-      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+      <div className="py-24 bg-white dark:bg-gray-900/95 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
@@ -476,7 +477,7 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
-      <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
+      <div className="py-24 bg-gray-100 dark:bg-gray-800/95 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
@@ -527,7 +528,7 @@ export default function LandingPage() {
       <SectionDivider />
 
       {/* Enhanced Testimonials */}
-      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+      <div className="py-24 bg-white dark:bg-gray-900/95 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">

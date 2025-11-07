@@ -419,7 +419,8 @@ export default function SignInPage() {
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+        {/* Light gray overlay for better readability */}
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/92 via-gray-900/88 to-gray-900/92" />
       </div>
       
       {/* Content */}
