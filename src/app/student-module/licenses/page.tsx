@@ -44,12 +44,12 @@ export default function StudentLicensesPage() {
   const [selectedLicense, setSelectedLicense] = useState<StudentLicense | null>(null);
   const [showActivationDialog, setShowActivationDialog] = useState(false);
 
-  const { data: studentId } = useQuery(
-    ['student-id', user?.id],
-    async () => {
+  const { data: studentId } = useQuery({
+    queryKey: ['student-id', user?.id],
+    queryFn: async () => {
       if (!user?.id) return null;
 
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('students')
         .select('id')
         .eq('user_id', user.id)
@@ -59,12 +59,12 @@ export default function StudentLicensesPage() {
       // Explicitly return null instead of undefined to prevent cache issues
       return data?.id ?? null;
     },
-    { enabled: !!user?.id }
-  );
+    enabled: !!user?.id
+  });
 
-  const { data: licenses = [], isLoading } = useQuery(
-    ['student-licenses', studentId],
-    async () => {
+  const { data: licenses = [], isLoading } = useQuery({
+    queryKey: ['student-licenses', studentId],
+    queryFn: async () => {
       if (!studentId) return [];
 
       const { data, error } = await supabase
@@ -94,14 +94,14 @@ export default function StudentLicensesPage() {
       if (error) throw error;
       return data as StudentLicense[];
     },
-    { enabled: !!studentId, staleTime: 30 * 1000 }
-  );
+    enabled: !!studentId,
+    staleTime: 30 * 1000
+  });
 
-  const activateMutation = useMutation(
-    async (licenseId: string) => {
+  const activateMutation = useMutation({
+    mutationFn: async (licenseId: string) => {
       return await EntityLicenseService.activateStudentLicense(licenseId, studentId);
     },
-    {
       onSuccess: (result) => {
         if (result.success) {
           toast.success('License activated successfully! You can now access the content.');

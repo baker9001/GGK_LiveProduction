@@ -81,9 +81,9 @@ export default function StudentLearningMaterialsPage() {
   const subjectLogo = (location.state as any)?.subjectLogo || null;
 
   // Fetch student ID
-  const { data: studentId } = useQuery(
-    ['student-id', user?.id],
-    async () => {
+  const { data: studentId } = useQuery({
+    queryKey: ['student-id', user?.id],
+    queryFn: async () => {
       if (!user?.id) return null;
       const { data, error } = await supabase
         .from('students')
@@ -94,25 +94,23 @@ export default function StudentLearningMaterialsPage() {
       // Explicitly return null instead of undefined to prevent cache issues
       return data?.id ?? null;
     },
-    { enabled: !!user?.id }
-  );
+    enabled: !!user?.id
+  });
 
   // Fetch materials
   const {
     data: materials = [],
     isLoading,
     error
-  } = useQuery(
-    ['student-materials', studentId, subjectId],
-    async () => {
+  } = useQuery({
+    queryKey: ['student-materials', studentId, subjectId],
+    queryFn: async () => {
       if (!studentId || !subjectId) return [];
       return getMaterialsForStudent(studentId, subjectId);
     },
-    {
-      enabled: !!studentId && !!subjectId,
-      staleTime: 5 * 60 * 1000
-    }
-  );
+    enabled: !!studentId && !!subjectId,
+    staleTime: 5 * 60 * 1000
+  });
 
   // Filter materials
   const filteredMaterials = materials.filter(material => {

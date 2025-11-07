@@ -30,9 +30,9 @@ function DashboardPage() {
   const { user } = useUser();
 
   // Fetch student school information
-  const { data: studentInfo } = useQuery<StudentInfo>(
-    ['student-dashboard-info', user?.id],
-    async () => {
+  const { data: studentInfo } = useQuery<StudentInfo>({
+    queryKey: ['student-dashboard-info', user?.id],
+    queryFn: async () => {
       if (!user?.id) {
         return {};
       }
@@ -77,11 +77,9 @@ function DashboardPage() {
         section: studentRow.section
       };
     },
-    {
-      enabled: !!user?.id,
-      staleTime: 5 * 60 * 1000
-    }
-  );
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000
+  });
 
   return (
     <div className="p-6 space-y-6">

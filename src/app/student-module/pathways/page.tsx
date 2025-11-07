@@ -180,9 +180,9 @@ export default function LearningPathPage() {
   const { user } = useUser();
   const navigate = useNavigate();
 
-  const { data: studentId, isLoading: isLoadingStudent, error: studentError } = useQuery(
-    ['student-id', user?.id],
-    async () => {
+  const { data: studentId, isLoading: isLoadingStudent, error: studentError } = useQuery({
+    queryKey: ['student-id', user?.id],
+    queryFn: async () => {
       if (!user?.id) return null;
 
       const { data, error } = await supabase
@@ -199,16 +199,17 @@ export default function LearningPathPage() {
       // Explicitly return null instead of undefined to prevent cache issues
       return data?.id ?? null;
     },
-    { enabled: !!user?.id, retry: 1 }
-  );
+    enabled: !!user?.id,
+    retry: 1
+  });
 
   const {
     data: subjects = [],
     isLoading: isLoadingSubjects,
     error: subjectsError
-  } = useQuery(
-    ['student-learning-path-subjects', studentId],
-    async () => {
+  } = useQuery({
+    queryKey: ['student-learning-path-subjects', studentId],
+    queryFn: async () => {
       if (!studentId) return [] as LearningPathSubjectCard[];
 
       const { data, error } = await supabase
@@ -271,11 +272,9 @@ export default function LearningPathPage() {
         .sort((a, b) => a.subjectName.localeCompare(b.subjectName))
         .map(({ priority, ...subject }) => subject);
     },
-    {
-      enabled: !!studentId,
-      staleTime: 5 * 60 * 1000
-    }
-  );
+    enabled: !!studentId,
+    staleTime: 5 * 60 * 1000
+  });
 
   React.useEffect(() => {
     if (subjectsError) {
