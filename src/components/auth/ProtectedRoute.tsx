@@ -1,9 +1,8 @@
 // /src/components/auth/ProtectedRoute.tsx
-// ENHANCED VERSION with role-based access control and loading states
+// ENHANCED VERSION with role-based access control
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { getCurrentUser, getRealAdminUser, isInTestMode } from '../../lib/auth';
 
 interface ProtectedRouteProps {
@@ -13,52 +12,15 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps) {
   const location = useLocation();
-  const [isChecking, setIsChecking] = useState(true);
-  const [authState, setAuthState] = useState<{
-    realAdmin: any;
-    currentUser: any;
-    testMode: boolean;
-  } | null>(null);
-
-  // Check authentication state with a small delay to allow session to initialize
-  useEffect(() => {
-    const checkAuth = () => {
-      try {
-        const realAdmin = getRealAdminUser();
-        const currentUser = getCurrentUser();
-        const testMode = isInTestMode();
-
-        setAuthState({ realAdmin, currentUser, testMode });
-        setIsChecking(false);
-      } catch (error) {
-        console.error('[ProtectedRoute] Error checking auth:', error);
-        setIsChecking(false);
-      }
-    };
-
-    // Small delay to allow session to be written to localStorage
-    const timer = setTimeout(checkAuth, 100);
-
-    return () => clearTimeout(timer);
-  }, [location.pathname]);
-
-  // Show loading spinner while checking auth
-  if (isChecking || !authState) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-[#64BC46] mx-auto" />
-          <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const { realAdmin, currentUser, testMode } = authState;
+  
+  // Check if there's a real admin user (for test mode) or a regular authenticated user
+  const realAdmin = getRealAdminUser();
+  const currentUser = getCurrentUser();
+  const testMode = isInTestMode();
   
   // Log access attempts for security monitoring
   useEffect(() => {
-    if (currentUser && !isChecking) {
+    if (currentUser) {
       console.log('[ProtectedRoute] Access attempt:', {
         user: currentUser.email,
         role: currentUser.role,
@@ -67,7 +29,7 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
         timestamp: new Date().toISOString()
       });
     }
-  }, [location.pathname, currentUser, requiredRoles, isChecking]);
+  }, [location.pathname, currentUser, requiredRoles]);
   
   // Allow access if:
   // 1. In test mode with a valid admin session

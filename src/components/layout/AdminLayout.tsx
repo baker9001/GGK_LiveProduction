@@ -217,18 +217,6 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   // SECURITY: Validate module access on mount, when moduleKey changes, or when test mode changes
   useEffect(() => {
     const validateModuleAccess = () => {
-      // CRITICAL FIX: Check if we're in login grace period
-      const justLoggedIn = localStorage.getItem('ggk_just_logged_in');
-      if (justLoggedIn) {
-        const loginTime = parseInt(justLoggedIn, 10);
-        const elapsed = Date.now() - loginTime;
-        // Skip validation for first 30 seconds after login
-        if (elapsed < 30000) {
-          console.log('[AdminLayout] Skipping module validation - in login grace period');
-          return;
-        }
-      }
-
       if (!currentUser) {
         console.error('[AdminLayout] No authenticated user');
         navigate('/signin', { replace: true });

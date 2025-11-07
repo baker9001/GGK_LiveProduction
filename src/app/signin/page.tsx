@@ -319,43 +319,10 @@ export default function SignInPage() {
         localStorage.removeItem('ggk_remembered_email');
         localStorage.removeItem('ggk_remember_session');
       }
-
-      // CRITICAL FIX: Wait for Supabase session to be fully written to localStorage
-      console.log('[Auth] Waiting for Supabase session to be established...');
-
-      // Poll for Supabase session in localStorage (max 3 seconds)
-      let sessionEstablished = false;
-      const maxAttempts = 30; // 30 attempts * 100ms = 3 seconds max
-
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const supabaseSession = localStorage.getItem('supabase.auth.token');
-        if (supabaseSession) {
-          try {
-            const parsed = JSON.parse(supabaseSession);
-            if (parsed && (parsed.currentSession || parsed.access_token)) {
-              sessionEstablished = true;
-              console.log(`[Auth] Supabase session established after ${attempt * 100}ms`);
-              break;
-            }
-          } catch {
-            // Continue polling
-          }
-        }
-
-        // Wait 100ms before next attempt
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      if (!sessionEstablished) {
-        console.warn('[Auth] Supabase session not found in localStorage, but continuing with login');
-      }
-
+      
       // Set authenticated user
       setAuthenticatedUser(authenticatedUser);
-
-      // Small delay to ensure auth state is fully propagated
-      await new Promise(resolve => setTimeout(resolve, 200));
-
+      
       // Success
       const friendlyGreeting = getTimeBasedGreeting();
       const displayName = getPreferredName(authenticatedUser.name);
@@ -369,10 +336,9 @@ export default function SignInPage() {
         message: 'We refreshed your workspace with the latest insights.',
         timestamp: Date.now()
       });
-
+      
       // Redirect based on user type
       const redirectPath = getRedirectPath(userType, userRole);
-      console.log('[Auth] Redirecting to:', redirectPath);
       navigate(redirectPath, { replace: true });
       
     } catch (err) {
