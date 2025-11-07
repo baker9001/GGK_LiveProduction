@@ -42,6 +42,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { getDyslexiaPreference, setDyslexiaPreference } from '../../lib/accessibility';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
 import { WelcomeBanner } from '../shared/WelcomeBanner';
+import { PageContainer } from './PageContainer';
 import {
   clearAuthenticatedUser,
   clearSessionExpiredNotice,
@@ -377,40 +378,47 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     const isExpanded = expandedItems.has(item.id);
     const isActive = location.pathname === item.path;
     const Icon = iconMap[item.icon] || Circle;
-    
+
     if (hasChildren) {
       return (
-        <div className={cn("mb-1", depth > 0 && "ml-3")}>
+        <div className={cn('mb-1.5', depth > 0 && 'ml-3')}>
           <div
             onClick={() => toggleExpanded(item.id)}
             className={cn(
-              'w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-theme cursor-pointer',
-              'hover:bg-theme-subtle',
-              isActive && 'bg-[color:var(--color-action-primary-soft)]'
+              'module-tile group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-theme cursor-pointer',
+              isActive
+                ? 'bg-[color:var(--color-action-primary-soft)] text-theme-primary ring-1 ring-[color:var(--color-action-primary)]/35'
+                : 'text-theme-secondary hover:bg-white/55 hover:text-theme-primary dark:hover:bg-white/10'
             )}
           >
             {depth === 0 ? (
-              <div className={cn(
-                "flex items-center justify-center w-8 h-8 rounded-lg transition-theme mr-3",
-                isActive
-                  ? "bg-[color:var(--color-action-primary-soft)] text-action-contrast"
-                  : "bg-theme-subtle text-theme-secondary"
-              )}>
+              <div
+                className={cn(
+                  'flex h-9 w-9 items-center justify-center rounded-xl transition-theme',
+                  isActive
+                    ? 'bg-[color:var(--color-action-primary)] text-action-contrast shadow-theme-elevated'
+                    : 'bg-theme-subtle text-theme-muted dark:bg-white/5'
+                )}
+              >
                 <Icon className="h-4 w-4" />
               </div>
             ) : (
-              <div className="w-8 h-8 flex items-center justify-center mr-3">
-                <div className={cn(
-                  "w-2 h-2 rounded-full",
-                  isActive ? "bg-[color:var(--color-action-primary)]" : "bg-theme-muted"
-                )} />
+              <div className="flex h-9 w-9 items-center justify-center">
+                <span
+                  className={cn(
+                    'h-2.5 w-2.5 rounded-full transition-theme',
+                    isActive ? 'bg-[color:var(--color-action-primary)]' : 'bg-theme-muted'
+                  )}
+                />
               </div>
             )}
-            <span className={cn(
-              'flex-1 text-left font-medium transition-theme',
-              isActive ? 'text-theme-primary' : 'text-theme-secondary',
-              !sidebarOpen && 'hidden'
-            )}>
+            <span
+              className={cn(
+                'flex-1 truncate transition-theme',
+                isActive ? 'text-theme-primary' : 'text-theme-secondary',
+                !sidebarOpen && 'hidden'
+              )}
+            >
               {item.label}
             </span>
             {sidebarOpen && (
@@ -423,10 +431,12 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           </div>
 
           {isExpanded && (
-            <div className={cn(
-              "mt-1 space-y-1",
-              depth === 0 && "ml-4 pl-4 border-l-2 border-theme-muted"
-            )}>
+            <div
+              className={cn(
+                'mt-1 space-y-1 border-l border-theme-muted/60 pl-4',
+                depth === 0 && 'ml-3'
+              )}
+            >
               {item.children.map((child) => (
                 <NavItem key={child.id} item={child} depth={depth + 1} />
               ))}
@@ -440,36 +450,40 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       <Link
         to={item.path}
         className={cn(
-          'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-theme mb-1',
+          'module-tile group mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-theme',
           isActive
             ? 'bg-[color:var(--color-action-primary)] text-action-contrast shadow-theme-elevated'
-            : 'hover:bg-theme-subtle text-theme-secondary'
+            : 'text-theme-secondary hover:bg-white/55 hover:text-theme-primary dark:hover:bg-white/10'
         )}
       >
         {depth === 0 ? (
-          <div className={cn(
-            "flex items-center justify-center w-8 h-8 rounded-lg transition-theme mr-3",
-            isActive
-              ? "bg-[color:var(--color-action-primary-soft)]"
-              : "bg-theme-subtle"
-          )}>
-            <Icon className={cn(
-              "h-4 w-4",
-              isActive ? "text-action-contrast" : "text-theme-secondary"
-            )} />
+          <div
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-xl transition-theme',
+              isActive
+                ? 'bg-[color:var(--color-action-primary-soft)] text-action-contrast'
+                : 'bg-theme-subtle text-theme-muted dark:bg-white/5'
+            )}
+          >
+            <Icon className="h-4 w-4" />
           </div>
         ) : (
-          <div className="w-8 h-8 flex items-center justify-center mr-3">
-            <div className={cn(
-              "w-2 h-2 rounded-full",
-              isActive ? "bg-action-contrast" : "bg-theme-muted"
-            )} />
+          <div className="flex h-9 w-9 items-center justify-center">
+            <span
+              className={cn(
+                'h-2.5 w-2.5 rounded-full transition-theme',
+                isActive ? 'bg-action-contrast' : 'bg-theme-muted'
+              )}
+            />
           </div>
         )}
-        <span className={cn(
-          'font-medium transition-theme text-theme-secondary',
-          !sidebarOpen && depth === 0 && 'hidden'
-        )}>
+        <span
+          className={cn(
+            'truncate transition-theme',
+            isActive ? 'text-action-contrast' : 'text-theme-secondary',
+            !sidebarOpen && depth === 0 && 'hidden'
+          )}
+        >
           {item.label}
         </span>
       </Link>
@@ -477,127 +491,162 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-theme-page text-theme-primary transition-theme">
+    <div className="app-shell text-theme-primary transition-theme">
       {/* Mobile menu button */}
-      <div className={cn(
-        "lg:hidden fixed top-4 z-50 transition-all duration-300",
-        sidebarOpen ? "left-4" : "left-20"
-      )}>
+      <div className="fixed left-4 top-4 z-50 lg:hidden">
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-md text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle transition-theme"
+          className={cn(
+            'surface-glass flex h-11 w-11 items-center justify-center rounded-xl text-theme-secondary hover:text-theme-primary transition-theme',
+            mobileMenuOpen && 'ring-2 ring-[color:var(--color-action-primary)]/40'
+          )}
+          aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}
+          aria-expanded={mobileMenuOpen}
         >
-          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
-      {/* Sidebar - Fixed to use flex column layout */}
+      {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex flex-col bg-theme-surface border-r border-theme transition-theme shadow-theme-elevated',
-          sidebarOpen ? 'w-64' : 'w-16',
+          'fixed inset-y-0 left-0 z-40 flex flex-col px-3 py-5 transition-all duration-300 ease-out',
+          'surface-card surface-card--strong border border-theme-muted/60 shadow-theme-elevated backdrop-blur-xl',
+          'lg:my-4 lg:ml-4 lg:rounded-[1.75rem]',
+          sidebarOpen ? 'w-72' : 'w-20',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
+        ref={navRef}
       >
-        {/* Sidebar Header - Fixed height */}
-        <div className="shrink-0 flex h-16 items-center justify-between px-4 border-b border-theme-muted">
-          <span className={cn(
-            "text-xl font-bold text-[#64BC46] transition-opacity",
-            !sidebarOpen && "opacity-0"
-          )}>
-            GGK Admin
+        <div className="relative flex h-16 items-center justify-between px-2">
+          <span
+            className={cn(
+              'sidebar-brand text-lg font-semibold text-theme-primary transition-opacity',
+              !sidebarOpen && 'opacity-0'
+            )}
+          >
+            GGK Console
           </span>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className={cn(
-              "p-1.5 rounded-md text-theme-secondary hover:text-theme-primary transition-theme",
-              !sidebarOpen && "absolute top-4 left-4 bg-theme-surface shadow-theme-elevated border border-theme"
+              'surface-glass flex h-9 w-9 items-center justify-center rounded-xl text-theme-secondary hover:text-theme-primary transition-theme',
+              !sidebarOpen && 'absolute left-3 top-4 h-10 w-10'
             )}
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
-            <Menu className="h-5 w-5" />
+            {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
 
-        {/* Module Navigation - Fixed height */}
-        <div className="shrink-0 px-3 py-4 border-b border-theme-muted">
+        <div className="shrink-0 rounded-2xl border border-theme-muted/50 bg-white/60 p-3 shadow-sm dark:bg-white/5">
           <ModuleNavigation sidebarOpen={sidebarOpen} activeModule={moduleKey} />
         </div>
 
-        {/* Main Navigation - Flexible and scrollable */}
-        <nav
-          ref={navRef}
-          className="flex-1 min-h-0 overflow-y-auto px-3 py-4 scrollbar-thin scrollbar-thumb-[color:var(--color-border-muted)] scrollbar-track-transparent hover:scrollbar-thumb-[color:var(--color-border-strong)]"
-        >
+        <nav className="mt-4 flex-1 space-y-2 overflow-y-auto px-1 py-2 scrollbar-thin scrollbar-thumb-[color:var(--color-border-muted)] scrollbar-track-transparent">
           {sidebarOpen && (
-            <h3 className="px-3 mb-3 text-xs font-semibold text-theme-muted uppercase tracking-wider">
+            <h3 className="px-3 text-xs font-semibold uppercase tracking-[0.3em] text-theme-muted">
               Navigation
             </h3>
           )}
-          <div className="space-y-0.5">
-            {navigationItems.map((item) => (
+          <div className="space-y-1.5 px-1">
+            {navigationItems.map(item => (
               <NavItem key={item.id} item={item} />
             ))}
           </div>
         </nav>
 
-        {/* User Info - Fixed height at bottom */}
-        {sidebarOpen && (
-          <div className="shrink-0 border-t border-theme-muted p-4">
-            <div className="flex items-center">
-              <div
-                className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden border border-theme',
-                  sidebarAvatarUrl ? 'bg-theme-subtle text-theme-secondary' : 'bg-[color:var(--color-action-primary)] text-action-contrast'
-                )}
-              >
-                {sidebarAvatarUrl ? (
-                  <img
-                    src={sidebarAvatarUrl}
-                    alt={`${displayName}'s avatar`}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span>{displayInitial}</span>
-                )}
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-theme-primary">{displayName}</p>
-                <p className="text-xs text-theme-muted">{displayEmail}</p>
-              </div>
+        <div className="mt-auto pt-4">
+          <div
+            className={cn(
+              'rounded-xl border border-theme-muted/50 transition-theme',
+              sidebarOpen
+                ? 'surface-glass surface-glass--strong flex items-center gap-3 px-3 py-3'
+                : 'surface-glass flex items-center justify-center p-3'
+            )}
+          >
+            <div
+              className={cn(
+                'flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-theme-muted text-sm font-semibold',
+                sidebarAvatarUrl
+                  ? 'bg-theme-subtle text-theme-secondary'
+                  : 'bg-[color:var(--color-action-primary)] text-action-contrast'
+              )}
+            >
+              {sidebarAvatarUrl ? (
+                <img
+                  src={sidebarAvatarUrl}
+                  alt={`${displayName}'s avatar`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <span>{displayInitial}</span>
+              )}
             </div>
+
+            {sidebarOpen && (
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-theme-primary">{displayName}</p>
+                <p className="truncate text-xs text-theme-muted">{displayEmail}</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </aside>
 
       {/* Main content area */}
-      <div className={cn(
-        'transition-all duration-300',
-        sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'
-      )}>
-        {/* Top header */}
-        <header className="sticky top-0 z-30 bg-theme-surface shadow-theme-elevated border-b border-theme-muted transition-theme">
-          <div className="px-4 sm:px-6 lg:px-8">
-            <div className="flex h-16 items-center justify-between">
-              <h1 className="text-xl font-semibold text-theme-primary transition-theme">GGK Admin System</h1>
+      <div
+        className={cn(
+          'transition-all duration-300 ease-out',
+          sidebarOpen ? 'lg:ml-[19rem]' : 'lg:ml-28'
+        )}
+      >
+        <header className="header-surface sticky top-0 z-30">
+          <div className="px-4 py-4 sm:px-6 lg:px-10">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="pill-indicator">Control Center</span>
+                  {inTestMode && (
+                    <span className="pill-indicator bg-amber-500/15 text-amber-700 dark:bg-amber-400/20 dark:text-amber-100">
+                      Test mode
+                    </span>
+                  )}
+                  {realAdmin && currentUser && realAdmin.id !== currentUser.id && (
+                    <span className="pill-indicator bg-indigo-500/15 text-indigo-600 dark:bg-indigo-400/15 dark:text-indigo-200">
+                      Acting as {currentUser.email}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <h1 className="font-display text-2xl font-semibold leading-tight">GGK Admin System</h1>
+                  <p className="text-sm text-theme-muted">
+                    Unified oversight for entities, teachers, and learners across GGK.
+                  </p>
+                </div>
+              </div>
 
-              <div className="flex items-center space-x-3">
-                {/* Notifications */}
-                <button className="relative p-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-lg transition-theme">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <button
+                  className="surface-glass relative flex h-11 w-11 items-center justify-center rounded-xl text-theme-secondary hover:text-theme-primary transition-theme"
+                  type="button"
+                  aria-label="View notifications"
+                >
                   <Bell className="h-5 w-5" />
-                  <span className="absolute -top-1 -right-1 h-5 w-5 text-xs flex items-center justify-center bg-red-500 text-white rounded-full font-semibold">
+                  <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-semibold text-white">
                     3
                   </span>
                 </button>
 
-                {/* Dyslexia Support Toggle */}
                 <button
                   className={cn(
-                    'p-2 rounded-lg hover:bg-theme-subtle transition-theme',
-                    'text-theme-secondary hover:text-theme-primary',
-                    isDyslexiaEnabled && 'text-emerald-600 hover:text-emerald-600'
+                    'surface-glass flex h-11 w-11 items-center justify-center rounded-xl transition-theme',
+                    isDyslexiaEnabled
+                      ? 'text-emerald-600 hover:text-emerald-600'
+                      : 'text-theme-secondary hover:text-theme-primary'
                   )}
-                  onClick={() => setIsDyslexiaEnabled((prev) => !prev)}
+                  onClick={() => setIsDyslexiaEnabled(prev => !prev)}
                   aria-pressed={isDyslexiaEnabled}
                   type="button"
                   title={isDyslexiaEnabled ? 'Disable dyslexia-friendly font' : 'Enable dyslexia-friendly font'}
@@ -606,43 +655,46 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                   <Accessibility className="h-5 w-5" />
                 </button>
 
-                {/* Theme Toggle */}
                 <button
-                  className="p-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-lg transition-theme"
+                  className="surface-glass flex h-11 w-11 items-center justify-center rounded-xl text-theme-secondary hover:text-theme-primary transition-theme"
                   onClick={toggle}
                   aria-label="Toggle theme"
                   aria-pressed={isDarkMode}
+                  type="button"
                 >
                   {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                 </button>
 
-                {/* User Profile */}
                 <div className="relative" ref={profileDropdownRef}>
                   <button
-                    className="p-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-lg transition-theme"
+                    className="surface-glass flex h-11 w-11 items-center justify-center rounded-xl text-theme-secondary hover:text-theme-primary transition-theme"
                     onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={isProfileDropdownOpen}
                   >
                     <User className="h-5 w-5" />
                   </button>
 
                   {isProfileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-theme-surface rounded-lg shadow-theme-popover py-1 border border-theme">
-                      <div className="px-4 py-2 border-b border-theme-muted">
+                    <div className="absolute right-0 mt-3 w-60 rounded-2xl border border-theme-muted/50 bg-theme-surface shadow-theme-popover">
+                      <div className="border-b border-theme-muted px-4 py-3">
                         <p className="text-sm font-medium text-theme-primary">{user?.name || 'User'}</p>
                         <p className="text-xs text-theme-muted">{user?.email || 'user@example.com'}</p>
                       </div>
                       <Link
                         to={getProfilePath()}
-                        className="block px-4 py-2 text-sm text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle transition-theme"
+                        className="block px-4 py-3 text-sm text-theme-secondary transition-theme hover:bg-theme-subtle hover:text-theme-primary"
                         onClick={() => setIsProfileDropdownOpen(false)}
                       >
                         Profile Settings
                       </Link>
                       <button
                         onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-sm text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle flex items-center transition-theme"
+                        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-theme-secondary transition-theme hover:bg-theme-subtle hover:text-theme-primary"
+                        type="button"
                       >
-                        <LogOut className="h-4 w-4 mr-2" />
+                        <LogOut className="h-4 w-4" />
                         Logout
                       </button>
                     </div>
@@ -653,13 +705,25 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           </div>
         </header>
 
-        <main className="min-h-[calc(100vh-4rem)] bg-theme-page transition-theme">
+        <main className="relative min-h-[calc(100vh-6rem)] pb-12">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,rgba(100,188,70,0.14),transparent_58%)]"
+          />
+
           {welcomeNotice && (
-            <div className="px-6 pb-2 pt-6">
+            <div className="px-4 pt-6 sm:px-6 lg:px-10">
               <WelcomeBanner notice={welcomeNotice} onDismiss={handleDismissWelcome} />
             </div>
           )}
-          {children}
+
+          <PageContainer
+            fullWidth
+            tone="transparent"
+            className={cn(welcomeNotice ? 'pt-4' : 'pt-8')}
+          >
+            {children}
+          </PageContainer>
         </main>
       </div>
     </div>
