@@ -231,8 +231,8 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
   });
 
   // Create/update license mutation
-  const licenseMutation = useMutation(
-    async (formData: FormData) => {
+  const licenseMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
       const totalQuantityValue = formData.get('total_quantity') as string;
 
       if (editingLicense) {
@@ -309,61 +309,59 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
         return newLicense;
       }
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['licenses']);
-        onSuccess?.();
-        onClose();
-        setIsSubmittingForm(false);
-        toast.success(`License ${editingLicense ? 'updated' : 'created'} successfully`);
-      },
-      onError: (error) => {
-        setIsSubmittingForm(false);
-        console.error('License Mutation Error:', error);
+    onSuccess: () => {
+      queryClient.invalidateQueries(['licenses']);
+      onSuccess?.();
+      onClose();
+      setIsSubmittingForm(false);
+      toast.success(`License ${editingLicense ? 'updated' : 'created'} successfully`);
+    },
+    onError: (error) => {
+      setIsSubmittingForm(false);
+      console.error('License Mutation Error:', error);
 
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
-            }
-          });
-          setFormErrors(errors);
-        } else if (error instanceof Error) {
-          // Log the full error for debugging
-          console.error('Full Error Object:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-            error: error
-          });
-
-          // Check for Supabase unique constraint error
-          if (error.message.includes('23505') ||
-              error.message.includes('already exists') ||
-              error.message.includes('unique constraint')) {
-            setFormErrors({
-              form: 'An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.'
-            });
-            toast.error('An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.');
-          } else if (error.message.includes('total_quantity') || error.message.includes('total_allocated')) {
-            setFormErrors({ total_quantity: error.message });
-            toast.error(error.message);
-          } else if (error.message.includes('permission') || error.message.includes('policy')) {
-            setFormErrors({ form: `Permission Error: ${error.message}` });
-            toast.error(`Permission Error: ${error.message}`);
-          } else {
-            setFormErrors({ form: error.message });
-            toast.error(error.message);
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path.length > 0) {
+            errors[err.path[0]] = err.message;
           }
+        });
+        setFormErrors(errors);
+      } else if (error instanceof Error) {
+        // Log the full error for debugging
+        console.error('Full Error Object:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          error: error
+        });
+
+        // Check for Supabase unique constraint error
+        if (error.message.includes('23505') ||
+            error.message.includes('already exists') ||
+            error.message.includes('unique constraint')) {
+          setFormErrors({
+            form: 'An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.'
+          });
+          toast.error('An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.');
+        } else if (error.message.includes('total_quantity') || error.message.includes('total_allocated')) {
+          setFormErrors({ total_quantity: error.message });
+          toast.error(error.message);
+        } else if (error.message.includes('permission') || error.message.includes('policy')) {
+          setFormErrors({ form: `Permission Error: ${error.message}` });
+          toast.error(`Permission Error: ${error.message}`);
         } else {
-          console.error('Unknown error type saving license:', error);
-          setFormErrors({ form: 'Failed to save license. Please try again.' });
-          toast.error('Failed to save license. Please try again.');
+          setFormErrors({ form: error.message });
+          toast.error(error.message);
         }
+      } else {
+        console.error('Unknown error type saving license:', error);
+        setFormErrors({ form: 'Failed to save license. Please try again.' });
+        toast.error('Failed to save license. Please try again.');
       }
     }
-  );
+  });
 
   // Reset form when dialog opens/closes
   useEffect(() => {

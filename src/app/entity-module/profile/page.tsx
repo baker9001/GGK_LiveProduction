@@ -154,8 +154,8 @@ export default function EntityProfilePage() {
   }, [profile]);
 
   // Update profile mutation
-  const updateProfileMutation = useMutation(
-    async (updates: Partial<EntityUserProfile>) => {
+  const updateProfileMutation = useMutation({
+    mutationFn: async (updates: Partial<EntityUserProfile>) => {
       if (!user?.id || !profile?.id) throw new Error('User not authenticated');
 
       const { error } = await supabase
@@ -175,19 +175,17 @@ export default function EntityProfilePage() {
       if (error) throw error;
       return updates;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['entity-profile']);
-        refreshUser();
-        setIsEditing(false);
-        toast.success('Profile updated successfully');
-      },
-      onError: (error) => {
-        console.error('Error updating profile:', error);
-        toast.error('Failed to update profile');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['entity-profile']);
+      refreshUser();
+      setIsEditing(false);
+      toast.success('Profile updated successfully');
+    },
+    onError: (error) => {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
     }
-  );
+  });
 
   // Handle form submission
   const handleSubmit = () => {

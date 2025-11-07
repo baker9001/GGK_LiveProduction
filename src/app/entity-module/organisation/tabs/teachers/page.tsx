@@ -1184,8 +1184,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   );
 
   // FIXED: Create Teacher with proper junction table handling
-  const createTeacherMutation = useMutation(
-    async (data: TeacherFormData) => {
+  const createTeacherMutation = useMutation({
+    mutationFn: async (data: TeacherFormData) => {
       // Create main teacher record
       const result = await userCreationService.createUserWithInvitation({
         user_type: 'teacher',
@@ -1299,34 +1299,32 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           console.warn('Junction tables update warning:', err);
         }
       }
-      
+
       return { ...result, email: data.email };
     },
-    {
-      onSuccess: (result) => {
-        if (formData.send_invitation) {
-          setInvitedTeacherEmail(result.email);
-          setShowInvitationSuccess(true);
-        }
-        setShowCreateForm(false);
-        refetchTeachers();
-        resetForm();
-        toast.success(
-          formData.send_invitation 
-            ? 'Teacher created successfully. Invitation email sent!' 
-            : 'Teacher created successfully'
-        );
-      },
-      onError: (error: any) => {
-        console.error('Create teacher error:', error);
-        toast.error(error.message || 'Failed to create teacher');
+    onSuccess: (result) => {
+      if (formData.send_invitation) {
+        setInvitedTeacherEmail(result.email);
+        setShowInvitationSuccess(true);
       }
+      setShowCreateForm(false);
+      refetchTeachers();
+      resetForm();
+      toast.success(
+        formData.send_invitation
+          ? 'Teacher created successfully. Invitation email sent!'
+          : 'Teacher created successfully'
+      );
+    },
+    onError: (error: any) => {
+      console.error('Create teacher error:', error);
+      toast.error(error.message || 'Failed to create teacher');
     }
-  );
+  });
 
   // FIXED: Update Teacher with junction table handling
-  const updateTeacherMutation = useMutation(
-    async ({ teacherId, data }: { teacherId: string; data: Partial<TeacherFormData> }) => {
+  const updateTeacherMutation = useMutation({
+    mutationFn: async ({ teacherId, data }: { teacherId: string; data: Partial<TeacherFormData> }) => {
       const teacher = teachers.find(t => t.id === teacherId);
       if (!teacher) throw new Error('Teacher not found');
 
@@ -1535,31 +1533,29 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         console.warn('Error updating teacher relationships:', err);
       }
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         emailUpdated: emailUpdated,
         teacherId: teacherId
       };
     },
-    {
-      onSuccess: (result) => {
-        toast.success('Teacher updated successfully');
-        setShowEditForm(false);
-        refetchTeachers();
-        resetForm();
-      },
-      onError: (error: any) => {
-        console.error('Update teacher error:', error);
-        toast.error(error.message || 'Failed to update teacher');
-      },
-      onSettled: () => {
-        queryClient.invalidateQueries(['teachers', companyId]);
-      }
+    onSuccess: () => {
+      toast.success('Teacher updated successfully');
+      setShowEditForm(false);
+      refetchTeachers();
+      resetForm();
+    },
+    onError: (error: any) => {
+      console.error('Update teacher error:', error);
+      toast.error(error.message || 'Failed to update teacher');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries(['teachers', companyId]);
     }
-  );
+  });
 
-  const deleteTeacherMutation = useMutation(
-    async (teacherIds: string[]) => {
+  const deleteTeacherMutation = useMutation({
+    mutationFn: async (teacherIds: string[]) => {
       const teachersToDelete = teachers.filter(t => teacherIds.includes(t.id));
       const userIds = teachersToDelete.map(t => t.user_id);
       
@@ -1574,27 +1570,25 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         .from('users')
         .delete()
         .in('id', userIds);
-      
+
       if (userError) throw userError;
-      
+
       return { success: true };
     },
-    {
-      onSuccess: () => {
-        toast.success('Teacher(s) deleted successfully');
-        setShowDeleteConfirmation(false);
-        setSelectedTeachers([]);
-        refetchTeachers();
-      },
-      onError: (error: any) => {
-        console.error('Delete teacher error:', error);
-        toast.error('Failed to delete teacher(s)');
-      }
+    onSuccess: () => {
+      toast.success('Teacher(s) deleted successfully');
+      setShowDeleteConfirmation(false);
+      setSelectedTeachers([]);
+      refetchTeachers();
+    },
+    onError: (error: any) => {
+      console.error('Delete teacher error:', error);
+      toast.error('Failed to delete teacher(s)');
     }
-  );
+  });
 
-  const toggleTeacherStatusMutation = useMutation(
-    async ({ teacherIds, activate }: { teacherIds: string[]; activate: boolean }) => {
+  const toggleTeacherStatusMutation = useMutation({
+    mutationFn: async ({ teacherIds, activate }: { teacherIds: string[]; activate: boolean }) => {
       const teachersToUpdate = teachers.filter(t => teacherIds.includes(t.id));
       const userIds = teachersToUpdate.map(t => t.user_id);
       
@@ -1602,24 +1596,22 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         .from('users')
         .update({ is_active: activate })
         .in('id', userIds);
-      
+
       if (error) throw error;
-      
+
       return { success: true };
     },
-    {
-      onSuccess: (_, { activate }) => {
-        toast.success(`Teacher(s) ${activate ? 'activated' : 'deactivated'} successfully`);
-        setShowBulkActionConfirmation(false);
-        setSelectedTeachers([]);
-        refetchTeachers();
-      },
-      onError: (error: any) => {
-        console.error('Toggle status error:', error);
-        toast.error('Failed to update teacher status');
-      }
+    onSuccess: (_, { activate }) => {
+      toast.success(`Teacher(s) ${activate ? 'activated' : 'deactivated'} successfully`);
+      setShowBulkActionConfirmation(false);
+      setSelectedTeachers([]);
+      refetchTeachers();
+    },
+    onError: (error: any) => {
+      console.error('Toggle status error:', error);
+      toast.error('Failed to update teacher status');
     }
-  );
+  });
 
   // ===== HELPER FUNCTIONS =====
   const resetForm = useCallback(() => {

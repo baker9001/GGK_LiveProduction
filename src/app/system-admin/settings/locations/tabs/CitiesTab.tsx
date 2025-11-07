@@ -201,8 +201,8 @@ export default function CitiesTab() {
   );
 
   // Create/update city mutation
-  const cityMutation = useMutation(
-    async (formData: FormData) => {
+  const cityMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
       const data = {
         name: formData.get('name') as string,
         country_id: formData.get('country_id') as string,
@@ -231,35 +231,33 @@ export default function CitiesTab() {
         return newCity;
       }
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['cities']);
-        setIsFormOpen(false);
-        setEditingCity(null);
-        setFormErrors({});
-        toast.success(`City ${editingCity ? 'updated' : 'created'} successfully`);
-      },
-      onError: (error) => {
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
-            }
-          });
-          setFormErrors(errors);
-        } else {
-          console.error('Error saving city:', error);
-          setFormErrors({ form: 'Failed to save city. Please try again.' });
-          toast.error('Failed to save city');
-        }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['cities']);
+      setIsFormOpen(false);
+      setEditingCity(null);
+      setFormErrors({});
+      toast.success(`City ${editingCity ? 'updated' : 'created'} successfully`);
+    },
+    onError: (error) => {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path.length > 0) {
+            errors[err.path[0]] = err.message;
+          }
+        });
+        setFormErrors(errors);
+      } else {
+        console.error('Error saving city:', error);
+        setFormErrors({ form: 'Failed to save city. Please try again.' });
+        toast.error('Failed to save city');
       }
     }
-  );
+  });
 
   // Delete city mutation
-  const deleteMutation = useMutation(
-    async (cities: City[]) => {
+  const deleteMutation = useMutation({
+    mutationFn: async (cities: City[]) => {
       const { error } = await supabase
         .from('cities')
         .delete()
@@ -268,21 +266,19 @@ export default function CitiesTab() {
       if (error) throw error;
       return cities;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['cities']);
-        setIsConfirmDialogOpen(false);
-        setCitiesToDelete([]);
-        toast.success('City(s) deleted successfully');
-      },
-      onError: (error) => {
-        console.error('Error deleting cities:', error);
-        toast.error('Failed to delete city(s)');
-        setIsConfirmDialogOpen(false);
-        setCitiesToDelete([]);
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['cities']);
+      setIsConfirmDialogOpen(false);
+      setCitiesToDelete([]);
+      toast.success('City(s) deleted successfully');
+    },
+    onError: (error) => {
+      console.error('Error deleting cities:', error);
+      toast.error('Failed to delete city(s)');
+      setIsConfirmDialogOpen(false);
+      setCitiesToDelete([]);
     }
-  );
+  });
 
   // Update form state when editing city changes
   useEffect(() => {

@@ -388,8 +388,8 @@ export function StudentForm({
   // ===== MUTATIONS =====
   
   // Create student mutation
-  const createStudentMutation = useMutation(
-    async (data: StudentFormData) => {
+  const createStudentMutation = useMutation({
+    mutationFn: async (data: StudentFormData) => {
       if (!user?.id) throw new Error('User not authenticated');
 
       const result = await userCreationService.createUserWithInvitation({
@@ -417,23 +417,21 @@ export function StudentForm({
 
       return result;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['students']);
-        toast.success('Student created successfully! Invitation email sent.');
-        onSuccess();
-        onClose();
-      },
-      onError: (error: any) => {
-        console.error('Student creation error:', error);
-        toast.error(error.message || 'Failed to create student');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['students']);
+      toast.success('Student created successfully! Invitation email sent.');
+      onSuccess();
+      onClose();
+    },
+    onError: (error: any) => {
+      console.error('Student creation error:', error);
+      toast.error(error.message || 'Failed to create student');
     }
-  );
+  });
 
   // Update student mutation
-  const updateStudentMutation = useMutation(
-    async (data: StudentFormData) => {
+  const updateStudentMutation = useMutation({
+    mutationFn: async (data: StudentFormData) => {
       if (!initialData?.user_id) throw new Error('Student user ID not found');
 
       await userCreationService.updateStudent(initialData.user_id, {
@@ -456,19 +454,17 @@ export function StudentForm({
         is_active: data.is_active
       });
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['students']);
-        toast.success('Student updated successfully!');
-        onSuccess();
-        onClose();
-      },
-      onError: (error: any) => {
-        console.error('Student update error:', error);
-        toast.error(error.message || 'Failed to update student');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['students']);
+      toast.success('Student updated successfully!');
+      onSuccess();
+      onClose();
+    },
+    onError: (error: any) => {
+      console.error('Student update error:', error);
+      toast.error(error.message || 'Failed to update student');
     }
-  );
+  });
 
   // ===== VALIDATION =====
   const validateForm = (): boolean => {
