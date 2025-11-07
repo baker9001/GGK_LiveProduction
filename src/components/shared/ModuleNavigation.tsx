@@ -104,62 +104,45 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
   };
 
   return (
-    <div className={cn('border-b-2 border-gray-200 dark:border-gray-700 pb-4 mb-4 pt-4', className)}>
-      {/* Module switcher title */}
-      <div className={cn(
-        'px-4 mb-3',
-        !sidebarOpen && 'hidden'
-      )}>
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          Modules
-        </h3>
-      </div>
+    <div className={cn('space-y-3', className)}>
+      {sidebarOpen && (
+        <div className="px-2">
+          <h3 className="text-[0.65rem] font-semibold uppercase tracking-[0.32em] text-theme-muted">
+            Modules
+          </h3>
+        </div>
+      )}
 
-      {/* Module icons */}
-      <div className="space-y-3 px-2">
+      <div className="space-y-2 px-1">
         {visibleModules.length === 0 ? (
-          <div className="text-sm text-gray-500 dark:text-gray-400 px-3 py-2">
+          <div className="surface-glass surface-glass--strong rounded-xl px-3 py-2 text-sm text-theme-muted">
             No modules available
           </div>
         ) : (
           visibleModules.map((module) => {
             const Icon = module.icon;
             const isCurrentModule = isModuleActive(module);
-            
+
             if (module.comingSoon) {
               return (
                 <div
                   key={module.id}
-                  className="group relative flex items-center cursor-not-allowed"
-                  title={sidebarOpen ? undefined : "Coming Soon"}
+                  className={cn(
+                    'module-tile relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-theme-muted',
+                    sidebarOpen ? 'bg-theme-subtle/60' : 'justify-center'
+                  )}
+                  title={sidebarOpen ? undefined : `${module.name} · Coming soon`}
                 >
-                  <div className={cn(
-                    'flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 transition-colors',
-                    !sidebarOpen && 'mx-auto'
-                  )}>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-theme-subtle text-theme-muted">
                     <Icon className="h-5 w-5" />
                   </div>
-                  
                   {sidebarOpen && (
-                    <span className="ml-3 text-sm text-gray-400 dark:text-gray-500 font-medium">
-                      {module.name}
-                    </span>
-                  )}
-                  
-                  {sidebarOpen && (
-                    <span className="ml-auto text-xs text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded-md">
-                      Soon
-                    </span>
-                  )}
-
-                  {/* Tooltip for collapsed sidebar */}
-                  {!sidebarOpen && (
-                    <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-                      <div className="bg-gray-900 dark:bg-gray-700 text-white dark:text-gray-100 text-xs rounded py-2 px-3 whitespace-nowrap">
-                        {module.name} - Coming Soon
-                        <div className="absolute left-0 top-1/2 transform -translate-x-1 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900 dark:border-r-gray-700"></div>
-                      </div>
-                    </div>
+                    <>
+                      <span className="text-sm font-medium">{module.name}</span>
+                      <span className="ml-auto rounded-full bg-theme-muted/30 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-theme-muted">
+                        Soon
+                      </span>
+                    </>
                   )}
                 </div>
               );
@@ -170,43 +153,33 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
                 key={module.id}
                 to={module.path}
                 className={cn(
-                  'group relative flex items-center rounded-lg p-2 transition-all duration-200 hover:bg-[#64BC46]/5 dark:hover:bg-[#64BC46]/10 hover:translate-x-1',
-                  isCurrentModule && 'bg-[#64BC46]/15 dark:bg-[#64BC46]/20',
+                  'module-tile group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-theme',
+                  isCurrentModule
+                    ? 'bg-[color:var(--color-action-primary-soft)] text-theme-primary shadow-theme-elevated ring-1 ring-[color:var(--color-action-primary)]/30'
+                    : 'text-theme-secondary hover:bg-white/55 hover:text-theme-primary dark:hover:bg-white/10',
                   !sidebarOpen && 'justify-center'
                 )}
                 title={sidebarOpen ? undefined : module.name}
               >
-                <div className={cn(
-                  'flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-200',
-                  isCurrentModule 
-                    ? 'bg-[#64BC46] text-white shadow-lg ring-2 ring-offset-2 ring-[#64BC46]' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 group-hover:bg-[#64BC46] group-hover:text-white'
-                )}>
+                <div
+                  className={cn(
+                    'flex h-10 w-10 items-center justify-center rounded-xl transition-theme',
+                    isCurrentModule
+                      ? 'bg-[color:var(--color-action-primary)] text-action-contrast shadow-theme-elevated'
+                      : 'bg-theme-subtle text-theme-muted dark:bg-white/5'
+                  )}
+                >
                   <Icon className="h-5 w-5" />
                 </div>
-                
+
                 {sidebarOpen && (
-                  <span className={cn(
-                    'ml-3 text-sm font-medium transition-colors duration-200',
-                    isCurrentModule ? 'text-[#64BC46]' : 'text-gray-700 dark:text-gray-300 group-hover:text-[#64BC46]'
-                  )}>
-                    {module.name}
+                  <span className="text-sm font-semibold">{module.name}</span>
+                )}
+
+                {isCurrentModule && sidebarOpen && (
+                  <span className="ml-auto rounded-full bg-[color:var(--color-action-primary)]/15 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-action-primary)]">
+                    Active
                   </span>
-                )}
-
-                {/* Active indicator */}
-                {isCurrentModule && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#64BC46] rounded-r-full"></div>
-                )}
-
-                {/* Tooltip for collapsed sidebar */}
-                {!sidebarOpen && (
-                  <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-                    <div className="bg-gray-900 dark:bg-gray-700 text-white dark:text-gray-100 text-xs rounded py-2 px-3 whitespace-nowrap">
-                      {module.name}
-                      <div className="absolute left-0 top-1/2 transform -translate-x-1 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900 dark:border-r-gray-700"></div>
-                    </div>
-                  </div>
                 )}
               </Link>
             );
