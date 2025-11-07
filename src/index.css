@@ -10,6 +10,30 @@
 @config "../tailwind.config.js";
 
 :root {
+  color-scheme: light dark;
+  --color-bg-page: 248 250 252;
+  --color-bg-surface: 255 255 255;
+  --color-bg-subtle: 241 245 249;
+  --color-bg-muted: 226 232 240;
+  --color-text-primary: 17 24 39;
+  --color-text-secondary: 71 85 105;
+  --color-text-muted: 100 116 139;
+  --color-text-inverse: 15 23 42;
+  --color-border: rgba(15, 23, 42, 0.12);
+  --color-border-muted: rgba(148, 163, 184, 0.22);
+  --color-border-strong: rgba(15, 23, 42, 0.18);
+  --color-action-primary: #7dc242;
+  --color-action-primary-hover: #6da52f;
+  --color-action-primary-active: #5b8f27;
+  --color-action-primary-soft: rgba(125, 194, 66, 0.18);
+  --color-action-contrast: #0b1120;
+  --color-action-primary-focus: rgba(125, 194, 66, 0.35);
+  --color-input-bg: #ffffff;
+  --color-input-border: rgba(15, 23, 42, 0.12);
+  --color-input-placeholder: rgba(71, 85, 105, 0.7);
+  --shadow-elevated: 0 18px 30px -20px rgba(15, 23, 42, 0.25);
+  --shadow-popover: 0 20px 30px -22px rgba(15, 23, 42, 0.35);
+  --transition-theme: background-color 220ms ease, color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, fill 220ms ease, stroke 220ms ease;
   --brand-accent: #7dc242;
   --brand-accent-strong: #4f8c1f;
   --brand-accent-soft: #e8f5dc;
@@ -18,8 +42,160 @@
 }
 
 .dark {
+  --color-bg-page: 15 23 42;
+  --color-bg-surface: 31 41 55;
+  --color-bg-subtle: 17 24 39;
+  --color-bg-muted: 30 41 59;
+  --color-text-primary: 248 250 252;
+  --color-text-secondary: 203 213 225;
+  --color-text-muted: 148 163 184;
+  --color-text-inverse: 248 250 252;
+  --color-border: rgba(148, 163, 184, 0.32);
+  --color-border-muted: rgba(94, 109, 128, 0.45);
+  --color-border-strong: rgba(148, 163, 184, 0.45);
+  --color-action-primary: #9ed050;
+  --color-action-primary-hover: #8cc63f;
+  --color-action-primary-active: #79b22e;
+  --color-action-primary-soft: rgba(158, 208, 80, 0.22);
+  --color-action-contrast: #0f172a;
+  --color-action-primary-focus: rgba(158, 208, 80, 0.38);
+  --color-input-bg: rgba(15, 23, 42, 0.85);
+  --color-input-border: rgba(148, 163, 184, 0.35);
+  --color-input-placeholder: rgba(148, 163, 184, 0.7);
+  --shadow-elevated: 0 22px 40px -25px rgba(8, 15, 29, 0.65);
+  --shadow-popover: 0 22px 40px -25px rgba(8, 15, 29, 0.75);
   --brand-accent-contrast: #f4faef;
   --brand-accent-muted-contrast: #dbead0;
+}
+
+body {
+  background-color: rgb(var(--color-bg-page));
+  color: rgb(var(--color-text-primary));
+  transition: var(--transition-theme);
+}
+
+.bg-theme-page {
+  background-color: rgb(var(--color-bg-page));
+}
+
+.bg-theme-surface {
+  background-color: rgb(var(--color-bg-surface));
+}
+
+.bg-theme-subtle {
+  background-color: rgb(var(--color-bg-subtle));
+}
+
+.bg-theme-muted {
+  background-color: rgb(var(--color-bg-muted));
+}
+
+.bg-action-primary {
+  background-color: var(--color-action-primary);
+}
+
+.bg-action-primary-hover {
+  background-color: var(--color-action-primary-hover);
+}
+
+.bg-action-primary-active {
+  background-color: var(--color-action-primary-active);
+}
+
+.bg-action-contrast {
+  background-color: var(--color-action-contrast);
+}
+
+.text-theme-primary {
+  color: rgb(var(--color-text-primary));
+}
+
+.text-theme-secondary {
+  color: rgb(var(--color-text-secondary));
+}
+
+.text-theme-muted {
+  color: rgb(var(--color-text-muted));
+}
+
+.text-action-contrast {
+  color: var(--color-action-contrast);
+}
+
+.border-theme {
+  border-color: var(--color-border);
+}
+
+.border-theme-muted {
+  border-color: var(--color-border-muted);
+}
+
+.border-theme-strong {
+  border-color: var(--color-border-strong);
+}
+
+.shadow-theme-elevated {
+  box-shadow: var(--shadow-elevated);
+}
+
+.shadow-theme-popover {
+  box-shadow: var(--shadow-popover);
+}
+
+.transition-theme {
+  transition: var(--transition-theme);
+}
+
+.hover\:bg-theme-subtle:hover {
+  background-color: rgb(var(--color-bg-subtle));
+}
+
+.hover\:bg-theme-muted:hover {
+  background-color: rgb(var(--color-bg-muted));
+}
+
+.hover\:text-theme-primary:hover {
+  color: rgb(var(--color-text-primary));
+}
+
+.hover\:text-theme-secondary:hover {
+  color: rgb(var(--color-text-secondary));
+}
+
+.hover\:bg-action-primary-hover:hover {
+  background-color: var(--color-action-primary-hover);
+}
+
+.active\:bg-action-primary-active:active {
+  background-color: var(--color-action-primary-active);
+}
+
+.hover\:border-theme-muted:hover {
+  border-color: var(--color-border-muted);
+}
+
+input,
+textarea,
+select {
+  background-color: var(--color-input-bg);
+  border-color: var(--color-input-border);
+  color: rgb(var(--color-text-primary));
+  transition: var(--transition-theme);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-input-placeholder);
+  opacity: 1;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-action-primary);
+  outline-offset: 2px;
+  border-color: var(--color-action-primary);
+  box-shadow: 0 0 0 4px var(--color-action-primary-focus);
 }
 
 .brand-select {
