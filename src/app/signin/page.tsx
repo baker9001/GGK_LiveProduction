@@ -505,7 +505,7 @@ export default function SignInPage() {
               id="email"
               label="Email address"
               required
-              labelClassName="text-gray-400 dark:text-gray-400"
+              labelClassName="text-gray-400"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -531,7 +531,7 @@ export default function SignInPage() {
               id="password"
               label="Password"
               required
-              labelClassName="text-gray-400 dark:text-gray-400"
+              labelClassName="text-gray-400"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
