@@ -100,7 +100,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [isDarkMode, setIsDarkMode] = useState(() => isDocumentDark());
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const stored = readDarkModePreference();
+    return stored !== null ? stored : isDocumentDark();
+  });
   const [isDyslexiaEnabled, setIsDyslexiaEnabled] = useState(() => getDyslexiaPreference());
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [welcomeNotice, setWelcomeNotice] = useState<WelcomeNotice | null>(null);
@@ -312,19 +315,35 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     return profilePaths[currentUser.role] || '/app/system-admin/profile';
   };
 
-  // Sync dark mode preference from storage once the component is mounted in the browser.
-  useEffect(() => {
-    const storedPreference = readDarkModePreference();
-    if (storedPreference !== null) {
-      setIsDarkMode(storedPreference);
-      applyDarkModeClass(storedPreference);
-    }
-  }, []);
-
-  // Persist dark mode changes and update the DOM class when the state changes.
+  // Apply dark mode on mount and when state changes
   useEffect(() => {
     applyDarkModeClass(isDarkMode);
     writeDarkModePreference(isDarkMode);
+  }, [isDarkMode]);
+
+  // Listen for dark mode changes from other components
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'darkMode' && e.newValue !== null) {
+        const newValue = e.newValue === 'true';
+        setIsDarkMode(newValue);
+      }
+    };
+
+    const handleDarkModeChange = () => {
+      const stored = readDarkModePreference();
+      if (stored !== null && stored !== isDarkMode) {
+        setIsDarkMode(stored);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('darkmode-change', handleDarkModeChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('darkmode-change', handleDarkModeChange);
+    };
   }, [isDarkMode]);
 
   // Initialize expanded items on first load

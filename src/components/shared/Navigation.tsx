@@ -24,23 +24,46 @@ export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => isDocumentDark());
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const stored = readDarkModePreference();
+    return stored !== null ? stored : isDocumentDark();
+  });
 
   useEffect(() => {
-    const storedPreference = readDarkModePreference();
-    if (storedPreference !== null) {
-      setIsDarkMode(storedPreference);
-      applyDarkModeClass(storedPreference);
-    }
-  }, []);
+    applyDarkModeClass(isDarkMode);
+    writeDarkModePreference(isDarkMode);
+
+    // Dispatch event to notify other components
+    window.dispatchEvent(new CustomEvent('darkmode-change'));
+  }, [isDarkMode]);
+
+  // Listen for dark mode changes from other components
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'darkMode' && e.newValue !== null) {
+        const newValue = e.newValue === 'true';
+        setIsDarkMode(newValue);
+      }
+    };
+
+    const handleDarkModeChange = () => {
+      const stored = readDarkModePreference();
+      if (stored !== null && stored !== isDarkMode) {
+        setIsDarkMode(stored);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('darkmode-change', handleDarkModeChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('darkmode-change', handleDarkModeChange);
+    };
+  }, [isDarkMode]);
 
   const toggleDarkMode = () => {
-    setIsDarkMode(previous => {
-      const next = !previous;
-      applyDarkModeClass(next);
-      writeDarkModePreference(next);
-      return next;
-    });
+    setIsDarkMode(previous => !previous);
   };
   
   const handleSignInClick = () => {
