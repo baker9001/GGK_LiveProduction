@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, X, Menu, Moon, Sun } from 'lucide-react';
+import clsx from 'clsx';
 import { Button } from './Button';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -20,31 +21,51 @@ export function Navigation() {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { isDark, toggle } = useTheme();
-  
+  const isLandingPage = location.pathname === '/' || location.pathname.startsWith('/landing');
+
   const handleSignInClick = () => {
     // Use React Router navigation instead of window.location
     navigate('/signin');
   };
-  
+
   return (
-    <nav className="bg-theme-surface backdrop-blur-md shadow-theme-elevated sticky top-0 z-50 transition-theme border-b border-theme-muted">
+    <nav
+      className={clsx(
+        'backdrop-blur-md sticky top-0 z-50 transition-theme border-b',
+        isLandingPage
+          ? 'bg-transparent border-transparent text-white'
+          : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
+      )}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
               <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
-              <span className="ml-2 text-xl font-bold text-theme-primary transition-theme">GGK</span>
+              <span
+                className={clsx(
+                  'ml-2 text-xl font-bold transition-theme',
+                  isLandingPage ? 'text-white' : 'text-theme-primary'
+                )}
+              >
+                GGK
+              </span>
             </Link>
             <div className="hidden md:flex ml-10 space-x-8">
               {NAV_ITEMS.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-theme ${
-                    location.pathname === item.path
-                      ? 'text-action-contrast border-b-2 border-[color:var(--color-action-primary)]'
-                      : 'text-theme-secondary hover:text-theme-primary hover:border-b-2 hover:border-theme-muted'
-                  }`}
+                  className={clsx(
+                    'inline-flex items-center px-1 pt-1 text-sm font-medium transition-theme border-b-2 border-transparent',
+                    isLandingPage
+                      ? location.pathname === item.path
+                        ? 'text-white border-white'
+                        : 'text-white/80 hover:text-white hover:border-white/60'
+                      : location.pathname === item.path
+                        ? 'text-action-contrast border-[color:var(--color-action-primary)]'
+                        : 'text-theme-secondary hover:text-theme-primary hover:border-theme-muted'
+                  )}
                 >
                   {item.label}
                 </Link>
@@ -54,7 +75,12 @@ export function Navigation() {
           <div className="flex items-center">
             <button
               onClick={toggle}
-              className="p-2 mr-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-full transition-theme"
+              className={clsx(
+                'p-2 mr-2 rounded-full transition-theme',
+                isLandingPage
+                  ? 'text-white/80 hover:text-white hover:bg-white/10'
+                  : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
+              )}
               aria-label="Toggle dark mode"
               aria-pressed={isDark}
             >
@@ -75,7 +101,12 @@ export function Navigation() {
 
             <button
               type="button"
-              className="md:hidden ml-2 p-2 rounded-md text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--color-action-primary)] transition-theme"
+              className={clsx(
+                'md:hidden ml-2 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--color-action-primary)] transition-theme',
+                isLandingPage
+                  ? 'text-white/80 hover:text-white hover:bg-white/10'
+                  : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
+              )}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               <span className="sr-only">Toggle menu</span>
@@ -92,16 +123,26 @@ export function Navigation() {
       {/* Mobile menu */}
       {isMenuOpen && (
         <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 bg-theme-surface transition-theme">
+          <div
+            className={clsx(
+              'px-2 pt-2 pb-3 space-y-1 transition-theme',
+              isLandingPage ? 'bg-gray-900/95 text-white' : 'bg-theme-surface'
+            )}
+          >
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`block px-3 py-2 rounded-md text-base font-medium transition-theme ${
-                  location.pathname === item.path
-                    ? 'text-action-contrast bg-[color:var(--color-action-primary-soft)]'
-                    : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
-                }`}
+                className={clsx(
+                  'block px-3 py-2 rounded-md text-base font-medium transition-theme',
+                  isLandingPage
+                    ? location.pathname === item.path
+                      ? 'text-white bg-white/10'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                    : location.pathname === item.path
+                      ? 'text-action-contrast bg-[color:var(--color-action-primary-soft)]'
+                      : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
+                )}
                 onClick={() => setIsMenuOpen(false)}
               >
                 {item.label}
@@ -115,7 +156,7 @@ export function Navigation() {
                 setIsMenuOpen(false);
                 handleSignInClick();
               }}
-              className="w-full mt-4"
+              className={clsx('w-full mt-4', isLandingPage && 'bg-[#8CC63F] text-white hover:bg-[#7ab635]')}
             >
               Sign In
             </Button>
