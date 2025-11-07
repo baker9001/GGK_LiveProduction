@@ -192,9 +192,9 @@ export default function TeacherProfilePage() {
     isLoading, 
     error,
     refetch 
-  } = useQuery<TeacherProfileData>(
-    ['teacher-profile', user?.id],
-    async () => {
+  } = useQuery<TeacherProfileData>({
+    queryKey: ['teacher-profile', user?.id],
+    queryFn: async () => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -279,12 +279,10 @@ export default function TeacherProfilePage() {
         department_name: teacherData.departments?.name
       } as TeacherProfileData;
     },
-    {
-      enabled: !!user?.id && user?.role === 'TEACHER',
-      staleTime: 2 * 60 * 1000,
-      retry: 2
-    }
-  );
+    enabled: !!user?.id && user?.role === 'TEACHER',
+    staleTime: 2 * 60 * 1000,
+    retry: 2
+  });
 
   // Initialize form data when profile data is loaded
   useEffect(() => {
