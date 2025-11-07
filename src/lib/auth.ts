@@ -34,6 +34,8 @@ const LAST_PAGE_LOAD_TIME_KEY = 'ggk_last_page_load_time';
 const DELIBERATE_RELOAD_KEY = 'ggk_deliberate_reload';
 const RELOAD_REASON_KEY = 'ggk_reload_reason';
 const EXTENDED_GRACE_PERIOD_KEY = 'ggk_extended_grace_period';
+const JUST_LOGGED_IN_KEY = 'ggk_just_logged_in';
+const LOGIN_GRACE_PERIOD = 30000; // 30 seconds grace period after login
 export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
 // Session durations
@@ -92,11 +94,36 @@ export function setAuthenticatedUser(user: User): void {
   const loginTime = Date.now();
   persistLastLoginTime(loginTime);
 
+  // CRITICAL FIX: Set "just logged in" flag to bypass strict session checks
+  localStorage.setItem(JUST_LOGGED_IN_KEY, loginTime.toString());
+
   console.log(`[Auth] Session created with ${rememberMe ? '30-day' : '24-hour'} expiration`);
   console.log(`[Auth] Login time recorded: ${new Date(loginTime).toISOString()}`);
+  console.log('[Auth] Login grace period activated for 30 seconds');
 
   // SECURITY: Dispatch auth change event
   dispatchAuthChange();
+}
+
+// Check if we're in the login grace period
+function isInLoginGracePeriod(): boolean {
+  try {
+    const justLoggedIn = localStorage.getItem(JUST_LOGGED_IN_KEY);
+    if (!justLoggedIn) return false;
+
+    const loginTime = parseInt(justLoggedIn, 10);
+    const elapsed = Date.now() - loginTime;
+
+    // If grace period expired, clean up the flag
+    if (elapsed >= LOGIN_GRACE_PERIOD) {
+      localStorage.removeItem(JUST_LOGGED_IN_KEY);
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Get authenticated user
@@ -115,18 +142,27 @@ export function getAuthenticatedUser(): User | null {
       // Clear without dispatching events to avoid loops
       localStorage.removeItem(AUTH_STORAGE_KEY);
       localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(JUST_LOGGED_IN_KEY);
       return null;
     }
   } catch {
     return null;
   }
 
-  // Ensure the Supabase auth session is still valid when required
-  if (isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
+  // CRITICAL FIX: Skip Supabase session validation during login grace period
+  const inGracePeriod = isInLoginGracePeriod();
+
+  // Ensure the Supabase auth session is still valid when required (skip during grace period)
+  if (!inGracePeriod && isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
     console.warn('[Auth] Supabase session is missing or expired. Clearing local auth state.');
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(JUST_LOGGED_IN_KEY);
     return null;
+  }
+
+  if (inGracePeriod) {
+    console.log('[Auth] In login grace period - skipping Supabase session validation');
   }
 
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -193,6 +229,7 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(LAST_LOGIN_TIME_KEY);
   localStorage.removeItem(LAST_PAGE_LOAD_TIME_KEY);
   localStorage.removeItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY);
+  localStorage.removeItem(JUST_LOGGED_IN_KEY);
 
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
@@ -370,6 +407,11 @@ export function getSupabaseSessionRemainingMinutes(): number | null {
 }
 
 export function isSupabaseSessionActive(gracePeriodMs = 0): boolean {
+  // CRITICAL FIX: Always return true during login grace period
+  if (isInLoginGracePeriod()) {
+    return true;
+  }
+
   const expiry = getSupabaseSessionExpiry();
   if (expiry === null) {
     // Treat missing session as inactive only when monitoring is required
@@ -676,7 +718,7 @@ export function startSessionMonitoring(): void {
   const lastPageLoadTime = getPersistedLastPageLoadTime();
 
   // Don't start monitoring immediately - wait for app to initialize
-  // CRITICAL FIX: Increased delay to 10 seconds to prevent interference with login flow
+  // CRITICAL FIX: Increased delay to 15 seconds to prevent interference with login flow
   setTimeout(() => {
     isMonitoringActive = true;
 
@@ -684,9 +726,15 @@ export function startSessionMonitoring(): void {
       // Skip if not monitoring or already redirecting
       if (!isMonitoringActive || isRedirecting) return;
 
-      // CRITICAL FIX: Don't monitor if user just logged in (within last 60 seconds)
+      // CRITICAL FIX: Skip if in login grace period
+      if (isInLoginGracePeriod()) {
+        console.log('[SessionMonitoring] Skipping check - in login grace period');
+        return;
+      }
+
+      // CRITICAL FIX: Don't monitor if user just logged in (within last 90 seconds)
       const timeSinceLogin = Date.now() - lastLoginTime;
-      if (timeSinceLogin < 60000) {
+      if (timeSinceLogin < 90000) {
         console.log('[SessionMonitoring] Skipping check - user recently logged in');
         return;
       }
