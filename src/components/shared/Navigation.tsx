@@ -48,7 +48,7 @@ export function Navigation() {
 
     const handleDarkModeChange = () => {
       const stored = readDarkModePreference();
-      if (stored !== null && stored !== isDarkMode) {
+      if (stored !== null) {
         setIsDarkMode(stored);
       }
     };
@@ -60,7 +60,7 @@ export function Navigation() {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('darkmode-change', handleDarkModeChange);
     };
-  }, [isDarkMode]);
+  }, []);
 
   const toggleDarkMode = () => {
     setIsDarkMode(previous => !previous);

@@ -332,7 +332,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
     const handleDarkModeChange = () => {
       const stored = readDarkModePreference();
-      if (stored !== null && stored !== isDarkMode) {
+      if (stored !== null) {
         setIsDarkMode(stored);
       }
     };
@@ -344,7 +344,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('darkmode-change', handleDarkModeChange);
     };
-  }, [isDarkMode]);
+  }, []);
 
   // Initialize expanded items on first load
   useEffect(() => {
@@ -646,7 +646,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                 </button>
 
                 {/* Theme Toggle */}
-                <button 
+                <button
                   className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
                   onClick={() => setIsDarkMode(!isDarkMode)}
                 >
