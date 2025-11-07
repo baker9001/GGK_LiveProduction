@@ -367,8 +367,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // ===== MUTATIONS =====
-  const createBranchMutation = useMutation(
-    async (data: any) => {
+  const createBranchMutation = useMutation({
+    mutationFn: async (data: any) => {
       if (isBranchAdmin) {
         toast.error('Branch administrators cannot create new branches');
         throw new Error('Insufficient permissions');
@@ -407,11 +407,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         .single();
       
       if (error) throw error;
-      
-      if (Object.keys(additionalData).length > 0) {
-        const { error: additionalError } = await supabase
-          .from('branches_additional')
-          .insert([{
+
+    if (Object.keys(additionalData).length > 0) {
+      const { error: additionalError } = await supabase
+        .from('branches_additional')
+        .insert([{
             branch_id: branch.id,
             ...additionalData
           }]);
@@ -419,31 +419,29 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         if (additionalError && additionalError.code !== '23505') {
           console.error('Additional data error:', additionalError);
         }
-      }
-      
-      return branch;
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['branches-tab']);
-        queryClient.invalidateQueries(['organization-stats']);
-        if (refreshData) refreshData();
-        toast.success('Branch created successfully');
-        setShowCreateModal(false);
-        setFormData({});
-        setFormErrors({});
-        setTabErrors({ basic: false, additional: false, contact: false });
-        setActiveTab('basic');
-      },
-      onError: (error: any) => {
-        console.error('Error creating branch:', error);
-        toast.error(error.message || 'Failed to create branch');
-      }
     }
-  );
 
-  const updateBranchMutation = useMutation(
-    async ({ id, data }: { id: string; data: any }) => {
+    return branch;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['branches-tab']);
+      queryClient.invalidateQueries(['organization-stats']);
+      if (refreshData) refreshData();
+      toast.success('Branch created successfully');
+      setShowCreateModal(false);
+      setFormData({});
+      setFormErrors({});
+      setTabErrors({ basic: false, additional: false, contact: false });
+      setActiveTab('basic');
+    },
+    onError: (error: any) => {
+      console.error('Error creating branch:', error);
+      toast.error(error.message || 'Failed to create branch');
+    }
+  });
+
+  const updateBranchMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const branchFields = ['name', 'code', 'school_id', 'status', 'address', 'notes', 'logo'];
       
       const additionalFieldsList = [
@@ -485,43 +483,41 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           .update(additionalData)
           .eq('branch_id', id);
         
-        if (updateError?.code === 'PGRST116') {
-          const { error: insertError } = await supabase
-            .from('branches_additional')
-            .insert([{
-              branch_id: id,
-              ...additionalData
-            }]);
-          
-          if (insertError && insertError.code !== '23505') {
-            console.error('Additional insert error:', insertError);
-          }
+      if (updateError?.code === 'PGRST116') {
+        const { error: insertError } = await supabase
+          .from('branches_additional')
+          .insert([{
+            branch_id: id,
+            ...additionalData
+          }]);
+
+        if (insertError && insertError.code !== '23505') {
+          console.error('Additional insert error:', insertError);
         }
       }
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['branches-tab']);
-        queryClient.invalidateQueries(['organization-stats']);
-        if (refreshData) refreshData();
-        toast.success('Branch updated successfully');
-        setShowEditModal(false);
-        setSelectedBranch(null);
-        setFormData({});
-        setFormErrors({});
-        setTabErrors({ basic: false, additional: false, contact: false });
-        setActiveTab('basic');
-      },
-      onError: (error: any) => {
-        console.error('Error updating branch:', error);
-        toast.error(error.message || 'Failed to update branch');
-      }
     }
-  );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['branches-tab']);
+      queryClient.invalidateQueries(['organization-stats']);
+      if (refreshData) refreshData();
+      toast.success('Branch updated successfully');
+      setShowEditModal(false);
+      setSelectedBranch(null);
+      setFormData({});
+      setFormErrors({});
+      setTabErrors({ basic: false, additional: false, contact: false });
+      setActiveTab('basic');
+    },
+    onError: (error: any) => {
+      console.error('Error updating branch:', error);
+      toast.error(error.message || 'Failed to update branch');
+    }
+  });
 
   // Delete branch mutation
-  const deleteBranchMutation = useMutation(
-    async (ids: string[]) => {
+  const deleteBranchMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
       const { error } = await supabase
         .from('branches')
         .delete()
@@ -530,23 +526,21 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       if (error) throw error;
       return ids;
     },
-    {
-      onSuccess: (_data, ids) => {
-        toast.success(ids.length > 1 ? 'Branches deleted successfully' : 'Branch deleted successfully');
-        queryClient.invalidateQueries(['branches-tab']);
-        setShowDeleteConfirmation(false);
-        setDeleteContext(null);
-        setSelectedBranches([]);
-        if (refreshData) refreshData();
-      },
-      onError: (error: any) => {
-        console.error('Error deleting branch:', error);
-        toast.error(error.message || 'Failed to delete branch');
-        setShowDeleteConfirmation(false);
-        setDeleteContext(null);
-      }
+    onSuccess: (_data, ids) => {
+      toast.success(ids.length > 1 ? 'Branches deleted successfully' : 'Branch deleted successfully');
+      queryClient.invalidateQueries(['branches-tab']);
+      setShowDeleteConfirmation(false);
+      setDeleteContext(null);
+      setSelectedBranches([]);
+      if (refreshData) refreshData();
+    },
+    onError: (error: any) => {
+      console.error('Error deleting branch:', error);
+      toast.error(error.message || 'Failed to delete branch');
+      setShowDeleteConfirmation(false);
+      setDeleteContext(null);
     }
-  );
+  });
 
   // Form validation
   const validateForm = useCallback(() => {

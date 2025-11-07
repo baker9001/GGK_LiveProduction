@@ -275,8 +275,8 @@ export default function TeacherMaterialsPage() {
   });
 
   // Create material mutation
-  const createMutation = useMutation(
-    async (materialData: any) => {
+  const createMutation = useMutation({
+    mutationFn: async (materialData: any) => {
       if (!teacherInfo) throw new Error('Teacher info not available');
       if (!uploadedFile) throw new Error('File is required');
 
@@ -293,60 +293,54 @@ export default function TeacherMaterialsPage() {
         teacher_id: teacherInfo.teacherId
       });
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['teacher-materials']);
-        toast.success('Material uploaded successfully');
-        setIsFormOpen(false);
-        setUploadedFile(null);
-        setFormErrors({});
-      },
-      onError: (error: any) => {
-        console.error('Error creating material:', error);
-        toast.error('Failed to upload material');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['teacher-materials']);
+      toast.success('Material uploaded successfully');
+      setIsFormOpen(false);
+      setUploadedFile(null);
+      setFormErrors({});
+    },
+    onError: (error: any) => {
+      console.error('Error creating material:', error);
+      toast.error('Failed to upload material');
     }
-  );
+  });
 
   // Update material mutation
-  const updateMutation = useMutation(
-    async ({ id, updates }: { id: string; updates: any }) => {
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
       await updateTeacherMaterial(id, updates);
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['teacher-materials']);
-        toast.success('Material updated successfully');
-        setIsFormOpen(false);
-        setEditingMaterial(null);
-      },
-      onError: (error: any) => {
-        console.error('Error updating material:', error);
-        toast.error('Failed to update material');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['teacher-materials']);
+      toast.success('Material updated successfully');
+      setIsFormOpen(false);
+      setEditingMaterial(null);
+    },
+    onError: (error: any) => {
+      console.error('Error updating material:', error);
+      toast.error('Failed to update material');
     }
-  );
+  });
 
   // Delete material mutation
-  const deleteMutation = useMutation(
-    async (materials: Material[]) => {
+  const deleteMutation = useMutation({
+    mutationFn: async (materials: Material[]) => {
       await Promise.all(
         materials.map(m => deleteTeacherMaterial(m.id, m.file_path))
       );
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['teacher-materials']);
-        toast.success(`Material(s) deleted successfully`);
-        setIsConfirmDialogOpen(false);
-        setMaterialsToDelete([]);
-      },
-      onError: (error: any) => {
-        console.error('Error deleting materials:', error);
-        toast.error('Failed to delete material(s)');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['teacher-materials']);
+      toast.success(`Material(s) deleted successfully`);
+      setIsConfirmDialogOpen(false);
+      setMaterialsToDelete([]);
+    },
+    onError: (error: any) => {
+      console.error('Error deleting materials:', error);
+      toast.error('Failed to delete material(s)');
     }
-  );
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

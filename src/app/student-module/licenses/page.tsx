@@ -102,22 +102,21 @@ export default function StudentLicensesPage() {
     mutationFn: async (licenseId: string) => {
       return await EntityLicenseService.activateStudentLicense(licenseId, studentId);
     },
-      onSuccess: (result) => {
-        if (result.success) {
-          toast.success('License activated successfully! You can now access the content.');
-          queryClient.invalidateQueries(['student-licenses']);
-          setShowActivationDialog(false);
-          setSelectedLicense(null);
-        } else {
-          toast.error(result.error || result.message || 'Failed to activate license');
-        }
-      },
-      onError: (error) => {
-        console.error('Activation error:', error);
-        toast.error('Failed to activate license. Please try again.');
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success('License activated successfully! You can now access the content.');
+        queryClient.invalidateQueries(['student-licenses']);
+        setShowActivationDialog(false);
+        setSelectedLicense(null);
+      } else {
+        toast.error(result.error || result.message || 'Failed to activate license');
       }
+    },
+    onError: (error) => {
+      console.error('Activation error:', error);
+      toast.error('Failed to activate license. Please try again.');
     }
-  );
+  });
 
   const handleActivate = (license: StudentLicense) => {
     setSelectedLicense(license);

@@ -266,8 +266,8 @@ export default function LicenseManagementPage() {
   } = usePagination(groupedLicenses);
 
   // License action mutation
-  const actionMutation = useMutation(
-    async (payload: any) => {
+  const actionMutation = useMutation({
+    mutationFn: async (payload: any) => {
       try {
         // Fetch the license details
         const { data: license, error: fetchError } = await supabase
@@ -373,40 +373,38 @@ export default function LicenseManagementPage() {
         throw error;
       }
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['licenses']);
-        queryClient.invalidateQueries(['licenseActions']);
-        setIsActionFormOpen(false);
-        setSelectedAction(null);
-        setEditingLicense(null);
-        toast.success(`License ${selectedAction?.toLowerCase()}ed successfully`);
-      },
-      onError: (error: any) => {
-        console.error('Error processing license action:', error);
+    onSuccess: () => {
+      queryClient.invalidateQueries(['licenses']);
+      queryClient.invalidateQueries(['licenseActions']);
+      setIsActionFormOpen(false);
+      setSelectedAction(null);
+      setEditingLicense(null);
+      toast.success(`License ${selectedAction?.toLowerCase()}ed successfully`);
+    },
+    onError: (error: any) => {
+      console.error('Error processing license action:', error);
 
-        let errorMessage = 'Failed to process license action. Please try again.';
+      let errorMessage = 'Failed to process license action. Please try again.';
 
-        if (error?.message) {
-          if (error.message.includes('relation') && error.message.includes('does not exist')) {
-            errorMessage = 'Database table missing. Please contact system administrator.';
-          } else if (error.message.includes('permission denied') || error.message.includes('policy')) {
-            errorMessage = 'You do not have permission to perform this action.';
-          } else if (error.message.includes('Failed to record license action')) {
-            errorMessage = 'Failed to record the action history. The license may have been updated.';
-          } else {
-            errorMessage = error.message;
-          }
+      if (error?.message) {
+        if (error.message.includes('relation') && error.message.includes('does not exist')) {
+          errorMessage = 'Database table missing. Please contact system administrator.';
+        } else if (error.message.includes('permission denied') || error.message.includes('policy')) {
+          errorMessage = 'You do not have permission to perform this action.';
+        } else if (error.message.includes('Failed to record license action')) {
+          errorMessage = 'Failed to record the action history. The license may have been updated.';
+        } else {
+          errorMessage = error.message;
         }
-
-        toast.error(errorMessage);
       }
+
+      toast.error(errorMessage);
     }
-  );
+  });
 
   // Delete license mutation
-  const deleteMutation = useMutation(
-    async (licenses: License[]) => {
+  const deleteMutation = useMutation({
+    mutationFn: async (licenses: License[]) => {
       const { error } = await supabase
         .from('licenses')
         .delete()
@@ -415,21 +413,19 @@ export default function LicenseManagementPage() {
       if (error) throw error;
       return licenses;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['licenses']);
-        setIsConfirmDialogOpen(false);
-        setLicensesToDelete([]);
-        toast.success('License(s) deleted successfully');
-      },
-      onError: (error) => {
-        console.error('Error deleting licenses:', error);
-        toast.error('Failed to delete license(s). Please try again.');
-        setIsConfirmDialogOpen(false);
-        setLicensesToDelete([]);
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['licenses']);
+      setIsConfirmDialogOpen(false);
+      setLicensesToDelete([]);
+      toast.success('License(s) deleted successfully');
+    },
+    onError: (error) => {
+      console.error('Error deleting licenses:', error);
+      toast.error('Failed to delete license(s). Please try again.');
+      setIsConfirmDialogOpen(false);
+      setLicensesToDelete([]);
     }
-  );
+  });
 
   // Main table columns (company level)
   const companyColumns = [

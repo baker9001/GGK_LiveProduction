@@ -209,8 +209,8 @@ export default function DataStructurePage() {
   );
 
   // Create/update data structure mutation
-  const mutation = useMutation(
-    async () => {
+  const mutation = useMutation({
+    mutationFn: async () => {
       const data = {
         region_id: formRegionId,
         program_id: formProgramId,
@@ -250,25 +250,23 @@ export default function DataStructurePage() {
         return newStructure;
       }
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['data-structures']);
-        setIsFormOpen(false);
-        setEditingStructure(null);
-        resetFormState();
-        setFormErrors({});
-        toast.success(`Structure ${editingStructure ? 'updated' : 'created'} successfully`);
-      },
-      onError: (error: any) => {
-        setFormErrors({ form: error.message || 'An error occurred' });
-        toast.error('Failed to save structure');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['data-structures']);
+      setIsFormOpen(false);
+      setEditingStructure(null);
+      resetFormState();
+      setFormErrors({});
+      toast.success(`Structure ${editingStructure ? 'updated' : 'created'} successfully`);
+    },
+    onError: (error: any) => {
+      setFormErrors({ form: error.message || 'An error occurred' });
+      toast.error('Failed to save structure');
     }
-  );
+  });
 
   // Delete data structure mutation
-  const deleteMutation = useMutation(
-    async (structures: DataStructure[]) => {
+  const deleteMutation = useMutation({
+    mutationFn: async (structures: DataStructure[]) => {
       const { error } = await supabase
         .from('data_structures')
         .delete()
@@ -277,21 +275,19 @@ export default function DataStructurePage() {
       if (error) throw error;
       return structures;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['data-structures']);
-        setIsConfirmDialogOpen(false);
-        setStructuresToDelete([]);
-        toast.success('Structure(s) deleted successfully');
-      },
-      onError: (error) => {
-        console.error('Error deleting structures:', error);
-        toast.error('Failed to delete structure(s)');
-        setIsConfirmDialogOpen(false);
-        setStructuresToDelete([]);
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['data-structures']);
+      setIsConfirmDialogOpen(false);
+      setStructuresToDelete([]);
+      toast.success('Structure(s) deleted successfully');
+    },
+    onError: (error) => {
+      console.error('Error deleting structures:', error);
+      toast.error('Failed to delete structure(s)');
+      setIsConfirmDialogOpen(false);
+      setStructuresToDelete([]);
     }
-  );
+  });
 
   // Update form state when editing structure changes
   React.useEffect(() => {

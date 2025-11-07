@@ -264,8 +264,8 @@ export default function SystemAdminProfilePage() {
   );
 
   // Enhanced update mutation
-  const updateProfileMutation = useMutation(
-    async (updates: Partial<UserProfile>) => {
+  const updateProfileMutation = useMutation({
+    mutationFn: async (updates: Partial<UserProfile>) => {
       if (!currentUser?.id) throw new Error('User not authenticated');
 
       // Fetch current metadata
@@ -334,20 +334,18 @@ export default function SystemAdminProfilePage() {
         }
       }
     },
-    {
-      onSuccess: (_data, _variables) => {
-        queryClient.invalidateQueries(['systemAdminProfile', currentUser?.id]);
-        queryClient.invalidateQueries(['userSidebarProfile', currentUser?.id]);
-        toast.success('Profile updated successfully!');
-        setIsEditingProfile(false);
-        setIsEditingSecurity(false);
-      },
-      onError: (err: any) => {
-        console.error('Error updating profile:', err);
-        toast.error(err.message || 'Failed to update profile');
-      },
+    onSuccess: (_data, _variables) => {
+      queryClient.invalidateQueries(['systemAdminProfile', currentUser?.id]);
+      queryClient.invalidateQueries(['userSidebarProfile', currentUser?.id]);
+      toast.success('Profile updated successfully!');
+      setIsEditingProfile(false);
+      setIsEditingSecurity(false);
+    },
+    onError: (err: any) => {
+      console.error('Error updating profile:', err);
+      toast.error(err.message || 'Failed to update profile');
     }
-  );
+  });
 
   // Handle avatar upload
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

@@ -558,8 +558,8 @@ export default function CompaniesTab() {
   // ===== MUTATIONS =====
   
   // Company mutation
-  const mutation = useMutation(
-    async (formData: FormState) => {
+  const mutation = useMutation({
+    mutationFn: async (formData: FormState) => {
       const data = {
         name: formData.name.trim(),
         code: formData.code.trim() || null,
@@ -592,35 +592,33 @@ export default function CompaniesTab() {
         return newCompany;
       }
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['companies']);
-        setIsFormOpen(false);
-        setEditingCompany(null);
-        setFormErrors({});
-        toast.success(`Company ${editingCompany ? 'updated' : 'created'} successfully`);
-      },
-      onError: (error) => {
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0] as string] = err.message;
-            }
-          });
-          setFormErrors(errors);
-        } else {
-          console.error('Error saving company:', error);
-          setFormErrors({ form: 'Failed to save company. Please try again.' });
-          toast.error('Failed to save company');
-        }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['companies']);
+      setIsFormOpen(false);
+      setEditingCompany(null);
+      setFormErrors({});
+      toast.success(`Company ${editingCompany ? 'updated' : 'created'} successfully`);
+    },
+    onError: (error) => {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path.length > 0) {
+            errors[err.path[0] as string] = err.message;
+          }
+        });
+        setFormErrors(errors);
+      } else {
+        console.error('Error saving company:', error);
+        setFormErrors({ form: 'Failed to save company. Please try again.' });
+        toast.error('Failed to save company');
       }
     }
-  );
+  });
 
   // Tenant admin mutation with proper Supabase Auth integration
-  const tenantAdminMutation = useMutation(
-    async (formData: FormData) => {
+  const tenantAdminMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
       try {
         const name = formData.get('name') as string;
         const email = (formData.get('email') as string).toLowerCase().trim();
@@ -1039,67 +1037,65 @@ export default function CompaniesTab() {
         throw error;
       }
     },
-    {
-      onSuccess: (result) => {
-        queryClient.invalidateQueries(['companies']);
-        
-        if (result.type === 'created' && result.user?.temporary_password) {
-          // Show password modal for new users with generated password
-          setGeneratedPassword(result.user.temporary_password);
-          toast.success('Admin created successfully. Copy the temporary password!');
-        } else {
-          setIsAdminFormOpen(false);
-          setSelectedCompanyForAdmin(null);
-          setEditingAdmin(null);
-          setAdminFormErrors({});
-          resetAdminForm();
-          
-          // Return to View Admins modal if we came from there
-          if (returnToViewAfterAdd && selectedCompanyForView) {
-            const companyId = result.company?.id || selectedCompanyForView.id;
-            fetchCompanyAdmins(companyId);
-            setIsViewAdminsOpen(true);
-            setReturnToViewAfterAdd(false);
-          }
-          
-          toast.success(result.message || 'Operation successful');
-          
-          // Show additional info about verification for new users
-          if (result.type === 'created' && result.user) {
-            toast.info('User can sign in after verifying their email.', {
-              duration: 5000
-            });
-          }
+    onSuccess: (result) => {
+      queryClient.invalidateQueries(['companies']);
+
+      if (result.type === 'created' && result.user?.temporary_password) {
+        // Show password modal for new users with generated password
+        setGeneratedPassword(result.user.temporary_password);
+        toast.success('Admin created successfully. Copy the temporary password!');
+      } else {
+        setIsAdminFormOpen(false);
+        setSelectedCompanyForAdmin(null);
+        setEditingAdmin(null);
+        setAdminFormErrors({});
+        resetAdminForm();
+
+        // Return to View Admins modal if we came from there
+        if (returnToViewAfterAdd && selectedCompanyForView) {
+          const companyId = result.company?.id || selectedCompanyForView.id;
+          fetchCompanyAdmins(companyId);
+          setIsViewAdminsOpen(true);
+          setReturnToViewAfterAdd(false);
         }
-      },
-      onError: (error: any) => {
-        if (error.validationErrors) {
-          const errors: Record<string, string> = {};
-          Object.entries(error.validationErrors).forEach(([key, value]) => {
-            errors[key] = Array.isArray(value) ? value[0] : value as string;
+
+        toast.success(result.message || 'Operation successful');
+
+        // Show additional info about verification for new users
+        if (result.type === 'created' && result.user) {
+          toast.info('User can sign in after verifying their email.', {
+            duration: 5000
           });
-          setAdminFormErrors(errors);
-        } else {
-          console.error('Error:', error);
-          const errorMessage = error.message || 'Operation failed';
-          
-          if (errorMessage.includes('already exists') || errorMessage.includes('already registered')) {
-            setAdminFormErrors({ email: 'This email is already registered' });
-          } else if (errorMessage.includes('null value in column')) {
-            setAdminFormErrors({ form: 'Missing required fields. Please ensure all fields are filled.' });
-          } else {
-            setAdminFormErrors({ form: errorMessage });
-          }
-          
-          toast.error(errorMessage);
         }
       }
+    },
+    onError: (error: any) => {
+      if (error.validationErrors) {
+        const errors: Record<string, string> = {};
+        Object.entries(error.validationErrors).forEach(([key, value]) => {
+          errors[key] = Array.isArray(value) ? value[0] : value as string;
+        });
+        setAdminFormErrors(errors);
+      } else {
+        console.error('Error:', error);
+        const errorMessage = error.message || 'Operation failed';
+
+        if (errorMessage.includes('already exists') || errorMessage.includes('already registered')) {
+          setAdminFormErrors({ email: 'This email is already registered' });
+        } else if (errorMessage.includes('null value in column')) {
+          setAdminFormErrors({ form: 'Missing required fields. Please ensure all fields are filled.' });
+        } else {
+          setAdminFormErrors({ form: errorMessage });
+        }
+
+        toast.error(errorMessage);
+      }
     }
-  );
+  });
 
   // FIXED: Change password mutation with fallback for missing Edge Function or Auth user
-  const changePasswordMutation = useMutation(
-    async (data: { userId: string; password: string; sendEmail: boolean }) => {
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { userId: string; password: string; sendEmail: boolean }) => {
       try {
         let authUpdateSuccess = false;
         let authUpdateAttempted = false;
@@ -1247,8 +1243,8 @@ export default function CompaniesTab() {
           });
         }
         
-        return { 
-          success: true, 
+        return {
+          success: true,
           password: data.password,
           isLegacyUser: isLegacyUser,
           authUpdated: authUpdateSuccess
@@ -1258,57 +1254,55 @@ export default function CompaniesTab() {
         throw error;
       }
     },
-    {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries(['companies']);
-        
-        if (data.password) {
-          setGeneratedPassword(data.password);
-          
-          // Show appropriate success message based on what happened
-          if (data.authUpdated) {
-            toast.success('Password changed successfully. Copy the new password!');
-          } else if (data.isLegacyUser) {
-            toast.success('Password changed for legacy user. Copy the new password!');
-          } else {
-            toast.success('Password changed. Copy the new password!');
-          }
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['companies']);
+
+      if (data.password) {
+        setGeneratedPassword(data.password);
+
+        // Show appropriate success message based on what happened
+        if (data.authUpdated) {
+          toast.success('Password changed successfully. Copy the new password!');
+        } else if (data.isLegacyUser) {
+          toast.success('Password changed for legacy user. Copy the new password!');
         } else {
-          setIsPasswordFormOpen(false);
-          setSelectedAdminForPassword(null);
-          toast.success('Password changed successfully');
+          toast.success('Password changed. Copy the new password!');
         }
-        
-        setFormErrors({});
-      },
-      onError: (error: any) => {
-        console.error('Error changing password:', error);
-        const errorMessage = error.message || 'Failed to change password';
-        
-        // Don't show critical error if it's just a legacy user situation
-        if (errorMessage.includes('authentication system') && 
-            !errorMessage.includes('not found in authentication')) {
-          // This is a real Auth error - show critical message
-          setFormErrors({ 
-            form: 'Failed to update authentication system. The password may not work for login. Please contact support.' 
-          });
-          toast.error('Critical: Authentication system update failed. User may not be able to login.', {
-            duration: 10000
-          });
-        } else {
-          // General error
-          setFormErrors({ form: errorMessage });
-          toast.error(errorMessage, {
-            duration: 5000
-          });
-        }
+      } else {
+        setIsPasswordFormOpen(false);
+        setSelectedAdminForPassword(null);
+        toast.success('Password changed successfully');
+      }
+
+      setFormErrors({});
+    },
+    onError: (error: any) => {
+      console.error('Error changing password:', error);
+      const errorMessage = error.message || 'Failed to change password';
+
+      // Don't show critical error if it's just a legacy user situation
+      if (errorMessage.includes('authentication system') &&
+          !errorMessage.includes('not found in authentication')) {
+        // This is a real Auth error - show critical message
+        setFormErrors({
+          form: 'Failed to update authentication system. The password may not work for login. Please contact support.'
+        });
+        toast.error('Critical: Authentication system update failed. User may not be able to login.', {
+          duration: 10000
+        });
+      } else {
+        // General error
+        setFormErrors({ form: errorMessage });
+        toast.error(errorMessage, {
+          duration: 5000
+        });
       }
     }
-  );
+  });
 
   // Delete company mutation
-  const deleteMutation = useMutation(
-    async (companies: Company[]) => {
+  const deleteMutation = useMutation({
+    mutationFn: async (companies: Company[]) => {
       // Delete logos from storage
       for (const company of companies) {
         if (company.logo) {
@@ -1330,25 +1324,23 @@ export default function CompaniesTab() {
       if (error) throw error;
       return companies;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['companies']);
-        setIsConfirmDialogOpen(false);
-        setCompaniesToDelete([]);
-        toast.success('Company(s) deleted successfully');
-      },
-      onError: (error) => {
-        console.error('Error deleting companies:', error);
-        toast.error('Failed to delete company(s)');
-        setIsConfirmDialogOpen(false);
-        setCompaniesToDelete([]);
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries(['companies']);
+      setIsConfirmDialogOpen(false);
+      setCompaniesToDelete([]);
+      toast.success('Company(s) deleted successfully');
+    },
+    onError: (error) => {
+      console.error('Error deleting companies:', error);
+      toast.error('Failed to delete company(s)');
+      setIsConfirmDialogOpen(false);
+      setCompaniesToDelete([]);
     }
-  );
+  });
 
   // Remove admin mutation
-  const removeAdminMutation = useMutation(
-    async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
+  const removeAdminMutation = useMutation({
+    mutationFn: async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
       const { error } = await supabase
         .from('entity_users')
         .delete()
@@ -1357,27 +1349,25 @@ export default function CompaniesTab() {
       if (error) throw error;
       return { entityUserId };
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['companies']);
-        if (selectedCompanyForView?.id) {
-          fetchCompanyAdmins(selectedCompanyForView.id);
-        }
-        toast.success('Admin removed successfully');
-      },
-      onError: (error) => {
-        console.error('Error removing admin:', error);
-        toast.error('Failed to remove admin');
+    onSuccess: () => {
+      queryClient.invalidateQueries(['companies']);
+      if (selectedCompanyForView?.id) {
+        fetchCompanyAdmins(selectedCompanyForView.id);
       }
+      toast.success('Admin removed successfully');
+    },
+    onError: (error) => {
+      console.error('Error removing admin:', error);
+      toast.error('Failed to remove admin');
     }
-  );
+  });
 
   // Resend verification mutation
-  const resendVerificationMutation = useMutation(
-    async (userId: string) => {
+  const resendVerificationMutation = useMutation({
+    mutationFn: async (userId: string) => {
       // Generate new verification token
       const token = generateVerificationToken();
-      
+
       // Get current user data first
       const { data: currentUser } = await supabase
         .from('users')
@@ -1411,22 +1401,20 @@ export default function CompaniesTab() {
       // TODO: Send actual email
       console.log('Verification email would be sent to:', user.email);
       console.log('Verification token:', token);
-      
+
       return { success: true };
     },
-    {
-      onSuccess: () => {
-        toast.success('Verification email sent successfully');
-        if (selectedCompanyForView?.id) {
-          fetchCompanyAdmins(selectedCompanyForView.id);
-        }
-      },
-      onError: (error: any) => {
-        console.error('Error:', error);
-        toast.error(error.message || 'Failed to send verification email');
+    onSuccess: () => {
+      toast.success('Verification email sent successfully');
+      if (selectedCompanyForView?.id) {
+        fetchCompanyAdmins(selectedCompanyForView.id);
       }
+    },
+    onError: (error: any) => {
+      console.error('Error:', error);
+      toast.error(error.message || 'Failed to send verification email');
     }
-  );
+  });
 
   // ===== HELPER FUNCTIONS =====
   

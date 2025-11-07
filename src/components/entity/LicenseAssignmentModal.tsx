@@ -167,8 +167,8 @@ export function LicenseAssignmentModal({
   }, [availableStudents, assignedStudents, filterSchool]);
 
   // Assignment mutation
-  const assignMutation = useMutation(
-    async (studentIds: string[]) => {
+  const assignMutation = useMutation({
+    mutationFn: async (studentIds: string[]) => {
       if (!license || !user?.id) throw new Error('Missing license or user information');
 
       const results = await EntityLicenseService.bulkAssignLicenses(
@@ -179,36 +179,34 @@ export function LicenseAssignmentModal({
 
       return results;
     },
-    {
-      onSuccess: (results) => {
-        queryClient.invalidateQueries(['available-students']);
-        queryClient.invalidateQueries(['assigned-students']);
-        queryClient.invalidateQueries(['entity-licenses']);
-        
-        if (results.successful > 0) {
-          toast.success(`Successfully assigned license to ${results.successful} student(s)`);
-        }
-        
-        if (results.failed > 0) {
-          toast.warning(`Failed to assign to ${results.failed} student(s). Check individual errors.`);
-          results.errors.forEach(error => {
-            console.warn('Assignment error:', error);
-          });
-        }
+    onSuccess: (results) => {
+      queryClient.invalidateQueries(['available-students']);
+      queryClient.invalidateQueries(['assigned-students']);
+      queryClient.invalidateQueries(['entity-licenses']);
 
-        setSelectedStudents([]);
-        onSuccess?.();
-      },
-      onError: (error) => {
-        console.error('Bulk assignment error:', error);
-        toast.error('Failed to assign licenses. Please try again.');
+      if (results.successful > 0) {
+        toast.success(`Successfully assigned license to ${results.successful} student(s)`);
       }
+
+      if (results.failed > 0) {
+        toast.warning(`Failed to assign to ${results.failed} student(s). Check individual errors.`);
+        results.errors.forEach(error => {
+          console.warn('Assignment error:', error);
+        });
+      }
+
+      setSelectedStudents([]);
+      onSuccess?.();
+    },
+    onError: (error) => {
+      console.error('Bulk assignment error:', error);
+      toast.error('Failed to assign licenses. Please try again.');
     }
-  );
+  });
 
   // Revocation mutation
-  const revokeMutation = useMutation(
-    async (assignments: StudentLicenseAssignment[]) => {
+  const revokeMutation = useMutation({
+    mutationFn: async (assignments: StudentLicenseAssignment[]) => {
       if (!license) throw new Error('Missing license information');
 
       const results = {
@@ -238,32 +236,30 @@ export function LicenseAssignmentModal({
 
       return results;
     },
-    {
-      onSuccess: (results) => {
-        queryClient.invalidateQueries(['available-students']);
-        queryClient.invalidateQueries(['assigned-students']);
-        queryClient.invalidateQueries(['entity-licenses']);
-        
-        if (results.successful > 0) {
-          toast.success(`Successfully revoked license from ${results.successful} student(s)`);
-        }
-        
-        if (results.failed > 0) {
-          toast.warning(`Failed to revoke from ${results.failed} student(s). Check individual errors.`);
-        }
+    onSuccess: (results) => {
+      queryClient.invalidateQueries(['available-students']);
+      queryClient.invalidateQueries(['assigned-students']);
+      queryClient.invalidateQueries(['entity-licenses']);
 
-        setShowConfirmDialog(false);
-        setStudentsToRevoke([]);
-        onSuccess?.();
-      },
-      onError: (error) => {
-        console.error('Bulk revocation error:', error);
-        toast.error('Failed to revoke licenses. Please try again.');
-        setShowConfirmDialog(false);
-        setStudentsToRevoke([]);
+      if (results.successful > 0) {
+        toast.success(`Successfully revoked license from ${results.successful} student(s)`);
       }
+
+      if (results.failed > 0) {
+        toast.warning(`Failed to revoke from ${results.failed} student(s). Check individual errors.`);
+      }
+
+      setShowConfirmDialog(false);
+      setStudentsToRevoke([]);
+      onSuccess?.();
+    },
+    onError: (error) => {
+      console.error('Bulk revocation error:', error);
+      toast.error('Failed to revoke licenses. Please try again.');
+      setShowConfirmDialog(false);
+      setStudentsToRevoke([]);
     }
-  );
+  });
 
   // Handle assignment
   const handleAssignLicenses = () => {
