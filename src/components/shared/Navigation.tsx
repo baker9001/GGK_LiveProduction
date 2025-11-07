@@ -31,10 +31,8 @@ export function Navigation() {
   return (
     <nav
       className={clsx(
-        'backdrop-blur-md sticky top-0 z-50 transition-theme border-b',
-        isLandingPage
-          ? 'bg-transparent border-transparent text-white'
-          : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
+        'nav-glass sticky top-0 z-50 transition-theme',
+        isLandingPage ? 'nav-glass--transparent text-white' : 'shadow-theme-elevated'
       )}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -44,7 +42,7 @@ export function Navigation() {
               <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
               <span
                 className={clsx(
-                  'ml-2 text-xl font-bold transition-theme',
+                  'sidebar-brand ml-2 text-xl font-semibold transition-theme',
                   isLandingPage ? 'text-white' : 'text-theme-primary'
                 )}
               >
@@ -76,10 +74,10 @@ export function Navigation() {
             <button
               onClick={toggle}
               className={clsx(
-                'p-2 mr-2 rounded-full transition-theme',
+                'surface-glass mr-2 flex h-10 w-10 items-center justify-center rounded-full transition-theme',
                 isLandingPage
-                  ? 'text-white/80 hover:text-white hover:bg-white/10'
-                  : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
+                  ? 'text-white/80 hover:text-white'
+                  : 'text-theme-secondary hover:text-theme-primary'
               )}
               aria-label="Toggle dark mode"
               aria-pressed={isDark}
@@ -94,7 +92,7 @@ export function Navigation() {
             <Button
               variant="default"
               onClick={handleSignInClick}
-              className="ml-4"
+              className="ml-4 shadow-theme-elevated"
             >
               Sign In
             </Button>
@@ -126,7 +124,7 @@ export function Navigation() {
           <div
             className={clsx(
               'px-2 pt-2 pb-3 space-y-1 transition-theme',
-              isLandingPage ? 'bg-gray-900/95 text-white' : 'bg-theme-surface'
+              isLandingPage ? 'bg-gray-900/95 text-white' : 'surface-card'
             )}
           >
             {NAV_ITEMS.map((item) => (
