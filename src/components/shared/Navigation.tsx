@@ -1,16 +1,10 @@
 ///home/project/src/components/shared/Navigation.tsx
 
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, X, Menu, Moon, Sun } from 'lucide-react';
 import { Button } from './Button';
-import {
-  applyDarkModeClass,
-  isDocumentDark,
-  readDarkModePreference,
-  writeDarkModePreference
-} from '../../lib/darkMode';
 
 const NAV_ITEMS = [
   { label: 'Home', path: '/' },
@@ -24,23 +18,21 @@ export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => isDocumentDark());
-
-  useEffect(() => {
-    const storedPreference = readDarkModePreference();
-    if (storedPreference !== null) {
-      setIsDarkMode(storedPreference);
-      applyDarkModeClass(storedPreference);
-    }
-  }, []);
-
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return document.documentElement.classList.contains('dark');
+  });
+  
   const toggleDarkMode = () => {
-    setIsDarkMode(previous => {
-      const next = !previous;
-      applyDarkModeClass(next);
-      writeDarkModePreference(next);
-      return next;
-    });
+    const newDarkMode = !isDarkMode;
+    setIsDarkMode(newDarkMode);
+    
+    if (newDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('darkMode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('darkMode', 'false');
+    }
   };
   
   const handleSignInClick = () => {

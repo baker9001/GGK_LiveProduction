@@ -38,12 +38,6 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import {
-  applyDarkModeClass,
-  isDocumentDark,
-  readDarkModePreference,
-  writeDarkModePreference
-} from '../../lib/darkMode';
 import { getDyslexiaPreference, setDyslexiaPreference } from '../../lib/accessibility';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
 import { WelcomeBanner } from '../shared/WelcomeBanner';
@@ -100,7 +94,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [isDarkMode, setIsDarkMode] = useState(() => isDocumentDark());
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
   const [isDyslexiaEnabled, setIsDyslexiaEnabled] = useState(() => getDyslexiaPreference());
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [welcomeNotice, setWelcomeNotice] = useState<WelcomeNotice | null>(null);
@@ -312,19 +309,14 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     return profilePaths[currentUser.role] || '/app/system-admin/profile';
   };
 
-  // Sync dark mode preference from storage once the component is mounted in the browser.
+  // Handle dark mode
   useEffect(() => {
-    const storedPreference = readDarkModePreference();
-    if (storedPreference !== null) {
-      setIsDarkMode(storedPreference);
-      applyDarkModeClass(storedPreference);
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
-  }, []);
-
-  // Persist dark mode changes and update the DOM class when the state changes.
-  useEffect(() => {
-    applyDarkModeClass(isDarkMode);
-    writeDarkModePreference(isDarkMode);
+    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
   // Initialize expanded items on first load
