@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MockExamService } from '../services/mockExamService';
 import { supabase } from '../lib/supabase';
@@ -163,7 +164,7 @@ export function useMockExamById(examId?: string) {
 }
 
 export function useMockExamStatusWizard(examId?: string) {
-  return useQuery<MockExamStatusWizardContext | null>({
+  const queryResult = useQuery<MockExamStatusWizardContext | null>({
     queryKey: ['mockExamStatusWizard', examId],
     queryFn: async () => {
       if (!examId) return null;
@@ -181,10 +182,15 @@ export function useMockExamStatusWizard(examId?: string) {
     staleTime: 30000,
     retry: 2, // Retry failed requests twice
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    onError: (error: any) => {
-      console.error('[useMockExamStatusWizard] Final error after retries:', error);
-    },
   });
+
+  useEffect(() => {
+    if (queryResult.error) {
+      console.error('[useMockExamStatusWizard] Final error after retries:', queryResult.error);
+    }
+  }, [queryResult.error]);
+
+  return queryResult;
 }
 
 export function useMockExamStatusTransition() {

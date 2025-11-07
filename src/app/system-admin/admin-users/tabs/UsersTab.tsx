@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Key, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, Loader2, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
@@ -528,9 +528,9 @@ export default function UsersTab() {
   // ===== QUERIES =====
   
   // Fetch roles
-  const { data: roles = [] } = useQuery<Role[]>(
-    ['roles'],
-    async () => {
+  const { data: roles = [] } = useQuery<Role[]>({
+    queryKey: ['roles'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('roles')
         .select('id, name')
@@ -539,8 +539,8 @@ export default function UsersTab() {
       if (error) throw error;
       return data || [];
     },
-    { staleTime: 10 * 60 * 1000 }
-  );
+    staleTime: 10 * 60 * 1000
+  });
 
   const roleLookup = useMemo(() => {
     return roles.reduce((acc, role) => {
@@ -556,9 +556,9 @@ export default function UsersTab() {
     isFetching,
     refetch: refetchUsers,
     error: usersError
-  } = useQuery<AdminUser[]>(
-    ['admin-users', filters],
-    async () => {
+  } = useQuery<AdminUser[]>({
+    queryKey: ['admin-users', filters],
+    queryFn: async () => {
       // ENHANCED: Fetch from admin_users with proper joins
       let query = supabase
         .from('admin_users')
@@ -625,17 +625,11 @@ export default function UsersTab() {
         avatar_url: user.avatar_url
       })) as AdminUser[];
     },
-    { 
-      keepPreviousData: true, 
-      staleTime: 30 * 1000,
-      refetchInterval: 30 * 1000,
-      retry: 3,
-      onError: (error) => {
-        console.error('Query error:', error);
-        toast.error('Failed to load users. Please check your database connection.');
-      }
-    }
-  );
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000,
+    retry: 3
+  });
 
   // Fetch pending invitations
   const {
@@ -643,9 +637,9 @@ export default function UsersTab() {
     isLoading: invitationsLoading,
     error: invitationsError,
     refetch: refetchInvitations
-  } = useQuery<AdminInvitation[]>(
-    ['admin-invitations', showInvitations],
-    async () => {
+  } = useQuery<AdminInvitation[]>({
+    queryKey: ['admin-invitations', showInvitations],
+    queryFn: async () => {
       if (!showInvitations) return [];
 
       const { data, error } = await supabase
@@ -690,16 +684,22 @@ export default function UsersTab() {
         invited_by_name: invitation.invited_by ? invitedByLookup[invitation.invited_by] : undefined
       })) as AdminInvitation[];
     },
-    {
-      enabled: showInvitations,
-      staleTime: 30 * 1000,
-      retry: 1,
-      onError: (error) => {
-        console.error('Invitations query error:', error);
-        toast.error('Failed to load pending invitations.');
-      }
-    }
-  );
+    enabled: showInvitations,
+    staleTime: 30 * 1000,
+    retry: 1
+  });
+
+  useEffect(() => {
+    if (!usersError) return;
+    console.error('Query error:', usersError);
+    toast.error('Failed to load users. Please check your database connection.');
+  }, [usersError]);
+
+  useEffect(() => {
+    if (!invitationsError) return;
+    console.error('Invitations query error:', invitationsError);
+    toast.error('Failed to load pending invitations.');
+  }, [invitationsError]);
 
   const isInvitationExpired = (invitation: AdminInvitation) => {
     if (!invitation.expires_at) return false;
@@ -767,116 +767,108 @@ export default function UsersTab() {
   // ===== MUTATIONS =====
   
   // Invite user mutation - now uses Edge Function
-  const inviteUserMutation = useMutation(
-    async (data: any) => {
+  const inviteUserMutation = useMutation({
+    mutationFn: async (data: any) => {
       const validatedData = createUserSchema.parse(data);
       return await createAdminUser(validatedData);
     },
-    {
-      onSuccess: (result) => {
-        queryClient.invalidateQueries(['admin-users']);
-        queryClient.invalidateQueries(['admin-invitations']);
-        setIsInviteFormOpen(false);
-        setInviteFormState({
-          name: '',
-          email: '',
-          role_id: '',
-          personal_message: '',
-          phone: '',
-          position: '',
-          department: ''
-        });
-        emailValidationCache.current = {};
-        setEmailValidation({ checking: false, exists: false, message: undefined });
-        toast.success(result.message || 'Admin user created successfully');
-      },
-      onError: (error: any) => {
-        console.error('Invite user error:', error);
-        
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0] as string] = err.message;
-            }
-          });
-          setFormErrors(errors);
-          toast.error('Please check the form for errors');
-        } else if (error.message) {
-          toast.error(error.message);
-          
-          // If it's a session error, suggest refreshing
-          if (error.message.includes('session') || error.message.includes('expired')) {
-            setTimeout(() => {
-              toast.info('Try refreshing the page if the problem persists');
-            }, 2000);
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
+      setIsInviteFormOpen(false);
+      setInviteFormState({
+        name: '',
+        email: '',
+        role_id: '',
+        personal_message: '',
+        phone: '',
+        position: '',
+        department: ''
+      });
+      emailValidationCache.current = {};
+      setEmailValidation({ checking: false, exists: false, message: undefined });
+      toast.success(result.message || 'Admin user created successfully');
+    },
+    onError: (error: any) => {
+      console.error('Invite user error:', error);
+
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path.length > 0) {
+            errors[err.path[0] as string] = err.message;
           }
-        } else {
-          toast.error('Failed to create admin user. Please try again.');
+        });
+        setFormErrors(errors);
+        toast.error('Please check the form for errors');
+      } else if (error.message) {
+        toast.error(error.message);
+
+        // If it's a session error, suggest refreshing
+        if (error.message.includes('session') || error.message.includes('expired')) {
+          setTimeout(() => {
+            toast.info('Try refreshing the page if the problem persists');
+          }, 2000);
         }
+      } else {
+        toast.error('Failed to create admin user. Please try again.');
       }
     }
-  );
+  });
 
   // Update user mutation
-  const updateUserMutation = useMutation(
-    async (data: { id: string; updates: any }) => {
+  const updateUserMutation = useMutation({
+    mutationFn: async (data: { id: string; updates: any }) => {
       return await updateAdminUser(data.id, data.updates);
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['admin-users']);
-        setIsEditFormOpen(false);
-        setEditingUser(null);
-        toast.success('User updated successfully');
-      },
-      onError: (error: any) => {
-        toast.error(error.message || 'Failed to update user');
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setIsEditFormOpen(false);
+      setEditingUser(null);
+      toast.success('User updated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update user');
     }
-  );
+  });
 
   // Resend invitation mutation
-  const resendInviteMutation = useMutation(
-    resendInvitation,
-    {
-      onMutate: (invitation) => {
-        setResendingInvitationId(invitation.id);
-      },
-      onSuccess: (result) => {
-        queryClient.invalidateQueries(['admin-invitations']);
-        toast.success(result?.message || 'Invitation resent successfully');
-      },
-      onError: (error: any) => {
-        toast.error(error.message || 'Failed to resend invitation');
-      },
-      onSettled: () => {
-        setResendingInvitationId(null);
-      }
+  const resendInviteMutation = useMutation({
+    mutationFn: resendInvitation,
+    onMutate: (invitation) => {
+      setResendingInvitationId(invitation.id);
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
+      toast.success(result?.message || 'Invitation resent successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to resend invitation');
+    },
+    onSettled: () => {
+      setResendingInvitationId(null);
     }
-  );
+  });
 
-  const sendPasswordResetMutation = useMutation(
-    sendPasswordResetEmail,
-    {
-      onMutate: (adminUser) => {
-        setResettingUserId(adminUser.id);
-      },
-      onSuccess: (result) => {
-        toast.success(result?.message || 'Password reset email sent successfully');
-      },
-      onError: (error: any) => {
-        toast.error(error.message || 'Failed to send password reset email');
-      },
-      onSettled: () => {
-        setResettingUserId(null);
-      }
+  const sendPasswordResetMutation = useMutation({
+    mutationFn: sendPasswordResetEmail,
+    onMutate: (adminUser) => {
+      setResettingUserId(adminUser.id);
+    },
+    onSuccess: (result) => {
+      toast.success(result?.message || 'Password reset email sent successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to send password reset email');
+    },
+    onSettled: () => {
+      setResettingUserId(null);
     }
-  );
+  });
 
   // Process users mutation (deactivate or delete)
-  const processUsersMutation = useMutation(
-    async ({ users, action }: { users: AdminUser[], action: 'deactivate' | 'delete' }) => {
+  const processUsersMutation = useMutation({
+    mutationFn: async ({ users, action }: { users: AdminUser[], action: 'deactivate' | 'delete' }) => {
       const results = [];
       let sessionToken: string | null = null;
 
@@ -978,29 +970,27 @@ export default function UsersTab() {
 
       return { results, action };
     },
-    {
-      onSuccess: ({ results, action }) => {
-        queryClient.invalidateQueries(['admin-users']);
-        setIsConfirmDialogOpen(false);
-        setUsersToProcess([]);
-        
-        const successCount = results.filter(r => r.success).length;
-        const failCount = results.filter(r => !r.success).length;
-        
-        if (failCount === 0) {
-          toast.success(`${successCount} user(s) ${action}d successfully`);
-        } else {
-          results
-            .filter(r => !r.success && r.error)
-            .forEach(r => toast.error(r.error));
-        }
-      },
-      onError: (error) => {
-        console.error('Error processing users:', error);
-        toast.error(`Failed to ${confirmAction} user(s)`);
+    onSuccess: ({ results, action }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setIsConfirmDialogOpen(false);
+      setUsersToProcess([]);
+
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      if (failCount === 0) {
+        toast.success(`${successCount} user(s) ${action}d successfully`);
+      } else {
+        results
+          .filter(r => !r.success && r.error)
+          .forEach(r => toast.error(r.error));
       }
+    },
+    onError: (error) => {
+      console.error('Error processing users:', error);
+      toast.error(`Failed to ${confirmAction} user(s)`);
     }
-  );
+  });
 
   // ===== HANDLERS =====
   
@@ -1126,7 +1116,7 @@ export default function UsersTab() {
 
       if (!updateError) {
         toast.success(`${adminUser.name} marked as verified`);
-        queryClient.invalidateQueries(['admin-users']);
+        queryClient.invalidateQueries({ queryKey: ['admin-users'] });
         
         try {
           await supabase
