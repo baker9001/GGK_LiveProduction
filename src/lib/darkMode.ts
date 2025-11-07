@@ -1,4 +1,4 @@
-const DARK_MODE_STORAGE_KEY = 'darkMode';
+export const DARK_MODE_STORAGE_KEY = 'darkMode';
 
 function canUseWindow(): boolean {
   return typeof window !== 'undefined';

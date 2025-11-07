@@ -9,6 +9,7 @@ import {
   readDarkModePreference,
   writeDarkModePreference
 } from './lib/darkMode';
+import { ThemeProvider } from './providers/ThemeProvider';
 
 const storedDarkModePreference = readDarkModePreference();
 
@@ -24,6 +25,8 @@ initializeDyslexiaPreference();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>
 );

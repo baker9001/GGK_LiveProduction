@@ -38,12 +38,7 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import {
-  applyDarkModeClass,
-  isDocumentDark,
-  readDarkModePreference,
-  writeDarkModePreference
-} from '../../lib/darkMode';
+import { useTheme } from '../../hooks/useTheme';
 import { getDyslexiaPreference, setDyslexiaPreference } from '../../lib/accessibility';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
 import { WelcomeBanner } from '../shared/WelcomeBanner';
@@ -100,10 +95,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const stored = readDarkModePreference();
-    return stored !== null ? stored : isDocumentDark();
-  });
+  const { isDark: isDarkMode, toggle } = useTheme();
   const [isDyslexiaEnabled, setIsDyslexiaEnabled] = useState(() => getDyslexiaPreference());
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [welcomeNotice, setWelcomeNotice] = useState<WelcomeNotice | null>(null);
@@ -315,37 +307,6 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     return profilePaths[currentUser.role] || '/app/system-admin/profile';
   };
 
-  // Apply dark mode on mount and when state changes
-  useEffect(() => {
-    applyDarkModeClass(isDarkMode);
-    writeDarkModePreference(isDarkMode);
-  }, [isDarkMode]);
-
-  // Listen for dark mode changes from other components
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'darkMode' && e.newValue !== null) {
-        const newValue = e.newValue === 'true';
-        setIsDarkMode(newValue);
-      }
-    };
-
-    const handleDarkModeChange = () => {
-      const stored = readDarkModePreference();
-      if (stored !== null) {
-        setIsDarkMode(stored);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('darkmode-change', handleDarkModeChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('darkmode-change', handleDarkModeChange);
-    };
-  }, []);
-
   // Initialize expanded items on first load
   useEffect(() => {
     const toExpand = new Set<string>();
@@ -423,17 +384,17 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           <div
             onClick={() => toggleExpanded(item.id)}
             className={cn(
-              'w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer',
-              'hover:bg-gray-100 dark:hover:bg-gray-700/50',
-              isActive && 'bg-[#64BC46]/10 dark:bg-[#64BC46]/20'
+              'w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-theme cursor-pointer',
+              'hover:bg-theme-subtle',
+              isActive && 'bg-[color:var(--color-action-primary-soft)]'
             )}
           >
             {depth === 0 ? (
               <div className={cn(
-                "flex items-center justify-center w-8 h-8 rounded-lg transition-colors mr-3",
+                "flex items-center justify-center w-8 h-8 rounded-lg transition-theme mr-3",
                 isActive
-                  ? "bg-[#64BC46]/20 text-[#64BC46]" 
-                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                  ? "bg-[color:var(--color-action-primary-soft)] text-action-contrast"
+                  : "bg-theme-subtle text-theme-secondary"
               )}>
                 <Icon className="h-4 w-4" />
               </div>
@@ -441,30 +402,30 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
               <div className="w-8 h-8 flex items-center justify-center mr-3">
                 <div className={cn(
                   "w-2 h-2 rounded-full",
-                  isActive ? "bg-[#64BC46]" : "bg-gray-400 dark:bg-gray-600"
+                  isActive ? "bg-[color:var(--color-action-primary)]" : "bg-theme-muted"
                 )} />
               </div>
             )}
             <span className={cn(
-              'flex-1 text-left font-medium',
-              isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300',
+              'flex-1 text-left font-medium transition-theme',
+              isActive ? 'text-theme-primary' : 'text-theme-secondary',
               !sidebarOpen && 'hidden'
             )}>
               {item.label}
             </span>
             {sidebarOpen && (
               isExpanded ? (
-                <ChevronDown className="h-4 w-4 text-gray-400" />
+                <ChevronDown className="h-4 w-4 text-theme-muted" />
               ) : (
-                <ChevronRight className="h-4 w-4 text-gray-400" />
+                <ChevronRight className="h-4 w-4 text-theme-muted" />
               )
             )}
           </div>
-          
+
           {isExpanded && (
             <div className={cn(
               "mt-1 space-y-1",
-              depth === 0 && "ml-4 pl-4 border-l-2 border-gray-200 dark:border-gray-700"
+              depth === 0 && "ml-4 pl-4 border-l-2 border-theme-muted"
             )}>
               {item.children.map((child) => (
                 <NavItem key={child.id} item={child} depth={depth + 1} />
@@ -479,34 +440,34 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       <Link
         to={item.path}
         className={cn(
-          'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 mb-1',
+          'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-theme mb-1',
           isActive
-            ? 'bg-[#64BC46] text-white shadow-md'
-            : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300'
+            ? 'bg-[color:var(--color-action-primary)] text-action-contrast shadow-theme-elevated'
+            : 'hover:bg-theme-subtle text-theme-secondary'
         )}
       >
         {depth === 0 ? (
           <div className={cn(
-            "flex items-center justify-center w-8 h-8 rounded-lg transition-colors mr-3",
-            isActive 
-              ? "bg-white/20" 
-              : "bg-gray-100 dark:bg-gray-800"
+            "flex items-center justify-center w-8 h-8 rounded-lg transition-theme mr-3",
+            isActive
+              ? "bg-[color:var(--color-action-primary-soft)]"
+              : "bg-theme-subtle"
           )}>
             <Icon className={cn(
               "h-4 w-4",
-              isActive ? "text-white" : "text-gray-600 dark:text-gray-400"
+              isActive ? "text-action-contrast" : "text-theme-secondary"
             )} />
           </div>
         ) : (
           <div className="w-8 h-8 flex items-center justify-center mr-3">
             <div className={cn(
               "w-2 h-2 rounded-full",
-              isActive ? "bg-white" : "bg-gray-400 dark:bg-gray-600"
+              isActive ? "bg-action-contrast" : "bg-theme-muted"
             )} />
           </div>
         )}
         <span className={cn(
-          'font-medium',
+          'font-medium transition-theme text-theme-secondary',
           !sidebarOpen && depth === 0 && 'hidden'
         )}>
           {item.label}
@@ -516,7 +477,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div className="min-h-screen bg-theme-page text-theme-primary transition-theme">
       {/* Mobile menu button */}
       <div className={cn(
         "lg:hidden fixed top-4 z-50 transition-all duration-300",
@@ -524,7 +485,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       )}>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800"
+          className="p-2 rounded-md text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle transition-theme"
         >
           {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
@@ -533,13 +494,13 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       {/* Sidebar - Fixed to use flex column layout */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 shadow-xl',
+          'fixed inset-y-0 left-0 z-40 flex flex-col bg-theme-surface border-r border-theme transition-theme shadow-theme-elevated',
           sidebarOpen ? 'w-64' : 'w-16',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
         {/* Sidebar Header - Fixed height */}
-        <div className="shrink-0 flex h-16 items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="shrink-0 flex h-16 items-center justify-between px-4 border-b border-theme-muted">
           <span className={cn(
             "text-xl font-bold text-[#64BC46] transition-opacity",
             !sidebarOpen && "opacity-0"
@@ -549,8 +510,8 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className={cn(
-              "p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-300",
-              !sidebarOpen && "absolute top-4 left-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700"
+              "p-1.5 rounded-md text-theme-secondary hover:text-theme-primary transition-theme",
+              !sidebarOpen && "absolute top-4 left-4 bg-theme-surface shadow-theme-elevated border border-theme"
             )}
           >
             <Menu className="h-5 w-5" />
@@ -558,17 +519,17 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         </div>
 
         {/* Module Navigation - Fixed height */}
-        <div className="shrink-0 px-3 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="shrink-0 px-3 py-4 border-b border-theme-muted">
           <ModuleNavigation sidebarOpen={sidebarOpen} activeModule={moduleKey} />
         </div>
 
         {/* Main Navigation - Flexible and scrollable */}
-        <nav 
+        <nav
           ref={navRef}
-          className="flex-1 min-h-0 overflow-y-auto px-3 py-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500"
+          className="flex-1 min-h-0 overflow-y-auto px-3 py-4 scrollbar-thin scrollbar-thumb-[color:var(--color-border-muted)] scrollbar-track-transparent hover:scrollbar-thumb-[color:var(--color-border-strong)]"
         >
           {sidebarOpen && (
-            <h3 className="px-3 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            <h3 className="px-3 mb-3 text-xs font-semibold text-theme-muted uppercase tracking-wider">
               Navigation
             </h3>
           )}
@@ -581,12 +542,12 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
         {/* User Info - Fixed height at bottom */}
         {sidebarOpen && (
-          <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 p-4">
+          <div className="shrink-0 border-t border-theme-muted p-4">
             <div className="flex items-center">
               <div
                 className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden border border-gray-200 dark:border-gray-700',
-                  sidebarAvatarUrl ? 'bg-gray-100 dark:bg-gray-700' : 'bg-[#64BC46] text-white'
+                  'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden border border-theme',
+                  sidebarAvatarUrl ? 'bg-theme-subtle text-theme-secondary' : 'bg-[color:var(--color-action-primary)] text-action-contrast'
                 )}
               >
                 {sidebarAvatarUrl ? (
@@ -601,8 +562,8 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                 )}
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{displayName}</p>
-                <p className="text-xs text-gray-500">{displayEmail}</p>
+                <p className="text-sm font-medium text-theme-primary">{displayName}</p>
+                <p className="text-xs text-theme-muted">{displayEmail}</p>
               </div>
             </div>
           </div>
@@ -615,14 +576,14 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'
       )}>
         {/* Top header */}
-        <header className="sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <header className="sticky top-0 z-30 bg-theme-surface shadow-theme-elevated border-b border-theme-muted transition-theme">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex h-16 items-center justify-between">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">GGK Admin System</h1>
-              
+              <h1 className="text-xl font-semibold text-theme-primary transition-theme">GGK Admin System</h1>
+
               <div className="flex items-center space-x-3">
                 {/* Notifications */}
-                <button className="relative p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg">
+                <button className="relative p-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-lg transition-theme">
                   <Bell className="h-5 w-5" />
                   <span className="absolute -top-1 -right-1 h-5 w-5 text-xs flex items-center justify-center bg-red-500 text-white rounded-full font-semibold">
                     3
@@ -632,9 +593,9 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                 {/* Dyslexia Support Toggle */}
                 <button
                   className={cn(
-                    'p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700',
-                    'text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
-                    isDyslexiaEnabled && 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-600'
+                    'p-2 rounded-lg hover:bg-theme-subtle transition-theme',
+                    'text-theme-secondary hover:text-theme-primary',
+                    isDyslexiaEnabled && 'text-emerald-600 hover:text-emerald-600'
                   )}
                   onClick={() => setIsDyslexiaEnabled((prev) => !prev)}
                   aria-pressed={isDyslexiaEnabled}
@@ -647,37 +608,39 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
                 {/* Theme Toggle */}
                 <button
-                  className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
-                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className="p-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-lg transition-theme"
+                  onClick={toggle}
+                  aria-label="Toggle theme"
+                  aria-pressed={isDarkMode}
                 >
                   {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                 </button>
 
                 {/* User Profile */}
                 <div className="relative" ref={profileDropdownRef}>
-                  <button 
-                    className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
+                  <button
+                    className="p-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-lg transition-theme"
                     onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
                   >
                     <User className="h-5 w-5" />
                   </button>
-                  
+
                   {isProfileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700">
-                      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name || 'User'}</p>
-                        <p className="text-xs text-gray-500">{user?.email || 'user@example.com'}</p>
+                    <div className="absolute right-0 mt-2 w-48 bg-theme-surface rounded-lg shadow-theme-popover py-1 border border-theme">
+                      <div className="px-4 py-2 border-b border-theme-muted">
+                        <p className="text-sm font-medium text-theme-primary">{user?.name || 'User'}</p>
+                        <p className="text-xs text-theme-muted">{user?.email || 'user@example.com'}</p>
                       </div>
-                      <Link 
+                      <Link
                         to={getProfilePath()}
-                        className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="block px-4 py-2 text-sm text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle transition-theme"
                         onClick={() => setIsProfileDropdownOpen(false)}
                       >
                         Profile Settings
                       </Link>
                       <button
                         onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                        className="w-full text-left px-4 py-2 text-sm text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle flex items-center transition-theme"
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Logout
@@ -690,7 +653,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           </div>
         </header>
 
-        <main className="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-900">
+        <main className="min-h-[calc(100vh-4rem)] bg-theme-page transition-theme">
           {welcomeNotice && (
             <div className="px-6 pb-2 pt-6">
               <WelcomeBanner notice={welcomeNotice} onDismiss={handleDismissWelcome} />
