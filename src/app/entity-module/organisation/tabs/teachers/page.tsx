@@ -396,11 +396,11 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   useEffect(() => {
     if (showEditForm && formData.school_ids && formData.school_ids.length > 0) {
       // Force refetch of dependent data when edit form opens with schools
-      queryClient.invalidateQueries(['branches-for-form', formData.school_ids]);
-      queryClient.invalidateQueries(['grade-levels-for-form', formData.school_ids, formData.branch_ids]);
+      queryClient.invalidateQueries({ queryKey: ['branches-for-form', formData.school_ids] });
+      queryClient.invalidateQueries({ queryKey: ['grade-levels-for-form', formData.school_ids, formData.branch_ids] });
       
       if (formData.grade_level_ids && formData.grade_level_ids.length > 0) {
-        queryClient.invalidateQueries(['sections-for-form', formData.grade_level_ids]);
+        queryClient.invalidateQueries({ queryKey: ['sections-for-form', formData.grade_level_ids] });
       }
     }
   }, [showEditForm, formData.school_ids, formData.branch_ids, formData.grade_level_ids, queryClient]);
@@ -1554,7 +1554,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       toast.error(error.message || 'Failed to update teacher');
     },
     onSettled: () => {
-      queryClient.invalidateQueries(['teachers', companyId]);
+      queryClient.invalidateQueries({ queryKey: ['teachers', companyId] });
     }
   });
 
@@ -1737,17 +1737,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     // Force refetch of dependent data with the new IDs
     if (initialData.school_ids.length > 0) {
       // Invalidate and refetch branches
-      await queryClient.invalidateQueries(['branches-for-schools', initialData.school_ids]);
-      await queryClient.refetchQueries(['branches-for-schools', initialData.school_ids]);
+      await queryClient.invalidateQueries({ queryKey: ['branches-for-schools', initialData.school_ids] });
+      await queryClient.refetchQueries({ queryKey: ['branches-for-schools', initialData.school_ids] });
       
       // Invalidate and refetch grade levels
-      await queryClient.invalidateQueries(['grade-levels', initialData.school_ids, initialData.branch_ids]);
-      await queryClient.refetchQueries(['grade-levels', initialData.school_ids, initialData.branch_ids]);
+      await queryClient.invalidateQueries({ queryKey: ['grade-levels', initialData.school_ids, initialData.branch_ids] });
+      await queryClient.refetchQueries({ queryKey: ['grade-levels', initialData.school_ids, initialData.branch_ids] });
       
       // If grades are selected, refetch sections
       if (initialData.grade_level_ids.length > 0) {
-        await queryClient.invalidateQueries(['sections', initialData.grade_level_ids]);
-        await queryClient.refetchQueries(['sections', initialData.grade_level_ids]);
+        await queryClient.invalidateQueries({ queryKey: ['sections', initialData.grade_level_ids] });
+        await queryClient.refetchQueries({ queryKey: ['sections', initialData.grade_level_ids] });
       }
     }
     

@@ -176,7 +176,7 @@ export default function EntityProfilePage() {
       return updates;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['entity-profile']);
+      queryClient.invalidateQueries({ queryKey: ['entity-profile'] });
       refreshUser();
       setIsEditing(false);
       toast.success('Profile updated successfully');

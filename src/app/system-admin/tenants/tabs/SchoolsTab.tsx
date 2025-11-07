@@ -391,7 +391,7 @@ export default function SchoolsTab() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['schools']);
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
       setIsFormOpen(false);
       setEditingSchool(null);
       setFormErrors({});
@@ -432,7 +432,7 @@ export default function SchoolsTab() {
       return schools;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['schools']);
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
       setIsConfirmDialogOpen(false);
       setSchoolsToDelete([]);
       toast.success('School(s) deleted successfully');

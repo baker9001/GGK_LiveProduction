@@ -180,9 +180,9 @@ export function LicenseAssignmentModal({
       return results;
     },
     onSuccess: (results) => {
-      queryClient.invalidateQueries(['available-students']);
-      queryClient.invalidateQueries(['assigned-students']);
-      queryClient.invalidateQueries(['entity-licenses']);
+      queryClient.invalidateQueries({ queryKey: ['available-students'] });
+      queryClient.invalidateQueries({ queryKey: ['assigned-students'] });
+      queryClient.invalidateQueries({ queryKey: ['entity-licenses'] });
 
       if (results.successful > 0) {
         toast.success(`Successfully assigned license to ${results.successful} student(s)`);
@@ -237,9 +237,9 @@ export function LicenseAssignmentModal({
       return results;
     },
     onSuccess: (results) => {
-      queryClient.invalidateQueries(['available-students']);
-      queryClient.invalidateQueries(['assigned-students']);
-      queryClient.invalidateQueries(['entity-licenses']);
+      queryClient.invalidateQueries({ queryKey: ['available-students'] });
+      queryClient.invalidateQueries({ queryKey: ['assigned-students'] });
+      queryClient.invalidateQueries({ queryKey: ['entity-licenses'] });
 
       if (results.successful > 0) {
         toast.success(`Successfully revoked license from ${results.successful} student(s)`);

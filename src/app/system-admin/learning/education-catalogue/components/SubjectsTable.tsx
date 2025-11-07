@@ -137,7 +137,7 @@ export default function SubjectsTable() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['subjects']);
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
       refetch();
       setIsFormOpen(false);
       setEditingSubject(null);
@@ -192,7 +192,7 @@ export default function SubjectsTable() {
       return subjects;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['subjects']);
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
       refetch();
       setIsConfirmDialogOpen(false);
       setSubjectsToDelete([]);

@@ -227,7 +227,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       setShowCreateAdminModal(false);
       setEditingAdmin(null);
       // Optionally refresh the admin list
-      // queryClient.invalidateQueries(['admins', companyId]);
+      // queryClient.invalidateQueries({ queryKey: ['admins', companyId] });
     } catch (error) {
       console.error('Error in handleAdminSuccess:', error);
       setShowCreateAdminModal(false);

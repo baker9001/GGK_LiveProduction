@@ -232,7 +232,7 @@ export default function CitiesTab() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['cities']);
+      queryClient.invalidateQueries({ queryKey: ['cities'] });
       setIsFormOpen(false);
       setEditingCity(null);
       setFormErrors({});
@@ -267,7 +267,7 @@ export default function CitiesTab() {
       return cities;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['cities']);
+      queryClient.invalidateQueries({ queryKey: ['cities'] });
       setIsConfirmDialogOpen(false);
       setCitiesToDelete([]);
       toast.success('City(s) deleted successfully');

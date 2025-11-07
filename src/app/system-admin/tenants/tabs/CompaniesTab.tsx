@@ -593,7 +593,7 @@ export default function CompaniesTab() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       setIsFormOpen(false);
       setEditingCompany(null);
       setFormErrors({});
@@ -1038,7 +1038,7 @@ export default function CompaniesTab() {
       }
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
 
       if (result.type === 'created' && result.user?.temporary_password) {
         // Show password modal for new users with generated password
@@ -1255,7 +1255,7 @@ export default function CompaniesTab() {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
 
       if (data.password) {
         setGeneratedPassword(data.password);
@@ -1325,7 +1325,7 @@ export default function CompaniesTab() {
       return companies;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       setIsConfirmDialogOpen(false);
       setCompaniesToDelete([]);
       toast.success('Company(s) deleted successfully');
@@ -1350,7 +1350,7 @@ export default function CompaniesTab() {
       return { entityUserId };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       if (selectedCompanyForView?.id) {
         fetchCompanyAdmins(selectedCompanyForView.id);
       }

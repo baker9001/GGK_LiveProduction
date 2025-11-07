@@ -1064,8 +1064,8 @@ export default function OrganizationManagement() {
                   console.log('Item clicked:', item, type);
                 }}
                 refreshData={() => {
-                  queryClient.invalidateQueries(['organization-complete']);
-                  queryClient.invalidateQueries(['organization-stats']);
+                  queryClient.invalidateQueries({ queryKey: ['organization-complete'] });
+                  queryClient.invalidateQueries({ queryKey: ['organization-stats'] });
                   handleRefreshStats();
                 }}
               />
@@ -1076,8 +1076,8 @@ export default function OrganizationManagement() {
                 ref={schoolsTabRef}
                 companyId={userCompanyId}
                 refreshData={() => {
-                  queryClient.invalidateQueries(['organization-complete']);
-                  queryClient.invalidateQueries(['organization-stats']);
+                  queryClient.invalidateQueries({ queryKey: ['organization-complete'] });
+                  queryClient.invalidateQueries({ queryKey: ['organization-stats'] });
                   handleRefreshStats();
                 }}
               />
@@ -1088,8 +1088,8 @@ export default function OrganizationManagement() {
                 ref={branchesTabRef}
                 companyId={userCompanyId}
                 refreshData={() => {
-                  queryClient.invalidateQueries(['organization-complete']);
-                  queryClient.invalidateQueries(['organization-stats']);
+                  queryClient.invalidateQueries({ queryKey: ['organization-complete'] });
+                  queryClient.invalidateQueries({ queryKey: ['organization-stats'] });
                   handleRefreshStats();
                 }}
               />
@@ -1105,8 +1105,8 @@ export default function OrganizationManagement() {
               <TeachersTab
                 companyId={userCompanyId}
                 refreshData={() => {
-                  queryClient.invalidateQueries(['organization-complete']);
-                  queryClient.invalidateQueries(['organization-stats']);
+                  queryClient.invalidateQueries({ queryKey: ['organization-complete'] });
+                  queryClient.invalidateQueries({ queryKey: ['organization-stats'] });
                   handleRefreshStats();
                 }}
               />
@@ -1116,8 +1116,8 @@ export default function OrganizationManagement() {
               <StudentsTab
                 companyId={userCompanyId}
                 refreshData={() => {
-                  queryClient.invalidateQueries(['organization-complete']);
-                  queryClient.invalidateQueries(['organization-stats']);
+                  queryClient.invalidateQueries({ queryKey: ['organization-complete'] });
+                  queryClient.invalidateQueries({ queryKey: ['organization-stats'] });
                   handleRefreshStats();
                 }}
               />
