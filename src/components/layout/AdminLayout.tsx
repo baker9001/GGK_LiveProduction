@@ -132,9 +132,9 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     setWelcomeNotice(null);
   };
 
-  const { data: sidebarProfile } = useQuery<SidebarProfileData>(
-    ['userSidebarProfile', user?.id],
-    async () => {
+  const { data: sidebarProfile } = useQuery<SidebarProfileData>({
+    queryKey: ['userSidebarProfile', user?.id],
+    queryFn: async () => {
       if (!user?.id) {
         return {
           avatarPath: user?.avatarUrl ?? null,
@@ -196,10 +196,8 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         email
       };
     },
-    {
-      enabled: !!user?.id
-    }
-  );
+    enabled: !!user?.id
+  });
 
   const displayName = sidebarProfile?.name ?? user?.name ?? 'User';
   const displayEmail = sidebarProfile?.email ?? user?.email ?? 'user@example.com';

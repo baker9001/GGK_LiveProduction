@@ -149,9 +149,20 @@ const PracticePage: React.FC = () => {
   const [highContrast, setHighContrast] = useState(false);
   const [dyslexiaFriendly, setDyslexiaFriendly] = useState(() => getDyslexiaPreference());
 
-  const practiceSetsQuery = useQuery(['practice-sets'], loadPracticeSets);
-  const practiceProgressQuery = useQuery(['practice-progress', studentId], () => loadPracticeProgress(studentId), { enabled: !!studentId });
-  const gamificationQuery = useQuery(['practice-gamification', studentId], () => loadActiveGamification(studentId), { enabled: !!studentId });
+  const practiceSetsQuery = useQuery({
+    queryKey: ['practice-sets'],
+    queryFn: loadPracticeSets
+  });
+  const practiceProgressQuery = useQuery({
+    queryKey: ['practice-progress', studentId],
+    queryFn: () => loadPracticeProgress(studentId),
+    enabled: !!studentId
+  });
+  const gamificationQuery = useQuery({
+    queryKey: ['practice-gamification', studentId],
+    queryFn: () => loadActiveGamification(studentId),
+    enabled: !!studentId
+  });
 
   const createSessionMutation = useMutation<PracticeSessionCreationResponse, Error, PracticeSetWithMeta>({
     mutationFn: async (practiceSet) => {
