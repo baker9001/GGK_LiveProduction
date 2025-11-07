@@ -173,9 +173,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     const scopeFilters = getScopeFilters('schools');
 
     // ===== FETCH SCHOOLS WITH PROPER JUNCTION TABLE HANDLING =====
-    const { data: schools = [], isLoading, error: fetchError, refetch } = useQuery(
-      ['schools-tab', companyId, isEntityAdmin, isSubEntityAdmin, isSchoolAdmin, isBranchAdmin, authenticatedUser?.id],
-      async () => {
+    const { data: schools = [], isLoading, error: fetchError, refetch } = useQuery({
+      queryKey: ['schools-tab', companyId, isEntityAdmin, isSubEntityAdmin, isSchoolAdmin, isBranchAdmin, authenticatedUser?.id],
+      queryFn: async () => {
         // For Entity and Sub-Entity admins - fetch all company schools
         if (isEntityAdmin || isSubEntityAdmin) {
           let schoolsQuery = supabase
@@ -382,15 +382,13 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
           
           return schoolsWithAdditional;
         }
-        
+
         return [];
       },
-      {
-        enabled: !!companyId && !isAccessControlLoading,
-        staleTime: 60 * 1000,
-        retry: 2
-      }
-    );
+      enabled: !!companyId && !isAccessControlLoading,
+      staleTime: 60 * 1000,
+      retry: 2
+    });
 
     // Check if user can access all schools
     const canAccessAll = isEntityAdmin || isSubEntityAdmin;
@@ -578,33 +576,31 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     );
 
     // Fetch branches for deactivation check
-    const { data: branches = [] } = useQuery(
-      ['branches-for-schools', companyId],
-      async () => {
+    const { data: branches = [] } = useQuery({
+      queryKey: ['branches-for-schools', companyId],
+      queryFn: async () => {
         const { data: schoolsData, error: schoolsError } = await supabase
           .from('schools')
           .select('id')
           .eq('company_id', companyId);
-        
+
         if (schoolsError) throw schoolsError;
-        
+
         const schoolIds = schoolsData?.map(s => s.id) || [];
-        
+
         if (schoolIds.length === 0) return [];
-        
+
         const { data: branchesData, error: branchesError } = await supabase
           .from('branches')
           .select('id, name, school_id, status')
           .in('school_id', schoolIds);
-        
+
         if (branchesError) throw branchesError;
-        
+
         return branchesData || [];
       },
-      {
-        enabled: !!companyId && !isAccessControlLoading
-      }
-    );
+      enabled: !!companyId && !isAccessControlLoading
+    });
 
     // Validation
     const validateForm = useCallback(() => {

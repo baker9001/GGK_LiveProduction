@@ -107,9 +107,9 @@ interface ActivityLog {
 
 // Custom hooks for enhanced functionality
 const useProfileStats = (userId: string) => {
-  return useQuery(
-    ['profileStats', userId],
-    async () => {
+  return useQuery({
+    queryKey: ['profileStats', userId],
+    queryFn: async () => {
       // Mock data for demonstration - replace with actual queries
       return {
         totalLogins: 247,
@@ -119,8 +119,8 @@ const useProfileStats = (userId: string) => {
         activeSessionsCount: 3
       };
     },
-    { enabled: !!userId }
-  );
+    enabled: !!userId
+  });
 };
 
 export default function SystemAdminProfilePage() {

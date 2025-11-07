@@ -288,13 +288,13 @@ export default function OrganizationManagement() {
   }, [user?.id]);
 
   // Fetch complete organization data including schools and branches
-  const { 
-    data: organizationData, 
+  const {
+    data: organizationData,
     isLoading: isLoadingOrgData,
-    refetch: refetchOrgData 
-  } = useQuery(
-    ['organization-complete', userCompanyId],
-    async () => {
+    refetch: refetchOrgData
+  } = useQuery({
+    queryKey: ['organization-complete', userCompanyId],
+    queryFn: async () => {
       if (!userCompanyId) return null;
 
       const { data: company, error: companyError } = await supabase
@@ -397,16 +397,14 @@ export default function OrganizationManagement() {
       setCompanyData(fullData);
       return fullData;
     },
-    {
-      enabled: !!userCompanyId && !isAccessControlLoading,
-      staleTime: 2 * 60 * 1000,
-      retry: 2,
-      onError: (error) => {
-        console.error('Error fetching organization data:', error);
-        toast.error('Failed to load organization structure');
-      }
+    enabled: !!userCompanyId && !isAccessControlLoading,
+    staleTime: 2 * 60 * 1000,
+    retry: 2,
+    onError: (error) => {
+      console.error('Error fetching organization data:', error);
+      toast.error('Failed to load organization structure');
     }
-  );
+  });
 
   // Get scope filters for data queries
   const scopeFilters = useMemo(() => {
@@ -414,13 +412,13 @@ export default function OrganizationManagement() {
   }, [getScopeFilters]);
 
   // Fetch organization statistics with scope filtering
-  const { 
-    data: organizationStats, 
+  const {
+    data: organizationStats,
     isLoading: isLoadingStats,
-    refetch: refetchStats 
-  } = useQuery(
-    ['organization-stats', userCompanyId, scopeFilters],
-    async () => {
+    refetch: refetchStats
+  } = useQuery({
+    queryKey: ['organization-stats', userCompanyId, scopeFilters],
+    queryFn: async () => {
       if (!userCompanyId) return null;
 
       // Count schools belonging to this company
@@ -608,11 +606,9 @@ export default function OrganizationManagement() {
         total_users: userCountResult.count || 0
       } as OrganizationStats;
     },
-    {
-      enabled: !!userCompanyId && !isAccessControlLoading && isAuthenticated,
-      staleTime: 2 * 60 * 1000,
-    }
-  );
+    enabled: !!userCompanyId && !isAccessControlLoading && isAuthenticated,
+    staleTime: 2 * 60 * 1000,
+  });
 
   // Memoized stats for performance
   const memoizedStats = useMemo(() => {

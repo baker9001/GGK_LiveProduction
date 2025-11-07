@@ -135,15 +135,15 @@ export function AdminListTable({
   const [deleteAction, setDeleteAction] = useState<'delete' | 'restore'>('delete');
 
   // Fetch administrators with React Query - WITH SCOPE FILTERING
-  const { 
-    data: admins = [], 
-    isLoading, 
+  const {
+    data: admins = [],
+    isLoading,
     isFetching,
     error,
-    refetch 
-  } = useQuery(
-    ['admins', companyId, filters, page, rowsPerPage, currentUserAdminLevel],
-    async () => {
+    refetch
+  } = useQuery({
+    queryKey: ['admins', companyId, filters, page, rowsPerPage, currentUserAdminLevel],
+    queryFn: async () => {
       // Build filter object for adminService
       const serviceFilters: any = {};
 
@@ -216,12 +216,10 @@ export function AdminListTable({
         total: adminList.length
       };
     },
-    {
-      keepPreviousData: true,
-      staleTime: 2 * 60 * 1000,
-      enabled: !!companyId
-    }
-  );
+    placeholderData: (previousData) => previousData,
+    staleTime: 2 * 60 * 1000,
+    enabled: !!companyId
+  });
 
   // Mutation hooks
   const deleteAdminMutation = useDeleteAdmin();
