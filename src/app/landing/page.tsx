@@ -349,12 +349,12 @@ export default function LandingPage() {
           />
         </div>
         <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
-          <div className="text-center w-full text-white">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6 drop-shadow-lg">
+          <div className="text-center w-full">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6)' }}>
               Master IGCSE, O-Level & A-Level
-              <span className="block text-white drop-shadow-lg">Cambridge & Edexcel Excellence</span>
+              <span className="block text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6)' }}>Cambridge & Edexcel Excellence</span>
             </h1>
-            <p className="mt-3 max-w-lg mx-auto text-xl text-white sm:mt-5 drop-shadow-lg font-medium">
+            <p className="mt-3 max-w-lg mx-auto text-xl text-white sm:mt-5 font-semibold" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8), 0 0 15px rgba(0,0,0,0.6)' }}>
               Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
@@ -373,25 +373,26 @@ export default function LandingPage() {
                 variant="outline"
                 size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[180px] border-white text-white hover:bg-white/20 hover:text-white drop-shadow-lg"
+                className="w-full sm:w-auto min-w-[180px] border-2 border-white text-white hover:bg-white/20 hover:text-white font-semibold"
                 leftIcon={<PlayCircle />}
+                style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.6)' }}
               >
                 Watch Demo
               </Button>
             </div>
             {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
             <div className="mt-8 flex items-center justify-center gap-8">
-              <div className="text-white drop-shadow-lg">
+              <div className="text-white" style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.8)' }}>
                 <div className="text-3xl font-bold">+</div>
-                <div className="text-sm opacity-95 font-semibold">Active Students</div>
+                <div className="text-sm font-bold">Active Students</div>
               </div>
-              <div className="text-white drop-shadow-lg">
+              <div className="text-white" style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.8)' }}>
                 <div className="text-3xl font-bold">%</div>
-                <div className="text-sm opacity-95 font-semibold">Pass Rate</div>
+                <div className="text-sm font-bold">Pass Rate</div>
               </div>
-              <div className="text-white drop-shadow-lg">
+              <div className="text-white" style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.8)' }}>
                 <div className="text-3xl font-bold">+</div>
-                <div className="text-sm opacity-95 font-semibold">Schools Trust Us</div>
+                <div className="text-sm font-bold">Schools Trust Us</div>
               </div>
             </div>
           </div>
