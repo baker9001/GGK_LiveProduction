@@ -327,7 +327,7 @@ export default function LandingPage() {
   const [showAllSubjects, setShowAllSubjects] = useState(false);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
+    <div className="min-h-screen bg-theme-page text-theme-primary transition-colors duration-200">
       <Navigation />
 
       {/* Hero Section */}
@@ -398,224 +398,228 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <SectionDivider />
+      <main className="sectioned-layout">
+        <SectionDivider />
 
-      {/* Exam Boards Section */}
-      <div className="py-16 bg-gray-100 dark:bg-gray-800/95">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              Official Exam Board Coverage
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400">
-              Complete syllabus coverage for all major examination boards
-            </p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
-              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">Cambridge</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
+        {/* Exam Boards Section */}
+        <section className="py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                Official Exam Board Coverage
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-400">
+                Complete syllabus coverage for all major examination boards
+              </p>
             </div>
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
-              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">Edexcel</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">International GCSE</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
+                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">Cambridge</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
+                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">Edexcel</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">International GCSE</p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
+                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">AQA</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
+                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">OCR</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
+              </div>
             </div>
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
-              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">AQA</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
+          </div>
+        </section>
+
+        <SectionDivider />
+
+        {/* Enhanced Feature Highlights */}
+        <section className="py-24 transition-colors duration-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+                Complete IGCSE & A-Level Success Platform
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-400">
+                Everything you need to excel in Cambridge and Edexcel examinations
+              </p>
             </div>
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
-              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">OCR</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <SectionDivider />
-
-      {/* Enhanced Feature Highlights */}
-      <div className="py-24 bg-white dark:bg-gray-900/95 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
-              Complete IGCSE & A-Level Success Platform
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400">
-              Everything you need to excel in Cambridge and Edexcel examinations
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-            <FeatureCard
-              icon={<FileText className="h-8 w-8" />}
-              title="10+ Years Past Papers"
-              description="Complete database of Cambridge & Edexcel past papers with mark schemes and examiner reports"
-            />
-            <FeatureCard
-              icon={<Video className="h-8 w-8" />}
-              title="Animated Video Lessons"
-              description="3000+ animated videos explaining complex concepts with visual clarity"
-            />
-            <FeatureCard
-              icon={<BarChart3 className="h-8 w-8" />}
-              title="AI-Powered Mock Exams"
-              description="Personalized mock tests that adapt to your learning level with instant feedback"
-            />
-            <FeatureCard
-              icon={<Users className="h-8 w-8" />}
-              title="Expert Teacher Support"
-              description="Direct access to qualified IGCSE & A-Level teachers for doubt resolution"
-            />
-          </div>
-        </div>
-      </div>
-
-      <SectionDivider />
-
-      {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
-      <div className="py-24 bg-gray-100 dark:bg-gray-800/95 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
-              IGCSE & A-Level Subjects We Offer
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
-              Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
-            </p>
-            <Button
-              variant="default"
-              size="lg"
-              rounded="full"
-              onClick={() => navigate('/subjects')}
-              rightIcon={<ChevronRight />}
-            >
-              View All Subjects
-            </Button>
-          </div>
-          
-          {/* DISPLAY FIRST 6 SUBJECTS IN GRID, THEN MORE ON CLICK */}
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {(showAllSubjects ? PRIORITY_SUBJECTS : PRIORITY_SUBJECTS.slice(0, 6)).map((subject) => (
-              <SubjectCard 
-                key={subject.title} 
-                {...subject} 
-                priority={true}
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+              <FeatureCard
+                icon={<FileText className="h-8 w-8" />}
+                title="10+ Years Past Papers"
+                description="Complete database of Cambridge & Edexcel past papers with mark schemes and examiner reports"
               />
-            ))}
+              <FeatureCard
+                icon={<Video className="h-8 w-8" />}
+                title="Animated Video Lessons"
+                description="3000+ animated videos explaining complex concepts with visual clarity"
+              />
+              <FeatureCard
+                icon={<BarChart3 className="h-8 w-8" />}
+                title="AI-Powered Mock Exams"
+                description="Personalized mock tests that adapt to your learning level with instant feedback"
+              />
+              <FeatureCard
+                icon={<Users className="h-8 w-8" />}
+                title="Expert Teacher Support"
+                description="Direct access to qualified IGCSE & A-Level teachers for doubt resolution"
+              />
+            </div>
           </div>
-          
-          {/* Show More/Less Button */}
-          {PRIORITY_SUBJECTS.length > 6 && (
-            <div className="text-center mt-12">
+        </section>
+
+        <SectionDivider />
+
+        {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
+        <section className="py-24 transition-colors duration-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+                IGCSE & A-Level Subjects We Offer
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
+                Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
+              </p>
               <Button
-                variant="outline"
+                variant="default"
                 size="lg"
                 rounded="full"
-                onClick={() => setShowAllSubjects(!showAllSubjects)}
-                rightIcon={showAllSubjects ? <ChevronUp /> : <ChevronDown />}
+                onClick={() => navigate('/subjects')}
+                rightIcon={<ChevronRight />}
               >
-                {showAllSubjects ? 'Show Less Subjects' : `View ${PRIORITY_SUBJECTS.length - 6} More Subjects`}
+                View All Subjects
               </Button>
             </div>
-          )}
-        </div>
-      </div>
 
-      <SectionDivider />
+            {/* DISPLAY FIRST 6 SUBJECTS IN GRID, THEN MORE ON CLICK */}
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {(showAllSubjects ? PRIORITY_SUBJECTS : PRIORITY_SUBJECTS.slice(0, 6)).map((subject) => (
+                <SubjectCard
+                  key={subject.title}
+                  {...subject}
+                  priority={true}
+                />
+              ))}
+            </div>
 
-      {/* Enhanced Testimonials */}
-      <div className="py-24 bg-white dark:bg-gray-900/95 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
-              Success Stories from IGCSE & A-Level Students
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400">
-              Join thousands of students achieving top grades with GGK Learning
-            </p>
+            {/* Show More/Less Button */}
+            {PRIORITY_SUBJECTS.length > 6 && (
+              <div className="text-center mt-12">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  rounded="full"
+                  onClick={() => setShowAllSubjects(!showAllSubjects)}
+                  rightIcon={showAllSubjects ? <ChevronUp /> : <ChevronDown />}
+                >
+                  {showAllSubjects ? 'Show Less Subjects' : `View ${PRIORITY_SUBJECTS.length - 6} More Subjects`}
+                </Button>
+              </div>
+            )}
           </div>
-          
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {testimonials.map((testimonial, index) => (
-              <div
-                key={index}
-                className="bg-gray-50 dark:bg-gray-800 rounded-xl p-8 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
-              >
-                <div className="flex items-center mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                  ))}
-                  <span className="ml-auto bg-[#8CC63F] text-white text-xs px-3 py-1 rounded-full font-semibold">
-                    {testimonial.results}
-                  </span>
-                </div>
-                
-                <div className="relative mb-6">
-                  <Quote className="absolute -top-2 -left-2 h-8 w-8 text-[#8CC63F] opacity-20" />
-                  <p className="text-gray-700 dark:text-gray-300 italic pl-6">
-                    "{testimonial.content}"
-                  </p>
-                </div>
-                
-                <div className="flex items-center">
-                  <img
-                    src={testimonial.image}
-                    alt={testimonial.name}
-                    className="h-12 w-12 rounded-full object-cover mr-4"
-                    loading="lazy"
-                  />
-                  <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-white">
-                      {testimonial.name}
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {testimonial.role}
-                    </p>
-                    <p className="text-xs text-[#8CC63F] font-medium">
-                      {testimonial.subject}
+        </section>
+
+        <SectionDivider />
+
+        {/* Enhanced Testimonials */}
+        <section className="py-24 transition-colors duration-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+                Success Stories from IGCSE & A-Level Students
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-400">
+                Join thousands of students achieving top grades with GGK Learning
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {testimonials.map((testimonial, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-50 dark:bg-gray-800 rounded-xl p-8 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
+                >
+                  <div className="flex items-center mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                    ))}
+                    <span className="ml-auto bg-[#8CC63F] text-white text-xs px-3 py-1 rounded-full font-semibold">
+                      {testimonial.results}
+                    </span>
+                  </div>
+
+                  <div className="relative mb-6">
+                    <Quote className="absolute -top-2 -left-2 h-8 w-8 text-[#8CC63F] opacity-20" />
+                    <p className="text-gray-700 dark:text-gray-300 italic pl-6">
+                      "{testimonial.content}"
                     </p>
                   </div>
+
+                  <div className="flex items-center">
+                    <img
+                      src={testimonial.image}
+                      alt={testimonial.name}
+                      className="h-12 w-12 rounded-full object-cover mr-4"
+                      loading="lazy"
+                    />
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-white">
+                        {testimonial.name}
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {testimonial.role}
+                      </p>
+                      <p className="text-xs text-[#8CC63F] font-medium">
+                        {testimonial.subject}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <SectionDivider />
+
+        {/* Statistics Section - REDUCED PADDING */}
+        <section className="py-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-3xl p-10 text-white shadow-lg">
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold mb-2">
+                  Proven Results That Speak for Themselves
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">15,000+</div>
+                  <div className="text-xs opacity-90">Past Papers Database</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">3,000+</div>
+                  <div className="text-xs opacity-90">Video Lessons</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">500+</div>
+                  <div className="text-xs opacity-90">Mock Exams</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">24/7</div>
+                  <div className="text-xs opacity-90">Learning Support</div>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <SectionDivider />
-
-      {/* Statistics Section - REDUCED PADDING */}
-      <div className="py-12 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-white mb-2">
-              Proven Results That Speak for Themselves
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="text-center text-white">
-              <div className="text-3xl font-bold mb-1">15,000+</div>
-              <div className="text-xs opacity-90">Past Papers Database</div>
-            </div>
-            <div className="text-center text-white">
-              <div className="text-3xl font-bold mb-1">3,000+</div>
-              <div className="text-xs opacity-90">Video Lessons</div>
-            </div>
-            <div className="text-center text-white">
-              <div className="text-3xl font-bold mb-1">500+</div>
-              <div className="text-xs opacity-90">Mock Exams</div>
-            </div>
-            <div className="text-center text-white">
-              <div className="text-3xl font-bold mb-1">24/7</div>
-              <div className="text-xs opacity-90">Learning Support</div>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
 
       <SectionDivider />
 
