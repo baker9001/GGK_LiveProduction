@@ -11,36 +11,70 @@
 
 :root {
   color-scheme: light dark;
-  --color-bg-page: 248 250 252;
-  --color-bg-surface: 255 255 255;
-  --color-bg-subtle: 241 245 249;
-  --color-bg-muted: 226 232 240;
-  --color-section-primary: 255 255 255;
-  --color-section-secondary: 239 246 255;
-  --color-text-primary: 17 24 39;
-  --color-text-secondary: 71 85 105;
-  --color-text-muted: 100 116 139;
-  --color-text-inverse: 15 23 42;
-  --color-border: rgba(15, 23, 42, 0.12);
-  --color-border-muted: rgba(148, 163, 184, 0.22);
-  --color-border-strong: rgba(15, 23, 42, 0.18);
-  --color-action-primary: #7dc242;
-  --color-action-primary-hover: #6da52f;
-  --color-action-primary-active: #5b8f27;
-  --color-action-primary-soft: rgba(125, 194, 66, 0.18);
-  --color-action-contrast: #0b1120;
-  --color-action-primary-focus: rgba(125, 194, 66, 0.35);
-  --color-input-bg: #ffffff;
-  --color-input-border: rgba(15, 23, 42, 0.12);
-  --color-input-placeholder: rgba(71, 85, 105, 0.7);
-  --shadow-elevated: 0 18px 30px -20px rgba(15, 23, 42, 0.25);
-  --shadow-popover: 0 20px 30px -22px rgba(15, 23, 42, 0.35);
-  --transition-theme: background-color 220ms ease, color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, fill 220ms ease, stroke 220ms ease;
-  --brand-accent: #7dc242;
-  --brand-accent-strong: #4f8c1f;
+
+  /* Brand Colors - Go Green Knowledge Palette */
+  --brand-primary: #99c93b;
+  --brand-primary-dark: #5d7e23;
+  --brand-primary-light: #b2d965;
+  --brand-secondary: #b2cace;
+  --brand-accent: #8CC63F;
+  --brand-accent-strong: #5d7e23;
   --brand-accent-soft: #e8f5dc;
   --brand-accent-contrast: #ffffff;
   --brand-accent-muted-contrast: #123116;
+
+  /* Background Colors - Modern Gradient System */
+  --color-bg-page: 250 251 252;
+  --color-bg-surface: 255 255 255;
+  --color-bg-subtle: 245 250 247;
+  --color-bg-muted: 232 245 220;
+  --color-section-primary: 255 255 255;
+  --color-section-secondary: 245 252 243;
+
+  /* Text Colors */
+  --color-text-primary: 31 41 55;
+  --color-text-secondary: 93 126 35;
+  --color-text-muted: 107 114 128;
+  --color-text-inverse: 255 255 255;
+
+  /* Border Colors */
+  --color-border: rgba(140, 198, 63, 0.2);
+  --color-border-muted: rgba(140, 198, 63, 0.12);
+  --color-border-strong: rgba(93, 126, 35, 0.3);
+
+  /* Action Colors */
+  --color-action-primary: #8CC63F;
+  --color-action-primary-hover: #7AB635;
+  --color-action-primary-active: #6AA52D;
+  --color-action-primary-soft: rgba(140, 198, 63, 0.15);
+  --color-action-contrast: #ffffff;
+  --color-action-primary-focus: rgba(140, 198, 63, 0.3);
+
+  /* Input Colors */
+  --color-input-bg: #ffffff;
+  --color-input-border: rgba(140, 198, 63, 0.25);
+  --color-input-placeholder: rgba(107, 114, 128, 0.6);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(93, 126, 35, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(93, 126, 35, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(93, 126, 35, 0.15);
+  --shadow-elevated: 0 20px 25px -5px rgba(93, 126, 35, 0.15), 0 8px 10px -6px rgba(93, 126, 35, 0.1);
+  --shadow-popover: 0 20px 30px -10px rgba(93, 126, 35, 0.25);
+
+  /* Transitions */
+  --transition-theme: background-color 220ms ease, color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, fill 220ms ease, stroke 220ms ease;
+  --transition-fast: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Status Colors */
+  --color-success: #8CC63F;
+  --color-success-soft: #e8f5dc;
+  --color-info: #3b82f6;
+  --color-info-soft: #dbeafe;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3c7;
+  --color-danger: #ef4444;
+  --color-danger-soft: #fee2e2;
 }
 
 .dark {
@@ -73,9 +107,85 @@
 }
 
 body {
-  background-color: rgb(var(--color-bg-page));
+  background: linear-gradient(135deg, rgb(var(--color-bg-page)) 0%, rgb(var(--color-bg-subtle)) 100%);
+  min-height: 100vh;
   color: rgb(var(--color-text-primary));
   transition: var(--transition-theme);
+}
+
+/* Brand Color Utilities */
+.bg-brand-primary {
+  background-color: var(--brand-primary);
+}
+
+.bg-brand-gradient {
+  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-primary-dark) 100%);
+}
+
+.bg-brand-soft {
+  background-color: var(--brand-accent-soft);
+}
+
+.text-brand-primary {
+  color: var(--brand-primary);
+}
+
+.text-brand-dark {
+  color: var(--brand-primary-dark);
+}
+
+.border-brand {
+  border-color: var(--brand-accent);
+}
+
+/* Status Utilities */
+.bg-success {
+  background-color: var(--color-success);
+}
+
+.bg-success-soft {
+  background-color: var(--color-success-soft);
+}
+
+.bg-info-soft {
+  background-color: var(--color-info-soft);
+}
+
+.bg-warning-soft {
+  background-color: var(--color-warning-soft);
+}
+
+.bg-danger-soft {
+  background-color: var(--color-danger-soft);
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+.text-info {
+  color: var(--color-info);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.text-danger {
+  color: var(--color-danger);
+}
+
+/* Shadow Utilities */
+.shadow-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+.shadow-md {
+  box-shadow: var(--shadow-md);
+}
+
+.shadow-lg {
+  box-shadow: var(--shadow-lg);
 }
 
 .bg-theme-page {
