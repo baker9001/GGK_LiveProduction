@@ -430,7 +430,8 @@ export default function SignInPage() {
           <div className="inline-flex items-center justify-center">
             <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
             <span className="ml-3 text-4xl font-bold text-gray-900">
-              GGK Learning
+              Go Green Knowledge
+              Empowering Education
             </span>
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
