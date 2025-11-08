@@ -152,7 +152,7 @@ function FilterDropdown({
     return createPortal(
       <div
         ref={dropdownRef}
-        className="z-50 mt-1 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-200 dark:border-gray-600 max-h-60 overflow-hidden"
+        className="z-50 mt-1 bg-card shadow-xl rounded-lg border border-theme max-h-60 overflow-hidden"
         style={{
           position: 'absolute',
           top: `${position.top}px`,
@@ -160,13 +160,13 @@ function FilterDropdown({
           width: `${position.width}px`
         }}
       >
-        <div className="p-2 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-750">
+        <div className="p-2 border-b border-theme bg-card-elevated">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               className={cn(
-                "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+                "w-full pl-8 pr-2 py-2 text-sm border border-theme rounded-md bg-theme-surface text-theme-primary",
                 "focus:outline-none focus:ring-2",
                 isGreenTheme
                   ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
@@ -180,7 +180,7 @@ function FilterDropdown({
           </div>
         </div>
 
-        <ul className="py-1 bg-white dark:bg-gray-800 overflow-y-auto max-h-[200px]">
+        <ul className="py-1 bg-card overflow-y-auto max-h-[200px]">
           {filteredOptions.length > 0 ? (
             filteredOptions.map(option => (
               <li key={option.value}>

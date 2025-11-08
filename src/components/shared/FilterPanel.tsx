@@ -31,7 +31,7 @@ export function FilterPanel({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <Card className={cn('overflow-hidden !bg-white dark:!bg-gray-800', className)} padding="none">
+    <Card className={cn('overflow-hidden bg-card', className)} padding="none">
       {/* Header */}
       <button
         type="button"
@@ -83,7 +83,7 @@ export function FilterPanel({
       {isOpen && (
         <div
           id="filter-content"
-          className="border-t border-ggk-neutral-200 dark:border-ggk-neutral-700 p-20 animate-in slide-in-from-top-2 duration-200 !bg-white dark:!bg-gray-800"
+          className="border-t border-theme p-20 animate-in slide-in-from-top-2 duration-200 bg-card"
         >
           <CardContent className="space-y-16">
             {children}

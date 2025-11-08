@@ -121,11 +121,11 @@ export function SlideInForm({
           <div
             ref={panelRef}
             className={cn(
-              'flex h-full flex-col overflow-hidden rounded-l-2xl !bg-white dark:!bg-gray-800 shadow-lg transition-colors duration-200',
+              'flex h-full flex-col overflow-hidden rounded-l-2xl bg-card shadow-lg transition-colors duration-200',
               className
             )}
           >
-            <div className="relative px-6 py-5 border-b border-gray-100 dark:border-gray-700 !bg-white dark:!bg-gray-800">
+            <div className="relative px-6 py-5 border-b border-theme bg-card">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                   {title}
@@ -140,10 +140,10 @@ export function SlideInForm({
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-600 !bg-white dark:!bg-gray-800">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-600 bg-card">
               {children}
             </div>
-            <div className="shrink-0 border-t border-gray-100 dark:border-gray-700 !bg-white dark:!bg-gray-800 px-6 py-4">
+            <div className="shrink-0 border-t border-theme bg-card px-6 py-4">
               <div className="flex justify-end gap-3">
                 {footerContent}
                 <Button

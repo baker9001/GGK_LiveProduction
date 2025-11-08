@@ -226,7 +226,7 @@ export const ButtonGroup = ({
 }) => {
   return (
     <div className={cn(
-      'inline-flex gap-1 p-1 !bg-gray-100 dark:!bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700',
+      'inline-flex gap-1 p-1 bg-card-elevated rounded-xl shadow-sm border border-theme',
       orientation === 'vertical' && 'flex-col',
       className
     )}>
