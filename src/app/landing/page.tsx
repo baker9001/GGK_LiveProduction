@@ -273,8 +273,8 @@ const SubjectCard = memo(({
         </div>
       </div>
       <div className="p-8">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-400 text-base mb-5 leading-relaxed">{description}</p>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{title}</h3>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 leading-relaxed">{description}</p>
         {badges && (
           <div className="flex flex-wrap gap-2 mb-5">
             {badges.map((badge, index) => (
@@ -305,7 +305,7 @@ const FeatureCard = memo(({ icon, title, description }: {
     <div className="h-20 w-20 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-8">
       {icon}
     </div>
-    <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">{title}</h3>
+    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
     <p className="text-base text-gray-600 dark:text-gray-400">{description}</p>
   </div>
 ));
@@ -344,10 +344,10 @@ export default function LandingPage() {
         </div>
         <div className="relative z-10 max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
           <div className="w-full max-w-6xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold !text-white leading-tight" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold !text-white leading-tight" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
               Master IGCSE, O-Level & A-Level Cambridge & Edexcel Excellence
             </h1>
-            <p className="mt-8 max-w-3xl mx-auto text-xl sm:text-2xl md:text-3xl !text-white sm:mt-10 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
+            <p className="mt-6 max-w-3xl mx-auto text-lg sm:text-xl md:text-2xl !text-white sm:mt-8 font-medium leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
               Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
@@ -380,8 +380,8 @@ export default function LandingPage() {
                   className="px-10 py-8 text-center"
                   style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
                 >
-                  <div className="text-5xl sm:text-6xl lg:text-7xl font-extrabold !text-white" style={{ color: 'white' }}>{item.value}</div>
-                  <div className="text-base sm:text-lg lg:text-xl font-bold !text-white mt-3" style={{ color: 'white' }}>{item.label}</div>
+                  <div className="text-3xl sm:text-4xl lg:text-5xl font-bold !text-white" style={{ color: 'white' }}>{item.value}</div>
+                  <div className="text-sm sm:text-base font-semibold !text-white mt-2" style={{ color: 'white' }}>{item.label}</div>
                 </div>
               ))}
             </div>
@@ -396,18 +396,18 @@ export default function LandingPage() {
         <section className="py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
                 Official Exam Board Coverage
               </h2>
-              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400">
+              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400">
                 Complete syllabus coverage for all major examination boards
               </p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               <div className="bg-white dark:bg-gray-900 p-8 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
                 <Award className="h-16 w-16 text-[#8CC63F] mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Cambridge</h3>
-                <p className="text-base text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Cambridge</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">IGCSE & A-Level</p>
               </div>
               <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
                 <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
@@ -434,10 +434,10 @@ export default function LandingPage() {
         <section className="py-24 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-20">
-              <h2 className="text-4xl md:text-5xl font-bold text-[#8CC63F] mb-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-[#8CC63F] mb-4">
                 Complete IGCSE & A-Level Success Platform
               </h2>
-              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400">
+              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400">
                 Everything you need to excel in Cambridge and Edexcel examinations
               </p>
             </div>
@@ -472,10 +472,10 @@ export default function LandingPage() {
         <section className="py-24 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-20">
-              <h2 className="text-4xl md:text-5xl font-bold text-[#8CC63F] mb-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-[#8CC63F] mb-4">
                 IGCSE & A-Level Subjects We Offer
               </h2>
-              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 mb-10">
+              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 mb-8">
                 Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
               </p>
               <Button
@@ -525,10 +525,10 @@ export default function LandingPage() {
         <section className="py-24 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-20">
-              <h2 className="text-4xl md:text-5xl font-bold text-[#8CC63F] mb-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-[#8CC63F] mb-4">
                 Success Stories from IGCSE & A-Level Students
               </h2>
-              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400">
+              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400">
                 Join thousands of students achieving top grades with GGK Learning
               </p>
             </div>
@@ -587,26 +587,26 @@ export default function LandingPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-3xl p-12 md:p-16 text-white shadow-2xl">
               <div className="text-center mb-12">
-                <h2 className="text-4xl md:text-5xl font-bold mb-3 text-white">
+                <h2 className="text-3xl md:text-4xl font-bold mb-3 text-white">
                   Proven Results That Speak for Themselves
                 </h2>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                 <div className="text-center text-white">
-                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">15,000+</div>
-                  <div className="text-base md:text-lg opacity-90 text-white">Past Papers Database</div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">15,000+</div>
+                  <div className="text-sm md:text-base opacity-90 text-white">Past Papers Database</div>
                 </div>
                 <div className="text-center text-white">
-                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">3,000+</div>
-                  <div className="text-base md:text-lg opacity-90 text-white">Video Lessons</div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">3,000+</div>
+                  <div className="text-sm md:text-base opacity-90 text-white">Video Lessons</div>
                 </div>
                 <div className="text-center text-white">
-                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">500+</div>
-                  <div className="text-base md:text-lg opacity-90 text-white">Mock Exams</div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">500+</div>
+                  <div className="text-sm md:text-base opacity-90 text-white">Mock Exams</div>
                 </div>
                 <div className="text-center text-white">
-                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">24/7</div>
-                  <div className="text-base md:text-lg opacity-90 text-white">Learning Support</div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">24/7</div>
+                  <div className="text-sm md:text-base opacity-90 text-white">Learning Support</div>
                 </div>
               </div>
             </div>
@@ -623,10 +623,10 @@ export default function LandingPage() {
             {/* Company Info */}
             <div className="space-y-4">
               <div className="flex items-center">
-                <GraduationCap className="h-9 w-9 text-[#8CC63F]" />
-                <span className="ml-3 text-2xl font-bold">GGK Learning</span>
+                <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
+                <span className="ml-3 text-xl font-bold">GGK Learning</span>
               </div>
-              <p className="text-gray-400 text-base leading-relaxed">
+              <p className="text-gray-400 text-sm leading-relaxed">
                 Your trusted partner for IGCSE, O-Level, and A-Level success. 
                 Official Cambridge and Edexcel exam preparation platform.
               </p>
@@ -648,10 +648,10 @@ export default function LandingPage() {
 
             {/* Quick Links */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
-              <ul className="space-y-2.5">
+              <h3 className="text-base font-semibold mb-3">Quick Links</h3>
+              <ul className="space-y-2">
                 <li>
-                  <Link to="/subjects" className="text-gray-400 hover:text-white transition-colors text-base">
+                  <Link to="/subjects" className="text-gray-400 hover:text-white transition-colors text-sm">
                     IGCSE Subjects
                   </Link>
                 </li>
