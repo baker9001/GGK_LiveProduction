@@ -31,11 +31,11 @@ export function Navigation() {
   return (
     <nav
       className={clsx(
-        'backdrop-blur-md sticky top-0 z-50 transition-theme border-b backdrop-saturate-150',
+        'sticky top-0 z-50 transition-theme border-b',
         isLandingPage
           ? isDark
-            ? 'text-white/95 bg-white/10 supports-[backdrop-filter]:bg-white/5 border-white/20 shadow-[0_10px_30px_rgba(15,23,42,0.45)]'
-            : 'text-slate-900/95 bg-white/80 supports-[backdrop-filter]:bg-white/65 border-white/70 shadow-[0_10px_30px_rgba(15,23,42,0.12)]'
+            ? 'text-white bg-slate-900 border-slate-800 shadow-lg'
+            : 'text-slate-900 bg-white border-slate-200 shadow-md'
           : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
       )}
     >
@@ -63,15 +63,15 @@ export function Navigation() {
                   key={item.path}
                   to={item.path}
                   className={clsx(
-                    'inline-flex items-center px-1 pt-1 text-sm font-medium transition-theme border-b-2 border-transparent',
+                    'inline-flex items-center px-1 pt-1 text-sm font-medium transition-all duration-200 border-b-2 border-transparent',
                     isLandingPage
                       ? isDark
                         ? location.pathname === item.path
-                          ? 'text-white border-white/80'
-                          : 'text-white/80 hover:text-white/95 hover:border-white/60'
+                          ? 'text-white border-[#8CC63F]'
+                          : 'text-slate-300 hover:text-white hover:border-slate-600'
                         : location.pathname === item.path
-                          ? 'text-slate-900 border-slate-900/60'
-                          : 'text-slate-700 hover:text-slate-900 hover:border-slate-400/60'
+                          ? 'text-slate-900 border-[#8CC63F]'
+                          : 'text-slate-600 hover:text-slate-900 hover:border-slate-300'
                       : location.pathname === item.path
                         ? 'text-action-contrast border-[color:var(--color-action-primary)]'
                         : 'text-theme-secondary hover:text-theme-primary hover:border-theme-muted'
@@ -86,11 +86,11 @@ export function Navigation() {
             <button
               onClick={toggle}
               className={clsx(
-                'p-2 mr-2 rounded-full transition-theme backdrop-blur-sm',
+                'p-2 mr-2 rounded-full transition-all duration-200',
                 isLandingPage
                   ? isDark
-                    ? 'text-white/80 hover:text-white hover:bg-white/15 focus-visible:ring-white/30'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/40 focus-visible:ring-slate-300/60'
+                    ? 'text-slate-300 hover:text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-700'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-300'
                   : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
               )}
               aria-label="Toggle dark mode"
@@ -114,12 +114,12 @@ export function Navigation() {
             <button
               type="button"
               className={clsx(
-                'md:hidden ml-2 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--color-action-primary)] transition-theme',
+                'md:hidden ml-2 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-inset transition-all duration-200',
                 isLandingPage
                   ? isDark
-                    ? 'text-white/80 hover:text-white hover:bg-white/10'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
-                  : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
+                    ? 'text-slate-300 hover:text-white hover:bg-slate-800 focus:ring-slate-700'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:ring-slate-300'
+                  : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle focus:ring-[color:var(--color-action-primary)]'
               )}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
@@ -139,11 +139,11 @@ export function Navigation() {
         <div className="md:hidden">
           <div
             className={clsx(
-              'px-2 pt-2 pb-3 space-y-1 transition-theme backdrop-blur-md',
+              'px-2 pt-2 pb-3 space-y-1 transition-theme',
               isLandingPage
                 ? isDark
-                  ? 'bg-slate-950/85 text-white border-t border-white/10 shadow-[0_16px_40px_rgba(15,23,42,0.45)]'
-                  : 'bg-slate-100/95 text-slate-900 border-t border-slate-200/80 shadow-[0_16px_40px_rgba(15,23,42,0.15)]'
+                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-lg'
+                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-md'
                 : 'bg-theme-surface'
             )}
           >
@@ -152,15 +152,15 @@ export function Navigation() {
                 key={item.path}
                 to={item.path}
                 className={clsx(
-                  'block px-3 py-2 rounded-md text-base font-medium transition-theme',
+                  'block px-3 py-2 rounded-md text-base font-medium transition-all duration-200',
                   isLandingPage
                     ? isDark
                       ? location.pathname === item.path
-                        ? 'text-white bg-white/10'
-                        : 'text-white/80 hover:text-white hover:bg-white/10'
+                        ? 'text-white bg-slate-800'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800'
                       : location.pathname === item.path
-                        ? 'text-slate-900 bg-white/70'
-                        : 'text-slate-700 hover:text-slate-900 hover:bg-white/70'
+                        ? 'text-slate-900 bg-slate-100'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     : location.pathname === item.path
                       ? 'text-action-contrast bg-[color:var(--color-action-primary-soft)]'
                       : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
