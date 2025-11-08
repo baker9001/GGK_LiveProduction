@@ -587,26 +587,26 @@ export default function LandingPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-3xl p-10 text-white shadow-lg">
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-2 text-white">
+                <h2 className="text-3xl font-bold mb-2">
                   Proven Results That Speak for Themselves
                 </h2>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">15,000+</div>
-                  <div className="text-xs opacity-90 text-white">Past Papers Database</div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">15,000+</div>
+                  <div className="text-xs opacity-90">Past Papers Database</div>
                 </div>
-                <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">3,000+</div>
-                  <div className="text-xs opacity-90 text-white">Video Lessons</div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">3,000+</div>
+                  <div className="text-xs opacity-90">Video Lessons</div>
                 </div>
-                <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">500+</div>
-                  <div className="text-xs opacity-90 text-white">Mock Exams</div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">500+</div>
+                  <div className="text-xs opacity-90">Mock Exams</div>
                 </div>
-                <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">24/7</div>
-                  <div className="text-xs opacity-90 text-white">Learning Support</div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold mb-1">24/7</div>
+                  <div className="text-xs opacity-90">Learning Support</div>
                 </div>
               </div>
             </div>
