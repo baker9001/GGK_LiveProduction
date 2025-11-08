@@ -81,7 +81,7 @@ interface TabsListProps {
 export function TabsList({ children, className, activeTab, onTabChange }: TabsListProps) {
   return (
     <div className={cn(
-      'flex items-center gap-2 p-1 rounded-lg bg-white',
+      'flex items-center gap-2 p-1 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
       className
     )}>
       {React.Children.map(children, child => {
@@ -150,10 +150,10 @@ export function TabsTrigger({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ease-in-out focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
         isActive
-          ? 'bg-[#8CC63F] text-white'
-          : 'text-gray-700 hover:bg-gray-50',
+          ? 'bg-[#8CC63F] text-white shadow-md'
+          : 'text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 hover:shadow-sm',
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
