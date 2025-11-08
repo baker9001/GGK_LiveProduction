@@ -31,18 +31,18 @@ export function Navigation() {
   return (
     <nav
       className={clsx(
-        'sticky top-0 z-[100] transition-theme border-b',
+        'sticky top-0 z-[100] transition-all duration-300 border-b backdrop-blur-xl',
         isLandingPage
           ? isDark
-            ? 'text-white bg-slate-900 border-slate-800 shadow-2xl'
-            : 'text-slate-900 bg-white border-slate-200 shadow-lg'
-          : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
+            ? 'text-white bg-slate-900/90 border-slate-800/50 shadow-2xl'
+            : 'text-slate-900 bg-white/90 border-slate-200/50 shadow-lg'
+          : 'bg-theme-surface shadow-theme-elevated border-theme-muted backdrop-blur-xl'
       )}
       style={{
         backgroundColor: isLandingPage
           ? isDark
-            ? 'rgb(15, 23, 42)'
-            : 'rgb(255, 255, 255)'
+            ? 'rgba(15, 23, 42, 0.90)'
+            : 'rgba(255, 255, 255, 0.90)'
           : undefined
       }}
     >
@@ -146,18 +146,18 @@ export function Navigation() {
         <div className="md:hidden">
           <div
             className={clsx(
-              'px-2 pt-2 pb-3 space-y-1 transition-theme',
+              'px-2 pt-2 pb-3 space-y-1 transition-all duration-300 backdrop-blur-xl',
               isLandingPage
                 ? isDark
-                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-2xl'
-                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-lg'
-                : 'bg-theme-surface'
+                  ? 'bg-slate-900/95 text-white border-t border-slate-800/50 shadow-2xl'
+                  : 'bg-white/95 text-slate-900 border-t border-slate-200/50 shadow-lg'
+                : 'bg-theme-surface backdrop-blur-xl'
             )}
             style={{
               backgroundColor: isLandingPage
                 ? isDark
-                  ? 'rgb(15, 23, 42)'
-                  : 'rgb(255, 255, 255)'
+                  ? 'rgba(15, 23, 42, 0.95)'
+                  : 'rgba(255, 255, 255, 0.95)'
                 : undefined
             }}
           >
