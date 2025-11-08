@@ -331,39 +331,35 @@ export default function LandingPage() {
       <Navigation />
 
       {/* Hero Section */}
-      <div className="relative h-screen">
-        <div className="absolute inset-0 overflow-hidden">
+      <div className="relative h-screen isolate overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden -z-10">
           <img
             src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=1920"
             alt="IGCSE Cambridge Edexcel Students Learning"
             className="w-full h-full object-cover"
             loading="eager"
           />
-          {/* Dark overlay for text readability - darker background, white text in front */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'linear-gradient(120deg, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.70) 50%, rgba(0, 0, 0, 0.75) 100%)',
-            }}
-          />
+          {/* Soft translucent overlay reused from the sign-in experience */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/65 via-gray-200/55 to-white/65 backdrop-blur-sm" />
         </div>
-        <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8" style={{ zIndex: 10 }}>
-          <div className="text-center w-full text-white">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold !text-white mb-6" style={{ textShadow: '3px 3px 10px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.7)' }}>
+        <div className="relative z-10 max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
+          <div className="w-full max-w-3xl mx-auto text-center sm:text-left text-gray-900">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight">
               Master IGCSE, O-Level & A-Level
-              <span className="block !text-white mt-2" style={{ textShadow: '3px 3px 10px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.7)' }}>Cambridge & Edexcel Excellence</span>
+              <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900">
+                Cambridge & Edexcel Excellence
+              </span>
             </h1>
-            <p className="mt-6 max-w-2xl mx-auto text-xl !text-white sm:mt-8 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
+            <p className="mt-6 max-w-2xl mx-auto sm:mx-0 text-lg sm:text-xl text-gray-700 sm:mt-8 leading-relaxed">
               Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="mt-10 flex flex-col sm:flex-row sm:items-center sm:justify-start gap-4 sm:gap-6">
               <Button
                 variant="default"
                 size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[180px]"
+                className="w-full sm:w-auto min-w-[190px] shadow-lg shadow-[#8CC63F]/25 hover:shadow-xl focus-visible:ring-4 focus-visible:ring-[#8CC63F]/30 transition-transform hover:-translate-y-0.5"
                 onClick={() => navigate('/signin')}
                 rightIcon={<ChevronRight />}
               >
@@ -373,26 +369,23 @@ export default function LandingPage() {
                 variant="outline"
                 size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[180px] border-2 border-white text-white hover:bg-white hover:text-gray-900 font-semibold transition-all duration-300"
+                className="w-full sm:w-auto min-w-[190px] border-2 border-gray-900/80 text-gray-900 hover:bg-gray-900 hover:text-white focus-visible:ring-4 focus-visible:ring-gray-900/20 font-semibold transition-all duration-300"
                 leftIcon={<PlayCircle />}
               >
                 Watch Demo
               </Button>
             </div>
             {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
-            <div className="mt-10 flex items-center justify-center gap-12 flex-wrap">
-              <div className="text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
-                <div className="text-4xl font-extrabold">10,000+</div>
-                <div className="text-base font-bold mt-1">Active Students</div>
-              </div>
-              <div className="text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
-                <div className="text-4xl font-extrabold">95%</div>
-                <div className="text-base font-bold mt-1">Pass Rate</div>
-              </div>
-              <div className="text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
-                <div className="text-4xl font-extrabold">200+</div>
-                <div className="text-base font-bold mt-1">Schools Trust Us</div>
-              </div>
+            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-3xl mx-auto sm:mx-0">
+              {[{ label: 'Active Students', value: '10,000+' }, { label: 'Pass Rate', value: '95%' }, { label: 'Schools Trust Us', value: '200+' }].map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-2xl bg-white/75 backdrop-blur-md px-6 py-5 shadow-lg shadow-gray-900/5 border border-white/60 text-center"
+                >
+                  <div className="text-3xl sm:text-4xl font-extrabold text-gray-900">{item.value}</div>
+                  <div className="text-sm sm:text-base font-semibold text-gray-600 mt-1">{item.label}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
