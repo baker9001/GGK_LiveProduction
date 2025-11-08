@@ -47,13 +47,13 @@ export function Navigation() {
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
+        <div className="flex justify-between h-20 items-center">
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
-              <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
+              <GraduationCap className="h-10 w-10 text-[#8CC63F]" />
               <span
                 className={clsx(
-                  'ml-2 text-xl font-bold transition-theme',
+                  'ml-3 text-2xl font-bold transition-theme',
                   isLandingPage
                     ? isDark
                       ? 'text-white'
@@ -64,13 +64,13 @@ export function Navigation() {
                 GGK
               </span>
             </Link>
-            <div className="hidden md:flex ml-10 space-x-8">
+            <div className="hidden md:flex ml-12 space-x-8">
               {NAV_ITEMS.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={clsx(
-                    'inline-flex items-center px-1 pt-1 text-sm font-medium transition-all duration-200 border-b-2 border-transparent',
+                    'inline-flex items-center px-2 pt-1 text-base font-semibold transition-all duration-200 border-b-2 border-transparent',
                     isLandingPage
                       ? isDark
                         ? location.pathname === item.path
@@ -93,7 +93,7 @@ export function Navigation() {
             <button
               onClick={toggle}
               className={clsx(
-                'p-2 mr-2 rounded-full transition-all duration-200',
+                'p-2.5 mr-3 rounded-full transition-all duration-200',
                 isLandingPage
                   ? isDark
                     ? 'text-slate-300 hover:text-white hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-700'
@@ -104,14 +104,15 @@ export function Navigation() {
               aria-pressed={isDark}
             >
               {isDark ? (
-                <Sun className="h-5 w-5" />
+                <Sun className="h-6 w-6" />
               ) : (
-                <Moon className="h-5 w-5" />
+                <Moon className="h-6 w-6" />
               )}
             </button>
 
             <Button
               variant="default"
+              size="lg"
               onClick={handleSignInClick}
               className="ml-4"
             >

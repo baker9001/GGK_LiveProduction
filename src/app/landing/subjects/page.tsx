@@ -209,17 +209,17 @@ export default function SubjectsPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16 sectioned-layout">
         {/* Enhanced Header with SEO-friendly content */}
-        <section className="py-12">
+        <section className="py-16">
           <div className="text-center">
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center shadow-lg">
-                <BookOpen className="w-10 h-10 text-white" />
+            <div className="flex justify-center mb-8">
+              <div className="w-24 h-24 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center shadow-xl">
+                <BookOpen className="w-12 h-12 text-white" />
               </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 dark:text-white mb-8">
               IGCSE, O-Level & A-Level Subjects
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-4xl mx-auto">
+            <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 max-w-4xl mx-auto leading-relaxed">
               Complete Cambridge International (CIE) and Pearson Edexcel curriculum coverage with
               10+ years of past papers, video lessons, and exam-specific resources
             </p>
@@ -249,8 +249,8 @@ export default function SubjectsPage() {
         </section>
 
         {/* Enhanced Search and Filter Bar */}
-        <section className="py-12">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+        <section className="py-16">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Search */}
               <div className="relative">
@@ -297,7 +297,7 @@ export default function SubjectsPage() {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
             IGCSE Core Subjects
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredSubjects.map((subject) => {
               const IconComponent = subject.icon;
               const isExpanded = expandedSubjects.includes(subject.id);
@@ -305,26 +305,26 @@ export default function SubjectsPage() {
               return (
                 <div
                   key={subject.id}
-                  className={`${subject.bgColor} ${subject.borderColor} border rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1`}
+                  className={`${subject.bgColor} ${subject.borderColor} border rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}
                 >
                   {/* Card Header */}
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className={`w-12 h-12 bg-gradient-to-br ${subject.color} rounded-lg flex items-center justify-center`}>
-                        <IconComponent className="w-6 h-6 text-white" />
+                  <div className="p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className={`w-14 h-14 bg-gradient-to-br ${subject.color} rounded-xl flex items-center justify-center`}>
+                        <IconComponent className="w-7 h-7 text-white" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-semibold">
+                        <span className="bg-[#8CC63F] text-white text-sm px-3 py-1.5 rounded-full font-semibold">
                           {subject.passRate} Pass
                         </span>
                       </div>
                     </div>
                     
-                    <h3 className={`text-xl font-semibold ${subject.textColor} mb-2`}>
+                    <h3 className={`text-2xl font-bold ${subject.textColor} mb-3`}>
                       {subject.name}
                     </h3>
-                    
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+
+                    <p className="text-base text-gray-600 dark:text-gray-400 mb-5 leading-relaxed">
                       {subject.description}
                     </p>
                     

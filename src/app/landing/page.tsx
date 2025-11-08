@@ -251,8 +251,8 @@ const SubjectCard = memo(({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200 group">
-      <div className="h-48 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-xl dark:hover:shadow-gray-900/30 transition-all duration-300 group hover:-translate-y-1">
+      <div className="h-56 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
         {isLoading && (
           <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
         )}
@@ -266,28 +266,28 @@ const SubjectCard = memo(({
           onLoad={handleImageLoad}
           loading="lazy"
         />
-        <div className="absolute top-2 right-2">
-          <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-medium">
+        <div className="absolute top-3 right-3">
+          <span className="bg-[#8CC63F] text-white text-sm px-3 py-1.5 rounded-full font-semibold shadow-lg">
             IGCSE
           </span>
         </div>
       </div>
-      <div className="p-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{description}</p>
+      <div className="p-8">
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+        <p className="text-gray-600 dark:text-gray-400 text-base mb-5 leading-relaxed">{description}</p>
         {badges && (
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-5">
             {badges.map((badge, index) => (
-              <span 
+              <span
                 key={index}
-                className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full"
+                className="text-sm px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full font-medium"
               >
                 {badge}
               </span>
             ))}
           </div>
         )}
-  
+
       </div>
     </div>
   );
@@ -301,12 +301,12 @@ const FeatureCard = memo(({ icon, title, description }: {
   title: string;
   description: string
 }) => (
-  <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
-    <div className="h-16 w-16 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-6">
+  <div className="bg-white dark:bg-gray-800 p-10 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
+    <div className="h-20 w-20 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-8">
       {icon}
     </div>
-    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
-    <p className="text-gray-600 dark:text-gray-400">{description}</p>
+    <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">{title}</h3>
+    <p className="text-base text-gray-600 dark:text-gray-400">{description}</p>
   </div>
 ));
 
@@ -344,19 +344,19 @@ export default function LandingPage() {
         </div>
         <div className="relative z-10 max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
           <div className="w-full max-w-6xl mx-auto text-center">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold !text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
-              Master IGCSE, O-Level & A-Level   Cambridge & Edexcel Excellence
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold !text-white leading-tight" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
+              Master IGCSE, O-Level & A-Level Cambridge & Edexcel Excellence
             </h1>
-            <p className="mt-6 max-w-2xl mx-auto text-lg sm:text-xl !text-white sm:mt-8 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
+            <p className="mt-8 max-w-3xl mx-auto text-xl sm:text-2xl md:text-3xl !text-white sm:mt-10 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
               Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+            <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-5 sm:gap-8">
               <Button
                 variant="default"
-                size="lg"
+                size="xl"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[190px] shadow-lg shadow-[#8CC63F]/25 hover:shadow-xl focus-visible:ring-4 focus-visible:ring-[#8CC63F]/30 transition-transform hover:-translate-y-0.5"
+                className="w-full sm:w-auto min-w-[220px] text-lg shadow-lg shadow-[#8CC63F]/25 hover:shadow-xl focus-visible:ring-4 focus-visible:ring-[#8CC63F]/30 transition-transform hover:-translate-y-0.5"
                 onClick={() => navigate('/signin')}
                 rightIcon={<ChevronRight />}
               >
@@ -364,24 +364,24 @@ export default function LandingPage() {
               </Button>
               <Button
                 variant="outline"
-                size="lg"
+                size="xl"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[190px] border-2 border-white text-white hover:bg-white hover:text-gray-900 focus-visible:ring-4 focus-visible:ring-white/30 font-semibold transition-all duration-300"
+                className="w-full sm:w-auto min-w-[220px] text-lg border-2 border-white text-white hover:bg-white hover:text-gray-900 focus-visible:ring-4 focus-visible:ring-white/30 font-semibold transition-all duration-300"
                 leftIcon={<PlayCircle />}
               >
                 Watch Demo
               </Button>
             </div>
             {/* Trust badges */}
-            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-5xl mx-auto">
               {[{ label: 'Active Students', value: '10,000+' }, { label: 'Pass Rate', value: '95%' }, { label: 'Schools Trust Us', value: '200+' }].map((item) => (
                 <div
                   key={item.label}
-                  className="px-8 py-6 text-center"
+                  className="px-10 py-8 text-center"
                   style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
                 >
-                  <div className="text-4xl sm:text-5xl font-extrabold !text-white" style={{ color: 'white' }}>{item.value}</div>
-                  <div className="text-sm sm:text-base font-bold !text-white mt-2" style={{ color: 'white' }}>{item.label}</div>
+                  <div className="text-5xl sm:text-6xl lg:text-7xl font-extrabold !text-white" style={{ color: 'white' }}>{item.value}</div>
+                  <div className="text-base sm:text-lg lg:text-xl font-bold !text-white mt-3" style={{ color: 'white' }}>{item.label}</div>
                 </div>
               ))}
             </div>
@@ -395,19 +395,19 @@ export default function LandingPage() {
         {/* Exam Boards Section */}
         <section className="py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
                 Official Exam Board Coverage
               </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400">
+              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400">
                 Complete syllabus coverage for all major examination boards
               </p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
-                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-900 dark:text-white">Cambridge</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
+              <div className="bg-white dark:bg-gray-900 p-8 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
+                <Award className="h-16 w-16 text-[#8CC63F] mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Cambridge</h3>
+                <p className="text-base text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
               </div>
               <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
                 <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
@@ -433,11 +433,11 @@ export default function LandingPage() {
         {/* Enhanced Feature Highlights */}
         <section className="py-24 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+            <div className="text-center mb-20">
+              <h2 className="text-4xl md:text-5xl font-bold text-[#8CC63F] mb-6">
                 Complete IGCSE & A-Level Success Platform
               </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400">
+              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400">
                 Everything you need to excel in Cambridge and Edexcel examinations
               </p>
             </div>
@@ -471,19 +471,20 @@ export default function LandingPage() {
         {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
         <section className="py-24 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+            <div className="text-center mb-20">
+              <h2 className="text-4xl md:text-5xl font-bold text-[#8CC63F] mb-6">
                 IGCSE & A-Level Subjects We Offer
               </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
+              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 mb-10">
                 Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
               </p>
               <Button
                 variant="default"
-                size="lg"
+                size="xl"
                 rounded="full"
                 onClick={() => navigate('/subjects')}
                 rightIcon={<ChevronRight />}
+                className="text-lg"
               >
                 View All Subjects
               </Button>
@@ -502,11 +503,12 @@ export default function LandingPage() {
 
             {/* Show More/Less Button */}
             {PRIORITY_SUBJECTS.length > 6 && (
-              <div className="text-center mt-12">
+              <div className="text-center mt-16">
                 <Button
                   variant="outline"
-                  size="lg"
+                  size="xl"
                   rounded="full"
+                  className="text-lg"
                   onClick={() => setShowAllSubjects(!showAllSubjects)}
                   rightIcon={showAllSubjects ? <ChevronUp /> : <ChevronDown />}
                 >
@@ -522,11 +524,11 @@ export default function LandingPage() {
         {/* Enhanced Testimonials */}
         <section className="py-24 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+            <div className="text-center mb-20">
+              <h2 className="text-4xl md:text-5xl font-bold text-[#8CC63F] mb-6">
                 Success Stories from IGCSE & A-Level Students
               </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400">
+              <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400">
                 Join thousands of students achieving top grades with GGK Learning
               </p>
             </div>
@@ -535,7 +537,7 @@ export default function LandingPage() {
               {testimonials.map((testimonial, index) => (
                 <div
                   key={index}
-                  className="bg-gray-50 dark:bg-gray-800 rounded-xl p-8 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
+                  className="bg-gray-50 dark:bg-gray-800 rounded-xl p-10 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
                 >
                   <div className="flex items-center mb-4">
                     {[...Array(testimonial.rating)].map((_, i) => (
@@ -581,30 +583,30 @@ export default function LandingPage() {
         <SectionDivider />
 
         {/* Statistics Section - REDUCED PADDING */}
-        <section className="py-12">
+        <section className="py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-3xl p-10 text-white shadow-lg">
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-2 text-white">
+            <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-3xl p-12 md:p-16 text-white shadow-2xl">
+              <div className="text-center mb-12">
+                <h2 className="text-4xl md:text-5xl font-bold mb-3 text-white">
                   Proven Results That Speak for Themselves
                 </h2>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                 <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">15,000+</div>
-                  <div className="text-xs opacity-90 text-white">Past Papers Database</div>
+                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">15,000+</div>
+                  <div className="text-base md:text-lg opacity-90 text-white">Past Papers Database</div>
                 </div>
                 <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">3,000+</div>
-                  <div className="text-xs opacity-90 text-white">Video Lessons</div>
+                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">3,000+</div>
+                  <div className="text-base md:text-lg opacity-90 text-white">Video Lessons</div>
                 </div>
                 <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">500+</div>
-                  <div className="text-xs opacity-90 text-white">Mock Exams</div>
+                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">500+</div>
+                  <div className="text-base md:text-lg opacity-90 text-white">Mock Exams</div>
                 </div>
                 <div className="text-center text-white">
-                  <div className="text-3xl font-bold mb-1 text-white">24/7</div>
-                  <div className="text-xs opacity-90 text-white">Learning Support</div>
+                  <div className="text-5xl md:text-6xl font-bold mb-2 text-white">24/7</div>
+                  <div className="text-base md:text-lg opacity-90 text-white">Learning Support</div>
                 </div>
               </div>
             </div>
@@ -616,21 +618,21 @@ export default function LandingPage() {
 
       {/* Footer - REDUCED PADDING */}
       <footer className="bg-gray-900 dark:bg-gray-950 text-white transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
             {/* Company Info */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center">
-                <GraduationCap className="h-7 w-7 text-[#8CC63F]" />
-                <span className="ml-2 text-xl font-bold">GGK Learning</span>
+                <GraduationCap className="h-9 w-9 text-[#8CC63F]" />
+                <span className="ml-3 text-2xl font-bold">GGK Learning</span>
               </div>
-              <p className="text-gray-400 text-sm">
+              <p className="text-gray-400 text-base leading-relaxed">
                 Your trusted partner for IGCSE, O-Level, and A-Level success. 
                 Official Cambridge and Edexcel exam preparation platform.
               </p>
-              <div className="flex space-x-3">
+              <div className="flex space-x-4">
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Facebook className="h-4 w-4" />
+                  <Facebook className="h-5 w-5" />
                 </a>
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
                   <Twitter className="h-4 w-4" />
@@ -646,10 +648,10 @@ export default function LandingPage() {
 
             {/* Quick Links */}
             <div>
-              <h3 className="text-base font-semibold mb-3">Quick Links</h3>
-              <ul className="space-y-1.5">
+              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+              <ul className="space-y-2.5">
                 <li>
-                  <Link to="/subjects" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/subjects" className="text-gray-400 hover:text-white transition-colors text-base">
                     IGCSE Subjects
                   </Link>
                 </li>
@@ -729,13 +731,13 @@ export default function LandingPage() {
           </div>
 
           {/* Bottom Bar */}
-          <div className="border-t border-gray-800 mt-8 pt-6">
+          <div className="border-t border-gray-800 mt-12 pt-8">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <p className="text-gray-400 text-xs">
+              <p className="text-gray-400 text-sm">
                 © 2025 GGK Learning Platform. Official Cambridge & Edexcel Partner.
               </p>
-              <div className="flex space-x-4 mt-3 md:mt-0">
-                <Link to="/privacy" className="text-gray-400 hover:text-white text-xs transition-colors">
+              <div className="flex space-x-6 mt-4 md:mt-0">
+                <Link to="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">
                   Privacy Policy
                 </Link>
                 <Link to="/terms" className="text-gray-400 hover:text-white text-xs transition-colors">
