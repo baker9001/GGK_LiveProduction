@@ -31,20 +31,13 @@ export function Navigation() {
   return (
     <nav
       className={clsx(
-        'sticky top-0 z-[100] transition-all duration-300 border-b backdrop-blur-xl',
+        'sticky top-0 z-[100] transition-all duration-300 border-b',
         isLandingPage
           ? isDark
-            ? 'text-white bg-slate-900/90 border-slate-800/50 shadow-2xl'
-            : 'text-slate-900 bg-white/90 border-slate-200/50 shadow-lg'
-          : 'bg-theme-surface shadow-theme-elevated border-theme-muted backdrop-blur-xl'
+            ? 'text-white bg-slate-900 border-slate-800 shadow-2xl'
+            : 'text-slate-900 bg-white border-slate-200 shadow-lg'
+          : 'bg-white dark:bg-gray-900 shadow-md border-gray-200 dark:border-gray-800'
       )}
-      style={{
-        backgroundColor: isLandingPage
-          ? isDark
-            ? 'rgba(15, 23, 42, 0.90)'
-            : 'rgba(255, 255, 255, 0.90)'
-          : undefined
-      }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
@@ -147,20 +140,13 @@ export function Navigation() {
         <div className="md:hidden">
           <div
             className={clsx(
-              'px-2 pt-2 pb-3 space-y-1 transition-all duration-300 backdrop-blur-xl',
+              'px-2 pt-2 pb-3 space-y-1 transition-all duration-300',
               isLandingPage
                 ? isDark
-                  ? 'bg-slate-900/95 text-white border-t border-slate-800/50 shadow-2xl'
-                  : 'bg-white/95 text-slate-900 border-t border-slate-200/50 shadow-lg'
-                : 'bg-theme-surface backdrop-blur-xl'
+                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-2xl'
+                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-lg'
+                : 'bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800'
             )}
-            style={{
-              backgroundColor: isLandingPage
-                ? isDark
-                  ? 'rgba(15, 23, 42, 0.95)'
-                  : 'rgba(255, 255, 255, 0.95)'
-                : undefined
-            }}
           >
             {NAV_ITEMS.map((item) => (
               <Link
