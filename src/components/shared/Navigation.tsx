@@ -35,7 +35,7 @@ export function Navigation() {
         isLandingPage
           ? isDark
             ? 'text-white/95 bg-slate-950/80 supports-[backdrop-filter]:bg-slate-950/65 border-white/10 shadow-[0_10px_30px_rgba(15,23,42,0.35)]'
-            : 'text-slate-900/95 bg-slate-100/95 supports-[backdrop-filter]:bg-slate-100/85 border-slate-200/80 shadow-[0_10px_30px_rgba(15,23,42,0.16)]'
+            : 'text-slate-900/95 bg-slate-100/80 supports-[backdrop-filter]:bg-slate-100/65 border-slate-200/70 shadow-[0_10px_30px_rgba(15,23,42,0.12)]'
           : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
       )}
     >
@@ -90,7 +90,7 @@ export function Navigation() {
                 isLandingPage
                   ? isDark
                     ? 'text-white/80 hover:text-white hover:bg-white/15 focus-visible:ring-white/30'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/55 focus-visible:ring-slate-300/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/40 focus-visible:ring-slate-300/60'
                   : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
               )}
               aria-label="Toggle dark mode"
@@ -118,7 +118,7 @@ export function Navigation() {
                 isLandingPage
                   ? isDark
                     ? 'text-white/80 hover:text-white hover:bg-white/10'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/55'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
                   : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
               )}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -159,8 +159,8 @@ export function Navigation() {
                         ? 'text-white bg-white/10'
                         : 'text-white/80 hover:text-white hover:bg-white/10'
                       : location.pathname === item.path
-                        ? 'text-slate-900 bg-white/80'
-                        : 'text-slate-700 hover:text-slate-900 hover:bg-white/80'
+                        ? 'text-slate-900 bg-white/70'
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-white/70'
                     : location.pathname === item.path
                       ? 'text-action-contrast bg-[color:var(--color-action-primary-soft)]'
                       : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
