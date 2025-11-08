@@ -26,63 +26,65 @@ import { Loader2 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-theme focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-action-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:rgb(var(--color-bg-surface))] disabled:opacity-60 disabled:pointer-events-none active:scale-95 relative overflow-hidden group',
+  'inline-flex items-center justify-center rounded-ggk-lg text-sm font-semibold transition-all duration-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ggk-primary-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none active:scale-[0.98] relative overflow-hidden group',
   {
     variants: {
       variant: {
         default: cn(
-          'bg-action-primary text-action-contrast shadow-theme-elevated',
-          'hover:bg-action-primary-hover active:bg-action-primary-active'
+          'bg-ggk-primary-600 text-white shadow-ggk-md',
+          'hover:bg-ggk-primary-700 hover:shadow-ggk-lg active:bg-ggk-primary-800',
+          'dark:bg-ggk-primary-500 dark:hover:bg-ggk-primary-600'
         ),
         secondary: cn(
-          'bg-theme-subtle text-theme-primary border border-theme shadow-sm',
-          'hover:bg-theme-muted'
+          'bg-ggk-neutral-100 text-ggk-neutral-700 border border-ggk-neutral-200 shadow-ggk-sm',
+          'hover:bg-ggk-neutral-200 hover:shadow-ggk-md',
+          'dark:bg-ggk-neutral-800 dark:text-ggk-neutral-200 dark:border-ggk-neutral-700 dark:hover:bg-ggk-neutral-700'
         ),
         destructive: cn(
-          'bg-red-500 text-white shadow-theme-elevated',
-          'hover:bg-red-600 active:bg-red-700'
+          'bg-red-500 text-white shadow-ggk-md',
+          'hover:bg-red-600 hover:shadow-ggk-lg active:bg-red-700',
+          'dark:bg-red-600 dark:hover:bg-red-700'
         ),
         outline: cn(
-          'border-2 border-[color:var(--color-action-primary)] text-[color:var(--color-action-primary)] bg-transparent shadow-sm',
-          'hover:bg-[color:var(--color-action-primary-soft)]'
+          'border-2 border-ggk-primary-600 text-ggk-primary-700 bg-transparent shadow-ggk-sm',
+          'hover:bg-ggk-primary-50 hover:shadow-ggk-md',
+          'dark:border-ggk-primary-500 dark:text-ggk-primary-400 dark:hover:bg-ggk-primary-950'
         ),
         ghost: cn(
-          'text-theme-secondary',
-          'hover:text-theme-primary hover:bg-theme-subtle'
+          'text-ggk-neutral-600 bg-transparent',
+          'hover:text-ggk-neutral-900 hover:bg-ggk-neutral-100',
+          'dark:text-ggk-neutral-400 dark:hover:text-ggk-neutral-100 dark:hover:bg-ggk-neutral-800'
         ),
         link: cn(
-          'text-[color:var(--color-action-primary)] underline-offset-4 hover:underline hover:text-[color:var(--color-action-primary-hover)]'
+          'text-ggk-primary-600 underline-offset-4 hover:underline hover:text-ggk-primary-700',
+          'dark:text-ggk-primary-500 dark:hover:text-ggk-primary-400'
         ),
         success: cn(
-          'bg-emerald-500 text-white shadow-theme-elevated',
-          'hover:bg-emerald-600 active:bg-emerald-700'
+          'bg-emerald-500 text-white shadow-ggk-md',
+          'hover:bg-emerald-600 hover:shadow-ggk-lg active:bg-emerald-700'
         ),
         warning: cn(
-          'bg-amber-500 text-white shadow-theme-elevated',
-          'hover:bg-amber-600 active:bg-amber-700'
-        ),
-        report: cn(
-          'bg-theme-surface text-[color:var(--color-action-primary)] border-2 border-[color:var(--color-action-primary)] shadow-sm',
-          'hover:bg-[color:var(--color-action-primary-soft)]'
+          'bg-amber-500 text-white shadow-ggk-md',
+          'hover:bg-amber-600 hover:shadow-ggk-lg active:bg-amber-700'
         ),
       },
       size: {
-        default: 'h-10 px-5 py-2.5',
-        sm: 'h-8 px-4 text-xs',
-        lg: 'h-12 px-7 text-base',
-        xl: 'h-14 px-9 text-lg',
-        icon: 'h-9 w-9',
-        'icon-sm': 'h-7 w-7',
-        'icon-lg': 'h-11 w-11',
+        default: 'h-10 px-20 py-10',
+        sm: 'h-8 px-16 text-xs',
+        lg: 'h-12 px-24 text-base',
+        xl: 'h-14 px-32 text-lg',
+        icon: 'h-10 w-10 p-0',
+        'icon-sm': 'h-8 w-8 p-0',
+        'icon-lg': 'h-12 w-12 p-0',
       },
       rounded: {
-        default: 'rounded-lg',
+        default: 'rounded-ggk-lg',
         full: 'rounded-full',
         none: 'rounded-none',
-        sm: 'rounded',
-        md: 'rounded-md',
-        lg: 'rounded-lg',
-        xl: 'rounded-xl',
+        sm: 'rounded-ggk-sm',
+        md: 'rounded-ggk-md',
+        lg: 'rounded-ggk-lg',
+        xl: 'rounded-ggk-xl',
       }
     },
     defaultVariants: {
