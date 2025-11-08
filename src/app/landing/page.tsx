@@ -336,7 +336,7 @@ export default function LandingPage() {
           <img
             src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=1920"
             alt="IGCSE Cambridge Edexcel Students Learning"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover blur-sm"
             loading="eager"
           />
           {/* Soft translucent overlay */}
