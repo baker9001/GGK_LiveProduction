@@ -191,43 +191,40 @@ const PracticePage: React.FC = () => {
     }
   });
 
-  const submitAnswerMutation = useMutation<PracticeAnswerResponse, Error, { payload: AnswerSubmissionPayload; item: PracticeSetItem }>(
-    async ({ payload, item }) => submitAnswer({ sessionId: sessionState!.sessionId, itemId: item.id, rawAnswer: payload }),
-    {
-      onSuccess: (data, { item }) => {
-        setSessionState((prev) => {
-          if (!prev) {
-            return prev;
+  const submitAnswerMutation = useMutation<PracticeAnswerResponse, Error, { payload: AnswerSubmissionPayload; item: PracticeSetItem }>({
+    mutationFn: async ({ payload, item }) =>
+      submitAnswer({ sessionId: sessionState!.sessionId, itemId: item.id, rawAnswer: payload }),
+    onSuccess: (data, { item }) => {
+      setSessionState((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return {
+          ...prev,
+          answers: {
+            ...prev.answers,
+            [item.id]: data
           }
-          return {
-            ...prev,
-            answers: {
-              ...prev.answers,
-              [item.id]: data
-            }
-          };
-        });
-      },
-      onError: (error) => {
-        console.error('Failed to submit answer:', error);
-        alert(`Error submitting answer: ${error.message}`);
-      }
+        };
+      });
+    },
+    onError: (error) => {
+      console.error('Failed to submit answer:', error);
+      alert(`Error submitting answer: ${error.message}`);
     }
-  );
+  });
 
-  const finishSessionMutation = useMutation<SessionSummary, Error, void>(
-    async () => finishSession(sessionState!.sessionId),
-    {
-      onSuccess: async (summary) => {
-        setSessionSummary(summary);
-        const overview = await getReport(summary.sessionId);
-        setReport(overview);
-        await queryClient.invalidateQueries({ queryKey: ['practice-progress', studentId] });
-        await queryClient.invalidateQueries({ queryKey: ['practice-gamification', studentId] });
-        setMode('results');
-      }
+  const finishSessionMutation = useMutation<SessionSummary, Error, void>({
+    mutationFn: async () => finishSession(sessionState!.sessionId),
+    onSuccess: async (summary) => {
+      setSessionSummary(summary);
+      const overview = await getReport(summary.sessionId);
+      setReport(overview);
+      await queryClient.invalidateQueries({ queryKey: ['practice-progress', studentId] });
+      await queryClient.invalidateQueries({ queryKey: ['practice-gamification', studentId] });
+      setMode('results');
     }
-  );
+  });
 
   const leaderboardQuery = useQuery({
     queryKey: ['practice-leaderboard'],
