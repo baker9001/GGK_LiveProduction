@@ -24,7 +24,7 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-ggk-2xl bg-white dark:bg-ggk-neutral-800 transition-all duration-base',
+        'rounded-ggk-2xl !bg-white dark:!bg-ggk-neutral-800 transition-all duration-base',
         {
           'shadow-ggk-md': variant === 'default',
           'shadow-ggk-lg hover:shadow-ggk-xl': variant === 'elevated',

@@ -70,15 +70,18 @@
   --color-action-contrast: #ffffff;
   --color-action-primary-focus: rgba(140, 198, 63, 0.3);
 
-  /* Input Colors */
+  /* Input Colors - Always solid backgrounds */
   --color-input-bg: #ffffff;
   --color-input-border: rgba(140, 198, 63, 0.25);
   --color-input-placeholder: rgba(107, 114, 128, 0.6);
+  --color-input-disabled-bg: #f3f4f6;
+  --color-input-focus-ring: rgba(140, 198, 63, 0.3);
 
-  /* Dropdown Colors */
+  /* Dropdown Colors - Solid backgrounds for clear visibility */
   --dropdown-bg: #ffffff;
   --dropdown-hover: #e8f5dc;
   --dropdown-selected: #d4edc4;
+  --dropdown-border: rgba(229, 231, 235, 1);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgba(93, 126, 35, 0.05);
@@ -143,14 +146,17 @@
   --color-action-primary-soft: rgba(158, 208, 80, 0.22);
   --color-action-contrast: #0f172a;
   --color-action-primary-focus: rgba(158, 208, 80, 0.38);
-  --color-input-bg: rgba(15, 23, 42, 0.85);
+  --color-input-bg: rgb(31, 41, 55);
   --color-input-border: rgba(148, 163, 184, 0.35);
   --color-input-placeholder: rgba(148, 163, 184, 0.7);
+  --color-input-disabled-bg: rgb(55, 65, 81);
+  --color-input-focus-ring: rgba(158, 208, 80, 0.38);
 
-  /* Dropdown Colors - Dark Mode */
+  /* Dropdown Colors - Dark Mode - Solid backgrounds */
   --dropdown-bg: rgb(31, 41, 55);
   --dropdown-hover: rgba(140, 198, 63, 0.2);
   --dropdown-selected: rgba(140, 198, 63, 0.3);
+  --dropdown-border: rgba(148, 163, 184, 0.32);
 
   --shadow-elevated: 0 22px 40px -25px rgba(8, 15, 29, 0.65);
   --shadow-popover: 0 22px 40px -25px rgba(8, 15, 29, 0.75);
@@ -410,10 +416,17 @@ body {
 input,
 textarea,
 select {
-  background-color: var(--color-input-bg);
-  border-color: var(--color-input-border);
-  color: rgb(var(--color-text-primary));
+  background-color: var(--color-input-bg, #ffffff) !important;
+  border-color: var(--color-input-border, rgba(140, 198, 63, 0.25));
+  color: rgb(var(--color-text-primary, 31 41 55));
   transition: var(--transition-theme);
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: rgb(31, 41, 55) !important;
+  color: rgb(248, 250, 252);
 }
 
 input::placeholder,
@@ -795,4 +808,76 @@ body.font-dyslexic {
 .rt-equation sup,
 .rt-equation sub {
   font-size: 0.8em;
+}
+
+/* Utility classes for enforcing solid backgrounds */
+.bg-solid-white {
+  background-color: #ffffff !important;
+}
+
+.bg-solid-gray-50 {
+  background-color: #f9fafb !important;
+}
+
+.bg-solid-gray-100 {
+  background-color: #f3f4f6 !important;
+}
+
+.dark .bg-solid-white {
+  background-color: rgb(31, 41, 55) !important;
+}
+
+.dark .bg-solid-gray-50 {
+  background-color: rgb(26, 35, 50) !important;
+}
+
+.dark .bg-solid-gray-100 {
+  background-color: rgb(55, 65, 81) !important;
+}
+
+/* Enforce solid backgrounds for form controls */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select,
+[role="combobox"],
+[role="listbox"] {
+  background-color: var(--color-input-bg, #ffffff) !important;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select,
+.dark [role="combobox"],
+.dark [role="listbox"] {
+  background-color: rgb(31, 41, 55) !important;
+}
+
+/* Dropdown menu solid backgrounds */
+[role="menu"],
+[role="listbox"],
+.dropdown-menu,
+.select-dropdown {
+  background-color: var(--dropdown-bg, #ffffff) !important;
+}
+
+.dark [role="menu"],
+.dark [role="listbox"],
+.dark .dropdown-menu,
+.dark .select-dropdown {
+  background-color: rgb(31, 41, 55) !important;
+}
+
+/* Modal and dialog solid backgrounds */
+[role="dialog"],
+[role="alertdialog"],
+.modal,
+.dialog {
+  background-color: #ffffff !important;
+}
+
+.dark [role="dialog"],
+.dark [role="alertdialog"],
+.dark .modal,
+.dark .dialog {
+  background-color: rgb(31, 41, 55) !important;
 }

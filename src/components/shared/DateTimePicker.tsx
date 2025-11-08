@@ -340,7 +340,7 @@ export function DateTimePicker({
     const dropdownContent = (
       <div
         ref={dropdownRef}
-        className="z-[150] rounded-lg border border-gray-200 dark:border-gray-600 shadow-xl dark:shadow-gray-900/40 overflow-hidden bg-white dark:bg-gray-800"
+        className="z-[150] rounded-lg border border-gray-200 dark:border-gray-600 shadow-xl dark:shadow-gray-900/40 overflow-hidden !bg-white dark:!bg-gray-800"
         style={
           usePortal
             ? {
@@ -361,7 +361,7 @@ export function DateTimePicker({
         }
       >
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <div className="flex border-b border-gray-200 dark:border-gray-700 !bg-white dark:!bg-gray-800">
           <button
             type="button"
             onClick={() => setActiveTab('date')}
@@ -400,7 +400,7 @@ export function DateTimePicker({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 !bg-gray-50 dark:!bg-gray-800">
           <div className="flex gap-2">
             <button
               type="button"
@@ -446,7 +446,7 @@ export function DateTimePicker({
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200 cursor-pointer',
           'flex items-center justify-between',
           'focus-within:outline-none focus-within:ring-2 focus-within:ring-[#8CC63F] focus-within:border-[#8CC63F]',
-          'bg-white dark:bg-gray-800',
+          '!bg-white dark:!bg-gray-800',
           disabled && 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed opacity-60',
           error
             ? 'border-red-300 dark:border-red-600'
