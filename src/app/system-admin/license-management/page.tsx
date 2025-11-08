@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, Loader2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
 import dayjs from 'dayjs';
 import { supabase } from '../../../lib/supabase';
@@ -138,13 +138,13 @@ export default function LicenseManagementPage() {
   });
 
   // Fetch licenses with React Query
-  const { 
-    data: rawLicenses = [], 
-    isLoading, 
-    isFetching 
-  } = useQuery<License[]>(
-    ['licenses', filters],
-    async () => {
+  const {
+    data: rawLicenses = [],
+    isLoading,
+    isFetching
+  } = useQuery<License[]>({
+    queryKey: ['licenses', filters],
+    queryFn: async () => {
       let query = supabase
         .from('licenses')
         .select(`
@@ -219,11 +219,9 @@ export default function LicenseManagementPage() {
 
       return formattedLicenses;
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000 // 5 minutes
+  });
   
   // Group licenses by company
   const groupedLicenses: CompanyLicenses[] = React.useMemo(() => {
