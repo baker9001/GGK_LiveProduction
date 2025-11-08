@@ -31,9 +31,9 @@ export function Navigation() {
   return (
     <nav
       className={clsx(
-        'backdrop-blur-md sticky top-0 z-50 transition-theme border-b',
+        'backdrop-blur-md sticky top-0 z-50 transition-theme border-b backdrop-saturate-150',
         isLandingPage
-          ? 'bg-transparent border-transparent text-white'
+          ? 'text-white/95 bg-slate-950/70 supports-[backdrop-filter]:bg-slate-950/55 border-white/10 shadow-[0_10px_30px_rgba(15,23,42,0.35)]'
           : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
       )}
     >
@@ -57,11 +57,11 @@ export function Navigation() {
                   key={item.path}
                   to={item.path}
                   className={clsx(
-                    'inline-flex items-center px-1 pt-1 text-sm font-medium transition-theme border-b-2 border-transparent',
-                    isLandingPage
+                  'inline-flex items-center px-1 pt-1 text-sm font-medium transition-theme border-b-2 border-transparent',
+                  isLandingPage
                       ? location.pathname === item.path
-                        ? 'text-white border-white'
-                        : 'text-white/80 hover:text-white hover:border-white/60'
+                        ? 'text-white border-white/80'
+                        : 'text-white/80 hover:text-white/95 hover:border-white/60'
                       : location.pathname === item.path
                         ? 'text-action-contrast border-[color:var(--color-action-primary)]'
                         : 'text-theme-secondary hover:text-theme-primary hover:border-theme-muted'
@@ -76,9 +76,9 @@ export function Navigation() {
             <button
               onClick={toggle}
               className={clsx(
-                'p-2 mr-2 rounded-full transition-theme',
+                'p-2 mr-2 rounded-full transition-theme backdrop-blur-sm',
                 isLandingPage
-                  ? 'text-white/80 hover:text-white hover:bg-white/10'
+                  ? 'text-white/80 hover:text-white hover:bg-white/15 focus-visible:ring-white/30'
                   : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
               )}
               aria-label="Toggle dark mode"
@@ -125,8 +125,10 @@ export function Navigation() {
         <div className="md:hidden">
           <div
             className={clsx(
-              'px-2 pt-2 pb-3 space-y-1 transition-theme',
-              isLandingPage ? 'bg-gray-900/95 text-white' : 'bg-theme-surface'
+              'px-2 pt-2 pb-3 space-y-1 transition-theme backdrop-blur-md',
+              isLandingPage
+                ? 'bg-slate-950/80 text-white border-t border-white/10 shadow-[0_16px_40px_rgba(15,23,42,0.45)]'
+                : 'bg-theme-surface'
             )}
           >
             {NAV_ITEMS.map((item) => (
