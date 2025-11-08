@@ -152,7 +152,7 @@ function FilterDropdown({
     return createPortal(
       <div
         ref={dropdownRef}
-        className="z-50 mt-1 bg-card shadow-lg rounded-md border-filter border max-h-60 overflow-auto"
+        className="z-50 mt-1 bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-200 dark:border-gray-600 max-h-60 overflow-hidden"
         style={{
           position: 'absolute',
           top: `${position.top}px`,
@@ -160,13 +160,13 @@ function FilterDropdown({
           width: `${position.width}px`
         }}
       >
-        <div className="p-2 border-b border-filter bg-card-elevated">
+        <div className="p-2 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-750">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               className={cn(
-                "w-full pl-8 pr-2 py-2 text-sm border border-filter rounded-md bg-card text-gray-900 dark:text-white",
+                "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
                 "focus:outline-none focus:ring-2",
                 isGreenTheme
                   ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
@@ -180,19 +180,19 @@ function FilterDropdown({
           </div>
         </div>
 
-        <ul className="py-1 bg-card">
+        <ul className="py-1 bg-white dark:bg-gray-800 overflow-y-auto max-h-[200px]">
           {filteredOptions.length > 0 ? (
             filteredOptions.map(option => (
               <li key={option.value}>
                 <button
                   type="button"
                   className={cn(
-                    'w-full px-4 py-2 text-sm text-left transition-colors',
+                    'w-full px-4 py-2.5 text-sm text-left transition-all duration-150',
                     option.value === value
                       ? isGreenTheme
-                        ? 'bg-[#8CC63F]/15 dark:bg-[#8CC63F]/25 text-[#5d7e23] dark:text-[#9ed050] font-medium'
-                        : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-900 dark:text-white hover:bg-card-hover'
+                        ? 'bg-[#e8f5dc] dark:bg-[#8CC63F]/20 text-[#5d7e23] dark:text-[#9ed050] font-semibold border-l-3 border-[#8CC63F]'
+                        : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-[#f0f9e8] dark:hover:bg-[#8CC63F]/10 hover:text-[#5d7e23] dark:hover:text-[#9ed050]'
                   )}
                   onClick={() => {
                     onChange(option.value);
@@ -205,7 +205,7 @@ function FilterDropdown({
               </li>
             ))
           ) : (
-            <li className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">No options found</li>
+            <li className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center italic">No options found</li>
           )}
         </ul>
       </div>,
