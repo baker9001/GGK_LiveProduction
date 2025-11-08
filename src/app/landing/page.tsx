@@ -339,22 +339,22 @@ export default function LandingPage() {
             className="w-full h-full object-cover"
             loading="eager"
           />
-          {/* Light gray overlay for better readability */}
+          {/* Dark overlay for text readability - darker background, white text in front */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(120deg, rgba(4, 9, 30, 0.85) 0%, rgba(8, 28, 21, 0.82) 55%, rgba(22, 58, 36, 0.75) 100%)',
+                'linear-gradient(120deg, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.70) 50%, rgba(0, 0, 0, 0.75) 100%)',
             }}
           />
         </div>
-        <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
+        <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8" style={{ zIndex: 10 }}>
           <div className="text-center w-full">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6)' }}>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6" style={{ textShadow: '3px 3px 10px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.7)' }}>
               Master IGCSE, O-Level & A-Level
-              <span className="block text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6)' }}>Cambridge & Edexcel Excellence</span>
+              <span className="block text-white mt-2" style={{ textShadow: '3px 3px 10px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.7)' }}>Cambridge & Edexcel Excellence</span>
             </h1>
-            <p className="mt-3 max-w-lg mx-auto text-xl text-white sm:mt-5 font-semibold" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8), 0 0 15px rgba(0,0,0,0.6)' }}>
+            <p className="mt-6 max-w-2xl mx-auto text-xl text-white sm:mt-8 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
               Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
@@ -373,26 +373,25 @@ export default function LandingPage() {
                 variant="outline"
                 size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[180px] border-2 border-white text-white hover:bg-white/20 hover:text-white font-semibold"
+                className="w-full sm:w-auto min-w-[180px] border-2 border-white text-white hover:bg-white hover:text-gray-900 font-semibold transition-all duration-300"
                 leftIcon={<PlayCircle />}
-                style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.6)' }}
               >
                 Watch Demo
               </Button>
             </div>
             {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
-            <div className="mt-8 flex items-center justify-center gap-8">
-              <div className="text-white" style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.8)' }}>
-                <div className="text-3xl font-bold">+</div>
-                <div className="text-sm font-bold">Active Students</div>
+            <div className="mt-10 flex items-center justify-center gap-12 flex-wrap">
+              <div className="text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
+                <div className="text-4xl font-extrabold">10,000+</div>
+                <div className="text-base font-bold mt-1">Active Students</div>
               </div>
-              <div className="text-white" style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.8)' }}>
-                <div className="text-3xl font-bold">%</div>
-                <div className="text-sm font-bold">Pass Rate</div>
+              <div className="text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
+                <div className="text-4xl font-extrabold">95%</div>
+                <div className="text-base font-bold mt-1">Pass Rate</div>
               </div>
-              <div className="text-white" style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.8)' }}>
-                <div className="text-3xl font-bold">+</div>
-                <div className="text-sm font-bold">Schools Trust Us</div>
+              <div className="text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
+                <div className="text-4xl font-extrabold">200+</div>
+                <div className="text-base font-bold mt-1">Schools Trust Us</div>
               </div>
             </div>
           </div>
