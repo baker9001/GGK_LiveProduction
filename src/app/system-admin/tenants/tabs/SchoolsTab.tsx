@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, ImageOff } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
@@ -136,9 +136,9 @@ export default function SchoolsTab() {
   };
 
   // Fetch companies with React Query
-  const { data: companies = [] } = useQuery<Company[]>(
-    ['companies'],
-    async () => {
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ['companies'],
+    queryFn: async () => {
       const { data: companiesData, error } = await supabase
         .from('companies')
         .select(`
@@ -166,19 +166,17 @@ export default function SchoolsTab() {
         status: 'active' as const
       }));
     },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    }
-  );
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
 
   // Fetch schools with React Query
   const {
     data: schools = [],
     isLoading,
     isFetching
-  } = useQuery<School[]>(
-    ['schools', filters],
-    async () => {
+  } = useQuery<School[]>({
+    queryKey: ['schools', filters],
+    queryFn: async () => {
       console.log('=== SCHOOLS QUERY DEBUG START ===');
 
       // Check authentication status
@@ -332,10 +330,9 @@ export default function SchoolsTab() {
       console.log('=== SCHOOLS QUERY DEBUG END ===');
       return enhancedSchools;
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      onError: (error: any) => {
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    onError: (error: any) => {
         console.error('❌ SCHOOLS QUERY FAILED:', error);
         const errorMessage = error?.message || 'Unknown error';
         const errorCode = error?.code || 'N/A';
@@ -352,8 +349,7 @@ export default function SchoolsTab() {
 
         toast.error(`${userMessage} (Code: ${errorCode})`);
       }
-    }
-  );
+  });
 
   // Create/update school mutation
   const schoolMutation = useMutation({
