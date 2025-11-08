@@ -420,7 +420,7 @@ export default function SignInPage() {
           style={{ userSelect: 'none' }}
         />
         {/* Light gray overlay for better readability */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/92 via-gray-900/88 to-gray-900/92" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/85 via-gray-900/75 to-gray-900/85" />
       </div>
       
       {/* Content */}
@@ -436,16 +436,16 @@ export default function SignInPage() {
           <h2 className="mt-6 text-3xl font-extrabold text-white">
             Sign in to your account
           </h2>
-          <p className="mt-2 text-sm text-gray-300">
+          <p className="mt-2 text-sm text-gray-200">
             Enter your registered email and password to access the platform
           </p>
         </div>
-        
+
         {/* Sign-in Form */}
-        <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+        <div className="mt-8 bg-gray-900/60 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-white/10">
           {/* Session expiration inline notice */}
           {sessionExpiredMessage && (
-            <div className="mb-4 bg-blue-500/10 backdrop-blur text-blue-200 p-4 rounded-lg border border-blue-500/20">
+            <div className="mb-4 bg-blue-500/15 backdrop-blur text-blue-100 p-4 rounded-lg border border-blue-500/25">
               <div className="flex items-start">
                 <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                 <div>
@@ -460,7 +460,7 @@ export default function SignInPage() {
           {error && (
             <div className="mb-4">
               {verificationNeeded ? (
-                <div className="bg-amber-500/10 backdrop-blur text-amber-400 p-4 rounded-lg border border-amber-500/20">
+                <div className="bg-amber-500/15 backdrop-blur text-amber-100 p-4 rounded-lg border border-amber-500/25">
                   <div className="flex items-start">
                     <MailWarning className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
@@ -472,7 +472,7 @@ export default function SignInPage() {
                       <button
                         onClick={handleResendVerification}
                         disabled={loading}
-                        className="text-sm mt-3 text-amber-100 hover:text-white font-medium underline disabled:opacity-50"
+                        className="text-sm mt-3 text-amber-50 hover:text-white font-medium underline disabled:opacity-50"
                       >
                         {loading ? 'Sending...' : 'Resend verification email'}
                       </button>
@@ -480,7 +480,7 @@ export default function SignInPage() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
+                <div className="bg-red-500/15 backdrop-blur text-red-100 p-4 rounded-lg flex items-start border border-red-500/25">
                   <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                   <div>
                     <span className="text-sm">{error}</span>
@@ -506,7 +506,7 @@ export default function SignInPage() {
               id="email"
               label="Email address"
               required
-              labelClassName="text-gray-400"
+              labelClassName="text-gray-200"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -519,20 +519,20 @@ export default function SignInPage() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                  className="pl-10 bg-white/10 border-white/15 text-white placeholder-white/60 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                   placeholder="Enter your email"
                   disabled={loading}
                   autoFocus
                 />
               </div>
             </FormField>
-            
+
             {/* Password Field */}
             <FormField
               id="password"
               label="Password"
               required
-              labelClassName="text-gray-400"
+              labelClassName="text-gray-200"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -545,7 +545,7 @@ export default function SignInPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                  className="pl-10 pr-10 bg-white/10 border-white/15 text-white placeholder-white/60 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                   placeholder="Enter your password"
                   disabled={loading}
                 />
@@ -556,14 +556,14 @@ export default function SignInPage() {
                   tabIndex={-1}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+                    <EyeOff className="h-5 w-5 text-gray-200 hover:text-white" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+                    <Eye className="h-5 w-5 text-gray-200 hover:text-white" />
                   )}
                 </button>
               </div>
             </FormField>
-            
+
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -579,13 +579,13 @@ export default function SignInPage() {
                       localStorage.removeItem('ggk_remember_session');
                     }
                   }}
-                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-600 rounded bg-gray-800/50"
+                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-white/20 rounded bg-white/10"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-200">
                   Remember me
                 </label>
               </div>
-              
+
               <div className="text-sm">
                 <Link
                   to="/forgot-password"
@@ -617,45 +617,45 @@ export default function SignInPage() {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
+                <div className="w-full border-t border-white/10" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
+                <span className="px-2 bg-gray-900/60 text-gray-200">
                   Need help?
                 </span>
               </div>
             </div>
-            
+
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Link
                 to="/contact-support"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+                className="w-full inline-flex justify-center py-2 px-4 border border-white/10 rounded-lg shadow-sm bg-white/10 backdrop-blur text-sm font-medium text-gray-100 hover:bg-white/15 transition-colors"
               >
                 Contact Support
               </Link>
               <Link
                 to="/request-access"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+                className="w-full inline-flex justify-center py-2 px-4 border border-white/10 rounded-lg shadow-sm bg-white/10 backdrop-blur text-sm font-medium text-gray-100 hover:bg-white/15 transition-colors"
               >
                 Request Access
               </Link>
             </div>
           </div>
-          
+
           {/* Back to Home Button */}
           <div className="mt-6">
             <Button
               onClick={() => navigate('/')}
               variant="outline"
-              className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+              className="w-full justify-center bg-white/10 backdrop-blur border-white/15 text-gray-100 hover:bg-white/15"
             >
               Back to Home
             </Button>
           </div>
         </div>
-        
+
         {/* Bottom text */}
-        <p className="mt-8 text-center text-sm text-gray-400">
+        <p className="mt-8 text-center text-sm text-gray-200">
           Protected by industry-standard encryption
         </p>
       </div>
