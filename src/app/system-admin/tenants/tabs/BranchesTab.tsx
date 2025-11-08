@@ -19,7 +19,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, ImageOff } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '@/components/shared/DataTable';
@@ -196,9 +196,9 @@ export default function BranchesTab() {
   };
 
   // Fetch companies with React Query
-  const { data: companies = [] } = useQuery<Company[]>(
-    ['companies-for-branches'],
-    async () => {
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ['companies-for-branches'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('companies')
         .select(`
@@ -218,19 +218,17 @@ export default function BranchesTab() {
         region_name: company.regions?.name ?? 'Unknown Region'
       }));
     },
-    {
-      staleTime: 10 * 60 * 1000,
-      onError: (error) => {
-        console.error('Error fetching companies:', error);
-        toast.error('Failed to fetch companies');
-      }
+    staleTime: 10 * 60 * 1000,
+    onError: (error) => {
+      console.error('Error fetching companies:', error);
+      toast.error('Failed to fetch companies');
     }
-  );
+  });
 
   // Fetch schools based on selected companies with React Query
-  const { data: schools = [] } = useQuery<School[]>(
-    ['schools-for-branches', filters.company_ids],
-    async () => {
+  const { data: schools = [] } = useQuery<School[]>({
+    queryKey: ['schools-for-branches', filters.company_ids],
+    queryFn: async () => {
       if (filters.company_ids.length === 0) {
         return [];
       }
@@ -255,15 +253,13 @@ export default function BranchesTab() {
         company_name: school.companies?.name ?? 'Unknown Company'
       }));
     },
-    {
-      enabled: filters.company_ids.length > 0,
-      staleTime: 5 * 60 * 1000,
-      onError: (error) => {
-        console.error('Error fetching schools:', error);
-        toast.error('Failed to fetch schools');
-      }
+    enabled: filters.company_ids.length > 0,
+    staleTime: 5 * 60 * 1000,
+    onError: (error) => {
+      console.error('Error fetching schools:', error);
+      toast.error('Failed to fetch schools');
     }
-  );
+  });
 
   // Fetch branches with React Query
   const {
@@ -271,9 +267,9 @@ export default function BranchesTab() {
     isLoading,
     isFetching,
     error: branchesError
-  } = useQuery<Branch[]>(
-    ['branches', filters],
-    async () => {
+  } = useQuery<Branch[]>({
+    queryKey: ['branches', filters],
+    queryFn: async () => {
       console.log('=== BRANCHES QUERY DEBUG START ===');
 
       // Check authentication status
@@ -379,29 +375,27 @@ export default function BranchesTab() {
         additional: branch.additional
       }));
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000,
-      refetchInterval: 30 * 1000,
-      onError: (error: any) => {
-        console.error('❌ BRANCHES QUERY FAILED:', error);
-        const errorMessage = error?.message || 'Unknown error';
-        const errorCode = error?.code || 'N/A';
-        const errorDetails = error?.details || 'No details available';
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 30 * 1000,
+    onError: (error: any) => {
+      console.error('❌ BRANCHES QUERY FAILED:', error);
+      const errorMessage = error?.message || 'Unknown error';
+      const errorCode = error?.code || 'N/A';
+      const errorDetails = error?.details || 'No details available';
 
-        console.error('Full error object:', JSON.stringify(error, null, 2));
+      console.error('Full error object:', JSON.stringify(error, null, 2));
 
-        let userMessage = 'Failed to fetch branches';
-        if (errorCode === 'PGRST301' || errorMessage.includes('policy')) {
-          userMessage = 'Access denied. Please ensure you have proper permissions.';
-        } else if (errorCode === '42501') {
-          userMessage = 'Permission denied. Contact your administrator.';
-        }
-
-        toast.error(`${userMessage} (Code: ${errorCode})`);
+      let userMessage = 'Failed to fetch branches';
+      if (errorCode === 'PGRST301' || errorMessage.includes('policy')) {
+        userMessage = 'Access denied. Please ensure you have proper permissions.';
+      } else if (errorCode === '42501') {
+        userMessage = 'Permission denied. Contact your administrator.';
       }
+
+      toast.error(`${userMessage} (Code: ${errorCode})`);
     }
-  );
+  });
 
   useEffect(() => {
     if (editingBranch) {
