@@ -3,8 +3,8 @@ import { AlertCircle, LogIn } from 'lucide-react';
 import { Button } from './Button';
 import { SESSION_EXPIRED_EVENT, consumeSessionExpiredNotice } from '../../lib/auth';
 
-const DEFAULT_MESSAGE = 'Your session has expired. Please sign in again to continue.';
-const ILLUSTRATION_SRC = '/image.png';
+const DEFAULT_MESSAGE =
+  'Your session ended because we could not keep you signed in. Please sign in again to continue where you left off.';
 
 /**
  * Check if current page is a public page that doesn't require authentication
@@ -103,48 +103,32 @@ export function SessionExpiredNotice() {
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm px-4">
-      <div className="max-w-3xl w-full overflow-hidden rounded-2xl border border-white/10 bg-white/95 shadow-2xl backdrop-blur dark:bg-gray-900/95">
-        <div className="grid grid-cols-1 gap-0 md:grid-cols-5">
-          <div className="relative hidden overflow-hidden md:col-span-2 md:block">
-            <img
-              src={ILLUSTRATION_SRC}
-              alt="Session expired illustration"
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 via-transparent to-gray-900/30" />
-          </div>
+      <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-white/95 p-8 shadow-2xl backdrop-blur dark:bg-gray-900/95">
+        <div className="flex items-start gap-4 text-gray-900 dark:text-gray-100">
+          <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-red-500/15 p-3 text-red-500">
+            <AlertCircle className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <div className="space-y-4">
+            <header>
+              <h2 className="text-2xl font-semibold leading-tight">Session expired</h2>
+              <p className="mt-2 text-base text-gray-700 dark:text-gray-300">{message}</p>
+            </header>
 
-          <div className="md:col-span-3 p-8">
-            <div className="flex items-center gap-3 text-gray-900 dark:text-gray-100">
-              <span className="inline-flex items-center justify-center rounded-full bg-red-500/10 p-2 text-red-500">
-                <AlertCircle className="h-6 w-6" aria-hidden="true" />
-              </span>
-              <div>
-                <h2 className="text-2xl font-semibold">Session expired</h2>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                  {message}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-lg border border-gray-200/60 bg-gray-50/60 p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-200">
-              <p className="font-medium">Why am I seeing this?</p>
-              <p className="mt-2">
-                For your security, sessions end automatically after a period of inactivity or when you sign in from another device.
-              </p>
-              <p className="mt-2">
-                To keep your work safe, please sign in again. You&apos;ll return to the login page once you acknowledge this message.
+            <div className="space-y-2 rounded-xl border border-gray-200/70 bg-gray-50/70 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-200">
+              <p className="font-medium text-gray-900 dark:text-gray-100">Why did this happen?</p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>For security, we end sessions after a long period of inactivity.</li>
+                <li>If you signed in on another device or browser, the previous session closes automatically.</li>
+              </ul>
+              <p className="pt-1 text-sm text-gray-600 dark:text-gray-300">
+                Signing in again keeps your information protected and lets you continue working safely.
               </p>
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-              <Button
-                className="inline-flex items-center gap-2"
-                onClick={handleAcknowledge}
-              >
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-end">
+              <Button className="inline-flex items-center justify-center gap-2 px-4 py-2" onClick={handleAcknowledge}>
                 <LogIn className="h-4 w-4" aria-hidden="true" />
-                Go to sign in
+                Return to sign in
               </Button>
             </div>
           </div>
