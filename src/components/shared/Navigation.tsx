@@ -34,8 +34,8 @@ export function Navigation() {
         'backdrop-blur-md sticky top-0 z-50 transition-theme border-b backdrop-saturate-150',
         isLandingPage
           ? isDark
-            ? 'text-white/95 bg-slate-950/80 supports-[backdrop-filter]:bg-slate-950/65 border-white/10 shadow-[0_10px_30px_rgba(15,23,42,0.35)]'
-            : 'text-slate-900/95 bg-slate-100/80 supports-[backdrop-filter]:bg-slate-100/65 border-slate-200/70 shadow-[0_10px_30px_rgba(15,23,42,0.12)]'
+            ? 'text-white/95 bg-white/10 supports-[backdrop-filter]:bg-white/5 border-white/20 shadow-[0_10px_30px_rgba(15,23,42,0.45)]'
+            : 'text-slate-900/95 bg-white/80 supports-[backdrop-filter]:bg-white/65 border-white/70 shadow-[0_10px_30px_rgba(15,23,42,0.12)]'
           : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
       )}
     >
