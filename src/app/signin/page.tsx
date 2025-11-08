@@ -414,248 +414,249 @@ export default function SignInPage() {
         <img
           src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
           alt="Educational background"
-          className="w-full h-full object-cover select-none pointer-events-none"
+          className="w-full h-full object-cover blur-sm select-none pointer-events-none"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
-        {/* Soft light-gray overlay for enhanced focus */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/65 via-gray-200/55 to-white/65 backdrop-blur-sm" />
+        {/* Enhanced overlay for better contrast */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-gray-100/70 to-white/80 backdrop-blur-md" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
-        <div className="text-center">
+        <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center">
-            <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
-            <span className="ml-3 text-4xl font-bold text-gray-900">
+            <GraduationCap className="h-12 w-12 text-[#8CC63F]" />
+            <span className="ml-3 text-3xl font-bold text-gray-900">
               Go Green Knowledge
             </span>
           </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-6 text-2xl font-bold text-gray-900">
             Sign in to your account
           </h2>
-          <p className="mt-2 text-sm text-gray-700">
+          <p className="mt-2 text-sm font-medium text-gray-700">
             Enter your registered email and password to access the platform
           </p>
         </div>
 
         {/* Sign-in Form */}
-        <div className="mt-8 bg-white/75 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-200/80">
-          {/* Session expiration inline notice */}
-          {sessionExpiredMessage && (
-            <div className="mb-4 bg-blue-500/10 text-blue-900 p-4 rounded-lg border border-blue-500/20">
-              <div className="flex items-start">
-                <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-blue-600" />
-                <div>
-                  <p className="font-medium text-blue-900">Session expired</p>
-                  <p className="text-sm mt-1 text-blue-800">{sessionExpiredMessage}</p>
+        <div className="bg-white shadow-2xl sm:rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="py-8 px-6 sm:px-10">
+            {/* Session expiration inline notice */}
+            {sessionExpiredMessage && (
+              <div className="mb-6 bg-blue-50 text-blue-900 p-4 rounded-lg border border-blue-200">
+                <div className="flex items-start">
+                  <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-blue-600" />
+                  <div>
+                    <p className="font-semibold text-blue-900">Session expired</p>
+                    <p className="text-sm mt-1 text-blue-800">{sessionExpiredMessage}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Error Messages */}
-          {error && (
-            <div className="mb-4">
-              {verificationNeeded ? (
-                <div className="bg-amber-500/10 text-amber-900 p-4 rounded-lg border border-amber-500/20">
-                  <div className="flex items-start">
-                    <MailWarning className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-amber-600" />
-                    <div className="flex-1">
-                      <p className="font-medium text-amber-900">Email Verification Required</p>
-                      <p className="text-sm mt-1 text-amber-800">Your email address is not verified. Please check your inbox for the verification link.</p>
-                      <p className="text-xs mt-2 text-amber-700">
-                        Can't find the email? Check your spam folder or click below to resend.
-                      </p>
-                      <button
-                        onClick={handleResendVerification}
-                        disabled={loading}
-                        className="text-sm mt-3 text-amber-800 hover:text-amber-900 font-medium underline disabled:opacity-50"
-                      >
-                        {loading ? 'Sending...' : 'Resend verification email'}
-                      </button>
+            {/* Error Messages */}
+            {error && (
+              <div className="mb-6">
+                {verificationNeeded ? (
+                  <div className="bg-amber-50 text-amber-900 p-4 rounded-lg border border-amber-200">
+                    <div className="flex items-start">
+                      <MailWarning className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-amber-600" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-amber-900">Email Verification Required</p>
+                        <p className="text-sm mt-1 text-amber-800">Your email address is not verified. Please check your inbox for the verification link.</p>
+                        <p className="text-xs mt-2 text-amber-700">
+                          Can't find the email? Check your spam folder or click below to resend.
+                        </p>
+                        <button
+                          onClick={handleResendVerification}
+                          disabled={loading}
+                          className="text-sm mt-3 text-amber-800 hover:text-amber-900 font-semibold underline disabled:opacity-50"
+                        >
+                          {loading ? 'Sending...' : 'Resend verification email'}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="bg-red-500/10 text-red-900 p-4 rounded-lg flex items-start border border-red-500/20">
-                  <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-red-600" />
-                  <div>
-                    <span className="text-sm text-red-900">{error}</span>
-                    {loginErrorType === 'invalid_credentials' && (
-                      <div className="mt-3">
-                        <Link
-                          to="/forgot-password"
-                          className="inline-flex items-center text-sm font-medium text-red-700 hover:text-red-800 underline"
-                        >
-                          Forgot your password?
-                        </Link>
-                      </div>
-                    )}
+                ) : (
+                  <div className="bg-red-50 text-red-900 p-4 rounded-lg flex items-start border border-red-200">
+                    <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-red-600" />
+                    <div>
+                      <span className="text-sm font-medium text-red-900">{error}</span>
+                      {loginErrorType === 'invalid_credentials' && (
+                        <div className="mt-3">
+                          <Link
+                            to="/forgot-password"
+                            className="inline-flex items-center text-sm font-semibold text-red-700 hover:text-red-800 underline"
+                          >
+                            Forgot your password?
+                          </Link>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
-            <FormField
-              id="email"
-              label="Email address"
-              required
-              labelClassName="text-gray-700"
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-500" />
-                </div>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-white/90 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-                  placeholder="Enter your email"
-                  disabled={loading}
-                  autoFocus
-                />
+                )}
               </div>
-            </FormField>
+            )}
 
-            {/* Password Field */}
-            <FormField
-              id="password"
-              label="Password"
-              required
-              labelClassName="text-gray-700"
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-500" />
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Email Field */}
+              <FormField
+                id="email"
+                label="Email address"
+                required
+                labelClassName="text-sm font-semibold text-gray-900"
+              >
+                <div className="relative mt-1">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
+                    placeholder="baker@ggknowledge.com"
+                    disabled={loading}
+                    autoFocus
+                  />
                 </div>
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 bg-white/90 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-                  placeholder="Enter your password"
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
-                  tabIndex={-1}
+              </FormField>
+
+              {/* Password Field */}
+              <FormField
+                id="password"
+                label="Password"
+                required
+                labelClassName="text-sm font-semibold text-gray-900"
+              >
+                <div className="relative mt-1">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 pr-10 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
+                    placeholder="Enter your password"
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </FormField>
+
+              {/* Remember Me & Forgot Password */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => {
+                      setRememberMe(e.target.checked);
+                      if (!e.target.checked) {
+                        localStorage.removeItem('ggk_remembered_email');
+                        localStorage.removeItem('ggk_remember_session');
+                      }
+                    }}
+                    className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-300 rounded cursor-pointer"
+                  />
+                  <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-gray-900 cursor-pointer">
+                    Remember me
+                  </label>
+                </div>
+
+                <div className="text-sm">
+                  <Link
+                    to="/forgot-password"
+                    className="font-semibold text-[#8CC63F] hover:text-[#7AB635] transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-semibold py-3 transition-all duration-200 shadow-md hover:shadow-lg"
+                  disabled={loading || !email || !password}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Signing in...
+                    </>
                   ) : (
-                    <Eye className="h-5 w-5" />
+                    'Sign in'
                   )}
-                </button>
+                </Button>
               </div>
-            </FormField>
+            </form>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => {
-                    setRememberMe(e.target.checked);
-                    if (!e.target.checked) {
-                      localStorage.removeItem('ggk_remembered_email');
-                      localStorage.removeItem('ggk_remember_session');
-                    }
-                  }}
-                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-300 rounded bg-white"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                  Remember me
-                </label>
-              </div>
 
-              <div className="text-sm">
-                <Link
-                  to="/forgot-password"
-                  className="font-medium text-[#688E2E] hover:text-[#567A23] transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-            </div>
-            
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
-              disabled={loading || !email || !password}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign in'
-              )}
-            </Button>
-          </form>
-          
-          {/* Additional Links */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white/75 text-gray-700">
+            {/* Additional Links */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <div className="flex justify-center mb-4">
+                <span className="text-sm font-semibold text-gray-900">
                   Need help?
                 </span>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Link
+                  to="/contact-support"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-semibold text-gray-900 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                >
+                  Contact Support
+                </Link>
+                <Link
+                  to="/request-access"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-semibold text-gray-900 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                >
+                  Request Access
+                </Link>
+              </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <Link
-                to="/contact-support"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-200 rounded-lg shadow-sm bg-white/85 text-sm font-medium text-gray-700 hover:bg-white"
+            {/* Back to Home Button */}
+            <div className="mt-4">
+              <Button
+                onClick={() => navigate('/')}
+                variant="outline"
+                className="w-full justify-center bg-white border-gray-300 text-gray-900 hover:bg-gray-50 hover:border-gray-400 font-semibold py-2.5 transition-colors"
               >
-                Contact Support
-              </Link>
-              <Link
-                to="/request-access"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-200 rounded-lg shadow-sm bg-white/85 text-sm font-medium text-gray-700 hover:bg-white"
-              >
-                Request Access
-              </Link>
+                Back to Home
+              </Button>
             </div>
-          </div>
-
-          {/* Back to Home Button */}
-          <div className="mt-6">
-            <Button
-              onClick={() => navigate('/')}
-              variant="outline"
-              className="w-full justify-center bg-white/85 border-gray-200 text-gray-700 hover:bg-white"
-            >
-              Back to Home
-            </Button>
           </div>
         </div>
 
         {/* Bottom text */}
-        <p className="mt-8 text-center text-sm text-gray-700">
+        <p className="mt-6 text-center text-sm font-medium text-gray-800 bg-white/60 backdrop-blur-sm py-2 px-4 rounded-lg inline-block mx-auto" style={{ display: 'block' }}>
           Protected by industry-standard encryption
         </p>
       </div>
