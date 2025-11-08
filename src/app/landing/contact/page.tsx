@@ -177,9 +177,9 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-theme-page text-theme-primary transition-colors duration-200">
       <Navigation />
-      
+
       <div className="relative">
         {/* Hero Section with Background */}
         <section className="relative bg-gradient-to-r from-[#8CC63F]/95 to-[#7AB635]/95 py-20">
@@ -227,9 +227,9 @@ export default function ContactPage() {
           </div>
         </section>
 
-        {/* Main Contact Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-16 sectioned-layout">
+          <section className="py-12">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
             {/* Left Column - Contact Information */}
             <div className="lg:col-span-1 space-y-8">
               {/* Support Features */}
@@ -518,7 +518,8 @@ export default function ContactPage() {
               </div>
             </div>
           </div>
-        </div>
+        </section>
+        </main>
       </div>
     </div>
   );

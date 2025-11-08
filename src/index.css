@@ -15,6 +15,8 @@
   --color-bg-surface: 255 255 255;
   --color-bg-subtle: 241 245 249;
   --color-bg-muted: 226 232 240;
+  --color-section-primary: 255 255 255;
+  --color-section-secondary: 239 246 255;
   --color-text-primary: 17 24 39;
   --color-text-secondary: 71 85 105;
   --color-text-muted: 100 116 139;
@@ -46,6 +48,8 @@
   --color-bg-surface: 31 41 55;
   --color-bg-subtle: 17 24 39;
   --color-bg-muted: 30 41 59;
+  --color-section-primary: 26 35 50;
+  --color-section-secondary: 17 24 39;
   --color-text-primary: 248 250 252;
   --color-text-secondary: 203 213 225;
   --color-text-muted: 148 163 184;
@@ -88,6 +92,14 @@ body {
 
 .bg-theme-muted {
   background-color: rgb(var(--color-bg-muted));
+}
+
+.bg-section-primary {
+  background-color: rgb(var(--color-section-primary));
+}
+
+.bg-section-secondary {
+  background-color: rgb(var(--color-section-secondary));
 }
 
 .bg-action-primary {
@@ -196,6 +208,25 @@ select:focus-visible {
   outline-offset: 2px;
   border-color: var(--color-action-primary);
   box-shadow: 0 0 0 4px var(--color-action-primary-focus);
+}
+
+.sectioned-layout > section {
+  position: relative;
+  isolation: isolate;
+  transition: var(--transition-theme);
+}
+
+.sectioned-layout > section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(var(--color-section-primary));
+  transition: var(--transition-theme);
+}
+
+.sectioned-layout > section:nth-of-type(even)::before {
+  background: rgb(var(--color-section-secondary));
 }
 
 .brand-select {
