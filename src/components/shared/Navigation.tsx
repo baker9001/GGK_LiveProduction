@@ -33,7 +33,9 @@ export function Navigation() {
       className={clsx(
         'backdrop-blur-md sticky top-0 z-50 transition-theme border-b backdrop-saturate-150',
         isLandingPage
-          ? 'text-white/95 bg-slate-950/70 supports-[backdrop-filter]:bg-slate-950/55 border-white/10 shadow-[0_10px_30px_rgba(15,23,42,0.35)]'
+          ? isDark
+            ? 'text-white/95 bg-slate-950/80 supports-[backdrop-filter]:bg-slate-950/65 border-white/10 shadow-[0_10px_30px_rgba(15,23,42,0.35)]'
+            : 'text-slate-900/95 bg-slate-100/95 supports-[backdrop-filter]:bg-slate-100/85 border-slate-200/80 shadow-[0_10px_30px_rgba(15,23,42,0.16)]'
           : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
       )}
     >
@@ -45,7 +47,11 @@ export function Navigation() {
               <span
                 className={clsx(
                   'ml-2 text-xl font-bold transition-theme',
-                  isLandingPage ? 'text-white' : 'text-theme-primary'
+                  isLandingPage
+                    ? isDark
+                      ? 'text-white'
+                      : 'text-slate-900'
+                    : 'text-theme-primary'
                 )}
               >
                 GGK
@@ -57,11 +63,15 @@ export function Navigation() {
                   key={item.path}
                   to={item.path}
                   className={clsx(
-                  'inline-flex items-center px-1 pt-1 text-sm font-medium transition-theme border-b-2 border-transparent',
-                  isLandingPage
-                      ? location.pathname === item.path
-                        ? 'text-white border-white/80'
-                        : 'text-white/80 hover:text-white/95 hover:border-white/60'
+                    'inline-flex items-center px-1 pt-1 text-sm font-medium transition-theme border-b-2 border-transparent',
+                    isLandingPage
+                      ? isDark
+                        ? location.pathname === item.path
+                          ? 'text-white border-white/80'
+                          : 'text-white/80 hover:text-white/95 hover:border-white/60'
+                        : location.pathname === item.path
+                          ? 'text-slate-900 border-slate-900/60'
+                          : 'text-slate-700 hover:text-slate-900 hover:border-slate-400/60'
                       : location.pathname === item.path
                         ? 'text-action-contrast border-[color:var(--color-action-primary)]'
                         : 'text-theme-secondary hover:text-theme-primary hover:border-theme-muted'
@@ -78,7 +88,9 @@ export function Navigation() {
               className={clsx(
                 'p-2 mr-2 rounded-full transition-theme backdrop-blur-sm',
                 isLandingPage
-                  ? 'text-white/80 hover:text-white hover:bg-white/15 focus-visible:ring-white/30'
+                  ? isDark
+                    ? 'text-white/80 hover:text-white hover:bg-white/15 focus-visible:ring-white/30'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/55 focus-visible:ring-slate-300/60'
                   : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
               )}
               aria-label="Toggle dark mode"
@@ -104,7 +116,9 @@ export function Navigation() {
               className={clsx(
                 'md:hidden ml-2 p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--color-action-primary)] transition-theme',
                 isLandingPage
-                  ? 'text-white/80 hover:text-white hover:bg-white/10'
+                  ? isDark
+                    ? 'text-white/80 hover:text-white hover:bg-white/10'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/55'
                   : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
               )}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -127,7 +141,9 @@ export function Navigation() {
             className={clsx(
               'px-2 pt-2 pb-3 space-y-1 transition-theme backdrop-blur-md',
               isLandingPage
-                ? 'bg-slate-950/80 text-white border-t border-white/10 shadow-[0_16px_40px_rgba(15,23,42,0.45)]'
+                ? isDark
+                  ? 'bg-slate-950/85 text-white border-t border-white/10 shadow-[0_16px_40px_rgba(15,23,42,0.45)]'
+                  : 'bg-slate-100/95 text-slate-900 border-t border-slate-200/80 shadow-[0_16px_40px_rgba(15,23,42,0.15)]'
                 : 'bg-theme-surface'
             )}
           >
@@ -138,9 +154,13 @@ export function Navigation() {
                 className={clsx(
                   'block px-3 py-2 rounded-md text-base font-medium transition-theme',
                   isLandingPage
-                    ? location.pathname === item.path
-                      ? 'text-white bg-white/10'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                    ? isDark
+                      ? location.pathname === item.path
+                        ? 'text-white bg-white/10'
+                        : 'text-white/80 hover:text-white hover:bg-white/10'
+                      : location.pathname === item.path
+                        ? 'text-slate-900 bg-white/80'
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-white/80'
                     : location.pathname === item.path
                       ? 'text-action-contrast bg-[color:var(--color-action-primary-soft)]'
                       : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
@@ -158,7 +178,13 @@ export function Navigation() {
                 setIsMenuOpen(false);
                 handleSignInClick();
               }}
-              className={clsx('w-full mt-4', isLandingPage && 'bg-[#8CC63F] text-white hover:bg-[#7ab635]')}
+              className={clsx(
+                'w-full mt-4',
+                isLandingPage &&
+                  (isDark
+                    ? 'bg-[#8CC63F] text-white hover:bg-[#7ab635]'
+                    : 'bg-[#8CC63F] text-white hover:bg-[#7ab635] shadow-[0_12px_30px_rgba(140,198,63,0.35)]')
+              )}
             >
               Sign In
             </Button>
