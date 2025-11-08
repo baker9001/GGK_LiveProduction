@@ -31,13 +31,20 @@ export function Navigation() {
   return (
     <nav
       className={clsx(
-        'sticky top-0 z-50 transition-theme border-b',
+        'sticky top-0 z-[100] transition-theme border-b',
         isLandingPage
           ? isDark
-            ? 'text-white bg-slate-900 border-slate-800 shadow-lg'
-            : 'text-slate-900 bg-white border-slate-200 shadow-md'
+            ? 'text-white bg-slate-900 border-slate-800 shadow-2xl'
+            : 'text-slate-900 bg-white border-slate-200 shadow-lg'
           : 'bg-theme-surface shadow-theme-elevated border-theme-muted'
       )}
+      style={{
+        backgroundColor: isLandingPage
+          ? isDark
+            ? 'rgb(15, 23, 42)'
+            : 'rgb(255, 255, 255)'
+          : undefined
+      }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
@@ -142,10 +149,17 @@ export function Navigation() {
               'px-2 pt-2 pb-3 space-y-1 transition-theme',
               isLandingPage
                 ? isDark
-                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-lg'
-                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-md'
+                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-2xl'
+                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-lg'
                 : 'bg-theme-surface'
             )}
+            style={{
+              backgroundColor: isLandingPage
+                ? isDark
+                  ? 'rgb(15, 23, 42)'
+                  : 'rgb(255, 255, 255)'
+                : undefined
+            }}
           >
             {NAV_ITEMS.map((item) => (
               <Link
