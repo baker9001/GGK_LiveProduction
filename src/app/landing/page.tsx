@@ -339,16 +339,13 @@ export default function LandingPage() {
             className="w-full h-full object-cover"
             loading="eager"
           />
-          {/* Soft translucent overlay reused from the sign-in experience */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/65 via-gray-200/55 to-white/65 backdrop-blur-sm" />
+          {/* Soft translucent overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/30 to-black/40" />
         </div>
         <div className="relative z-10 max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
-          <div className="w-full max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
-              Master IGCSE, O-Level & A-Level
-              <span className="block mt-2">
-                Cambridge & Edexcel Excellence
-              </span>
+          <div className="w-full max-w-6xl mx-auto text-center">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
+              Master IGCSE, O-Level & A-Level | Cambridge & Edexcel Excellence
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-lg sm:text-xl text-white sm:mt-8 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
               Complete exam preparation with 10+ years of past papers, animated video lessons,
@@ -375,16 +372,16 @@ export default function LandingPage() {
                 Watch Demo
               </Button>
             </div>
-            {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
+            {/* Trust badges */}
             <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
               {[{ label: 'Active Students', value: '10,000+' }, { label: 'Pass Rate', value: '95%' }, { label: 'Schools Trust Us', value: '200+' }].map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-2xl bg-white/10 backdrop-blur-md px-8 py-6 border border-white/20 text-center hover:bg-white/15 transition-all duration-300"
+                  className="px-8 py-6 text-center"
                   style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
                 >
                   <div className="text-4xl sm:text-5xl font-extrabold text-white">{item.value}</div>
-                  <div className="text-sm sm:text-base font-bold text-white/90 mt-2">{item.label}</div>
+                  <div className="text-sm sm:text-base font-bold text-white mt-2">{item.label}</div>
                 </div>
               ))}
             </div>
