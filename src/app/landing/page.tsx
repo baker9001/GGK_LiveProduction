@@ -350,11 +350,11 @@ export default function LandingPage() {
                 Cambridge & Edexcel Excellence
               </span>
             </h1>
-            <p className="mt-6 max-w-2xl mx-auto sm:mx-0 text-lg sm:text-xl text-gray-700 sm:mt-8 leading-relaxed">
+            <p className="mt-6 max-w-2xl mx-auto text-lg sm:text-xl text-white sm:mt-8 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
               Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
-            <div className="mt-10 flex flex-col sm:flex-row sm:items-center sm:justify-start gap-4 sm:gap-6">
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
               <Button
                 variant="default"
                 size="lg"
@@ -369,21 +369,22 @@ export default function LandingPage() {
                 variant="outline"
                 size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[190px] border-2 border-gray-900/80 text-gray-900 hover:bg-gray-900 hover:text-white focus-visible:ring-4 focus-visible:ring-gray-900/20 font-semibold transition-all duration-300"
+                className="w-full sm:w-auto min-w-[190px] border-2 border-white text-white hover:bg-white hover:text-gray-900 focus-visible:ring-4 focus-visible:ring-white/30 font-semibold transition-all duration-300"
                 leftIcon={<PlayCircle />}
               >
                 Watch Demo
               </Button>
             </div>
             {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
-            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-3xl mx-auto sm:mx-0">
+            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
               {[{ label: 'Active Students', value: '10,000+' }, { label: 'Pass Rate', value: '95%' }, { label: 'Schools Trust Us', value: '200+' }].map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-2xl bg-white/75 backdrop-blur-md px-6 py-5 shadow-lg shadow-gray-900/5 border border-white/60 text-center"
+                  className="rounded-2xl bg-white/10 backdrop-blur-md px-8 py-6 border border-white/20 text-center hover:bg-white/15 transition-all duration-300"
+                  style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
                 >
-                  <div className="text-3xl sm:text-4xl font-extrabold text-gray-900">{item.value}</div>
-                  <div className="text-sm sm:text-base font-semibold text-gray-600 mt-1">{item.label}</div>
+                  <div className="text-4xl sm:text-5xl font-extrabold text-white">{item.value}</div>
+                  <div className="text-sm sm:text-base font-bold text-white/90 mt-2">{item.label}</div>
                 </div>
               ))}
             </div>
