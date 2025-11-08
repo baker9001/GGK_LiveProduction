@@ -1534,18 +1534,18 @@ export default function UsersTab() {
       )}
 
       {showInvitations && (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+        <div className="rounded-xl border border-panel bg-panel shadow-md">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-panel px-5 py-4 bg-card-elevated">
             <div>
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Pending Invitations</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 Monitor outstanding invitations and resend secure setup emails when needed.
               </p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => refetchInvitations()}
-                className="p-1.5 rounded-full hover:bg-gray-100 transition-colors dark:hover:bg-gray-800"
+                className="p-2 rounded-full hover:bg-card-hover transition-colors text-gray-600 dark:text-gray-300 hover:text-[#5d7e23] dark:hover:text-[#9ed050]"
                 title="Refresh invitations"
               >
                 <RefreshCw className={`h-4 w-4 ${invitationsLoading ? 'animate-spin' : ''}`} />
@@ -1560,7 +1560,7 @@ export default function UsersTab() {
             </div>
           </div>
 
-          <div className="space-y-3 px-4 py-4">
+          <div className="space-y-3 px-5 py-4 bg-panel">
             {invitationsError ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
                 Failed to load invitations. Please try refreshing.
@@ -1582,20 +1582,20 @@ export default function UsersTab() {
                 return (
                   <div
                     key={invitation.id}
-                    className="rounded-lg border border-gray-200 px-4 py-3 shadow-sm transition hover:border-[#8CC63F]/60 hover:shadow-md dark:border-gray-700 dark:hover:border-[#8CC63F]/50"
+                    className="rounded-lg border border-filter bg-invitation-card px-5 py-4 shadow-sm transition-all hover:border-[#8CC63F]/50 hover:shadow-md hover:bg-invitation-hover"
                   >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{invitation.email}</span>
                           <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${getInvitationStatusBadgeClass(invitation.status, expired)}`}
+                            className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${getInvitationStatusBadgeClass(invitation.status, expired)}`}
                           >
                             {expired ? 'Expired' : invitation.status.replace(/^(\w)/, (m) => m.toUpperCase())}
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                          <span>Role: {invitation.role_name || roleLookup[invitation.role_id] || 'Unknown Role'}</span>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
+                          <span className="font-medium">Role: <span className="font-normal">{invitation.role_name || roleLookup[invitation.role_id] || 'Unknown Role'}</span></span>
                           <span>{formatInvitationExpiry(invitation)}</span>
                           <span>Invited: {formatTimestamp(invitation.created_at)}</span>
                           {invitation.resent_at && (
@@ -1610,11 +1610,11 @@ export default function UsersTab() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleCopyInvitationEmail(invitation)}
-                          className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                          className="rounded-full p-2 text-gray-500 transition-colors hover:bg-card-hover hover:text-[#5d7e23] dark:text-gray-400 dark:hover:text-[#9ed050]"
                           title="Copy email"
                         >
                           {copiedInvitationId === invitation.id ? (
-                            <Check className="h-4 w-4 text-emerald-500" />
+                            <Check className="h-4 w-4 text-[#8CC63F]" />
                           ) : (
                             <Copy className="h-4 w-4" />
                           )}
@@ -1623,7 +1623,7 @@ export default function UsersTab() {
                         <button
                           onClick={() => resendInviteMutation.mutate(invitation)}
                           disabled={!canResend || resendInviteMutation.isLoading}
-                          className="rounded-full p-1.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-200"
+                          className="rounded-full p-2 text-[#5d7e23] dark:text-[#9ed050] transition-colors hover:bg-[#8CC63F]/10 disabled:cursor-not-allowed disabled:opacity-50"
                           title={canResend ? 'Resend invitation email' : 'Invitation cannot be resent'}
                         >
                           {resendingInvitationId === invitation.id && resendInviteMutation.isLoading ? (

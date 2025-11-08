@@ -152,7 +152,7 @@ function FilterDropdown({
     return createPortal(
       <div
         ref={dropdownRef}
-        className="z-50 mt-1 bg-white dark:bg-gray-800 shadow-lg dark:shadow-gray-900/20 rounded-md border border-gray-200 dark:border-gray-600 max-h-60 overflow-auto"
+        className="z-50 mt-1 bg-card shadow-lg rounded-md border-filter border max-h-60 overflow-auto"
         style={{
           position: 'absolute',
           top: `${position.top}px`,
@@ -160,15 +160,15 @@ function FilterDropdown({
           width: `${position.width}px`
         }}
       >
-        <div className="p-2 border-b border-gray-100 dark:border-gray-600">
+        <div className="p-2 border-b border-filter bg-card-elevated">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               className={cn(
-                "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+                "w-full pl-8 pr-2 py-2 text-sm border border-filter rounded-md bg-card text-gray-900 dark:text-white",
                 "focus:outline-none focus:ring-2",
-                isGreenTheme 
+                isGreenTheme
                   ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                   : "focus:ring-blue-500 focus:border-blue-500"
               )}
@@ -179,20 +179,20 @@ function FilterDropdown({
             />
           </div>
         </div>
-        
-        <ul className="py-1">
+
+        <ul className="py-1 bg-card">
           {filteredOptions.length > 0 ? (
             filteredOptions.map(option => (
               <li key={option.value}>
                 <button
                   type="button"
                   className={cn(
-                    'w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors',
-                    option.value === value 
-                      ? isGreenTheme 
-                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 text-[#8CC63F]' 
+                    'w-full px-4 py-2 text-sm text-left transition-colors',
+                    option.value === value
+                      ? isGreenTheme
+                        ? 'bg-[#8CC63F]/15 dark:bg-[#8CC63F]/25 text-[#5d7e23] dark:text-[#9ed050] font-medium'
                         : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-900 dark:text-white'
+                      : 'text-gray-900 dark:text-white hover:bg-card-hover'
                   )}
                   onClick={() => {
                     onChange(option.value);
@@ -205,7 +205,7 @@ function FilterDropdown({
               </li>
             ))
           ) : (
-            <li className="px-4 py-2 text-sm text-gray-500 dark:text-gray-300">No options found</li>
+            <li className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">No options found</li>
           )}
         </ul>
       </div>,
@@ -225,26 +225,27 @@ function FilterDropdown({
           type="button"
           id={id}
           className={cn(
-            'w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md py-2 pl-3 pr-10 text-left',
-            'focus:outline-none focus:ring-1',
-            isGreenTheme 
+            'w-full bg-card border border-filter rounded-md py-2 pl-3 pr-10 text-left',
+            'focus:outline-none focus:ring-2',
+            isGreenTheme
               ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
               : 'focus:ring-blue-500 focus:border-blue-500',
             'text-sm text-gray-900 dark:text-gray-100 transition-colors duration-200',
-            disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed'
+            'hover:bg-card-hover',
+            disabled && 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60'
           )}
           onClick={handleOpen}
           disabled={disabled}
         >
-          <span className={value ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-400'}>
+          <span className={value ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}>
             {selectedOption?.label || placeholder}
           </span>
-          
+
           <span className="absolute inset-y-0 right-0 flex items-center pr-2">
             {value ? (
               <button
                 type="button"
-                className="text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400"
+                className="text-gray-400 dark:text-gray-500 hover:text-[#8CC63F] dark:hover:text-[#9ed050] transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange('');
@@ -254,13 +255,13 @@ function FilterDropdown({
               </button>
             ) : (
               <ChevronDown className={cn(
-                "h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform",
+                "h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform",
                 isOpen && "transform rotate-180"
               )} />
             )}
           </span>
         </button>
-        
+
         {renderDropdown()}
       </div>
     </div>
@@ -291,37 +292,37 @@ export function FilterCard({
   };
   
   return (
-    <div className={cn('bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-gray-900/20 transition-colors duration-200', className)}>
+    <div className={cn('bg-filter border-filter border rounded-lg shadow-md transition-colors duration-200', className)}>
       {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 cursor-pointer"
+      <div className="px-4 py-3 flex items-center justify-between border-b border-filter cursor-pointer bg-card-elevated"
         onClick={() => setCollapsed(!collapsed)}
       >
-        <h3 className="text-base font-medium text-gray-900 dark:text-white flex items-center">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center">
           {title}
         </h3>
         <div>
           {collapsed ? (
-            <ChevronDown className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+            <ChevronDown className="h-5 w-5 text-gray-600 dark:text-gray-300" />
           ) : (
-            <ChevronUp className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+            <ChevronUp className="h-5 w-5 text-gray-600 dark:text-gray-300" />
           )}
         </div>
       </div>
-      
+
       {/* Content */}
       {!collapsed && (
-        <div className="p-4">
+        <div className="p-5 bg-card">
           <div className="space-y-4">
             {children}
           </div>
-          
+
           {/* Actions */}
           <div className="mt-6 flex items-center justify-end">
             <Button
               variant="outline"
               size="sm"
               onClick={handleClear}
-              className="border-gray-300 hover:border-[#8CC63F] hover:text-[#8CC63F] focus:ring-[#8CC63F]"
+              className="border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white focus:ring-[#8CC63F] transition-all"
             >
               Clear Filters
             </Button>

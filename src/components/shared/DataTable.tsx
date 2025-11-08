@@ -156,11 +156,11 @@ export function DataTable<T>({
   }
   
   return (
-    <div className={cn('bg-white rounded-lg shadow-sm transition-colors duration-200', className)} role="region" aria-label={ariaLabel}>
+    <div className={cn('bg-card rounded-lg shadow-md border border-filter transition-colors duration-200', className)} role="region" aria-label={ariaLabel}>
       {/* Bulk actions */}
       {selectedRows.size > 0 && onDelete && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between">
-          <span className="text-sm text-blue-700 dark:text-blue-300">
+        <div className="bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 px-4 py-3 border-b border-[#8CC63F]/30 dark:border-[#8CC63F]/40 flex items-center justify-between">
+          <span className="text-sm font-medium text-[#5d7e23] dark:text-[#9ed050]">
             {selectedRows.size} {selectedRows.size === 1 ? 'item' : 'items'} selected
           </span>
           <Button
@@ -173,11 +173,11 @@ export function DataTable<T>({
           </Button>
         </div>
       )}
-      
+
       {/* Loading indicator */}
       {isFetching && (
-        <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 flex items-center justify-center z-10">
-          <div className="h-8 w-8 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin"></div>
+        <div className="absolute inset-0 bg-card/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
+          <div className="h-8 w-8 border-4 border-t-[#8CC63F] border-[#8CC63F]/20 rounded-full animate-spin"></div>
         </div>
       )}
       
@@ -189,7 +189,7 @@ export function DataTable<T>({
           aria-label={ariaLabel}
         >
           {caption && <caption className="sr-only">{caption}</caption>}
-          <thead className="bg-gray-50">
+          <thead className="bg-table-header">
             <tr>
               {/* Checkbox column */}
               <th scope="col" className="px-6 py-3 w-12" aria-label="Select all rows">
@@ -197,7 +197,7 @@ export function DataTable<T>({
                   <input
                     id="select-all-checkbox"
                     type="checkbox"
-                    className="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500 dark:bg-gray-700"
+                    className="h-4 w-4 text-[#8CC63F] rounded border-filter focus:ring-[#8CC63F] focus:ring-offset-0 dark:bg-gray-700"
                     checked={allRowsSelected}
                     ref={input => input && (input.indeterminate = someRowsSelected)}
                     onChange={toggleSelectAll}
@@ -205,15 +205,15 @@ export function DataTable<T>({
                 </div>
                 <label htmlFor="select-all-checkbox" className="sr-only">Select all rows</label>
               </th>
-              
+
               {/* Data columns */}
               {columns.map(column => (
                 <th
                   key={column.id}
                   scope="col"
                   className={cn(
-                    'px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider',
-                    column.enableSorting !== false && 'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                    'px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider',
+                    column.enableSorting !== false && 'cursor-pointer select-none hover:text-[#5d7e23] dark:hover:text-[#9ed050] focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-2'
                   )}
                   tabIndex={column.enableSorting !== false ? 0 : -1}
                   role={column.enableSorting !== false ? "button" : undefined}
@@ -279,29 +279,30 @@ export function DataTable<T>({
             </tr>
           </thead>
           
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-table-row divide-y divide-gray-200 dark:divide-gray-700">
             {paginatedData.length === 0 ? (
               <tr>
                 <td
                   colSpan={columns.length + ((onEdit || onDelete || renderActions) ? 2 : 1)}
-                  className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500 dark:text-gray-400"
+                  className="px-6 py-8 whitespace-nowrap text-center text-sm text-gray-500 dark:text-gray-400"
                 >
                   {emptyMessage}
                 </td>
               </tr>
             ) : (
-              paginatedData.map(row => {
+              paginatedData.map((row, index) => {
                 const rowKey = String(row[keyField]);
                 const isSelected = selectedRows.has(rowKey);
-                
+
                 return (
                   <tr
                     key={rowKey}
                     className={cn(
                       'transition-colors duration-200',
-                      isSelected && 'bg-blue-50 dark:bg-blue-900/20',
+                      isSelected && 'bg-table-row-selected',
+                      !isSelected && index % 2 === 1 && 'bg-table-row-alt',
                       getRowClassName?.(row),
-                      !getRowClassName?.(row) && 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      !getRowClassName?.(row) && !isSelected && 'hover:bg-table-row-hover'
                     )}
                     role="row"
                   >
@@ -310,7 +311,7 @@ export function DataTable<T>({
                       <div className="flex items-center justify-center">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500 dark:bg-gray-700"
+                          className="h-4 w-4 text-[#8CC63F] rounded border-filter focus:ring-[#8CC63F] focus:ring-offset-0 dark:bg-gray-700"
                           aria-label={`Select row ${rowKey}`}
                           checked={isSelected}
                           onChange={() => toggleRowSelection(rowKey)}

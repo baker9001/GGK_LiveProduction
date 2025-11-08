@@ -23,13 +23,33 @@
   --brand-accent-contrast: #ffffff;
   --brand-accent-muted-contrast: #123116;
 
-  /* Background Colors - Modern Gradient System */
+  /* Background Colors - Modern Solid Color System */
   --color-bg-page: 250 251 252;
   --color-bg-surface: 255 255 255;
   --color-bg-subtle: 245 250 247;
   --color-bg-muted: 232 245 220;
   --color-section-primary: 255 255 255;
   --color-section-secondary: 245 252 243;
+
+  /* Card & Component Backgrounds */
+  --color-card-bg: 255 255 255;
+  --color-card-elevated: 252 254 251;
+  --color-card-hover: 248 252 245;
+  --color-filter-bg: 248 252 245;
+  --color-filter-border: 226 240 208;
+
+  /* Table Backgrounds */
+  --color-table-header: 248 252 245;
+  --color-table-row: 255 255 255;
+  --color-table-row-alt: 252 254 251;
+  --color-table-row-hover: 245 250 240;
+  --color-table-row-selected: 240 247 232;
+
+  /* Invitation & Panel Backgrounds */
+  --color-panel-bg: 250 253 248;
+  --color-panel-border: 226 240 208;
+  --color-invitation-card: 255 255 255;
+  --color-invitation-hover: 248 252 245;
 
   /* Text Colors */
   --color-text-primary: 31 41 55;
@@ -84,6 +104,27 @@
   --color-bg-muted: 30 41 59;
   --color-section-primary: 26 35 50;
   --color-section-secondary: 17 24 39;
+
+  /* Card & Component Backgrounds - Dark Mode */
+  --color-card-bg: 31 41 55;
+  --color-card-elevated: 37 47 63;
+  --color-card-hover: 42 52 70;
+  --color-filter-bg: 26 35 50;
+  --color-filter-border: 55 75 85;
+
+  /* Table Backgrounds - Dark Mode */
+  --color-table-header: 26 35 50;
+  --color-table-row: 31 41 55;
+  --color-table-row-alt: 35 45 60;
+  --color-table-row-hover: 42 52 70;
+  --color-table-row-selected: 40 58 65;
+
+  /* Invitation & Panel Backgrounds - Dark Mode */
+  --color-panel-bg: 26 35 50;
+  --color-panel-border: 55 75 85;
+  --color-invitation-card: 35 45 60;
+  --color-invitation-hover: 42 52 70;
+
   --color-text-primary: 248 250 252;
   --color-text-secondary: 203 213 225;
   --color-text-muted: 148 163 184;
@@ -254,6 +295,65 @@ body {
 
 .border-theme-strong {
   border-color: var(--color-border-strong);
+}
+
+/* Card & Component Background Utilities */
+.bg-card {
+  background-color: rgb(var(--color-card-bg));
+}
+
+.bg-card-elevated {
+  background-color: rgb(var(--color-card-elevated));
+}
+
+.bg-card-hover {
+  background-color: rgb(var(--color-card-hover));
+}
+
+.bg-filter {
+  background-color: rgb(var(--color-filter-bg));
+}
+
+.border-filter {
+  border-color: rgb(var(--color-filter-border));
+}
+
+/* Table Background Utilities */
+.bg-table-header {
+  background-color: rgb(var(--color-table-header));
+}
+
+.bg-table-row {
+  background-color: rgb(var(--color-table-row));
+}
+
+.bg-table-row-alt {
+  background-color: rgb(var(--color-table-row-alt));
+}
+
+.bg-table-row-hover {
+  background-color: rgb(var(--color-table-row-hover));
+}
+
+.bg-table-row-selected {
+  background-color: rgb(var(--color-table-row-selected));
+}
+
+/* Panel & Invitation Background Utilities */
+.bg-panel {
+  background-color: rgb(var(--color-panel-bg));
+}
+
+.border-panel {
+  border-color: rgb(var(--color-panel-border));
+}
+
+.bg-invitation-card {
+  background-color: rgb(var(--color-invitation-card));
+}
+
+.hover\:bg-invitation-hover:hover {
+  background-color: rgb(var(--color-invitation-hover));
 }
 
 .shadow-theme-elevated {
