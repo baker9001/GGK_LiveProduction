@@ -37,10 +37,10 @@
   --color-text-muted: 107 114 128;
   --color-text-inverse: 255 255 255;
 
-  /* Border Colors */
-  --color-border: rgba(140, 198, 63, 0.2);
-  --color-border-muted: rgba(140, 198, 63, 0.12);
-  --color-border-strong: rgba(93, 126, 35, 0.3);
+  /* Border Colors - Minimal borders */
+  --color-border: rgba(229, 231, 235, 1);
+  --color-border-muted: rgba(243, 244, 246, 1);
+  --color-border-strong: rgba(209, 213, 219, 1);
 
   /* Action Colors */
   --color-action-primary: #8CC63F;
