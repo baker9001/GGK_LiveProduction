@@ -344,10 +344,10 @@ export default function LandingPage() {
         </div>
         <div className="relative z-10 max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
           <div className="w-full max-w-6xl mx-auto text-center">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold !text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
               Master IGCSE, O-Level & A-Level | Cambridge & Edexcel Excellence
             </h1>
-            <p className="mt-6 max-w-2xl mx-auto text-lg sm:text-xl text-white sm:mt-8 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
+            <p className="mt-6 max-w-2xl mx-auto text-lg sm:text-xl !text-white sm:mt-8 font-semibold leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
               Complete exam preparation with 10+ years of past papers, animated video lessons,
               mock exams, and AI-powered personalized learning.
             </p>
@@ -380,8 +380,8 @@ export default function LandingPage() {
                   className="px-8 py-6 text-center"
                   style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
                 >
-                  <div className="text-4xl sm:text-5xl font-extrabold text-white">{item.value}</div>
-                  <div className="text-sm sm:text-base font-bold text-white mt-2">{item.label}</div>
+                  <div className="text-4xl sm:text-5xl font-extrabold !text-white" style={{ color: 'white' }}>{item.value}</div>
+                  <div className="text-sm sm:text-base font-bold !text-white mt-2" style={{ color: 'white' }}>{item.label}</div>
                 </div>
               ))}
             </div>
