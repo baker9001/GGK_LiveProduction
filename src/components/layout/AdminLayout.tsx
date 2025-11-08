@@ -594,10 +594,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                 {/* Dyslexia Support Toggle */}
                 <button
                   className={cn(
-                    'p-2 rounded-lg transition-all',
+                    'p-2 rounded-lg transition-colors',
                     isDyslexiaEnabled
-                      ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                      : 'text-gray-600 hover:text-brand-primary hover:bg-brand-soft'
+                      ? 'text-emerald-600'
+                      : 'text-gray-600 hover:text-gray-900'
                   )}
                   onClick={() => setIsDyslexiaEnabled((prev) => !prev)}
                   aria-pressed={isDyslexiaEnabled}
@@ -610,7 +610,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
                 {/* Theme Toggle */}
                 <button
-                  className="p-2 text-gray-600 hover:text-brand-primary hover:bg-brand-soft rounded-lg transition-all"
+                  className="p-2 text-gray-600 hover:text-gray-900 rounded-lg transition-colors"
                   onClick={toggle}
                   aria-label="Toggle theme"
                   aria-pressed={isDarkMode}
@@ -628,21 +628,21 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                   </button>
 
                   {isProfileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-theme-surface rounded-lg shadow-theme-popover py-1 border border-theme">
-                      <div className="px-4 py-2 border-b border-theme-muted">
-                        <p className="text-sm font-medium text-theme-primary">{user?.name || 'User'}</p>
-                        <p className="text-xs text-theme-muted">{user?.email || 'user@example.com'}</p>
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1">
+                      <div className="px-4 py-2">
+                        <p className="text-sm font-medium text-gray-900">{user?.name || 'User'}</p>
+                        <p className="text-xs text-gray-600">{user?.email || 'user@example.com'}</p>
                       </div>
                       <Link
                         to={getProfilePath()}
-                        className="block px-4 py-2 text-sm text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle transition-theme"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         onClick={() => setIsProfileDropdownOpen(false)}
                       >
                         Profile Settings
                       </Link>
                       <button
                         onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-sm text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle flex items-center transition-theme"
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors"
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Logout
@@ -655,7 +655,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           </div>
         </header>
 
-        <main className="min-h-[calc(100vh-4rem)] bg-theme-page transition-theme">
+        <main className="min-h-[calc(100vh-4rem)] bg-gray-50 transition-theme">
           {welcomeNotice && (
             <div className="px-6 pb-2 pt-6">
               <WelcomeBanner notice={welcomeNotice} onDismiss={handleDismissWelcome} />

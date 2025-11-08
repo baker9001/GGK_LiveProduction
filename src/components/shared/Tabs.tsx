@@ -81,7 +81,7 @@ interface TabsListProps {
 export function TabsList({ children, className, activeTab, onTabChange }: TabsListProps) {
   return (
     <div className={cn(
-      'flex items-center gap-2 p-2 rounded-2xl bg-gradient-to-r from-white via-gray-50 to-white dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 backdrop-blur-md border border-gray-200 dark:border-gray-600 shadow-lg dark:shadow-gray-900/30 transition-all duration-300 hover:shadow-xl',
+      'flex items-center gap-2 p-1 rounded-lg bg-white',
       className
     )}>
       {React.Children.map(children, child => {
@@ -150,11 +150,11 @@ export function TabsTrigger({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold ring-offset-white transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transform hover:scale-105 hover:-translate-y-0.5 relative overflow-hidden',
+        'inline-flex items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50',
         isActive
-          ? 'bg-gradient-to-r from-[#8CC63F] via-[#9ED050] to-[#7AB635] text-white shadow-xl shadow-[#8CC63F]/30 border border-[#8CC63F]/40 dark:shadow-[#8CC63F]/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-white/20 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300'
-          : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] hover:bg-gradient-to-r hover:from-white hover:to-gray-50 dark:hover:from-gray-700 dark:hover:to-gray-600 hover:shadow-lg hover:border-[#8CC63F]/30 border border-gray-200/50 dark:border-gray-600/50 backdrop-blur-sm',
-        disabled && 'opacity-50 cursor-not-allowed hover:scale-100',
+          ? 'bg-[#8CC63F] text-white'
+          : 'text-gray-700 hover:bg-gray-50',
+        disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
       onClick={handleClick}

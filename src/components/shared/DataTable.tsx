@@ -156,7 +156,7 @@ export function DataTable<T>({
   }
   
   return (
-    <div className={cn('bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-gray-900/20 transition-colors duration-200', className)} role="region" aria-label={ariaLabel}>
+    <div className={cn('bg-white rounded-lg shadow-sm transition-colors duration-200', className)} role="region" aria-label={ariaLabel}>
       {/* Bulk actions */}
       {selectedRows.size > 0 && onDelete && (
         <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between">
@@ -183,13 +183,13 @@ export function DataTable<T>({
       
       {/* Table */}
       <div className="overflow-x-auto relative">
-        <table 
-          className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" 
+        <table
+          className="min-w-full"
           role="table"
           aria-label={ariaLabel}
         >
           {caption && <caption className="sr-only">{caption}</caption>}
-          <thead className="bg-gray-50 dark:bg-gray-900/50">
+          <thead className="bg-gray-50">
             <tr>
               {/* Checkbox column */}
               <th scope="col" className="px-6 py-3 w-12" aria-label="Select all rows">
