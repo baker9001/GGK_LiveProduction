@@ -343,10 +343,10 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-white/65 via-gray-200/55 to-white/65 backdrop-blur-sm" />
         </div>
         <div className="relative z-10 max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
-          <div className="w-full max-w-3xl mx-auto text-center sm:text-left text-gray-900">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight">
-              Master IGCSE, O-Level & A-Level
-              <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900">
+          <div className="w-full max-w-3xl mx-auto text-center sm:text-left">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight text-white" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)' }}>
+              <span className="whitespace-nowrap">Master IGCSE, O-Level & A-Level</span>
+              <span className="block mt-2 whitespace-nowrap">
                 Cambridge & Edexcel Excellence
               </span>
             </h1>
