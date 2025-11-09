@@ -38,12 +38,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { 
-  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
+import {
+  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X,
   Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key,
   Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2, RefreshCw,
   AlertTriangle
 } from 'lucide-react';
+import { iconColors } from '../../../../lib/constants/iconConfig';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../../../../lib/supabase';
@@ -1952,7 +1953,7 @@ export default function CompaniesTab() {
                 setEditingCompany(company);
                 setIsFormOpen(true);
               }}
-              className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              className={`p-1.5 ${iconColors.edit.full} ${iconColors.edit.bg} rounded-lg transition-colors`}
               title="Edit Company"
             >
               <Edit className="h-4 w-4" />
@@ -1960,7 +1961,7 @@ export default function CompaniesTab() {
             
             <button
               onClick={() => handleDelete([company])}
-              className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              className={`p-1.5 ${iconColors.delete.full} ${iconColors.delete.bg} rounded-lg transition-colors`}
               title="Delete Company"
             >
               <Trash2 className="h-4 w-4" />
@@ -2593,7 +2594,7 @@ export default function CompaniesTab() {
                                 <button
                                   onClick={() => resendVerificationMutation.mutate(admin.user_id)}
                                   disabled={resendVerificationMutation.isLoading}
-                                  className="p-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                  className={`p-2 ${iconColors.warning.full} ${iconColors.warning.bg} rounded-lg transition-colors disabled:opacity-50`}
                                   title="Resend verification email"
                                 >
                                   {resendVerificationMutation.isLoading ? (
@@ -2632,7 +2633,7 @@ export default function CompaniesTab() {
                                   setIsAdminFormOpen(true);
                                   setReturnToViewAfterAdd(true);
                                 }}
-                                className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                className={`p-2 ${iconColors.edit.full} ${iconColors.edit.bg} rounded-lg transition-colors`}
                                 title="Edit Admin"
                               >
                                 <Edit className="h-5 w-5" />
@@ -2649,7 +2650,7 @@ export default function CompaniesTab() {
                                   }
                                 }}
                                 disabled={removeAdminMutation.isLoading}
-                                className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                className={`p-2 ${iconColors.delete.full} ${iconColors.delete.bg} rounded-lg transition-colors disabled:opacity-50`}
                                 title="Remove Admin"
                               >
                                 <Trash2 className="h-5 w-5" />

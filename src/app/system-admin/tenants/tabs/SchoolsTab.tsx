@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, ImageOff } from 'lucide-react';
+import { ActionButtons } from '../../../../components/shared/ActionButtons';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';

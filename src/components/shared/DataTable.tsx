@@ -13,6 +13,7 @@ import { cn } from '../../lib/utils';
 import { Button } from './Button';
 import { DataTableSkeleton } from './DataTableSkeleton';
 import { PaginationControls } from './PaginationControls';
+import { iconColors } from '../../lib/constants/iconConfig';
 
 export interface Column<T> {
   id: string;
@@ -344,7 +345,7 @@ export function DataTable<T>({
                             {onEdit && (
                               <button
                                 onClick={() => onEdit(row)}
-                                className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+                                className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded-full transition-colors`}
                                 aria-label={`Edit row ${rowKey}`}
                                 title="Edit"
                               >
@@ -354,7 +355,7 @@ export function DataTable<T>({
                             {onDelete && (
                               <button
                                 onClick={() => onDelete([row])}
-                                className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+                                className={`${iconColors.delete.full} ${iconColors.delete.bg} p-1 rounded-full transition-colors`}
                                 aria-label={`Delete row ${rowKey}`}
                                 title="Delete"
                               >

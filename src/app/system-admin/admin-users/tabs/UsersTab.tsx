@@ -8,6 +8,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Key, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, Loader2, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
+import { iconColors } from '../../../../lib/constants/iconConfig';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -1481,7 +1482,7 @@ export default function UsersTab() {
           setEditingUser(row);
           setIsEditFormOpen(true);
         }}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+        className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded-full transition-colors`}
         title="Edit"
       >
         <Edit2 className="h-4 w-4" />
@@ -1492,7 +1493,7 @@ export default function UsersTab() {
           <button
             onClick={() => handleDeactivate([row])}
             disabled={processUsersMutation.isLoading}
-            className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors disabled:opacity-50"
+            className={`${iconColors.warning.full} ${iconColors.warning.bg} p-1 rounded-full transition-colors disabled:opacity-50`}
             title={row.status === 'active' ? 'Deactivate user' : 'User already inactive'}
           >
             <XCircle className="h-4 w-4" />
@@ -1501,7 +1502,7 @@ export default function UsersTab() {
           <button
             onClick={() => handleDelete([row])}
             disabled={processUsersMutation.isLoading}
-            className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors disabled:opacity-50"
+            className={`${iconColors.delete.full} ${iconColors.delete.bg} p-1 rounded-full transition-colors disabled:opacity-50`}
             title="Delete user permanently"
           >
             <Trash2 className="h-4 w-4" />
