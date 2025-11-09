@@ -148,12 +148,13 @@ export default function ForgotPasswordPage() {
           <img
             src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
             alt="Educational background"
-            className="w-full h-full object-cover select-none pointer-events-none"
+            className="w-full h-full object-cover select-none pointer-events-none blur-sm"
             draggable="false"
             onContextMenu={(e) => e.preventDefault()}
             style={{ userSelect: 'none' }}
           />
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70" />
+          {/* Transparent gray overlay with blur */}
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" />
         </div>
         
         {/* Content */}
@@ -223,12 +224,13 @@ export default function ForgotPasswordPage() {
         <img
           src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
           alt="Educational background"
-          className="w-full h-full object-cover select-none pointer-events-none"
+          className="w-full h-full object-cover select-none pointer-events-none blur-sm"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+        {/* Transparent gray overlay with blur */}
+        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" />
       </div>
       
       {/* Content */}
