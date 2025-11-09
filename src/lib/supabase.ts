@@ -28,6 +28,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { markSessionExpired } from './auth';
 
 // Get environment variables with trimming to remove any whitespace
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -358,12 +359,9 @@ if (typeof window !== 'undefined') {
     // Handle SIGNED_OUT event
     if (event === 'SIGNED_OUT') {
       console.log('[Supabase Auth] User signed out, clearing local auth');
-      import('./auth').then(({ clearAuthenticatedUser, markSessionExpired, consumeSessionExpiredNoticeSuppression }) => {
-        const shouldSuppressNotice = consumeSessionExpiredNoticeSuppression();
+      import('./auth').then(({ clearAuthenticatedUser, markSessionExpired }) => {
         clearAuthenticatedUser();
-        if (!shouldSuppressNotice) {
-          markSessionExpired('Your session has ended. Please sign in again to continue.');
-        }
+        markSessionExpired('Your session has ended. Please sign in again to continue.');
 
         // Redirect to signin if not already there
         if (!window.location.pathname.startsWith('/signin')) {

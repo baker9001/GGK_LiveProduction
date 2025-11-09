@@ -4,9 +4,6 @@ import { AdminLayout } from '../../components/layout/AdminLayout';
 import { getCurrentUser } from '../../lib/auth';
 import { useModuleSecurity } from '../../hooks/useModuleSecurity';
 import { GraduationCap, BookOpen, ClipboardList, User, BarChart3 } from 'lucide-react';
-import { PageHeader } from '../../components/shared/PageHeader';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/shared/Card';
-import { Badge } from '../../components/shared/Badge';
 import ProfilePage from './profile/page';
 import StudentsPage from './students/page';
 import LearningManagementPage from './learning-management/page';
@@ -19,100 +16,89 @@ interface TeachersModulePageProps {
 
 function DashboardPage() {
   return (
-    <div className="min-h-screen bg-ggk-neutral-50 dark:bg-ggk-neutral-900">
-      <PageHeader
-        title="Teachers Module"
-        subtitle="Manage your classes, students, assignments, and track performance"
-        accent={true}
-      />
+    <div className="p-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          Teachers Module Dashboard
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          Manage your classes, students, assignments, and track performance
+        </p>
+      </div>
 
-      <div className="px-24 pb-32 space-y-24">
-        <Card variant="elevated" className="bg-gradient-to-r from-ggk-primary-50 to-blue-50 dark:from-ggk-primary-900/20 dark:to-blue-900/20 border-ggk-primary-200 dark:border-ggk-primary-800">
-          <CardContent className="p-24">
-            <div className="flex items-center gap-16">
-              <div className="flex-shrink-0 w-56 h-56 rounded-ggk-lg bg-ggk-primary-100 dark:bg-ggk-primary-800/50 flex items-center justify-center">
-                <GraduationCap className="h-32 w-32 text-ggk-primary-600 dark:text-ggk-primary-400" />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-xl font-semibold text-ggk-neutral-900 dark:text-ggk-neutral-50 mb-8">
-                  Welcome to the Teachers Module
-                </h2>
-                <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
-                  This module provides comprehensive tools for managing your teaching activities, tracking student progress, and delivering engaging lessons.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+        <div className="flex items-center">
+          <GraduationCap className="h-8 w-8 text-blue-600 dark:text-blue-400 mr-4" />
+          <div>
+            <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              Welcome to the Teachers Module
+            </h2>
+            <p className="text-blue-700 dark:text-blue-300">
+              This module provides comprehensive tools for managing your teaching activities, tracking student progress, and delivering engaging lessons.
+            </p>
+          </div>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
-          <Card variant="elevated" hover>
-            <CardHeader accent>
-              <div className="flex items-center gap-12">
-                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-blue-100 dark:bg-blue-800/50 flex items-center justify-center">
-                  <BookOpen className="h-24 w-24 text-blue-600 dark:text-blue-400" />
-                </div>
-                <CardTitle>My Classes</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-16">
-              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
-                View and manage all your assigned classes, schedules, and student rosters.
-              </p>
-              <Badge variant="default">Coming Soon</Badge>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <BookOpen className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              My Classes
+            </h3>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            View and manage all your assigned classes, schedules, and student rosters.
+          </p>
+          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
+            Coming Soon
+          </div>
+        </div>
 
-          <Card variant="elevated" hover>
-            <CardHeader accent>
-              <div className="flex items-center gap-12">
-                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-orange-100 dark:bg-orange-800/50 flex items-center justify-center">
-                  <ClipboardList className="h-24 w-24 text-orange-600 dark:text-orange-400" />
-                </div>
-                <CardTitle>Assignments</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-16">
-              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
-                Create, distribute, and grade assignments for your students.
-              </p>
-              <Badge variant="default">Coming Soon</Badge>
-            </CardContent>
-          </Card>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <ClipboardList className="h-6 w-6 text-orange-600 dark:text-orange-400 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Assignments
+            </h3>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Create, distribute, and grade assignments for your students.
+          </p>
+          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
+            Coming Soon
+          </div>
+        </div>
 
-          <Card variant="elevated" hover>
-            <CardHeader accent>
-              <div className="flex items-center gap-12">
-                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-ggk-success-100 dark:bg-ggk-success-800/50 flex items-center justify-center">
-                  <BarChart3 className="h-24 w-24 text-ggk-success-600 dark:text-ggk-success-400" />
-                </div>
-                <CardTitle>Performance Analytics</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-16">
-              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
-                Track student progress, identify learning gaps, and monitor class performance.
-              </p>
-              <Badge variant="default">Coming Soon</Badge>
-            </CardContent>
-          </Card>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <BarChart3 className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Performance Analytics
+            </h3>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Track student progress, identify learning gaps, and monitor class performance.
+          </p>
+          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
+            Coming Soon
+          </div>
+        </div>
 
-          <Card variant="elevated" hover>
-            <CardHeader accent>
-              <div className="flex items-center gap-12">
-                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-ggk-primary-100 dark:bg-ggk-primary-800/50 flex items-center justify-center">
-                  <User className="h-24 w-24 text-ggk-primary-600 dark:text-ggk-primary-400" />
-                </div>
-                <CardTitle>Profile Management</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-16">
-              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
-                Manage your personal profile, security settings, and account preferences.
-              </p>
-              <Badge variant="success">Available</Badge>
-            </CardContent>
-          </Card>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <User className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Profile Management
+            </h3>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Manage your personal profile, security settings, and account preferences.
+          </p>
+          <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+            Available
+          </div>
         </div>
       </div>
     </div>

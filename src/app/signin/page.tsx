@@ -2,19 +2,16 @@
 // Production version - Dev Access section removed for security
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import {
-  GraduationCap,
-  AlertCircle,
-  Loader2,
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { 
+  GraduationCap, 
+  AlertCircle, 
+  Loader2, 
   Mail,
   Lock,
   Eye,
   EyeOff,
-  MailWarning,
-  Sparkles,
-  ShieldCheck,
-  BarChart3
+  MailWarning
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
@@ -23,7 +20,6 @@ import {
   setAuthenticatedUser,
   clearAuthenticatedUser,
   consumeSessionExpiredNotice,
-  suppressSessionExpiredNoticeOnce,
   type User,
   type UserRole
 } from '../../lib/auth';
@@ -33,30 +29,7 @@ import { saveWelcomeNotice } from '../../lib/welcomeNotice';
 
 export default function SignInPage() {
   const navigate = useNavigate();
-
-  const highlightItems = [
-    {
-      icon: Sparkles,
-      title: 'Curated learning intelligence',
-      description:
-        'Surface the most relevant insights and assignments for every stakeholder in a single dashboard.'
-    },
-    {
-      icon: ShieldCheck,
-      title: 'Enterprise-grade security',
-      description: 'Rely on multi-layer protection, session monitoring, and compliance-ready audit trails.'
-    },
-    {
-      icon: BarChart3,
-      title: 'Real-time performance analytics',
-      description: 'Track progress with live metrics, cohort comparisons, and actionable recommendations.'
-    },
-    {
-      icon: Loader2,
-      title: 'Frictionless onboarding',
-      description: 'Resume exactly where you left off with intelligent session recovery and tailored notices.'
-    }
-  ];
+  const location = useLocation();
   
   // Form state
   const [email, setEmail] = useState('');
@@ -75,8 +48,7 @@ export default function SignInPage() {
   useEffect(() => {
     console.log('[Auth] Clearing session on sign-in page load');
     
-    // Sign out from Supabase Auth without triggering a session expired notice
-    suppressSessionExpiredNoticeOnce();
+    // Sign out from Supabase Auth
     supabase.auth.signOut();
     
     // Clear local storage
@@ -124,7 +96,6 @@ export default function SignInPage() {
       const normalizedEmail = email.trim().toLowerCase();
       
       // Clear existing session
-      suppressSessionExpiredNoticeOnce();
       await supabase.auth.signOut();
       clearAuthenticatedUser();
       
@@ -174,7 +145,6 @@ export default function SignInPage() {
         setError('Please verify your email before signing in. Check your inbox for the verification link.');
         
         // Sign out since email isn't verified
-        suppressSessionExpiredNoticeOnce();
         await supabase.auth.signOut();
         setLoading(false);
         return;
@@ -213,7 +183,6 @@ export default function SignInPage() {
       if (userDataFetch) {
         // Check if account is active
         if (!userDataFetch.is_active) {
-          suppressSessionExpiredNoticeOnce();
           await supabase.auth.signOut();
           setError('Your account is inactive. Please contact support.');
           setLoading(false);
@@ -434,331 +403,255 @@ export default function SignInPage() {
   };
   
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="absolute inset-0">
+    <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* Background Image */}
+      <div className="absolute inset-0 z-0">
         <img
-          src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
+          src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
           alt="Educational background"
-          className="h-full w-full select-none object-cover"
+          className="w-full h-full object-cover select-none pointer-events-none"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
-        <div className="absolute inset-0 bg-slate-950/70" />
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950/80 via-slate-900/55 to-slate-950/75" />
-        <div className="absolute left-1/4 top-12 h-72 w-72 rounded-full bg-ggk-primary-400/30 blur-3xl" />
-        <div className="absolute right-1/4 bottom-10 h-80 w-80 rounded-full bg-sky-400/20 blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
       </div>
-
-      <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="flex items-center justify-between px-6 py-6 sm:px-10 lg:px-16">
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-white shadow-lg backdrop-blur">
-              <GraduationCap className="h-7 w-7 text-ggk-primary-300" />
+      
+      {/* Content */}
+      <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Logo */}
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center">
+            <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
+            <span className="ml-3 text-4xl font-bold text-white">
+              GGK Learning
             </span>
-            <div className="text-white">
-              <p className="text-xs uppercase tracking-[0.4em] text-white/60">GGK Learning</p>
-              <p className="text-2xl font-semibold leading-tight">Intelligent Education Workspace</p>
-            </div>
           </div>
-
-          <div className="hidden items-center gap-3 sm:flex">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/80 hover:text-white"
-              onClick={() => navigate('/contact-support')}
-            >
-              Contact support
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-white/30 text-white hover:border-white/60 hover:bg-white/10"
-              onClick={() => navigate('/request-access')}
-            >
-              Request access
-            </Button>
-          </div>
-        </header>
-
-        <main className="flex flex-1 flex-col justify-center px-6 pb-16 pt-4 sm:px-10 lg:px-16">
-          <div className="mx-auto w-full max-w-6xl">
-            <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] xl:grid-cols-[1fr_0.9fr]">
-              <section className="flex flex-col justify-center text-white">
-                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-white/70 backdrop-blur">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Welcome back
-                </span>
-                <h1 className="mt-6 text-4xl font-semibold leading-tight text-white sm:text-5xl">
-                  Sign in to orchestrate brilliant learning journeys.
-                </h1>
-                <p className="mt-4 text-base text-white/75 sm:text-lg">
-                  Access the GGK ecosystem to manage stakeholders, unlock curated insights, and deliver meaningful progress updates across every cohort.
-                </p>
-
-                <div className="mt-10 grid gap-4 sm:grid-cols-2">
-                  {highlightItems.map((item, index) => (
-                    <div
-                      key={index}
-                      className="group flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg shadow-black/20 backdrop-blur-xl transition-transform duration-300 ease-out hover:-translate-y-1 hover:border-white/25 hover:bg-white/10"
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white/90">
-                        <item.icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">{item.title}</h3>
-                        <p className="mt-1 text-sm leading-relaxed text-white/70">{item.description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-12 flex flex-wrap items-center gap-6 text-sm text-white/60">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                    99.9% uptime SLA
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-ggk-primary-300" />
-                    SOC2-ready controls
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-sky-300" />
-                    Continuous backups
-                  </div>
-                </div>
-              </section>
-
-              <section className="relative">
-                <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-ggk-primary-400/30 blur-3xl" />
-                <div className="absolute -bottom-10 -left-6 h-40 w-40 rounded-full bg-sky-500/20 blur-3xl" />
-
-                <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-slate-950/70 shadow-2xl shadow-black/40 backdrop-blur-2xl">
-                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-ggk-primary-300 via-emerald-300 to-sky-300" />
-                  <div className="relative z-10 p-8 sm:p-10">
-                    <div className="flex flex-col gap-2 pb-6">
-                      <h2 className="text-2xl font-semibold text-white">Sign in to GGK Learning</h2>
-                      <p className="text-sm text-white/65">
-                        Use your work email and password. Your session activity is protected with continuous monitoring.
-                      </p>
-                    </div>
-            {/* Session expiration inline notice */}
-            {sessionExpiredMessage && (
-              <div className="mb-6 rounded-2xl border border-blue-400/40 bg-blue-500/10 p-4 text-blue-100">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-200" />
-                  <div>
-                    <p className="font-semibold">Session expired</p>
-                    <p className="mt-1 text-sm text-blue-100/80">{sessionExpiredMessage}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Error Messages */}
-            {error && (
-              <div className="mb-6">
-                {verificationNeeded ? (
-                  <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-amber-100">
-                    <div className="flex items-start gap-3">
-                      <MailWarning className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-200" />
-                      <div className="flex-1">
-                        <p className="font-semibold">Email verification required</p>
-                        <p className="mt-1 text-sm text-amber-100/80">Your email address is not verified. Please check your inbox for the verification link.</p>
-                        <p className="mt-2 text-xs text-amber-100/70">
-                          Can't find the email? Check your spam folder or click below to resend.
-                        </p>
-                        <button
-                          onClick={handleResendVerification}
-                          disabled={loading}
-                          className="mt-3 text-sm font-semibold text-amber-100 underline decoration-amber-200/70 underline-offset-4 transition hover:text-amber-50 disabled:opacity-50"
-                        >
-                          {loading ? 'Sending...' : 'Resend verification email'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-3 rounded-2xl border border-red-400/40 bg-red-500/10 p-4 text-red-100">
-                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-200" />
-                    <div>
-                      <span className="text-sm font-medium text-red-100">{error}</span>
-                      {loginErrorType === 'invalid_credentials' && (
-                        <div className="mt-3">
-                          <Link
-                            to="/forgot-password"
-                            className="inline-flex items-center text-sm font-semibold text-red-100 underline decoration-red-200/70 underline-offset-4 transition hover:text-red-50"
-                          >
-                            Forgot your password?
-                          </Link>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Field */}
-              <FormField
-                id="email"
-                label="Email address"
-                required
-                labelClassName="text-sm font-semibold text-white/75"
-              >
-                <div className="relative mt-1">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-white/40" />
-                  </div>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 pr-3 text-white placeholder:text-white/50 focus:border-ggk-primary-300 focus:ring-ggk-primary-300"
-                    placeholder="name@yourorganization.com"
-                    disabled={loading}
-                    autoFocus
-                  />
-                </div>
-              </FormField>
-
-              {/* Password Field */}
-              <FormField
-                id="password"
-                label="Password"
-                required
-                labelClassName="text-sm font-semibold text-white/75"
-              >
-                <div className="relative mt-1">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-white/40" />
-                  </div>
-                  <Input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 rounded-2xl border border-white/10 bg-white/5 pl-10 pr-10 text-white placeholder:text-white/50 focus:border-ggk-primary-300 focus:ring-ggk-primary-300"
-                    placeholder="Enter your password"
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-white/50 transition hover:text-white"
-                    tabIndex={-1}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
-                  </button>
-                </div>
-              </FormField>
-
-              {/* Remember Me & Forgot Password */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-sm text-white/70">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => {
-                      setRememberMe(e.target.checked);
-                      if (!e.target.checked) {
-                        localStorage.removeItem('ggk_remembered_email');
-                        localStorage.removeItem('ggk_remember_session');
-                      }
-                    }}
-                    className="h-4 w-4 cursor-pointer rounded border-white/20 bg-white/5 text-ggk-primary-300 focus:ring-ggk-primary-300 focus:ring-offset-0"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 cursor-pointer text-sm font-medium">
-                    Remember me
-                  </label>
-                </div>
-
+          <h2 className="mt-6 text-3xl font-extrabold text-white">
+            Sign in to your account
+          </h2>
+          <p className="mt-2 text-sm text-gray-300">
+            Enter your registered email and password to access the platform
+          </p>
+        </div>
+        
+        {/* Sign-in Form */}
+        <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+          {/* Session expiration inline notice */}
+          {sessionExpiredMessage && (
+            <div className="mb-4 bg-blue-500/10 backdrop-blur text-blue-200 p-4 rounded-lg border border-blue-500/20">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                 <div>
-                  <Link
-                    to="/forgot-password"
-                    className="font-semibold text-ggk-primary-200 underline decoration-ggk-primary-200/60 underline-offset-4 transition hover:text-ggk-primary-100"
-                  >
-                    Forgot password?
-                  </Link>
+                  <p className="font-medium">Session expired</p>
+                  <p className="text-sm mt-1">{sessionExpiredMessage}</p>
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Submit Button */}
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  size="lg"
-                  fullWidth
-                  className="h-12 w-full rounded-2xl text-base tracking-wide shadow-lg shadow-ggk-primary-900/40"
-                  disabled={loading || !email || !password}
-                  loading={loading}
-                  loadingText="Signing in..."
-                >
-                  Sign in
-                </Button>
+          {/* Error Messages */}
+          {error && (
+            <div className="mb-4">
+              {verificationNeeded ? (
+                <div className="bg-amber-500/10 backdrop-blur text-amber-400 p-4 rounded-lg border border-amber-500/20">
+                  <div className="flex items-start">
+                    <MailWarning className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium">Email Verification Required</p>
+                      <p className="text-sm mt-1">Your email address is not verified. Please check your inbox for the verification link.</p>
+                      <p className="text-xs mt-2 text-amber-300">
+                        Can't find the email? Check your spam folder or click below to resend.
+                      </p>
+                      <button
+                        onClick={handleResendVerification}
+                        disabled={loading}
+                        className="text-sm mt-3 text-amber-100 hover:text-white font-medium underline disabled:opacity-50"
+                      >
+                        {loading ? 'Sending...' : 'Resend verification email'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
+                  <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-sm">{error}</span>
+                    {loginErrorType === 'invalid_credentials' && (
+                      <div className="mt-3">
+                        <Link
+                          to="/forgot-password"
+                          className="inline-flex items-center text-sm font-medium text-red-300 hover:text-red-200 underline"
+                        >
+                          Forgot your password?
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Field */}
+            <FormField
+              id="email"
+              label="Email address"
+              required
+              labelClassName="text-gray-200"
+            >
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                </div>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                  placeholder="Enter your email"
+                  disabled={loading}
+                  autoFocus
+                />
               </div>
-            </form>
-
-
-            {/* Additional Links */}
-            <div className="mt-8 space-y-6 pt-6">
-              <div className="text-center text-sm font-semibold text-white/75">
-                Need help?
+            </FormField>
+            
+            {/* Password Field */}
+            <FormField
+              id="password"
+              label="Password"
+              required
+              labelClassName="text-gray-200"
+            >
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                  placeholder="Enter your password"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+                  ) : (
+                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+                  )}
+                </button>
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Button
-                  variant="secondary"
-                  className="h-11 rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                  onClick={() => navigate('/contact-support')}
+            </FormField>
+            
+            {/* Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => {
+                    setRememberMe(e.target.checked);
+                    if (!e.target.checked) {
+                      localStorage.removeItem('ggk_remembered_email');
+                      localStorage.removeItem('ggk_remember_session');
+                    }
+                  }}
+                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-600 rounded bg-gray-800/50"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
+                  Remember me
+                </label>
+              </div>
+              
+              <div className="text-sm">
+                <Link
+                  to="/forgot-password"
+                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
                 >
-                  Contact support
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-11 rounded-2xl text-white/85 hover:bg-white/10 hover:text-white"
-                  onClick={() => navigate('/request-access')}
-                >
-                  Request access
-                </Button>
+                  Forgot password?
+                </Link>
               </div>
             </div>
-
-            {/* Back to Home Button */}
-            <div className="mt-6">
-              <Button
-                onClick={() => navigate('/')}
-                variant="outline"
-                fullWidth
-                className="h-11 rounded-2xl border-white/30 text-white hover:border-white/60 hover:bg-white/10"
+            
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
+              disabled={loading || !email || !password}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
+            </Button>
+          </form>
+          
+          {/* Additional Links */}
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900/50 text-gray-400">
+                  Need help?
+                </span>
+              </div>
+            </div>
+            
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <Link
+                to="/contact-support"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
               >
-                Back to home
-              </Button>
+                Contact Support
+              </Link>
+              <Link
+                to="/request-access"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+              >
+                Request Access
+              </Link>
             </div>
-
-            <p className="mt-6 text-center text-xs font-medium uppercase tracking-[0.3em] text-white/40">
-              Protected by advanced encryption & compliance monitoring
-            </p>
+          </div>
+          
+          {/* Back to Home Button */}
+          <div className="mt-6">
+            <Button
+              onClick={() => navigate('/')}
+              variant="outline"
+              className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+            >
+              Back to Home
+            </Button>
           </div>
         </div>
-      </section>
-    </div>
-  </div>
-        </main>
+        
+        {/* Bottom text */}
+        <p className="mt-8 text-center text-sm text-gray-400">
+          Protected by industry-standard encryption
+        </p>
       </div>
     </div>
   );

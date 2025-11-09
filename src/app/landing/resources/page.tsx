@@ -216,57 +216,54 @@ export default function ResourcesPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <div className="min-h-screen bg-theme-page text-theme-primary transition-colors duration-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16 sectioned-layout">
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Enhanced Header */}
-        <section className="py-12">
-          <div className="text-center">
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center shadow-lg">
-                <Download className="w-10 h-10 text-white" />
-              </div>
-            </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-              IGCSE & A-Level Learning Resources
-            </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-4xl mx-auto">
-              Access the most comprehensive collection of Cambridge and Edexcel past papers,
-              video lessons, mock exams, and revision materials
-            </p>
-
-            {/* Quick Stats */}
-            <div className="flex items-center justify-center gap-8 mt-8 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-[#8CC63F]" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Updated Daily
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-[#8CC63F]" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Exam Board Verified
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-[#8CC63F]" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  4.9/5 Rating
-                </span>
-              </div>
+        <div className="text-center mb-16">
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center shadow-lg">
+              <Download className="w-10 h-10 text-white" />
             </div>
           </div>
-        </section>
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+            IGCSE & A-Level Learning Resources
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-4xl mx-auto mb-4">
+            Access the most comprehensive collection of Cambridge and Edexcel past papers, 
+            video lessons, mock exams, and revision materials
+          </p>
+          
+          {/* Quick Stats */}
+          <div className="flex items-center justify-center gap-8 mt-8">
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-[#8CC63F]" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Updated Daily
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-[#8CC63F]" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Exam Board Verified
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-[#8CC63F]" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                4.9/5 Rating
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* Advanced Search and Filter Bar */}
-        <section className="py-12">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* Search */}
-              <div className="lg:col-span-2 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Search */}
+            <div className="lg:col-span-2 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search papers, videos, notes by code or topic..."
@@ -317,12 +314,11 @@ export default function ResourcesPage() {
               <option value="2020">2020</option>
               <option value="older">Before 2020</option>
             </select>
-            </div>
           </div>
-        </section>
+        </div>
 
         {/* Resource Categories Grid */}
-        <section className="py-12">
+        <div className="mb-16">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
             Resource Categories
           </h2>
@@ -383,10 +379,10 @@ export default function ResourcesPage() {
               );
             })}
           </div>
-        </section>
+        </div>
 
         {/* Featured Past Papers */}
-        <section className="py-12">
+        <div className="mb-16">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -481,131 +477,125 @@ export default function ResourcesPage() {
               </div>
             ))}
           </div>
-        </section>
+        </div>
 
         {/* Resource Statistics */}
-        <section className="py-12">
-          <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-2xl p-8 text-white shadow-lg">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold mb-4">
-                GGK Learning Resource Statistics
-              </h2>
-              <p className="text-xl opacity-90">
-                The largest collection of IGCSE & A-Level materials online
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-              {RESOURCE_STATS.map((stat, index) => {
-                const IconComponent = stat.icon;
-                return (
-                  <div key={index} className="text-center">
-                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                      <IconComponent className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="text-2xl font-bold mb-1">{stat.value}</div>
-                    <div className="text-sm opacity-90">{stat.label}</div>
-                  </div>
-                );
-              })}
-            </div>
+        <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-2xl p-8 mb-16 text-white">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold mb-4">
+              GGK Learning Resource Statistics
+            </h2>
+            <p className="text-xl opacity-90">
+              The largest collection of IGCSE & A-Level materials online
+            </p>
           </div>
-        </section>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            {RESOURCE_STATS.map((stat, index) => {
+              const IconComponent = stat.icon;
+              return (
+                <div key={index} className="text-center">
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <IconComponent className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-2xl font-bold mb-1">{stat.value}</div>
+                  <div className="text-sm opacity-90">{stat.label}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Learning Path Section */}
-        <section className="py-12">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                Your Path to IGCSE & A-Level Success
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                Follow our proven 4-step methodology for exam excellence
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 mb-16">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              Your Path to IGCSE & A-Level Success
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              Follow our proven 4-step methodology for exam excellence
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">1</span>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Learn Concepts
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Watch animated videos and read comprehensive notes
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-white">1</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Learn Concepts
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Watch animated videos and read comprehensive notes
-                </p>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">2</span>
               </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Practice Questions
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Solve topic-wise questions from past papers
+              </p>
+            </div>
 
-              <div className="text-center">
-                <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-white">2</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Practice Questions
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Solve topic-wise questions from past papers
-                </p>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">3</span>
               </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Take Mock Exams
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Test yourself with timed mock examinations
+              </p>
+            </div>
 
-              <div className="text-center">
-                <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-white">3</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Take Mock Exams
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Test yourself with timed mock examinations
-                </p>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">4</span>
               </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-white">4</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Review & Improve
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Analyze performance and focus on weak areas
-                </p>
-              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Review & Improve
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Analyze performance and focus on weak areas
+              </p>
             </div>
           </div>
-        </section>
+        </div>
 
         {/* Call to Action */}
-        <section className="py-12">
-          <div className="text-center">
-            <div className="bg-gray-900 rounded-2xl p-8 text-white shadow-lg">
-              <h2 className="text-3xl font-bold mb-4">
-                Start Your IGCSE & A-Level Journey Today
-              </h2>
-              <p className="text-xl mb-6 opacity-90 max-w-2xl mx-auto">
-                Join 50,000+ students accessing premium Cambridge and Edexcel resources
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/signin"
-                  className="inline-flex items-center px-8 py-3 bg-[#8CC63F] hover:bg-[#7AB635] text-white font-semibold rounded-lg transition-colors duration-200"
-                >
-                  Get Full Access
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Link>
-                <Link
-                  to="/pricing"
-                  className="inline-flex items-center px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-gray-900 transition-colors duration-200"
-                >
-                  View Pricing Plans
-                  <Zap className="w-5 h-5 ml-2" />
-                </Link>
-              </div>
+        <div className="text-center">
+          <div className="bg-gray-900 rounded-2xl p-8 text-white">
+            <h2 className="text-3xl font-bold mb-4">
+              Start Your IGCSE & A-Level Journey Today
+            </h2>
+            <p className="text-xl mb-6 opacity-90 max-w-2xl mx-auto">
+              Join 50,000+ students accessing premium Cambridge and Edexcel resources
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                to="/signin"
+                className="inline-flex items-center px-8 py-3 bg-[#8CC63F] hover:bg-[#7AB635] text-white font-semibold rounded-lg transition-colors duration-200"
+              >
+                Get Full Access
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Link>
+              <Link
+                to="/pricing"
+                className="inline-flex items-center px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-gray-900 transition-colors duration-200"
+              >
+                View Pricing Plans
+                <Zap className="w-5 h-5 ml-2" />
+              </Link>
             </div>
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
     </div>
   );
 }

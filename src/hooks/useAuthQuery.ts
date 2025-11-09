@@ -4,7 +4,6 @@
  * Custom React Query hooks with built-in session expiration handling
  */
 
-import { useEffect } from 'react';
 import { useQuery, useMutation, UseQueryOptions, UseMutationOptions } from '@tanstack/react-query';
 import { supabaseAuthQuery } from '../lib/supabase';
 import { clearAuthenticatedUser, markSessionExpired } from '../lib/auth';
@@ -45,9 +44,7 @@ export function useAuthQuery<T>(
   queryFn: () => Promise<{ data: T | null; error: any }>,
   options?: Omit<UseQueryOptions<T, any>, 'queryKey' | 'queryFn'>
 ) {
-  const { onError, retry: retryOption, ...restOptions } = options ?? {};
-
-  const queryResult = useQuery<T, any>({
+  return useQuery<T, any>({
     queryKey,
     queryFn: async () => {
       const result = await supabaseAuthQuery<T>(queryFn, queryKey.join('/'));
@@ -70,37 +67,16 @@ export function useAuthQuery<T>(
       if (isSessionExpirationError(error)) {
         return false;
       }
-
-      if (typeof retryOption === 'function') {
-        return (retryOption as (failureCount: number, error: any) => boolean | number)(failureCount, error);
-      }
-
-      if (typeof retryOption === 'number') {
-        return failureCount < retryOption;
-      }
-
-      if (typeof retryOption === 'boolean') {
-        return retryOption;
-      }
-
-      return failureCount < 1;
+      return (options?.retry as any)?.(failureCount, error) ?? failureCount < 1;
     },
-    ...restOptions,
+    onError: (error) => {
+      if (isSessionExpirationError(error)) {
+        handleSessionExpiration();
+      }
+      options?.onError?.(error);
+    },
+    ...options,
   });
-
-  useEffect(() => {
-    if (!queryResult.error) {
-      return;
-    }
-
-    if (isSessionExpirationError(queryResult.error)) {
-      handleSessionExpiration();
-    }
-
-    onError?.(queryResult.error);
-  }, [queryResult.error, onError]);
-
-  return queryResult;
 }
 
 /**
