@@ -20,7 +20,6 @@ import {
   setAuthenticatedUser,
   clearAuthenticatedUser,
   consumeSessionExpiredNotice,
-  suppressSessionExpiredNoticeOnce,
   type User,
   type UserRole
 } from '../../lib/auth';
@@ -49,8 +48,7 @@ export default function SignInPage() {
   useEffect(() => {
     console.log('[Auth] Clearing session on sign-in page load');
     
-    // Sign out from Supabase Auth without triggering a session expired notice
-    suppressSessionExpiredNoticeOnce();
+    // Sign out from Supabase Auth
     supabase.auth.signOut();
     
     // Clear local storage
@@ -98,7 +96,6 @@ export default function SignInPage() {
       const normalizedEmail = email.trim().toLowerCase();
       
       // Clear existing session
-      suppressSessionExpiredNoticeOnce();
       await supabase.auth.signOut();
       clearAuthenticatedUser();
       
@@ -148,7 +145,6 @@ export default function SignInPage() {
         setError('Please verify your email before signing in. Check your inbox for the verification link.');
         
         // Sign out since email isn't verified
-        suppressSessionExpiredNoticeOnce();
         await supabase.auth.signOut();
         setLoading(false);
         return;
@@ -187,7 +183,6 @@ export default function SignInPage() {
       if (userDataFetch) {
         // Check if account is active
         if (!userDataFetch.is_active) {
-          suppressSessionExpiredNoticeOnce();
           await supabase.auth.signOut();
           setError('Your account is inactive. Please contact support.');
           setLoading(false);
@@ -505,7 +500,7 @@ export default function SignInPage() {
               id="email"
               label="Email address"
               required
-              labelClassName="text-gray-400"
+              labelClassName="text-gray-200"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -531,7 +526,7 @@ export default function SignInPage() {
               id="password"
               label="Password"
               required
-              labelClassName="text-gray-400"
+              labelClassName="text-gray-200"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

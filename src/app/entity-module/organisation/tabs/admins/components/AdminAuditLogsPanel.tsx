@@ -75,14 +75,14 @@ export function AdminAuditLogsPanel({
   const [rowsPerPage, setRowsPerPage] = useState(20);
 
   // Fetch audit logs with React Query
-  const {
-    data: queryResult,
-    isLoading,
+  const { 
+    data: queryResult, 
+    isLoading, 
     isFetching,
-    error
-  } = useQuery({
-    queryKey: ['adminAuditLogs', companyId, filters, page, rowsPerPage],
-    queryFn: async () => {
+    error 
+  } = useQuery(
+    ['adminAuditLogs', companyId, filters, page, rowsPerPage],
+    async () => {
       // Build filter object for auditService
       const serviceFilters: any = {
         company_id: companyId,
@@ -115,10 +115,12 @@ export function AdminAuditLogsPanel({
       
       return { logs: logs, total: total };
     },
-    placeholderData: (previousData) => previousData,
-    staleTime: 30 * 1000, // 30 seconds
-    enabled: !!companyId
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 30 * 1000, // 30 seconds
+      enabled: !!companyId
+    }
+  );
 
   // Extract logs and total from query result
   const auditLogs = queryResult?.logs || [];

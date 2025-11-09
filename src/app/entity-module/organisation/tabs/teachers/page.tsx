@@ -470,9 +470,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   // ===== DATA FETCHING =====
   
   // FIXED: Fetch teachers with proper junction table relationships
-  const { data: teachers = [], isLoading: isLoadingTeachers, error: teachersError, refetch: refetchTeachers } = useQuery({
-    queryKey: ['teachers', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: teachers = [], isLoading: isLoadingTeachers, error: teachersError, refetch: refetchTeachers } = useQuery(
+    ['teachers', companyId, scopeFilters],
+    async () => {
       try {
         if (!companyId) {
           throw new Error('Company ID is required');
@@ -656,18 +656,20 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         throw error;
       }
     },
-    enabled: !!companyId && !isAccessControlLoading,
-    staleTime: 2 * 60 * 1000,
-    retry: (failureCount, error: any) => {
-      if (error?.message?.includes('permission')) return false;
-      return failureCount < 2;
+    {
+      enabled: !!companyId && !isAccessControlLoading,
+      staleTime: 2 * 60 * 1000,
+      retry: (failureCount, error: any) => {
+        if (error?.message?.includes('permission')) return false;
+        return failureCount < 2;
+      }
     }
-  });
+  );
 
   // Fetch available schools (filtered by scope)
-  const { data: availableSchools = [] } = useQuery<School[]>({
-    queryKey: ['schools-for-teachers', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: availableSchools = [] } = useQuery<School[]>(
+    ['schools-for-teachers', companyId, scopeFilters],
+    async () => {
       try {
         let schoolsQuery = supabase
           .from('schools')
@@ -682,93 +684,99 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         }
 
         const { data, error } = await schoolsQuery;
-
+        
         if (error) {
           console.error('Schools query error:', error);
           return [];
         }
-
+        
         return data || [];
       } catch (error) {
         console.error('Error fetching schools:', error);
         return [];
       }
     },
-    enabled: !!companyId && !isAccessControlLoading,
-    staleTime: 5 * 60 * 1000
-  });
+    { 
+      enabled: !!companyId && !isAccessControlLoading,
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // FIXED: Fetch branches for selected school(s) - now with enabled condition
-  const { data: availableBranches = [] } = useQuery<Branch[]>({
-    queryKey: ['branches-for-schools', assignmentFormData.school_ids, scopeFilters],
-    queryFn: async () => {
+  const { data: availableBranches = [] } = useQuery<Branch[]>(
+    ['branches-for-schools', assignmentFormData.school_ids, scopeFilters],
+    async () => {
       if (!assignmentFormData.school_ids || assignmentFormData.school_ids.length === 0) return [];
-
+      
       let branchesQuery = supabase
         .from('branches')
         .select('id, name, status, school_id')
         .in('school_id', assignmentFormData.school_ids)
         .eq('status', 'active')
         .order('name');
-
+      
       // Apply scope filtering
       if (!canAccessAll && scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
         branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
       }
-
+      
       const { data, error } = await branchesQuery;
-
+      
       if (error) {
         console.error('Branches query error:', error);
         return [];
       }
-
+      
       return data || [];
     },
-    enabled: !!(assignmentFormData.school_ids && assignmentFormData.school_ids.length > 0),
-    staleTime: 5 * 60 * 1000
-  });
+    { 
+      enabled: !!(assignmentFormData.school_ids && assignmentFormData.school_ids.length > 0),
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // FIXED: Fetch branches for form (when editing) - support multiple schools
-  const { data: formBranches = [] } = useQuery<Branch[]>({
-    queryKey: ['branches-for-form', formData.school_ids],
-    queryFn: async () => {
+  const { data: formBranches = [] } = useQuery<Branch[]>(
+    ['branches-for-form', formData.school_ids],
+    async () => {
       if (!formData.school_ids || formData.school_ids.length === 0) return [];
-
+      
       let branchesQuery = supabase
         .from('branches')
         .select('id, name, status, school_id')
         .in('school_id', formData.school_ids)
         .eq('status', 'active')
         .order('name');
-
+      
       const { data, error } = await branchesQuery;
-
+      
       if (error) {
         console.error('Form branches query error:', error);
         return [];
       }
-
+      
       return data || [];
     },
-    enabled: !!(formData.school_ids && formData.school_ids.length > 0),
-    staleTime: 5 * 60 * 1000
-  });
+    { 
+      enabled: !!(formData.school_ids && formData.school_ids.length > 0),
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // FIXED: Fetch grade levels for form (when editing)
-  const { data: formGradeLevels = [] } = useQuery<GradeLevel[]>({
-    queryKey: ['grade-levels-for-form', formData.school_ids, formData.branch_ids],
-    queryFn: async () => {
+  const { data: formGradeLevels = [] } = useQuery<GradeLevel[]>(
+    ['grade-levels-for-form', formData.school_ids, formData.branch_ids],
+    async () => {
       if (!formData.school_ids || formData.school_ids.length === 0) return [];
-
+      
       let query = supabase
         .from('grade_levels')
         .select(`
-          id,
-          grade_name,
-          grade_code,
-          grade_order,
-          school_id,
+          id, 
+          grade_name, 
+          grade_code, 
+          grade_order, 
+          school_id, 
           branch_id,
           schools!inner (
             id,
@@ -787,39 +795,41 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       if (formData.branch_ids && formData.branch_ids.length > 0) {
         query = query.or(`branch_id.in.(${formData.branch_ids.join(',')}),branch_id.is.null`);
       }
-
+      
       const { data, error } = await query;
-
+      
       if (error) {
         console.error('Form grade levels query error:', error);
         return [];
       }
-
+      
       // Transform data to include school/branch context
       const gradeLevelsWithContext = (data || []).map(grade => ({
         ...grade,
         display_name: `${grade.grade_name} (${grade.grade_code}) - ${grade.schools?.name}${grade.branches ? ` / ${grade.branches.name}` : ''}`
       }));
-
+      
       return gradeLevelsWithContext;
     },
-    enabled: !!(formData.school_ids && formData.school_ids.length > 0),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false
-  });
+    { 
+      enabled: !!(formData.school_ids && formData.school_ids.length > 0),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
+    }
+  );
 
   // FIXED: Fetch sections for form (when editing)
-  const { data: formSections = [] } = useQuery<ClassSection[]>({
-    queryKey: ['sections-for-form', formData.grade_level_ids],
-    queryFn: async () => {
+  const { data: formSections = [] } = useQuery<ClassSection[]>(
+    ['sections-for-form', formData.grade_level_ids],
+    async () => {
       if (!formData.grade_level_ids || formData.grade_level_ids.length === 0) return [];
-
+      
       const { data, error } = await supabase
         .from('class_sections')
         .select(`
-          id,
-          section_name,
-          section_code,
+          id, 
+          section_name, 
+          section_code, 
           grade_level_id,
           grade_levels!inner (
             grade_name,
@@ -829,12 +839,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         .in('grade_level_id', formData.grade_level_ids)
         .eq('status', 'active')
         .order('class_section_order');
-
+      
       if (error) {
         console.error('Form sections query error:', error);
         return [];
       }
-
+      
       // Transform data to include grade info
       const sectionsWithGrade = (data || []).map(section => ({
         id: section.id,
@@ -845,92 +855,100 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         grade_code: section.grade_levels?.grade_code || '',
         display_name: `${section.grade_levels?.grade_name || ''} - ${section.section_name} (${section.section_code})`
       }));
-
+      
       return sectionsWithGrade;
     },
-    enabled: !!(formData.grade_level_ids && formData.grade_level_ids.length > 0),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false
-  });
+    { 
+      enabled: !!(formData.grade_level_ids && formData.grade_level_ids.length > 0),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
+    }
+  );
 
   // Fetch available programs
-  const { data: availablePrograms = [] } = useQuery<Program[]>({
-    queryKey: ['programs', companyId],
-    queryFn: async () => {
+  const { data: availablePrograms = [] } = useQuery<Program[]>(
+    ['programs', companyId],
+    async () => {
       const { data, error } = await supabase
         .from('programs')
         .select('id, name, code')
         .eq('status', 'active')
         .order('name');
-
+      
       if (error) {
         console.error('Programs query error:', error);
         return [];
       }
-
+      
       return data || [];
     },
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000
-  });
+    { 
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // Fetch available subjects
-  const { data: availableSubjects = [] } = useQuery<Subject[]>({
-    queryKey: ['subjects', companyId],
-    queryFn: async () => {
+  const { data: availableSubjects = [] } = useQuery<Subject[]>(
+    ['subjects', companyId],
+    async () => {
       const { data, error } = await supabase
         .from('edu_subjects')
         .select('id, name, code')
         .eq('status', 'active')
         .order('name');
-
+      
       if (error) {
         console.error('Subjects query error:', error);
         return [];
       }
-
+      
       return data || [];
     },
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000
-  });
+    { 
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // Fetch departments
-  const { data: availableDepartments = [] } = useQuery<Department[]>({
-    queryKey: ['departments', companyId],
-    queryFn: async () => {
+  const { data: availableDepartments = [] } = useQuery<Department[]>(
+    ['departments', companyId],
+    async () => {
       const { data, error } = await supabase
         .from('departments')
         .select('id, name, code, status')
         .eq('company_id', companyId)
         .eq('status', 'active')
         .order('name');
-
+      
       if (error) {
         console.error('Departments query error:', error);
         return [];
       }
-
+      
       return data || [];
     },
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000
-  });
+    { 
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // FIXED: Fetch grade levels with proper enabled condition
-  const { data: availableGradeLevels = [] } = useQuery<GradeLevel[]>({
-    queryKey: ['grade-levels', assignmentFormData.school_ids, assignmentFormData.branch_ids],
-    queryFn: async () => {
+  const { data: availableGradeLevels = [] } = useQuery<GradeLevel[]>(
+    ['grade-levels', assignmentFormData.school_ids, assignmentFormData.branch_ids],
+    async () => {
       if (!assignmentFormData.school_ids || assignmentFormData.school_ids.length === 0) return [];
-
+      
       let query = supabase
         .from('grade_levels')
         .select(`
-          id,
-          grade_name,
-          grade_code,
-          grade_order,
-          school_id,
+          id, 
+          grade_name, 
+          grade_code, 
+          grade_order, 
+          school_id, 
           branch_id,
           schools!inner (
             id,
@@ -949,39 +967,41 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       if (assignmentFormData.branch_ids && assignmentFormData.branch_ids.length > 0) {
         query = query.or(`branch_id.in.(${assignmentFormData.branch_ids.join(',')}),branch_id.is.null`);
       }
-
+      
       const { data, error } = await query;
-
+      
       if (error) {
         console.error('Grade levels query error:', error);
         return [];
       }
-
+      
       // Transform data to include school/branch context
       const gradeLevelsWithContext = (data || []).map(grade => ({
         ...grade,
         display_name: `${grade.grade_name} (${grade.grade_code}) - ${grade.schools?.name}${grade.branches ? ` / ${grade.branches.name}` : ''}`
       }));
-
+      
       return gradeLevelsWithContext;
     },
-    enabled: !!(assignmentFormData.school_ids && assignmentFormData.school_ids.length > 0),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false
-  });
+    { 
+      enabled: !!(assignmentFormData.school_ids && assignmentFormData.school_ids.length > 0),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
+    }
+  );
 
   // FIXED: Fetch sections with proper enabled condition
-  const { data: availableSections = [] } = useQuery<ClassSection[]>({
-    queryKey: ['sections', assignmentFormData.grade_level_ids],
-    queryFn: async () => {
+  const { data: availableSections = [] } = useQuery<ClassSection[]>(
+    ['sections', assignmentFormData.grade_level_ids],
+    async () => {
       if (!assignmentFormData.grade_level_ids || assignmentFormData.grade_level_ids.length === 0) return [];
-
+      
       const { data, error } = await supabase
         .from('class_sections')
         .select(`
-          id,
-          section_name,
-          section_code,
+          id, 
+          section_name, 
+          section_code, 
           grade_level_id,
           grade_levels!inner (
             grade_name,
@@ -991,12 +1011,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         .in('grade_level_id', assignmentFormData.grade_level_ids)
         .eq('status', 'active')
         .order('class_section_order');
-
+      
       if (error) {
         console.error('Sections query error:', error);
         return [];
       }
-
+      
       // Transform data to include grade info
       const sectionsWithGrade = (data || []).map(section => ({
         id: section.id,
@@ -1007,13 +1027,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         grade_code: section.grade_levels?.grade_code || '',
         display_name: `${section.grade_levels?.grade_name || ''} - ${section.section_name} (${section.section_code})`
       }));
-
+      
       return sectionsWithGrade;
     },
-    enabled: !!(assignmentFormData.grade_level_ids && assignmentFormData.grade_level_ids.length > 0),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false
-  });
+    { 
+      enabled: !!(assignmentFormData.grade_level_ids && assignmentFormData.grade_level_ids.length > 0),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
+    }
+  );
 
   // ===== MUTATIONS =====
   

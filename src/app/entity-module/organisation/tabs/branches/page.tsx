@@ -196,11 +196,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const scopeFilters = getScopeFilters('branches');
 
   // ===== FETCH SCHOOLS FOR DROPDOWN =====
-  const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery({
-    queryKey: ['schools-for-branches', companyId],
-    queryFn: async () => {
+  const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery(
+    ['schools-for-branches', companyId],
+    async () => {
       console.log('Fetching schools for user company:', companyId);
-
+      
       if (!companyId) {
         console.error('No company ID available for user');
         return [];
@@ -228,19 +228,21 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         toast.error('Failed to load schools: ' + error.message);
         throw error;
       }
-
+      
       console.log(`Found ${data?.length || 0} schools for user's company (${companyId}):`, data);
       return data || [];
     },
-    enabled: !!companyId && !isAccessControlLoading,
-    staleTime: 5 * 60 * 1000,
-    retry: 1
-  });
+    { 
+      enabled: !!companyId && !isAccessControlLoading,
+      staleTime: 5 * 60 * 1000,
+      retry: 1
+    }
+  );
 
   // ===== FETCH BRANCHES WITH SCOPE =====
-  const { data: branches = [], isLoading, error: fetchError, refetch } = useQuery({
-    queryKey: ['branches-tab', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: branches = [], isLoading, error: fetchError, refetch } = useQuery(
+    ['branches-tab', companyId, scopeFilters],
+    async () => {
       if (isBranchAdmin && scopeFilters.branch_id) {
         let branchQuery = supabase
           .from('branches')
@@ -327,7 +329,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         .order('name');
       
       if (branchesError) throw branchesError;
-
+      
       const branchesWithAdditional = await Promise.all((branchesData || []).map(async (branch) => {
         const { data: additional } = await supabase
           .from('branches_additional')
@@ -355,13 +357,15 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           teachers_count: teacherCount
         };
       }));
-
+      
       return branchesWithAdditional;
     },
-    enabled: !!companyId && !isAccessControlLoading,
-    staleTime: 60 * 1000,
-    retry: 2
-  });
+    {
+      enabled: !!companyId && !isAccessControlLoading,
+      staleTime: 60 * 1000,
+      retry: 2
+    }
+  );
 
   // Check if user can access all branches
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;

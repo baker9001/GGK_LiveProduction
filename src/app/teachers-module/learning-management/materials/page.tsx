@@ -87,9 +87,9 @@ export default function TeacherMaterialsPage() {
   });
 
   // Step 1: Get entity_user record for the logged-in teacher
-  const { data: entityUser, error: entityUserError, isLoading: isLoadingEntityUser } = useQuery({
-    queryKey: ['entity-user', user?.id],
-    queryFn: async () => {
+  const { data: entityUser, error: entityUserError, isLoading: isLoadingEntityUser } = useQuery(
+    ['entity-user', user?.id],
+    async () => {
       if (!user?.id) return null;
 
       console.log('[Materials] Fetching entity user for:', user.id);
@@ -114,19 +114,21 @@ export default function TeacherMaterialsPage() {
       console.log('[Materials] Entity user found:', data.id);
       return data;
     },
-    enabled: !!user?.id,
-    retry: 1,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    onError: (error: any) => {
-      console.error('[Materials] Entity user query failed:', error);
+    {
+      enabled: !!user?.id,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onError: (error: any) => {
+        console.error('[Materials] Entity user query failed:', error);
+      }
     }
-  });
+  );
 
   // Step 2: Get teacher's assigned school from entity_user_schools junction table
-  const { data: teacherInfo, error: teacherInfoError, isLoading: isLoadingTeacherInfo } = useQuery({
-    queryKey: ['teacher-schools', entityUser?.id],
-    queryFn: async () => {
+  const { data: teacherInfo, error: teacherInfoError, isLoading: isLoadingTeacherInfo } = useQuery(
+    ['teacher-schools', entityUser?.id],
+    async () => {
       if (!entityUser?.id) {
         console.warn('[Materials] No entity user ID available');
         return null;
@@ -176,19 +178,21 @@ export default function TeacherMaterialsPage() {
       console.log('[Materials] Teacher info resolved:', result);
       return result;
     },
-    enabled: !!entityUser?.id,
-    retry: 1,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    onError: (error: any) => {
-      console.error('[Materials] Teacher info query failed:', error);
+    {
+      enabled: !!entityUser?.id,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onError: (error: any) => {
+        console.error('[Materials] Teacher info query failed:', error);
+      }
     }
-  });
+  );
 
   // Fetch teacher's materials
-  const { data: materials = [], isLoading: isLoadingMaterials, error: materialsError } = useQuery({
-    queryKey: ['teacher-materials', teacherInfo?.teacherId, teacherInfo?.schoolId, filters],
-    queryFn: async () => {
+  const { data: materials = [], isLoading: isLoadingMaterials, error: materialsError } = useQuery(
+    ['teacher-materials', teacherInfo?.teacherId, teacherInfo?.schoolId, filters],
+    async () => {
       if (!teacherInfo?.teacherId || !teacherInfo?.schoolId) {
         console.warn('[Materials] Cannot fetch materials - missing teacher info');
         return [];
@@ -202,17 +206,19 @@ export default function TeacherMaterialsPage() {
         filters
       );
     },
-    enabled: !!teacherInfo?.teacherId && !!teacherInfo?.schoolId,
-    retry: 1,
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    onSuccess: (data) => {
-      console.log('[Materials] Materials fetched successfully:', data.length, 'items');
-    },
-    onError: (error: any) => {
-      console.error('[Materials] Failed to fetch materials:', error);
+    {
+      enabled: !!teacherInfo?.teacherId && !!teacherInfo?.schoolId,
+      retry: 1,
+      staleTime: 2 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onSuccess: (data) => {
+        console.log('[Materials] Materials fetched successfully:', data.length, 'items');
+      },
+      onError: (error: any) => {
+        console.error('[Materials] Failed to fetch materials:', error);
+      }
     }
-  });
+  );
 
   // Compute overall loading state
   const isLoading = isLoadingEntityUser || isLoadingTeacherInfo || isLoadingMaterials;
@@ -228,9 +234,9 @@ export default function TeacherMaterialsPage() {
     : null;
 
   // Fetch data structure options (subjects) for teacher's school
-  const { data: dataStructureOptions = [] } = useQuery({
-    queryKey: ['data-structures'],
-    queryFn: async () => {
+  const { data: dataStructureOptions = [] } = useQuery(
+    ['data-structures'],
+    async () => {
       const { data, error } = await supabase
         .from('data_structures')
         .select(`
@@ -252,12 +258,12 @@ export default function TeacherMaterialsPage() {
         subject_name: ds.edu_subjects?.name
       }));
     }
-  });
+  );
 
   // Fetch grade levels
-  const { data: gradeLevels = [] } = useQuery({
-    queryKey: ['grade-levels'],
-    queryFn: async () => {
+  const { data: gradeLevels = [] } = useQuery(
+    ['grade-levels'],
+    async () => {
       const { data, error } = await supabase
         .from('grade_levels')
         .select('id, grade_name')
@@ -270,9 +276,11 @@ export default function TeacherMaterialsPage() {
       }
       return data.map(g => ({ id: g.id, name: g.grade_name }));
     },
-    retry: 1,
-    staleTime: 5 * 60 * 1000
-  });
+    {
+      retry: 1,
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // Create material mutation
   const createMutation = useMutation(

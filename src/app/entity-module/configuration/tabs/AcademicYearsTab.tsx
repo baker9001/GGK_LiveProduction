@@ -187,9 +187,9 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // Fetch schools for dropdown
-  const { data: schools = [] } = useQuery({
-    queryKey: ['schools-for-years', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: schools = [] } = useQuery(
+    ['schools-for-years', companyId, scopeFilters],
+    async () => {
       if (!companyId) return [];
 
       let query = supabase
@@ -207,9 +207,11 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Apply template to form
   const applyTemplate = (template: typeof YEAR_TEMPLATES[0]) => {
@@ -285,9 +287,9 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
     data: academicYears = [], 
     isLoading, 
     isFetching 
-  } = useQuery({
-    queryKey: ['academic-years', companyId, filters, scopeFilters],
-    queryFn: async () => {
+  } = useQuery(
+    ['academic-years', companyId, filters, scopeFilters],
+    async () => {
       if (!companyId) return [];
 
       let query = supabase
@@ -361,10 +363,10 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
           .from('academic_year_schools')
           .select('school_id, schools(name)')
           .eq('academic_year_id', year.id);
-
+        
         const schoolIds = associations?.map(a => a.school_id) || [year.school_id];
         const schoolNames = associations?.map(a => a.schools?.name).filter(Boolean) || [year.schools?.name];
-
+        
         return {
           ...year,
           school_name: year.schools?.name || 'Unknown School',
@@ -375,10 +377,12 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
 
       return enhancedData;
     },
-    enabled: !!companyId,
-    placeholderData: (previousData) => previousData,
-    staleTime: 2 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId,
+      keepPreviousData: true,
+      staleTime: 2 * 60 * 1000,
+    }
+  );
 
   // Create/update mutation with enhanced validation
   const yearMutation = useMutation(

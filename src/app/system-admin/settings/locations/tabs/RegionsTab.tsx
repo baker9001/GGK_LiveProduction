@@ -44,13 +44,13 @@ export default function RegionsTab() {
   const [regionsToDelete, setRegionsToDelete] = useState<Region[]>([]);
 
   // React Query for fetching regions
-  const {
-    data: regions = [],
-    isLoading,
-    isFetching
-  } = useQuery({
-    queryKey: ['regions', filters],
-    queryFn: async () => {
+  const { 
+    data: regions = [], 
+    isLoading, 
+    isFetching 
+  } = useQuery(
+    ['regions', filters],
+    async () => {
       let query = supabase
         .from('regions')
         .select('id, name, code, description, status, created_at')
@@ -69,9 +69,11 @@ export default function RegionsTab() {
       if (error) throw error;
       return data || [];
     },
-    placeholderData: (previousData) => previousData,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
 
   // Mutation for creating/updating regions
   const mutation = useMutation(

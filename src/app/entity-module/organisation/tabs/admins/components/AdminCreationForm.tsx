@@ -147,58 +147,58 @@ export function AdminCreationForm({
   const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
 
   // ===== FETCH USER TYPE =====
-  const { data: userData } = useQuery({
-    queryKey: ['user-type', initialData?.user_id],
-    queryFn: async () => {
+  const { data: userData } = useQuery(
+    ['user-type', initialData?.user_id],
+    async () => {
       if (!initialData?.user_id) return null;
-
+      
       const { data, error } = await supabase
         .from('users')
         .select('user_type')
         .eq('id', initialData.user_id)
         .single();
-
+      
       if (error) throw error;
       return data;
     },
-    enabled: !!initialData?.user_id && isOpen
-  });
+    { enabled: !!initialData?.user_id && isOpen }
+  );
 
   // ===== FETCH SCHOOLS =====
-  const { data: schools = [], isLoading: isLoadingSchools } = useQuery({
-    queryKey: ['schools-for-admin', companyId],
-    queryFn: async () => {
+  const { data: schools = [], isLoading: isLoadingSchools } = useQuery(
+    ['schools-for-admin', companyId],
+    async () => {
       const { data, error } = await supabase
         .from('schools')
         .select('id, name')
         .eq('company_id', companyId)
         .eq('status', 'active')
         .order('name');
-
+      
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId && isOpen
-  });
+    { enabled: !!companyId && isOpen }
+  );
 
   // ===== FETCH BRANCHES =====
-  const { data: branches = [], isLoading: isLoadingBranches } = useQuery({
-    queryKey: ['branches-for-admin', selectedSchoolForBranches],
-    queryFn: async () => {
+  const { data: branches = [], isLoading: isLoadingBranches } = useQuery(
+    ['branches-for-admin', selectedSchoolForBranches],
+    async () => {
       if (!selectedSchoolForBranches) return [];
-
+      
       const { data, error } = await supabase
         .from('branches')
         .select('id, name')
         .eq('school_id', selectedSchoolForBranches)
         .eq('status', 'active')
         .order('name');
-
+      
       if (error) throw error;
       return data || [];
     },
-    enabled: !!selectedSchoolForBranches && formData.admin_level === 'branch_admin'
-  });
+    { enabled: !!selectedSchoolForBranches && formData.admin_level === 'branch_admin' }
+  );
 
   // ===== COMPUTED VALUES =====
   const phoneTableName = useMemo(() => {
