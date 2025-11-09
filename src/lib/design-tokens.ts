@@ -62,6 +62,24 @@ export const colors = {
     DEFAULT: '#3b82f6',
     dark: '#2563eb',
   },
+
+  // Icon Action Colors
+  iconView: {
+    DEFAULT: '#3b82f6',
+    hover: '#2563eb',
+  },
+  iconEdit: {
+    DEFAULT: '#f59e0b',
+    hover: '#d97706',
+  },
+  iconDelete: {
+    DEFAULT: '#ef4444',
+    hover: '#dc2626',
+  },
+  iconCreate: {
+    DEFAULT: '#10b981',
+    hover: '#059669',
+  },
 } as const;
 
 // ============================================================================
@@ -267,6 +285,16 @@ export const cssVariables = `
     --ggk-warning: ${colors.warning.DEFAULT};
     --ggk-danger: ${colors.danger.DEFAULT};
     --ggk-info: ${colors.info.DEFAULT};
+
+    /* Icon Action Colors */
+    --ggk-icon-view: ${colors.iconView.DEFAULT};
+    --ggk-icon-view-hover: ${colors.iconView.hover};
+    --ggk-icon-edit: ${colors.iconEdit.DEFAULT};
+    --ggk-icon-edit-hover: ${colors.iconEdit.hover};
+    --ggk-icon-delete: ${colors.iconDelete.DEFAULT};
+    --ggk-icon-delete-hover: ${colors.iconDelete.hover};
+    --ggk-icon-create: ${colors.iconCreate.DEFAULT};
+    --ggk-icon-create-hover: ${colors.iconCreate.hover};
 
     /* Shadows */
     --ggk-shadow-xs: ${shadows.xs};
