@@ -966,6 +966,7 @@ export default function LicenseManagementPage() {
             />
           </CardContent>
         </Card>
+        </FilterCard>
 
         <SlideInForm
           key={selectedAction ? `${editingLicense?.id || 'new'}-${selectedAction}` : undefined}
