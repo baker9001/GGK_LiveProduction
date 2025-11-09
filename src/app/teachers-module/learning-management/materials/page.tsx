@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { Plus, Upload, Download, Eye, Trash2, CreditCard as Edit2, FileText } from 'lucide-react';
+import { iconColors } from '../../../../lib/constants/iconConfig';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../lib/supabase';
 import { useUser } from '../../../../contexts/UserContext';
@@ -486,7 +487,7 @@ export default function TeacherMaterialsPage() {
     <div className="flex items-center justify-end gap-2">
       <button
         onClick={() => setPreviewMaterial(row)}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+        className={`${iconColors.view.full} ${iconColors.view.bg} p-1 rounded transition-colors`}
         title={row.type === 'video' ? 'Stream Video' : 'Preview'}
       >
         <Eye className="h-4 w-4" />
@@ -496,7 +497,7 @@ export default function TeacherMaterialsPage() {
         <a
           href={row.file_url}
           download
-          className="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 p-1 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+          className={`${iconColors.create.full} ${iconColors.create.bg} p-1 rounded transition-colors`}
           title="Download"
         >
           <Download className="h-4 w-4" />
@@ -523,14 +524,14 @@ export default function TeacherMaterialsPage() {
           });
           setIsFormOpen(true);
         }}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+        className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded transition-colors`}
         title="Edit"
       >
         <Edit2 className="h-4 w-4" />
       </button>
       <button
         onClick={() => handleDelete([row])}
-        className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+        className={`${iconColors.delete.full} ${iconColors.delete.bg} p-1 rounded transition-colors`}
         title="Delete"
       >
         <Trash2 className="h-4 w-4" />

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, Loader2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
+import { iconColors } from '../../../lib/constants/iconConfig';
 import dayjs from 'dayjs';
 import { supabase } from '../../../lib/supabase';
 import { DataTable } from '../../../components/shared/DataTable';
@@ -560,7 +561,7 @@ export default function LicenseManagementPage() {
             setEditingLicense(row);
             setIsFormOpen(true);
           }}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+          className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded-full transition-colors`}
           title="Edit"
         >
           <Edit2 className="h-4 w-4" />

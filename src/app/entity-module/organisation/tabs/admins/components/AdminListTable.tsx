@@ -19,13 +19,13 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Search, 
-  Filter, 
-  Download, 
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  Filter,
+  Download,
   Eye,
   Crown,
   Shield,
@@ -43,6 +43,7 @@ import {
   Users,
   Info
 } from 'lucide-react';
+import { iconColors } from '@/lib/constants/iconConfig';
 import { DataTable } from '@/components/shared/DataTable';
 import { FilterCard } from '@/components/shared/FilterCard';
 import { FormField, Input, Select } from '@/components/shared/FormField';
@@ -637,7 +638,7 @@ export function AdminListTable({
                   : undefined
               }
               className={cn(
-                "text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300",
+                iconColors.edit.full,
                 !canInteract && "opacity-50 cursor-not-allowed"
               )}
             >
@@ -650,9 +651,9 @@ export function AdminListTable({
               onClick={() => handleDeleteAdmin([row])}
               disabled={row.is_active && isSelfEdit}
               title={row.is_active && isSelfEdit ? "You cannot deactivate your own account for security reasons" : undefined}
-              className={row.is_active 
-                ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              className={row.is_active
+                ? iconColors.delete.full
+                : iconColors.create.full
               }
             >
               {row.is_active ? 'Deactivate' : 'Restore'}
