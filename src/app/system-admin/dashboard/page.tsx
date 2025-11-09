@@ -334,6 +334,7 @@ export default function SystemAdminDashboard() {
                 iconColor="from-blue-500 to-blue-600"
                 loading={isLoading}
                 animationDelay={0}
+                transparent={true}
               />
             </div>
             <div className="bg-purple-50 dark:bg-purple-900/20 rounded-ggk-xl p-20 border border-purple-100 dark:border-purple-800">
@@ -345,6 +346,7 @@ export default function SystemAdminDashboard() {
                 iconColor="from-purple-500 to-purple-600"
                 loading={isLoading}
                 animationDelay={100}
+                transparent={true}
               />
             </div>
             <div className="bg-orange-50 dark:bg-orange-900/20 rounded-ggk-xl p-20 border border-orange-100 dark:border-orange-800">
@@ -356,6 +358,7 @@ export default function SystemAdminDashboard() {
                 iconColor="from-orange-500 to-orange-600"
                 loading={isLoading}
                 animationDelay={200}
+                transparent={true}
               />
             </div>
             <div className="bg-ggk-success-50 dark:bg-ggk-success-900/20 rounded-ggk-xl p-20 border border-ggk-success-100 dark:border-ggk-success-800">
@@ -368,6 +371,7 @@ export default function SystemAdminDashboard() {
                 trend={dashboardData?.kpis.trends.activeLicenses}
                 loading={isLoading}
                 animationDelay={300}
+                transparent={true}
               />
             </div>
             <div className="bg-amber-50 dark:bg-amber-900/20 rounded-ggk-xl p-20 border border-amber-100 dark:border-amber-800">
@@ -379,6 +383,7 @@ export default function SystemAdminDashboard() {
                 iconColor="from-amber-500 to-amber-600"
                 loading={isLoading}
                 animationDelay={400}
+                transparent={true}
               />
             </div>
             <div className="bg-teal-50 dark:bg-teal-900/20 rounded-ggk-xl p-20 border border-teal-100 dark:border-teal-800">
@@ -391,6 +396,7 @@ export default function SystemAdminDashboard() {
                 trend={dashboardData?.kpis.trends.teachers}
                 loading={isLoading}
                 animationDelay={500}
+                transparent={true}
               />
             </div>
             <div className="bg-pink-50 dark:bg-pink-900/20 rounded-ggk-xl p-20 border border-pink-100 dark:border-pink-800">
@@ -403,6 +409,7 @@ export default function SystemAdminDashboard() {
                 trend={dashboardData?.kpis.trends.students}
                 loading={isLoading}
                 animationDelay={600}
+                transparent={true}
               />
             </div>
           </div>

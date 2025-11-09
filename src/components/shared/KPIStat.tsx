@@ -15,6 +15,7 @@ interface KPIStatProps {
   className?: string;
   loading?: boolean;
   animationDelay?: number;
+  transparent?: boolean;
 }
 
 export function KPIStat({
@@ -26,7 +27,8 @@ export function KPIStat({
   iconColor = 'from-[#8CC63F] to-[#7AB635]',
   className,
   loading = false,
-  animationDelay = 0
+  animationDelay = 0,
+  transparent = false
 }: KPIStatProps) {
   const [displayValue, setDisplayValue] = useState<number>(0);
   const numericValue = typeof value === 'number' ? value : parseFloat(String(value).replace(/,/g, '')) || 0;
@@ -77,7 +79,8 @@ export function KPIStat({
     return (
       <div
         className={cn(
-          'rounded-ggk-2xl border border-filter bg-card px-24 py-20 shadow-theme-elevated',
+          'rounded-ggk-2xl border border-filter px-24 py-20 shadow-theme-elevated',
+          !transparent && 'bg-card',
           'animate-pulse space-y-16',
           className
         )}
@@ -95,7 +98,8 @@ export function KPIStat({
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-ggk-2xl border border-filter bg-card px-24 py-20 shadow-theme-elevated',
+        'group relative overflow-hidden rounded-ggk-2xl border border-filter px-24 py-20 shadow-theme-elevated',
+        !transparent && 'bg-card',
         'transition-theme hover:-translate-y-1 hover:shadow-theme-popover',
         'after:absolute after:inset-x-0 after:bottom-0 after:h-1 after:bg-gradient-to-r after:from-transparent after:via-ggk-primary-400/60 after:to-transparent after:transition-opacity after:duration-base after:opacity-0 group-hover:after:opacity-100',
         className
