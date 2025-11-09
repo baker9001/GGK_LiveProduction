@@ -48,80 +48,74 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
   const [dataStructureId, setDataStructureId] = useState<string>('');
 
   // Fetch companies with React Query
-  const { data: companies = [] } = useQuery(
-    ['companies'],
-    async () => {
+  const { data: companies = [] } = useQuery({
+    queryKey: ['companies'],
+    queryFn: async () => {
       const { data } = await supabase
         .from('companies')
         .select('id, name')
         .eq('status', 'active')
         .order('name');
-    
+
       return data || [];
     },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    }
-  );
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
 
   // Fetch regions with React Query
-  const { data: regions = [] } = useQuery(
-    ['regions'],
-    async () => {
+  const { data: regions = [] } = useQuery({
+    queryKey: ['regions'],
+    queryFn: async () => {
       const { data } = await supabase
         .from('regions')
         .select('id, name')
         .eq('status', 'active')
         .order('name');
-    
+
       return data || [];
     },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    }
-  );
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
 
   // Fetch programs based on selected region
-  const { data: programs = [] } = useQuery(
-    ['programs', selectedRegion],
-    async () => {
+  const { data: programs = [] } = useQuery({
+    queryKey: ['programs', selectedRegion],
+    queryFn: async () => {
       if (!selectedRegion) return [];
-      
+
       // First, get unique program_ids from data_structures for the given region
       const { data: dataStructures } = await supabase
         .from('data_structures')
         .select('program_id')
         .eq('region_id', selectedRegion)
         .eq('status', 'active');
-    
+
       if (dataStructures && dataStructures.length > 0) {
         // Extract unique program IDs
         const programIds = [...new Set(dataStructures.map(ds => ds.program_id))];
-        
+
         // Then fetch the program details
         const { data: programsData } = await supabase
           .from('programs')
           .select('id, name')
           .in('id', programIds)
           .order('name');
-        
+
         return programsData || [];
       }
-      
+
       return [];
     },
-    {
-      enabled: !!selectedRegion,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: !!selectedRegion,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Fetch providers based on selected region and program
-  const { data: providers = [] } = useQuery(
-    ['providers', selectedRegion, selectedProgram],
-    async () => {
+  const { data: providers = [] } = useQuery({
+    queryKey: ['providers', selectedRegion, selectedProgram],
+    queryFn: async () => {
       if (!selectedRegion || !selectedProgram) return [];
-      
+
       // First, get unique provider_ids from data_structures for the given region and program
       const { data: dataStructures } = await supabase
         .from('data_structures')
@@ -129,35 +123,33 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
         .eq('region_id', selectedRegion)
         .eq('program_id', selectedProgram)
         .eq('status', 'active');
-    
+
       if (dataStructures && dataStructures.length > 0) {
         // Extract unique provider IDs
         const providerIds = [...new Set(dataStructures.map(ds => ds.provider_id))];
-        
+
         // Then fetch the provider details
         const { data: providersData } = await supabase
           .from('providers')
           .select('id, name')
           .in('id', providerIds)
           .order('name');
-        
+
         return providersData || [];
       }
-      
+
       return [];
     },
-    {
-      enabled: !!selectedRegion && !!selectedProgram,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: !!selectedRegion && !!selectedProgram,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Fetch subjects based on selected region, program, and provider
-  const { data: subjects = [] } = useQuery(
-    ['subjects', selectedRegion, selectedProgram, selectedProvider],
-    async () => {
+  const { data: subjects = [] } = useQuery({
+    queryKey: ['subjects', selectedRegion, selectedProgram, selectedProvider],
+    queryFn: async () => {
       if (!selectedRegion || !selectedProgram || !selectedProvider) return [];
-      
+
       // First, get data_structures with subject_ids for the given region, program, and provider
       const { data: dataStructures } = await supabase
         .from('data_structures')
@@ -166,33 +158,31 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
         .eq('program_id', selectedProgram)
         .eq('provider_id', selectedProvider)
         .eq('status', 'active');
-    
+
       if (dataStructures && dataStructures.length > 0) {
         // Extract unique subject IDs
         const subjectIds = [...new Set(dataStructures.map(ds => ds.subject_id))];
-        
+
         // Then fetch the subject details from edu_subjects table
         const { data: subjectsData } = await supabase
           .from('edu_subjects')
           .select('id, name, code, status')
           .in('id', subjectIds)
           .order('name');
-        
+
         return subjectsData || [];
       }
-      
+
       return [];
     },
-    {
-      enabled: !!selectedRegion && !!selectedProgram && !!selectedProvider,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    enabled: !!selectedRegion && !!selectedProgram && !!selectedProvider,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Fetch license details for editing
-  const { isLoading: isLoadingLicense } = useQuery(
-    ['license', editingLicense?.id],
-    async () => {
+  const { isLoading: isLoadingLicense } = useQuery({
+    queryKey: ['license', editingLicense?.id],
+    queryFn: async () => {
       if (!editingLicense) return null;
 
       // Fetch the complete license data with all relationships
@@ -236,11 +226,9 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
 
       return license;
     },
-    {
-      enabled: !!editingLicense?.id,
-      staleTime: 0, // Don't cache this query
-    }
-  );
+    enabled: !!editingLicense?.id,
+    staleTime: 0, // Don't cache this query
+  });
 
   // Create/update license mutation
   const licenseMutation = useMutation(

@@ -38,7 +38,6 @@ import { Toast } from './components/shared/Toast';
 import { SessionExpiredNotice } from './components/shared/SessionExpiredNotice';
 import { SessionWarningBanner } from './components/shared/SessionWarningBanner';
 import { ActivityConfirmationDialog } from './components/shared/ActivityConfirmationDialog';
-import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { ReactQueryProvider } from './providers/ReactQueryProvider';
 import { TestModeBar } from './components/admin/TestModeBar';
 import { isInTestMode, getCurrentUser } from './lib/auth';
@@ -217,30 +216,24 @@ function App() {
   };
 
   return (
-    <ErrorBoundary
-      onError={(error, errorInfo) => {
-        console.error('[App] Caught error in ErrorBoundary:', error);
-        console.error('[App] Error info:', errorInfo);
-      }}
-    >
-      <ReactQueryProvider>
-        <BrowserRouter>
-          <UserProvider>
-            <PermissionProvider>
-              <Toast />
-              <SessionExpiredNotice />
-              <SessionWarningBanner />
-              <ActivityConfirmationDialog
-                isOpen={showActivityDialog}
-                onConfirm={handleActivityConfirm}
-                onCancel={handleActivityCancel}
-                operationName={activityDialogData?.operationName || 'Operation'}
-                operationProgress={activityDialogData?.progress || 0}
-              />
-              {/* PRESERVED: Test Mode Bar - Shows only when in test mode */}
-              <TestModeBar />
-
-              <Routes>
+    <ReactQueryProvider>
+      <BrowserRouter>
+        <UserProvider>
+          <PermissionProvider>
+            <Toast />
+            <SessionExpiredNotice />
+            <SessionWarningBanner />
+            <ActivityConfirmationDialog
+              isOpen={showActivityDialog}
+              onConfirm={handleActivityConfirm}
+              onCancel={handleActivityCancel}
+              operationName={activityDialogData?.operationName || 'Operation'}
+              operationProgress={activityDialogData?.progress || 0}
+            />
+            {/* PRESERVED: Test Mode Bar - Shows only when in test mode */}
+            <TestModeBar />
+            
+            <Routes>
               {/* ============================================ */}
               {/* PUBLIC LANDING PAGES - NO AUTHENTICATION REQUIRED */}
               {/* ============================================ */}
@@ -376,12 +369,11 @@ function App() {
               
               {/* PRESERVED: Catch-all route - redirect to home */}
               <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </PermissionProvider>
-          </UserProvider>
-        </BrowserRouter>
-      </ReactQueryProvider>
-    </ErrorBoundary>
+            </Routes>
+          </PermissionProvider>
+        </UserProvider>
+      </BrowserRouter>
+    </ReactQueryProvider>
   );
 }
 

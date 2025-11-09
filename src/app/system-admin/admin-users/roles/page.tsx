@@ -38,45 +38,45 @@ export default function RolesPage() {
   const [rolesToDelete, setRolesToDelete] = useState<Role[]>([]);
 
   // Fetch roles with React Query
-  const { 
-    data: roles = [], 
-    isLoading, 
-    isFetching 
-  } = useQuery(
-    ['roles'],
-    async () => {
+  const {
+    data: roles = [],
+    isLoading,
+    isFetching
+  } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('roles')
         .select('*')
         .order('created_at', { ascending: false });
-    
+
       if (error) throw error;
       return data || [];
     },
-    {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Fetch role permissions when editing role changes
-  const { data: fetchedRolePermissions } = useQuery(
-    ['rolePermissions', editingRole?.id],
-    async () => {
+  const { data: fetchedRolePermissions } = useQuery({
+    queryKey: ['rolePermissions', editingRole?.id],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('role_permissions')
         .select('*')
         .eq('role_id', editingRole!.id);
-    
+
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: !!editingRole?.id, // Only run query when editing a role
-      onSuccess: (data) => {
-        setRolePermissions(data);
-      }
+    enabled: !!editingRole?.id // Only run query when editing a role
+  });
+
+  // Handle side effect when data changes
+  React.useEffect(() => {
+    if (fetchedRolePermissions) {
+      setRolePermissions(fetchedRolePermissions);
     }
-  );
+  }, [fetchedRolePermissions]);
 
   // Create/update role mutation
   const roleMutation = useMutation(
