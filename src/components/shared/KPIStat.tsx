@@ -17,15 +17,31 @@ interface KPIStatProps {
   animationDelay?: number;
 }
 
-export function KPIStat({ label, value, caption, trend, icon: Icon, iconColor = 'from-[#8CC63F] to-[#7AB635]', className, loading = false, animationDelay = 0 }: KPIStatProps) {
+export function KPIStat({
+  label,
+  value,
+  caption,
+  trend,
+  icon: Icon,
+  iconColor = 'from-[#8CC63F] to-[#7AB635]',
+  className,
+  loading = false,
+  animationDelay = 0
+}: KPIStatProps) {
   const [displayValue, setDisplayValue] = useState<number>(0);
   const numericValue = typeof value === 'number' ? value : parseFloat(String(value).replace(/,/g, '')) || 0;
   const shouldAnimate = typeof value === 'number' && value > 0;
 
   useEffect(() => {
-    if (!shouldAnimate || loading) return;
+    if (!shouldAnimate || loading) {
+      setDisplayValue(numericValue);
+      return;
+    }
 
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const prefersReducedMotion = typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : true;
+
     if (prefersReducedMotion) {
       setDisplayValue(numericValue);
       return;
@@ -59,15 +75,19 @@ export function KPIStat({ label, value, caption, trend, icon: Icon, iconColor = 
 
   if (loading) {
     return (
-      <div className={cn('bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/50 dark:border-gray-700/50 shadow-lg', className)}>
-        <div className="animate-pulse">
-          <div className="flex items-center justify-between mb-3">
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
-            <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-          </div>
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-2"></div>
-          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+      <div
+        className={cn(
+          'rounded-ggk-2xl border border-filter bg-card px-24 py-20 shadow-theme-elevated',
+          'animate-pulse space-y-16',
+          className
+        )}
+      >
+        <div className="flex items-center justify-between">
+          <span className="h-4 w-32 rounded-full bg-theme-subtle" />
+          <span className="h-12 w-12 rounded-full bg-theme-subtle" />
         </div>
+        <span className="block h-8 w-36 rounded-full bg-theme-subtle" />
+        <span className="block h-3 w-24 rounded-full bg-theme-subtle" />
       </div>
     );
   }
@@ -75,12 +95,9 @@ export function KPIStat({ label, value, caption, trend, icon: Icon, iconColor = 
   return (
     <div
       className={cn(
-        'bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/50 dark:border-gray-700/50',
-        'transition-all duration-300 ease-out shadow-lg',
-        'hover:shadow-2xl hover:shadow-[#8CC63F]/20 hover:scale-[1.02] hover:border-[#8CC63F]/40',
-        'animate-fade-in relative overflow-hidden',
-        'before:absolute before:inset-0 before:bg-gradient-to-br before:from-[#8CC63F]/5 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300',
-        'hover:before:opacity-100',
+        'group relative overflow-hidden rounded-ggk-2xl border border-filter bg-card px-24 py-20 shadow-theme-elevated',
+        'transition-theme hover:-translate-y-1 hover:shadow-theme-popover',
+        'after:absolute after:inset-x-0 after:bottom-0 after:h-1 after:bg-gradient-to-r after:from-transparent after:via-ggk-primary-400/60 after:to-transparent after:transition-opacity after:duration-base after:opacity-0 group-hover:after:opacity-100',
         className
       )}
       style={{
@@ -88,32 +105,34 @@ export function KPIStat({ label, value, caption, trend, icon: Icon, iconColor = 
         animationFillMode: 'both'
       }}
     >
-      <div className="flex items-start justify-between gap-3 mb-4 relative z-10">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+      <div className="flex items-start justify-between gap-12">
+        <div className="space-y-6">
+          <p className="text-sm font-medium uppercase tracking-wide text-ggk-neutral-500">
             {label}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {trend && <TrendChip {...trend} />}
-          {Icon && (
-            <div className={cn('w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center shadow-md transition-transform duration-300 hover:scale-110', iconColor)}>
-              <Icon className="h-6 w-6 text-white" />
-            </div>
+          <p className="text-4xl font-bold text-ggk-neutral-900 dark:text-ggk-neutral-50">
+            {formattedValue}
+          </p>
+          {caption && (
+            <p className="text-sm text-theme-muted">
+              {caption}
+            </p>
           )}
         </div>
-      </div>
 
-      <div className="relative z-10">
-        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1 transition-all duration-300">
-          {formattedValue}
-        </p>
-
-        {caption && (
-          <p className="text-xs text-gray-500 dark:text-gray-500">
-            {caption}
-          </p>
-        )}
+        <div className="flex items-center gap-10">
+          {trend && <TrendChip {...trend} />}
+          {Icon && (
+            <span
+              className={cn(
+                'flex h-12 w-12 items-center justify-center rounded-ggk-xl bg-ggk-primary-100 text-ggk-primary-700',
+                iconColor.startsWith('from') && `bg-gradient-to-br ${iconColor} text-white`
+              )}
+            >
+              <Icon className="h-6 w-6" />
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

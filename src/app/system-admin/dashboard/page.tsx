@@ -7,17 +7,44 @@
  * All queries are read-only with graceful fallbacks.
  */
 
-import React, { useState } from 'react';
-import { RefreshCw, Download, Building2, School, MapPin, Key, Users, GraduationCap, Clock, Activity, TrendingUp, Filter } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  RefreshCw,
+  Download,
+  Building2,
+  School,
+  MapPin,
+  Key,
+  Users,
+  GraduationCap,
+  Clock,
+  Activity,
+  TrendingUp,
+  AlertCircle
+} from 'lucide-react';
 import { PageHeader } from '../../../components/shared/PageHeader';
-import { DashboardCard } from '../../../components/shared/DashboardCard';
 import { KPIStat } from '../../../components/shared/KPIStat';
 import { TimeRangePicker, type TimeRange } from '../../../components/shared/TimeRangePicker';
 import { EmptyState } from '../../../components/shared/EmptyState';
 import { DataTable, type Column } from '../../../components/shared/DataTable';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../../components/shared/Card';
+import { Button } from '../../../components/shared/Button';
+import { FilterPanel, FilterGroup, FilterRow } from '../../../components/shared/FilterPanel';
+import { Badge, type BadgeProps } from '../../../components/shared/Badge';
 import { useSysAdminDashboard, useFilterOptions } from './hooks/useSysAdminDashboard';
 import type { ActivityEvent, SchoolStats } from './hooks/types';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 import { cn } from '../../../lib/utils';
 
 // Helper to get initial time range
@@ -48,6 +75,17 @@ export default function SystemAdminDashboard() {
 
   const { data: filterOptions } = useFilterOptions();
 
+  const activeFilterCount = useMemo(
+    () => [regionId, programId, providerId, subjectId].filter(Boolean).length,
+    [programId, providerId, regionId, subjectId]
+  );
+
+  const selectClassName = cn(
+    'w-full h-11 rounded-ggk-lg border border-filter bg-card px-12 text-sm text-theme-primary shadow-sm transition-theme',
+    'focus:outline-none focus:ring-2 focus:ring-ggk-primary-500 focus:border-ggk-primary-500',
+    'dark:text-ggk-neutral-100'
+  );
+
   const handleRefresh = () => {
     refetch();
   };
@@ -76,6 +114,24 @@ export default function SystemAdminDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const handleClearFilters = () => {
+    setTimeRange(getInitialTimeRange());
+    setRegionId('');
+    setProgramId('');
+    setProviderId('');
+    setSubjectId('');
+  };
+
+  const actionBadgeVariants: Record<ActivityEvent['action'], BadgeProps['variant']> = {
+    create: 'success',
+    update: 'info',
+    delete: 'danger',
+    assign: 'primary',
+    renew: 'primary',
+    extend: 'info',
+    expand: 'info'
+  };
+
   // Activity columns
   const activityColumns: Column<ActivityEvent>[] = [
     {
@@ -94,15 +150,13 @@ export default function SystemAdminDashboard() {
       id: 'action',
       header: 'Action',
       accessorFn: (row) => (
-        <span className={cn(
-          'px-2 py-1 text-xs font-medium rounded-md',
-          row.action === 'create' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-          row.action === 'update' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-          row.action === 'delete' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-          (row.action === 'assign' || row.action === 'renew') && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-        )}>
+        <Badge
+          size="sm"
+          variant={actionBadgeVariants[row.action] ?? 'default'}
+          className="capitalize"
+        >
           {row.action}
-        </span>
+        </Badge>
       )
     },
     {
@@ -149,11 +203,14 @@ export default function SystemAdminDashboard() {
         if (row.trendPct === 0) return '-';
         const direction = row.trendPct > 0 ? 'up' : row.trendPct < 0 ? 'down' : 'flat';
         return (
-          <span className={cn(
-            'text-sm font-medium',
-            direction === 'up' && 'text-green-600 dark:text-green-400',
-            direction === 'down' && 'text-red-600 dark:text-red-400'
-          )}>
+          <span
+            className={cn(
+              'text-sm font-medium',
+              direction === 'up' && 'text-emerald-600 dark:text-emerald-400',
+              direction === 'down' && 'text-red-600 dark:text-red-400',
+              direction === 'flat' && 'text-theme-muted'
+            )}
+          >
             {row.trendPct > 0 ? '+' : ''}{row.trendPct.toFixed(1)}%
           </span>
         );
@@ -161,38 +218,51 @@ export default function SystemAdminDashboard() {
     }
   ];
 
+  const dashboardCardClass = 'bg-card border border-filter shadow-theme-elevated transition-theme hover:shadow-theme-popover';
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <PageHeader
-        title="System Admin Dashboard"
-        subtitle="Overview & quick actions"
-      />
+    <div className="min-h-screen bg-theme-page text-theme-primary">
+      <div className="mx-auto max-w-7xl px-20 py-20">
+        <PageHeader
+          title="System Admin Dashboard"
+          subtitle="Monitor licensing health, user growth, and platform operations using the refreshed GGK design system."
+          actions={(
+            <div className="flex flex-wrap items-center gap-12">
+              <Button
+                variant="secondary"
+                onClick={handleRefresh}
+                disabled={isLoading}
+                loading={isLoading}
+                leftIcon={<RefreshCw className="h-4 w-4" />}
+              >
+                Refresh Data
+              </Button>
+              <Button
+                onClick={handleExportCSV}
+                disabled={!dashboardData}
+                leftIcon={<Download className="h-4 w-4" />}
+              >
+                Export CSV
+              </Button>
+            </div>
+          )}
+        />
 
-      <div className="px-6 pb-6 space-y-6">
-        {/* Filter Row */}
-        <DashboardCard
-          icon={Filter}
-          className="bg-gradient-to-br from-white/90 to-white/70 dark:from-gray-800/90 dark:to-gray-800/70 backdrop-blur-2xl border-white/60 dark:border-gray-700/60"
-        >
-          <div className="space-y-4">
-            <TimeRangePicker value={timeRange} onChange={setTimeRange} />
+        <div className="space-y-24">
+          <FilterPanel
+            title="Dashboard Filters"
+            activeFilterCount={activeFilterCount}
+            onClear={activeFilterCount > 0 ? handleClearFilters : undefined}
+          >
+            <TimeRangePicker value={timeRange} onChange={setTimeRange} className="max-w-xl" />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Region Filter */}
-              <div>
-                <label htmlFor="region-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Region
-                </label>
+            <FilterRow>
+              <FilterGroup label="Region">
                 <select
                   id="region-filter"
                   value={regionId}
                   onChange={(e) => setRegionId(e.target.value)}
-                  className={cn(
-                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
-                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
-                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
-                    'transition-all duration-200'
-                  )}
+                  className={selectClassName}
                 >
                   <option value="">All Regions</option>
                   {filterOptions?.regions.map((region) => (
@@ -201,23 +271,14 @@ export default function SystemAdminDashboard() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </FilterGroup>
 
-              {/* Program Filter */}
-              <div>
-                <label htmlFor="program-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Program
-                </label>
+              <FilterGroup label="Program">
                 <select
                   id="program-filter"
                   value={programId}
                   onChange={(e) => setProgramId(e.target.value)}
-                  className={cn(
-                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
-                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
-                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
-                    'transition-all duration-200'
-                  )}
+                  className={selectClassName}
                 >
                   <option value="">All Programs</option>
                   {filterOptions?.programs.map((program) => (
@@ -226,23 +287,14 @@ export default function SystemAdminDashboard() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </FilterGroup>
 
-              {/* Provider Filter */}
-              <div>
-                <label htmlFor="provider-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Provider
-                </label>
+              <FilterGroup label="Provider">
                 <select
                   id="provider-filter"
                   value={providerId}
                   onChange={(e) => setProviderId(e.target.value)}
-                  className={cn(
-                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
-                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
-                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
-                    'transition-all duration-200'
-                  )}
+                  className={selectClassName}
                 >
                   <option value="">All Providers</option>
                   {filterOptions?.providers.map((provider) => (
@@ -251,23 +303,14 @@ export default function SystemAdminDashboard() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </FilterGroup>
 
-              {/* Subject Filter */}
-              <div>
-                <label htmlFor="subject-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Subject
-                </label>
+              <FilterGroup label="Subject">
                 <select
                   id="subject-filter"
                   value={subjectId}
                   onChange={(e) => setSubjectId(e.target.value)}
-                  className={cn(
-                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
-                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
-                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
-                    'transition-all duration-200'
-                  )}
+                  className={selectClassName}
                 >
                   <option value="">All Subjects</option>
                   {filterOptions?.subjects.map((subject) => (
@@ -276,283 +319,295 @@ export default function SystemAdminDashboard() {
                     </option>
                   ))}
                 </select>
-              </div>
-            </div>
+              </FilterGroup>
+            </FilterRow>
+          </FilterPanel>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className={cn(
-                  'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg',
-                  'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300',
-                  'border border-gray-300 dark:border-gray-600',
-                  'hover:bg-gray-50 dark:hover:bg-gray-700',
-                  'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-1',
-                  'transition-all duration-200',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
-              >
-                <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-                Refresh
-              </button>
-
-              <button
-                onClick={handleExportCSV}
-                disabled={!dashboardData}
-                className={cn(
-                  'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg',
-                  'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white',
-                  'hover:shadow-md',
-                  'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-1',
-                  'transition-all duration-200',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
-              >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </button>
-            </div>
+          {/* KPI Grid */}
+          <div className="grid grid-cols-1 gap-16 sm:grid-cols-2 xl:grid-cols-4">
+            <KPIStat
+              label="Total Companies"
+              value={dashboardData?.kpis.totalCompanies || 0}
+              caption="Active companies"
+              icon={Building2}
+              iconColor="from-blue-500 to-blue-600"
+              loading={isLoading}
+              animationDelay={0}
+            />
+            <KPIStat
+              label="Total Schools"
+              value={dashboardData?.kpis.totalSchools || 0}
+              caption="Active schools"
+              icon={School}
+              iconColor="from-purple-500 to-purple-600"
+              loading={isLoading}
+              animationDelay={100}
+            />
+            <KPIStat
+              label="Total Branches"
+              value={dashboardData?.kpis.totalBranches || 0}
+              caption="Active branches"
+              icon={MapPin}
+              iconColor="from-orange-500 to-orange-600"
+              loading={isLoading}
+              animationDelay={200}
+            />
+            <KPIStat
+              label="Active Licenses"
+              value={dashboardData?.kpis.activeLicenses || 0}
+              caption="Current period"
+              icon={Key}
+              iconColor="from-[#8CC63F] to-[#7AB635]"
+              trend={dashboardData?.kpis.trends.activeLicenses}
+              loading={isLoading}
+              animationDelay={300}
+            />
+            <KPIStat
+              label="Expiring Soon"
+              value={dashboardData?.kpis.expiringLicenses30d || 0}
+              caption="Within 30 days"
+              icon={Clock}
+              iconColor="from-amber-500 to-amber-600"
+              loading={isLoading}
+              animationDelay={400}
+            />
+            <KPIStat
+              label="Teachers"
+              value={dashboardData?.kpis.teachers || 0}
+              caption="Active teachers"
+              icon={Users}
+              iconColor="from-teal-500 to-teal-600"
+              trend={dashboardData?.kpis.trends.teachers}
+              loading={isLoading}
+              animationDelay={500}
+            />
+            <KPIStat
+              label="Students"
+              value={dashboardData?.kpis.students || 0}
+              caption="Active students"
+              icon={GraduationCap}
+              iconColor="from-pink-500 to-pink-600"
+              trend={dashboardData?.kpis.trends.students}
+              loading={isLoading}
+              animationDelay={600}
+            />
           </div>
-        </DashboardCard>
 
-        {/* KPI Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPIStat
-            label="Total Companies"
-            value={dashboardData?.kpis.totalCompanies || 0}
-            caption="Active companies"
-            icon={Building2}
-            iconColor="from-blue-500 to-blue-600"
-            loading={isLoading}
-            animationDelay={0}
-          />
-          <KPIStat
-            label="Total Schools"
-            value={dashboardData?.kpis.totalSchools || 0}
-            caption="Active schools"
-            icon={School}
-            iconColor="from-purple-500 to-purple-600"
-            loading={isLoading}
-            animationDelay={100}
-          />
-          <KPIStat
-            label="Total Branches"
-            value={dashboardData?.kpis.totalBranches || 0}
-            caption="Active branches"
-            icon={MapPin}
-            iconColor="from-orange-500 to-orange-600"
-            loading={isLoading}
-            animationDelay={200}
-          />
-          <KPIStat
-            label="Active Licenses"
-            value={dashboardData?.kpis.activeLicenses || 0}
-            caption="Current period"
-            icon={Key}
-            iconColor="from-[#8CC63F] to-[#7AB635]"
-            trend={dashboardData?.kpis.trends.activeLicenses}
-            loading={isLoading}
-            animationDelay={300}
-          />
-          <KPIStat
-            label="Expiring Soon"
-            value={dashboardData?.kpis.expiringLicenses30d || 0}
-            caption="Within 30 days"
-            icon={Clock}
-            iconColor="from-amber-500 to-amber-600"
-            loading={isLoading}
-            animationDelay={400}
-          />
-          <KPIStat
-            label="Teachers"
-            value={dashboardData?.kpis.teachers || 0}
-            caption="Active teachers"
-            icon={Users}
-            iconColor="from-teal-500 to-teal-600"
-            trend={dashboardData?.kpis.trends.teachers}
-            loading={isLoading}
-            animationDelay={500}
-          />
-          <KPIStat
-            label="Students"
-            value={dashboardData?.kpis.students || 0}
-            caption="Active students"
-            icon={GraduationCap}
-            iconColor="from-pink-500 to-pink-600"
-            trend={dashboardData?.kpis.trends.students}
-            loading={isLoading}
-            animationDelay={600}
-          />
-        </div>
-
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Licenses by Subject */}
-          <DashboardCard
-            title="Active Licenses by Subject"
-            subtitle="Top 10 subjects"
-            icon={Key}
-            loading={isLoading}
-            error={error ? 'Failed to load chart data' : undefined}
-            onRetry={handleRefresh}
-            animationDelay={700}
-          >
-            {isLoading ? (
-              <div className="h-80 flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Loading chart...</div>
-              </div>
-            ) : dashboardData?.charts.licensesBySubject.length === 0 ? (
-              <EmptyState
-                icon={<Key className="h-12 w-12" />}
-                title="No License Data"
-                description="No active licenses found for the selected period."
-              />
-            ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={dashboardData?.charts.licensesBySubject}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="subject"
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={100}
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 gap-20 lg:grid-cols-2">
+            <Card className={cn(dashboardCardClass)} padding="lg">
+              <CardHeader className="flex items-start gap-12" accent={false}>
+                <div className="flex items-start gap-12">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-ggk-xl bg-ggk-primary-100 text-ggk-primary-700">
+                    <Key className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-lg">Active Licenses by Subject</CardTitle>
+                    <CardDescription>Top 10 subjects</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                {error ? (
+                  <EmptyState
+                    icon={<AlertCircle className="h-10 w-10 text-amber-500" />}
+                    title="Unable to load chart data"
+                    description="Please try refreshing the dashboard."
+                    action={{ label: 'Retry', onClick: handleRefresh }}
                   />
-                  <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px'
+                ) : isLoading ? (
+                  <div className="flex h-[320px] items-center justify-center text-theme-muted animate-pulse">
+                    Loading chart...
+                  </div>
+                ) : dashboardData?.charts.licensesBySubject.length === 0 ? (
+                  <EmptyState
+                    icon={<Key className="h-12 w-12 text-ggk-primary-500" />}
+                    title="No License Data"
+                    description="No active licenses found for the selected period."
+                  />
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={dashboardData?.charts.licensesBySubject}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.4)" />
+                      <XAxis
+                        dataKey="subject"
+                        tick={{ fill: 'rgb(107,114,128)', fontSize: 12 }}
+                        angle={-45}
+                        textAnchor="end"
+                        height={100}
+                      />
+                      <YAxis tick={{ fill: 'rgb(107,114,128)', fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgb(var(--color-card-bg))',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: '12px',
+                          boxShadow: 'var(--shadow-popover)'
+                        }}
+                      />
+                      <Bar dataKey="active" fill="#8CC63F" radius={[12, 12, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className={cn(dashboardCardClass)} padding="lg">
+              <CardHeader className="flex items-start gap-12" accent={false}>
+                <div className="flex items-start gap-12">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-ggk-xl bg-ggk-primary-100 text-ggk-primary-700">
+                    <TrendingUp className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-lg">New Users by Role</CardTitle>
+                    <CardDescription>Daily breakdown</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                {error ? (
+                  <EmptyState
+                    icon={<AlertCircle className="h-10 w-10 text-amber-500" />}
+                    title="Unable to load chart data"
+                    description="Please try refreshing the dashboard."
+                    action={{ label: 'Retry', onClick: handleRefresh }}
+                  />
+                ) : isLoading ? (
+                  <div className="flex h-[320px] items-center justify-center text-theme-muted animate-pulse">
+                    Loading chart...
+                  </div>
+                ) : dashboardData?.charts.newUsersByRole.length === 0 ? (
+                  <EmptyState
+                    icon={<Users className="h-12 w-12 text-ggk-primary-500" />}
+                    title="No User Data"
+                    description="No new users registered during the selected period."
+                  />
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={dashboardData?.charts.newUsersByRole}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.4)" />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fill: 'rgb(107,114,128)', fontSize: 12 }}
+                        tickFormatter={(value) =>
+                          new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        }
+                      />
+                      <YAxis tick={{ fill: 'rgb(107,114,128)', fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'rgb(var(--color-card-bg))',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: '12px',
+                          boxShadow: 'var(--shadow-popover)'
+                        }}
+                        labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                      />
+                      <Legend />
+                      <Line type="monotone" dataKey="teachers" stroke="#8CC63F" strokeWidth={2} dot={{ fill: '#8CC63F' }} />
+                      <Line type="monotone" dataKey="students" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6' }} />
+                      <Line type="monotone" dataKey="admins" stroke="#a855f7" strokeWidth={2} dot={{ fill: '#a855f7' }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tables Row */}
+          <div className="grid grid-cols-1 gap-20 lg:grid-cols-2">
+            <Card className={cn(dashboardCardClass)} padding="lg">
+              <CardHeader className="flex items-start gap-12" accent={false}>
+                <div className="flex items-start gap-12">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-ggk-xl bg-ggk-primary-100 text-ggk-primary-700">
+                    <Activity className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-lg">Recent Activity</CardTitle>
+                    <CardDescription>Latest 15 events</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                {error ? (
+                  <EmptyState
+                    icon={<AlertCircle className="h-10 w-10 text-amber-500" />}
+                    title="Unable to load activity data"
+                    description="Please try refreshing the dashboard."
+                    action={{ label: 'Retry', onClick: handleRefresh }}
+                  />
+                ) : isLoading ? (
+                  <div className="space-y-8">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="h-12 w-full animate-pulse rounded-ggk-lg bg-theme-subtle" />
+                    ))}
+                  </div>
+                ) : dashboardData?.recentActivity.length === 0 ? (
+                  <EmptyState
+                    icon={<Activity className="h-12 w-12 text-ggk-primary-500" />}
+                    title="No Activity"
+                    description="No recent activity found for the selected period."
+                  />
+                ) : (
+                  <DataTable
+                    data={dashboardData?.recentActivity || []}
+                    columns={activityColumns}
+                    keyField="id"
+                    emptyMessage="No activity found"
+                    className="max-h-96 overflow-auto border border-filter shadow-none"
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className={cn(dashboardCardClass)} padding="lg">
+              <CardHeader className="flex items-start gap-12" accent={false}>
+                <div className="flex items-start gap-12">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-ggk-xl bg-ggk-primary-100 text-ggk-primary-700">
+                    <School className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-lg">Top Schools by Active Students</CardTitle>
+                    <CardDescription>Filtered by time range</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                {error ? (
+                  <EmptyState
+                    icon={<AlertCircle className="h-10 w-10 text-amber-500" />}
+                    title="Unable to load school data"
+                    description="Please try refreshing the dashboard."
+                    action={{ label: 'Retry', onClick: handleRefresh }}
+                  />
+                ) : isLoading ? (
+                  <div className="space-y-8">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="h-12 w-full animate-pulse rounded-ggk-lg bg-theme-subtle" />
+                    ))}
+                  </div>
+                ) : dashboardData?.topSchools.length === 0 ? (
+                  <EmptyState
+                    icon={<School className="h-12 w-12 text-ggk-primary-500" />}
+                    title="No School Data"
+                    description="No schools found matching the selected filters."
+                    action={{
+                      label: 'View All Schools',
+                      href: '/app/system-admin/tenants'
                     }}
                   />
-                  <Bar dataKey="active" fill="#8CC63F" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </DashboardCard>
-
-          {/* New Users by Role */}
-          <DashboardCard
-            title="New Users by Role"
-            subtitle="Daily breakdown"
-            icon={TrendingUp}
-            loading={isLoading}
-            error={error ? 'Failed to load chart data' : undefined}
-            onRetry={handleRefresh}
-            animationDelay={800}
-          >
-            {isLoading ? (
-              <div className="h-80 flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Loading chart...</div>
-              </div>
-            ) : dashboardData?.charts.newUsersByRole.length === 0 ? (
-              <EmptyState
-                icon={<Users className="h-12 w-12" />}
-                title="No User Data"
-                description="No new users registered during the selected period."
-              />
-            ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={dashboardData?.charts.newUsersByRole}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                ) : (
+                  <DataTable
+                    data={dashboardData?.topSchools || []}
+                    columns={schoolColumns}
+                    keyField="id"
+                    emptyMessage="No schools found"
+                    className="max-h-96 overflow-auto border border-filter shadow-none"
                   />
-                  <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px'
-                    }}
-                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="teachers" stroke="#8CC63F" strokeWidth={2} dot={{ fill: '#8CC63F' }} />
-                  <Line type="monotone" dataKey="students" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6' }} />
-                  <Line type="monotone" dataKey="admins" stroke="#a855f7" strokeWidth={2} dot={{ fill: '#a855f7' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </DashboardCard>
-        </div>
-
-        {/* Tables Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Activity */}
-          <DashboardCard
-            title="Recent Activity"
-            subtitle="Latest 15 events"
-            icon={Activity}
-            loading={isLoading}
-            error={error ? 'Failed to load activity data' : undefined}
-            onRetry={handleRefresh}
-            animationDelay={900}
-          >
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="animate-pulse h-12 bg-gray-200 dark:bg-gray-700 rounded" />
-                ))}
-              </div>
-            ) : dashboardData?.recentActivity.length === 0 ? (
-              <EmptyState
-                icon={<Activity className="h-12 w-12" />}
-                title="No Activity"
-                description="No recent activity found for the selected period."
-              />
-            ) : (
-              <DataTable
-                data={dashboardData?.recentActivity || []}
-                columns={activityColumns}
-                keyField="id"
-                emptyMessage="No activity found"
-                className="max-h-96 overflow-auto"
-              />
-            )}
-          </DashboardCard>
-
-          {/* Top Schools */}
-          <DashboardCard
-            title="Top Schools by Active Students"
-            subtitle="Filtered by time range"
-            icon={School}
-            loading={isLoading}
-            error={error ? 'Failed to load school data' : undefined}
-            onRetry={handleRefresh}
-            animationDelay={1000}
-          >
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="animate-pulse h-12 bg-gray-200 dark:bg-gray-700 rounded" />
-                ))}
-              </div>
-            ) : dashboardData?.topSchools.length === 0 ? (
-              <EmptyState
-                icon={<School className="h-12 w-12" />}
-                title="No School Data"
-                description="No schools found matching the selected filters."
-                action={{
-                  label: 'View All Schools',
-                  href: '/app/system-admin/tenants'
-                }}
-              />
-            ) : (
-              <DataTable
-                data={dashboardData?.topSchools || []}
-                columns={schoolColumns}
-                keyField="id"
-                emptyMessage="No schools found"
-                className="max-h-96 overflow-auto"
-              />
-            )}
-          </DashboardCard>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
