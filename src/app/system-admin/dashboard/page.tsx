@@ -31,6 +31,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../..
 import { Button } from '../../../components/shared/Button';
 import { FilterPanel, FilterGroup, FilterRow } from '../../../components/shared/FilterPanel';
 import { Badge, type BadgeProps } from '../../../components/shared/Badge';
+import { Select } from '../../../components/shared/Select';
 import { useSysAdminDashboard, useFilterOptions } from './hooks/useSysAdminDashboard';
 import type { ActivityEvent, SchoolStats } from './hooks/types';
 import {
@@ -73,18 +74,33 @@ export default function SystemAdminDashboard() {
     subjectId: subjectId || undefined
   });
 
-  const { data: filterOptions = { regions: [], programs: [], providers: [], subjects: [] } } = useFilterOptions();
+  const { data: filterOptions = { regions: [], programs: [], providers: [], subjects: [] }, isLoading: isLoadingFilters } = useFilterOptions();
 
   const activeFilterCount = useMemo(
     () => [regionId, programId, providerId, subjectId].filter(Boolean).length,
     [programId, providerId, regionId, subjectId]
   );
 
-  const selectClassName = cn(
-    'w-full h-11 rounded-ggk-lg border border-filter bg-card px-12 text-sm text-theme-primary shadow-sm transition-theme',
-    'focus:outline-none focus:ring-2 focus:ring-ggk-primary-500 focus:border-ggk-primary-500',
-    'dark:text-ggk-neutral-100'
-  );
+  // Convert filter options to Select component format
+  const regionOptions = [
+    { value: '', label: 'All Regions' },
+    ...(filterOptions?.regions || []).map(r => ({ value: r.id, label: r.label }))
+  ];
+
+  const programOptions = [
+    { value: '', label: 'All Programs' },
+    ...(filterOptions?.programs || []).map(p => ({ value: p.id, label: p.label }))
+  ];
+
+  const providerOptions = [
+    { value: '', label: 'All Providers' },
+    ...(filterOptions?.providers || []).map(p => ({ value: p.id, label: p.label }))
+  ];
+
+  const subjectOptions = [
+    { value: '', label: 'All Subjects' },
+    ...(filterOptions?.subjects || []).map(s => ({ value: s.id, label: s.label }))
+  ];
 
   const handleRefresh = () => {
     refetch();
@@ -258,139 +274,137 @@ export default function SystemAdminDashboard() {
 
             <FilterRow>
               <FilterGroup label="Region">
-                <select
+                <Select
                   id="region-filter"
                   value={regionId}
-                  onChange={(e) => setRegionId(e.target.value)}
-                  className={selectClassName}
-                >
-                  <option value="">All Regions</option>
-                  {(filterOptions?.regions || []).map((region) => (
-                    <option key={region.id} value={region.id}>
-                      {region.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setRegionId}
+                  options={regionOptions}
+                  placeholder="All Regions"
+                  searchable={true}
+                  disabled={isLoadingFilters}
+                />
               </FilterGroup>
 
               <FilterGroup label="Program">
-                <select
+                <Select
                   id="program-filter"
                   value={programId}
-                  onChange={(e) => setProgramId(e.target.value)}
-                  className={selectClassName}
-                >
-                  <option value="">All Programs</option>
-                  {(filterOptions?.programs || []).map((program) => (
-                    <option key={program.id} value={program.id}>
-                      {program.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setProgramId}
+                  options={programOptions}
+                  placeholder="All Programs"
+                  searchable={true}
+                  disabled={isLoadingFilters}
+                />
               </FilterGroup>
 
               <FilterGroup label="Provider">
-                <select
+                <Select
                   id="provider-filter"
                   value={providerId}
-                  onChange={(e) => setProviderId(e.target.value)}
-                  className={selectClassName}
-                >
-                  <option value="">All Providers</option>
-                  {(filterOptions?.providers || []).map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setProviderId}
+                  options={providerOptions}
+                  placeholder="All Providers"
+                  searchable={true}
+                  disabled={isLoadingFilters}
+                />
               </FilterGroup>
 
               <FilterGroup label="Subject">
-                <select
+                <Select
                   id="subject-filter"
                   value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                  className={selectClassName}
-                >
-                  <option value="">All Subjects</option>
-                  {(filterOptions?.subjects || []).map((subject) => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSubjectId}
+                  options={subjectOptions}
+                  placeholder="All Subjects"
+                  searchable={true}
+                  disabled={isLoadingFilters}
+                />
               </FilterGroup>
             </FilterRow>
           </FilterPanel>
 
-          {/* KPI Grid */}
-          <div className="grid grid-cols-1 gap-16 sm:grid-cols-2 xl:grid-cols-4">
-            <KPIStat
-              label="Total Companies"
-              value={dashboardData?.kpis.totalCompanies || 0}
-              caption="Active companies"
-              icon={Building2}
-              iconColor="from-blue-500 to-blue-600"
-              loading={isLoading}
-              animationDelay={0}
-            />
-            <KPIStat
-              label="Total Schools"
-              value={dashboardData?.kpis.totalSchools || 0}
-              caption="Active schools"
-              icon={School}
-              iconColor="from-purple-500 to-purple-600"
-              loading={isLoading}
-              animationDelay={100}
-            />
-            <KPIStat
-              label="Total Branches"
-              value={dashboardData?.kpis.totalBranches || 0}
-              caption="Active branches"
-              icon={MapPin}
-              iconColor="from-orange-500 to-orange-600"
-              loading={isLoading}
-              animationDelay={200}
-            />
-            <KPIStat
-              label="Active Licenses"
-              value={dashboardData?.kpis.activeLicenses || 0}
-              caption="Current period"
-              icon={Key}
-              iconColor="from-[#8CC63F] to-[#7AB635]"
-              trend={dashboardData?.kpis.trends.activeLicenses}
-              loading={isLoading}
-              animationDelay={300}
-            />
-            <KPIStat
-              label="Expiring Soon"
-              value={dashboardData?.kpis.expiringLicenses30d || 0}
-              caption="Within 30 days"
-              icon={Clock}
-              iconColor="from-amber-500 to-amber-600"
-              loading={isLoading}
-              animationDelay={400}
-            />
-            <KPIStat
-              label="Teachers"
-              value={dashboardData?.kpis.teachers || 0}
-              caption="Active teachers"
-              icon={Users}
-              iconColor="from-teal-500 to-teal-600"
-              trend={dashboardData?.kpis.trends.teachers}
-              loading={isLoading}
-              animationDelay={500}
-            />
-            <KPIStat
-              label="Students"
-              value={dashboardData?.kpis.students || 0}
-              caption="Active students"
-              icon={GraduationCap}
-              iconColor="from-pink-500 to-pink-600"
-              trend={dashboardData?.kpis.trends.students}
-              loading={isLoading}
-              animationDelay={600}
-            />
+          {/* KPI Grid - Unified sizes with light colors */}
+          <div className="grid grid-cols-1 gap-20 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-ggk-xl p-20 border border-blue-100 dark:border-blue-800">
+              <KPIStat
+                label="Total Companies"
+                value={dashboardData?.kpis.totalCompanies || 0}
+                caption="Active companies"
+                icon={Building2}
+                iconColor="from-blue-500 to-blue-600"
+                loading={isLoading}
+                animationDelay={0}
+              />
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-ggk-xl p-20 border border-purple-100 dark:border-purple-800">
+              <KPIStat
+                label="Total Schools"
+                value={dashboardData?.kpis.totalSchools || 0}
+                caption="Active schools"
+                icon={School}
+                iconColor="from-purple-500 to-purple-600"
+                loading={isLoading}
+                animationDelay={100}
+              />
+            </div>
+            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-ggk-xl p-20 border border-orange-100 dark:border-orange-800">
+              <KPIStat
+                label="Total Branches"
+                value={dashboardData?.kpis.totalBranches || 0}
+                caption="Active branches"
+                icon={MapPin}
+                iconColor="from-orange-500 to-orange-600"
+                loading={isLoading}
+                animationDelay={200}
+              />
+            </div>
+            <div className="bg-ggk-success-50 dark:bg-ggk-success-900/20 rounded-ggk-xl p-20 border border-ggk-success-100 dark:border-ggk-success-800">
+              <KPIStat
+                label="Active Licenses"
+                value={dashboardData?.kpis.activeLicenses || 0}
+                caption="Current period"
+                icon={Key}
+                iconColor="from-[#8CC63F] to-[#7AB635]"
+                trend={dashboardData?.kpis.trends.activeLicenses}
+                loading={isLoading}
+                animationDelay={300}
+              />
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-ggk-xl p-20 border border-amber-100 dark:border-amber-800">
+              <KPIStat
+                label="Expiring Soon"
+                value={dashboardData?.kpis.expiringLicenses30d || 0}
+                caption="Within 30 days"
+                icon={Clock}
+                iconColor="from-amber-500 to-amber-600"
+                loading={isLoading}
+                animationDelay={400}
+              />
+            </div>
+            <div className="bg-teal-50 dark:bg-teal-900/20 rounded-ggk-xl p-20 border border-teal-100 dark:border-teal-800">
+              <KPIStat
+                label="Teachers"
+                value={dashboardData?.kpis.teachers || 0}
+                caption="Active teachers"
+                icon={Users}
+                iconColor="from-teal-500 to-teal-600"
+                trend={dashboardData?.kpis.trends.teachers}
+                loading={isLoading}
+                animationDelay={500}
+              />
+            </div>
+            <div className="bg-pink-50 dark:bg-pink-900/20 rounded-ggk-xl p-20 border border-pink-100 dark:border-pink-800">
+              <KPIStat
+                label="Students"
+                value={dashboardData?.kpis.students || 0}
+                caption="Active students"
+                icon={GraduationCap}
+                iconColor="from-pink-500 to-pink-600"
+                trend={dashboardData?.kpis.trends.students}
+                loading={isLoading}
+                animationDelay={600}
+              />
+            </div>
           </div>
 
           {/* Charts Row */}
