@@ -472,6 +472,10 @@ export default function UsersTab() {
     role: '',
     status: []
   });
+
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string>('created_at');
+  const [sortAscending, setSortAscending] = useState(false);
   
   // Test mode checks
   const inTestMode = isInTestMode();
@@ -763,6 +767,55 @@ export default function UsersTab() {
   const pendingInvitationCount = useMemo(() => {
     return invitations.filter((invitation) => invitation.status === 'pending' && !isInvitationExpired(invitation)).length;
   }, [invitations]);
+
+  // Handle sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortAscending(!sortAscending);
+    } else {
+      setSortColumn(column);
+      setSortAscending(true);
+    }
+  };
+
+  // Sort users
+  const sortedUsers = useMemo(() => {
+    const sorted = [...users];
+    sorted.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case 'name':
+          aValue = a.name?.toLowerCase() || '';
+          bValue = b.name?.toLowerCase() || '';
+          break;
+        case 'email':
+          aValue = a.email?.toLowerCase() || '';
+          bValue = b.email?.toLowerCase() || '';
+          break;
+        case 'role_name':
+          aValue = a.role_name?.toLowerCase() || '';
+          bValue = b.role_name?.toLowerCase() || '';
+          break;
+        case 'status':
+          aValue = a.status || '';
+          bValue = b.status || '';
+          break;
+        case 'created_at':
+          aValue = new Date(a.created_at || 0).getTime();
+          bValue = new Date(b.created_at || 0).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortAscending ? -1 : 1;
+      if (aValue > bValue) return sortAscending ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [users, sortColumn, sortAscending]);
 
   // ===== MUTATIONS =====
   
@@ -1701,7 +1754,7 @@ export default function UsersTab() {
 
       {/* Main Users Table */}
       <DataTable
-        data={users}
+        data={sortedUsers}
         columns={columns}
         keyField="id"
         caption="List of system users with their roles and status"
@@ -1710,6 +1763,10 @@ export default function UsersTab() {
         isFetching={isFetching}
         renderActions={renderActions}
         emptyMessage="No system users found"
+        sorting={{
+          sort: { column: sortColumn, ascending: sortAscending },
+          handleSort: handleSort
+        }}
       />
 
       {/* Info about email verification */}
