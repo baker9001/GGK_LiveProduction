@@ -420,7 +420,7 @@ export default function SignInPage() {
           style={{ userSelect: 'none' }}
         />
         {/* Transparent gray overlay with blur */}
-        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" />
+        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-md" />
       </div>
 
       {/* Content */}
