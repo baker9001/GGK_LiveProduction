@@ -1,59 +1,76 @@
 // /src/app/system-admin/tenants/page.tsx
 
 import React, { useState } from 'react';
+import { AlertCircle } from 'lucide-react';
+import ModulePageShell from '../../../components/layout/ModulePageShell';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/shared/Tabs';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/shared/Card';
+import { Button } from '../../../components/shared/Button';
 import CompaniesTab from './tabs/CompaniesTab';
 import SchoolsTab from './tabs/SchoolsTab';
 import BranchesTab from './tabs/BranchesTab';
 import { RLSDiagnostic } from '../../../components/shared/RLSDiagnostic';
-import { AlertCircle } from 'lucide-react';
 
 export default function TenantsPage() {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   return (
-    <div className="p-6">
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tenants Management</h1>
-            <p className="mt-1 text-gray-600 dark:text-gray-400">Manage companies, schools, and branches</p>
-          </div>
-          <button
-            onClick={() => setShowDiagnostics(!showDiagnostics)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-          >
-            <AlertCircle className="w-4 h-4" />
-            {showDiagnostics ? 'Hide' : 'Show'} Diagnostics
-          </button>
-        </div>
-      </div>
-
+    <ModulePageShell
+      title="Tenants Management"
+      subtitle="Oversee companies, schools, and branches with the refreshed GGK EdTech design system."
+      actions={(
+        <Button
+          variant={showDiagnostics ? 'secondary' : 'outline'}
+          leftIcon={<AlertCircle className="h-4 w-4" />}
+          onClick={() => setShowDiagnostics((prev) => !prev)}
+        >
+          {showDiagnostics ? 'Hide Diagnostics' : 'Show Diagnostics'}
+        </Button>
+      )}
+    >
       {showDiagnostics && (
-        <div className="mb-6">
-          <RLSDiagnostic />
-        </div>
+        <Card variant="outlined" className="bg-card/95 backdrop-blur-sm">
+          <CardHeader accent>
+            <CardTitle>RLS Diagnostics</CardTitle>
+            <CardDescription>
+              Review row-level security checks and recent violations across tenant resources.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RLSDiagnostic />
+          </CardContent>
+        </Card>
       )}
 
-      <Tabs defaultValue="companies" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="companies">Companies</TabsTrigger>
-          <TabsTrigger value="schools">Schools</TabsTrigger>
-          <TabsTrigger value="branches">Branches</TabsTrigger>
-        </TabsList>
+      <Card variant="outlined" className="bg-card/95 backdrop-blur-sm">
+        <CardHeader accent>
+          <CardTitle>Tenant Directory</CardTitle>
+          <CardDescription>
+            Navigate between companies, schools, and branches with a cohesive visual hierarchy.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-24">
+          <Tabs defaultValue="companies" className="space-y-16">
+            <TabsList className="bg-card-elevated border border-filter rounded-ggk-full p-6 gap-8 shadow-theme-soft">
+              <TabsTrigger value="companies">Companies</TabsTrigger>
+              <TabsTrigger value="schools">Schools</TabsTrigger>
+              <TabsTrigger value="branches">Branches</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="companies">
-          <CompaniesTab />
-        </TabsContent>
+            <TabsContent value="companies" className="mt-12">
+              <CompaniesTab />
+            </TabsContent>
 
-        <TabsContent value="schools">
-          <SchoolsTab />
-        </TabsContent>
+            <TabsContent value="schools" className="mt-12">
+              <SchoolsTab />
+            </TabsContent>
 
-        <TabsContent value="branches">
-          <BranchesTab />
-        </TabsContent>
-      </Tabs>
-    </div>
+            <TabsContent value="branches" className="mt-12">
+              <BranchesTab />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </ModulePageShell>
   );
 }
