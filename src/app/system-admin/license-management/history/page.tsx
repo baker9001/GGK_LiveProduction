@@ -3,32 +3,48 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { LicenseHistoryDisplay } from '../LicenseHistoryDisplay';
 import { Button } from '../../../../components/shared/Button';
+import ModulePageShell from '../../../../components/layout/ModulePageShell';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../../components/shared/Card';
 
 export default function LicenseHistoryPage() {
   const { licenseId } = useParams();
   const navigate = useNavigate();
 
   if (!licenseId) {
-    return <div>License ID not found</div>;
+    return (
+      <ModulePageShell title="License History" subtitle="Review chronological updates for a specific license.">
+        <Card variant="outlined" className="bg-card/95 backdrop-blur-sm">
+          <CardContent className="text-theme-muted">
+            License ID not found
+          </CardContent>
+        </Card>
+      </ModulePageShell>
+    );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button
-            variant="ghost"
-            onClick={() => navigate('/app/system-admin/license-management')}
-            className="hover:bg-gray-100"
-            leftIcon={<ArrowLeft className="h-4 w-4" />}
-          >
-            Back to Licenses
-          </Button>
-          <h1 className="text-2xl font-bold text-gray-900">License History</h1>
-        </div>
-      </div>
-
-      <LicenseHistoryDisplay licenseId={licenseId} />
-    </div>
+    <ModulePageShell
+      title="License History"
+      subtitle="Trace license renewals, extensions, and expansions with the refreshed GGK surfaces."
+      actions={(
+        <Button
+          variant="secondary"
+          onClick={() => navigate('/app/system-admin/license-management')}
+          leftIcon={<ArrowLeft className="h-4 w-4" />}
+        >
+          Back to Licenses
+        </Button>
+      )}
+    >
+      <Card variant="outlined" className="bg-card/95 backdrop-blur-sm">
+        <CardHeader accent>
+          <CardTitle>Activity Timeline</CardTitle>
+          <CardDescription>All recorded actions for license {licenseId}.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LicenseHistoryDisplay licenseId={licenseId} />
+        </CardContent>
+      </Card>
+    </ModulePageShell>
   );
 }
