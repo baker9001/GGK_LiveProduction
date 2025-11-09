@@ -246,9 +246,9 @@ export default function StudentProfileSettingsPage() {
     isLoading,
     isError,
     error
-  } = useQuery<StudentProfileData>({
-    queryKey: ['student-profile', user?.id],
-    queryFn: async () => {
+  } = useQuery<StudentProfileData>(
+    ['student-profile', user?.id],
+    async () => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -358,17 +358,19 @@ export default function StudentProfileSettingsPage() {
         branchName
       } satisfies StudentProfileData;
     },
-    enabled: !!user?.id,
-    staleTime: 60 * 1000,
-    retry: 2
-  });
+    {
+      enabled: !!user?.id,
+      staleTime: 60 * 1000,
+      retry: 2
+    }
+  );
 
   // -------------------------------------------------------------------------
   // Mutations
   // -------------------------------------------------------------------------
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async (values: StudentProfileFormValues) => {
+  const updateProfileMutation = useMutation(
+    async (values: StudentProfileFormValues) => {
       if (!user?.id || !profileData?.user) {
         throw new Error('User not authenticated');
       }
@@ -464,38 +466,42 @@ export default function StudentProfileSettingsPage() {
         }
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['student-profile', user?.id] });
-      toast.success('Profile updated! ✨');
-      setIsEditingProfile(false);
-    },
-    onError: (err: any) => {
-      console.error('Profile update failed:', err);
-      toast.error(err?.message || 'Failed to update profile');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['student-profile', user?.id] });
+        toast.success('Profile updated! ✨');
+        setIsEditingProfile(false);
+      },
+      onError: (err: any) => {
+        console.error('Profile update failed:', err);
+        toast.error(err?.message || 'Failed to update profile');
+      }
     }
-  });
+  );
 
-  const updateEmailMutation = useMutation({
-    mutationFn: async (newEmail: string) => {
+  const updateEmailMutation = useMutation(
+    async (newEmail: string) => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
       await userCreationService.updateEmail(user.id, newEmail);
     },
-    onSuccess: () => {
-      toast.success('Email update requested. Check your inbox!');
-      setEmailError(null);
-      queryClient.invalidateQueries({ queryKey: ['student-profile', user?.id] });
-    },
-    onError: (err: any) => {
-      console.error('Email update error:', err);
-      setEmailError(err?.message || 'Failed to update email');
-      toast.error(err?.message || 'Failed to update email');
+    {
+      onSuccess: () => {
+        toast.success('Email update requested. Check your inbox!');
+        setEmailError(null);
+        queryClient.invalidateQueries({ queryKey: ['student-profile', user?.id] });
+      },
+      onError: (err: any) => {
+        console.error('Email update error:', err);
+        setEmailError(err?.message || 'Failed to update email');
+        toast.error(err?.message || 'Failed to update email');
+      }
     }
-  });
+  );
 
-  const changePasswordMutation = useMutation({
-    mutationFn: async (password: string) => {
+  const changePasswordMutation = useMutation(
+    async (password: string) => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -519,18 +525,20 @@ export default function StudentProfileSettingsPage() {
 
       await userCreationService.updatePasswordMetadata(user.id);
     },
-    onSuccess: () => {
-      setNewPassword('');
-      setConfirmPassword('');
-      setIsChangingPassword(false);
-      queryClient.invalidateQueries({ queryKey: ['student-profile', user?.id] });
-      toast.success('Password updated! 🔒');
-    },
-    onError: (err: any) => {
-      console.error('Password update failed:', err);
-      toast.error(err?.message || 'Failed to update password');
+    {
+      onSuccess: () => {
+        setNewPassword('');
+        setConfirmPassword('');
+        setIsChangingPassword(false);
+        queryClient.invalidateQueries({ queryKey: ['student-profile', user?.id] });
+        toast.success('Password updated! 🔒');
+      },
+      onError: (err: any) => {
+        console.error('Password update failed:', err);
+        toast.error(err?.message || 'Failed to update password');
+      }
     }
-  });
+  );
 
   // -------------------------------------------------------------------------
   // Derived data & effects

@@ -38,7 +38,6 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useTheme } from '../../hooks/useTheme';
 import { getDyslexiaPreference, setDyslexiaPreference } from '../../lib/accessibility';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
 import { WelcomeBanner } from '../shared/WelcomeBanner';
@@ -95,7 +94,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const { isDark: isDarkMode, toggle } = useTheme();
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
   const [isDyslexiaEnabled, setIsDyslexiaEnabled] = useState(() => getDyslexiaPreference());
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [welcomeNotice, setWelcomeNotice] = useState<WelcomeNotice | null>(null);
@@ -130,9 +132,9 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     setWelcomeNotice(null);
   };
 
-  const { data: sidebarProfile } = useQuery<SidebarProfileData>({
-    queryKey: ['userSidebarProfile', user?.id],
-    queryFn: async () => {
+  const { data: sidebarProfile } = useQuery<SidebarProfileData>(
+    ['userSidebarProfile', user?.id],
+    async () => {
       if (!user?.id) {
         return {
           avatarPath: user?.avatarUrl ?? null,
@@ -194,8 +196,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         email
       };
     },
-    enabled: !!user?.id
-  });
+    {
+      enabled: !!user?.id
+    }
+  );
 
   const displayName = sidebarProfile?.name ?? user?.name ?? 'User';
   const displayEmail = sidebarProfile?.email ?? user?.email ?? 'user@example.com';
@@ -307,6 +311,16 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     return profilePaths[currentUser.role] || '/app/system-admin/profile';
   };
 
+  // Handle dark mode
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+  }, [isDarkMode]);
+
   // Initialize expanded items on first load
   useEffect(() => {
     const toExpand = new Set<string>();
@@ -380,67 +394,52 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     
     if (hasChildren) {
       return (
-        <div className={cn("mb-0.5", depth > 0 && "ml-3")}>
+        <div className={cn("mb-1", depth > 0 && "ml-3")}>
           <div
             onClick={() => toggleExpanded(item.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleExpanded(item.id);
-              }
-            }}
-            role="button"
-            tabIndex={0}
             className={cn(
               'w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer',
-              'hover:bg-gradient-to-r hover:from-[#8CC63F]/10 hover:to-[#7AB635]/5 hover:shadow-sm',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F] focus-visible:ring-offset-1',
-              isActive && 'bg-gradient-to-r from-[#E8F5DC] to-[#E8F5DC]/70 text-gray-900 shadow-sm'
+              'hover:bg-gray-100 dark:hover:bg-gray-700/50',
+              isActive && 'bg-[#64BC46]/10 dark:bg-[#64BC46]/20'
             )}
           >
             {depth === 0 ? (
               <div className={cn(
-                "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200 mr-3",
+                "flex items-center justify-center w-8 h-8 rounded-lg transition-colors mr-3",
                 isActive
-                  ? "bg-gradient-to-br from-[#8CC63F] to-[#7AB635] text-white shadow-md"
-                  : "bg-gray-100 text-gray-600 group-hover:bg-[#8CC63F]/20 group-hover:text-[#8CC63F] group-hover:scale-105"
+                  ? "bg-[#64BC46]/20 text-[#64BC46]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
               )}>
-                <Icon className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+                <Icon className="h-4 w-4" />
               </div>
             ) : (
               <div className="w-8 h-8 flex items-center justify-center mr-3">
                 <div className={cn(
-                  "w-2 h-2 rounded-full transition-all duration-200",
-                  isActive ? "bg-[#8CC63F] shadow-sm" : "bg-gray-300 group-hover:bg-[#8CC63F]/60"
+                  "w-2 h-2 rounded-full",
+                  isActive ? "bg-[#64BC46]" : "bg-gray-400 dark:bg-gray-600"
                 )} />
               </div>
             )}
             <span className={cn(
-              'flex-1 text-left font-medium transition-colors duration-200',
-              isActive ? 'text-gray-900 font-semibold' : 'text-gray-700 group-hover:text-[#8CC63F]',
+              'flex-1 text-left font-medium',
+              isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300',
               !sidebarOpen && 'hidden'
             )}>
               {item.label}
             </span>
             {sidebarOpen && (
               isExpanded ? (
-                <ChevronDown className={cn(
-                  "h-4 w-4 transition-all duration-200",
-                  isActive ? "text-[#8CC63F]" : "text-gray-400 group-hover:text-[#8CC63F]"
-                )} />
+                <ChevronDown className="h-4 w-4 text-gray-400" />
               ) : (
-                <ChevronRight className={cn(
-                  "h-4 w-4 transition-all duration-200",
-                  isActive ? "text-[#8CC63F]" : "text-gray-400 group-hover:text-[#8CC63F]"
-                )} />
+                <ChevronRight className="h-4 w-4 text-gray-400" />
               )
             )}
           </div>
-
+          
           {isExpanded && (
             <div className={cn(
-              "mt-1 space-y-0.5 animate-in fade-in slide-in-from-top-2 duration-200",
-              depth === 0 && "ml-4 pl-4 border-l-2 border-gray-200/60"
+              "mt-1 space-y-1",
+              depth === 0 && "ml-4 pl-4 border-l-2 border-gray-200 dark:border-gray-700"
             )}>
               {item.children.map((child) => (
                 <NavItem key={child.id} item={child} depth={depth + 1} />
@@ -455,36 +454,34 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       <Link
         to={item.path}
         className={cn(
-          'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 mb-0.5',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F] focus-visible:ring-offset-1',
+          'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 mb-1',
           isActive
-            ? 'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white shadow-md'
-            : 'hover:bg-gradient-to-r hover:from-[#8CC63F]/10 hover:to-[#7AB635]/5 hover:shadow-sm text-gray-700'
+            ? 'bg-[#64BC46] text-white shadow-md'
+            : 'hover:bg-gray-100 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300'
         )}
       >
         {depth === 0 ? (
           <div className={cn(
-            "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200 mr-3",
-            isActive
-              ? "bg-white/20 shadow-inner"
-              : "bg-gray-100 group-hover:bg-[#8CC63F]/20 group-hover:text-[#8CC63F] group-hover:scale-105"
+            "flex items-center justify-center w-8 h-8 rounded-lg transition-colors mr-3",
+            isActive 
+              ? "bg-white/20" 
+              : "bg-gray-100 dark:bg-gray-800"
           )}>
             <Icon className={cn(
-              "h-4 w-4 transition-all duration-200",
-              isActive ? "text-white" : "text-gray-600 group-hover:text-[#8CC63F] group-hover:scale-110"
+              "h-4 w-4",
+              isActive ? "text-white" : "text-gray-600 dark:text-gray-400"
             )} />
           </div>
         ) : (
           <div className="w-8 h-8 flex items-center justify-center mr-3">
             <div className={cn(
-              "w-2 h-2 rounded-full transition-all duration-200",
-              isActive ? "bg-white shadow-sm" : "bg-gray-300 group-hover:bg-[#8CC63F]/60"
+              "w-2 h-2 rounded-full",
+              isActive ? "bg-white" : "bg-gray-400 dark:bg-gray-600"
             )} />
           </div>
         )}
         <span className={cn(
-          'font-medium transition-colors duration-200',
-          isActive ? 'text-white font-semibold' : 'group-hover:text-[#8CC63F]',
+          'font-medium',
           !sidebarOpen && depth === 0 && 'hidden'
         )}>
           {item.label}
@@ -494,7 +491,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 transition-theme">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       {/* Mobile menu button */}
       <div className={cn(
         "lg:hidden fixed top-4 z-50 transition-all duration-300",
@@ -502,7 +499,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       )}>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-md text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle transition-theme"
+          className="p-2 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800"
         >
           {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
@@ -511,15 +508,15 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       {/* Sidebar - Fixed to use flex column layout */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex flex-col bg-white shadow-xl transition-all duration-300',
+          'fixed inset-y-0 left-0 z-40 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 shadow-xl',
           sidebarOpen ? 'w-64' : 'w-16',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
         {/* Sidebar Header - Fixed height */}
-        <div className="shrink-0 flex h-16 items-center justify-between px-4 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
+        <div className="shrink-0 flex h-16 items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
           <span className={cn(
-            "text-xl font-bold text-white transition-opacity",
+            "text-xl font-bold text-[#64BC46] transition-opacity",
             !sidebarOpen && "opacity-0"
           )}>
             GGK Admin
@@ -527,8 +524,8 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className={cn(
-              "p-1.5 rounded-md text-white/90 hover:text-white hover:bg-white/10 transition-colors",
-              !sidebarOpen && "absolute top-4 left-4 bg-gradient-to-r from-[#8CC63F] to-[#7AB635] shadow-sm"
+              "p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-300",
+              !sidebarOpen && "absolute top-4 left-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700"
             )}
           >
             <Menu className="h-5 w-5" />
@@ -536,17 +533,17 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         </div>
 
         {/* Module Navigation - Fixed height */}
-        <div className="shrink-0 px-3 py-4">
+        <div className="shrink-0 px-3 py-4 border-b border-gray-200 dark:border-gray-700">
           <ModuleNavigation sidebarOpen={sidebarOpen} activeModule={moduleKey} />
         </div>
 
         {/* Main Navigation - Flexible and scrollable */}
-        <nav
+        <nav 
           ref={navRef}
-          className="flex-1 min-h-0 overflow-y-auto px-3 py-4 bg-gradient-to-b from-gray-50/40 via-white to-white scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400"
+          className="flex-1 min-h-0 overflow-y-auto px-3 py-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500"
         >
           {sidebarOpen && (
-            <h3 className="px-3 mb-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <h3 className="px-3 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
               Navigation
             </h3>
           )}
@@ -559,12 +556,12 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
         {/* User Info - Fixed height at bottom */}
         {sidebarOpen && (
-          <div className="shrink-0 p-4 bg-gradient-to-t from-gray-50/80 to-transparent border-t border-gray-200/60">
+          <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center">
               <div
                 className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden',
-                  sidebarAvatarUrl ? 'bg-gray-100' : 'bg-gradient-to-br from-[#8CC63F] to-[#7AB635] text-white'
+                  'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden border border-gray-200 dark:border-gray-700',
+                  sidebarAvatarUrl ? 'bg-gray-100 dark:bg-gray-700' : 'bg-[#64BC46] text-white'
                 )}
               >
                 {sidebarAvatarUrl ? (
@@ -578,9 +575,9 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                   <span>{displayInitial}</span>
                 )}
               </div>
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
-                <p className="text-xs text-gray-600 truncate">{displayEmail}</p>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{displayName}</p>
+                <p className="text-xs text-gray-500">{displayEmail}</p>
               </div>
             </div>
           </div>
@@ -593,14 +590,14 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'
       )}>
         {/* Top header */}
-        <header className="sticky top-0 z-30 bg-white transition-theme">
+        <header className="sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex h-16 items-center justify-between">
-              <h1 className="text-xl font-semibold text-gray-900 transition-theme">GGK Admin System</h1>
-
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">GGK Admin System</h1>
+              
               <div className="flex items-center space-x-3">
                 {/* Notifications */}
-                <button className="relative p-2 text-gray-600 hover:text-gray-900 rounded-lg transition-colors">
+                <button className="relative p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg">
                   <Bell className="h-5 w-5" />
                   <span className="absolute -top-1 -right-1 h-5 w-5 text-xs flex items-center justify-center bg-red-500 text-white rounded-full font-semibold">
                     3
@@ -610,10 +607,9 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                 {/* Dyslexia Support Toggle */}
                 <button
                   className={cn(
-                    'p-2 rounded-lg transition-colors',
-                    isDyslexiaEnabled
-                      ? 'text-emerald-600'
-                      : 'text-gray-600 hover:text-gray-900'
+                    'p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700',
+                    'text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
+                    isDyslexiaEnabled && 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-600'
                   )}
                   onClick={() => setIsDyslexiaEnabled((prev) => !prev)}
                   aria-pressed={isDyslexiaEnabled}
@@ -625,40 +621,38 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                 </button>
 
                 {/* Theme Toggle */}
-                <button
-                  className="p-2 text-gray-600 hover:text-gray-900 rounded-lg transition-colors"
-                  onClick={toggle}
-                  aria-label="Toggle theme"
-                  aria-pressed={isDarkMode}
+                <button 
+                  className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
+                  onClick={() => setIsDarkMode(!isDarkMode)}
                 >
                   {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                 </button>
 
                 {/* User Profile */}
                 <div className="relative" ref={profileDropdownRef}>
-                  <button
-                    className="p-2 text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle rounded-lg transition-theme"
+                  <button 
+                    className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
                     onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
                   >
                     <User className="h-5 w-5" />
                   </button>
-
+                  
                   {isProfileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1">
-                      <div className="px-4 py-2">
-                        <p className="text-sm font-medium text-gray-900">{user?.name || 'User'}</p>
-                        <p className="text-xs text-gray-600">{user?.email || 'user@example.com'}</p>
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700">
+                      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name || 'User'}</p>
+                        <p className="text-xs text-gray-500">{user?.email || 'user@example.com'}</p>
                       </div>
-                      <Link
+                      <Link 
                         to={getProfilePath()}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                         onClick={() => setIsProfileDropdownOpen(false)}
                       >
                         Profile Settings
                       </Link>
                       <button
                         onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors"
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Logout
@@ -671,7 +665,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           </div>
         </header>
 
-        <main className="min-h-[calc(100vh-4rem)] bg-gray-50 transition-theme">
+        <main className="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-900">
           {welcomeNotice && (
             <div className="px-6 pb-2 pt-6">
               <WelcomeBanner notice={welcomeNotice} onDismiss={handleDismissWelcome} />

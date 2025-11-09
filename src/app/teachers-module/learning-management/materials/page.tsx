@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { Plus, Upload, Download, Eye, Trash2, CreditCard as Edit2, FileText } from 'lucide-react';
-import { iconColors } from '../../../../lib/constants/iconConfig';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../lib/supabase';
 import { useUser } from '../../../../contexts/UserContext';
@@ -88,9 +87,9 @@ export default function TeacherMaterialsPage() {
   });
 
   // Step 1: Get entity_user record for the logged-in teacher
-  const { data: entityUser, error: entityUserError, isLoading: isLoadingEntityUser } = useQuery({
-    queryKey: ['entity-user', user?.id],
-    queryFn: async () => {
+  const { data: entityUser, error: entityUserError, isLoading: isLoadingEntityUser } = useQuery(
+    ['entity-user', user?.id],
+    async () => {
       if (!user?.id) return null;
 
       console.log('[Materials] Fetching entity user for:', user.id);
@@ -115,19 +114,21 @@ export default function TeacherMaterialsPage() {
       console.log('[Materials] Entity user found:', data.id);
       return data;
     },
-    enabled: !!user?.id,
-    retry: 1,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    onError: (error: any) => {
-      console.error('[Materials] Entity user query failed:', error);
+    {
+      enabled: !!user?.id,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onError: (error: any) => {
+        console.error('[Materials] Entity user query failed:', error);
+      }
     }
-  });
+  );
 
   // Step 2: Get teacher's assigned school from entity_user_schools junction table
-  const { data: teacherInfo, error: teacherInfoError, isLoading: isLoadingTeacherInfo } = useQuery({
-    queryKey: ['teacher-schools', entityUser?.id],
-    queryFn: async () => {
+  const { data: teacherInfo, error: teacherInfoError, isLoading: isLoadingTeacherInfo } = useQuery(
+    ['teacher-schools', entityUser?.id],
+    async () => {
       if (!entityUser?.id) {
         console.warn('[Materials] No entity user ID available');
         return null;
@@ -177,19 +178,21 @@ export default function TeacherMaterialsPage() {
       console.log('[Materials] Teacher info resolved:', result);
       return result;
     },
-    enabled: !!entityUser?.id,
-    retry: 1,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    onError: (error: any) => {
-      console.error('[Materials] Teacher info query failed:', error);
+    {
+      enabled: !!entityUser?.id,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onError: (error: any) => {
+        console.error('[Materials] Teacher info query failed:', error);
+      }
     }
-  });
+  );
 
   // Fetch teacher's materials
-  const { data: materials = [], isLoading: isLoadingMaterials, error: materialsError } = useQuery({
-    queryKey: ['teacher-materials', teacherInfo?.teacherId, teacherInfo?.schoolId, filters],
-    queryFn: async () => {
+  const { data: materials = [], isLoading: isLoadingMaterials, error: materialsError } = useQuery(
+    ['teacher-materials', teacherInfo?.teacherId, teacherInfo?.schoolId, filters],
+    async () => {
       if (!teacherInfo?.teacherId || !teacherInfo?.schoolId) {
         console.warn('[Materials] Cannot fetch materials - missing teacher info');
         return [];
@@ -203,17 +206,19 @@ export default function TeacherMaterialsPage() {
         filters
       );
     },
-    enabled: !!teacherInfo?.teacherId && !!teacherInfo?.schoolId,
-    retry: 1,
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    onSuccess: (data) => {
-      console.log('[Materials] Materials fetched successfully:', data.length, 'items');
-    },
-    onError: (error: any) => {
-      console.error('[Materials] Failed to fetch materials:', error);
+    {
+      enabled: !!teacherInfo?.teacherId && !!teacherInfo?.schoolId,
+      retry: 1,
+      staleTime: 2 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onSuccess: (data) => {
+        console.log('[Materials] Materials fetched successfully:', data.length, 'items');
+      },
+      onError: (error: any) => {
+        console.error('[Materials] Failed to fetch materials:', error);
+      }
     }
-  });
+  );
 
   // Compute overall loading state
   const isLoading = isLoadingEntityUser || isLoadingTeacherInfo || isLoadingMaterials;
@@ -229,9 +234,9 @@ export default function TeacherMaterialsPage() {
     : null;
 
   // Fetch data structure options (subjects) for teacher's school
-  const { data: dataStructureOptions = [] } = useQuery({
-    queryKey: ['data-structures'],
-    queryFn: async () => {
+  const { data: dataStructureOptions = [] } = useQuery(
+    ['data-structures'],
+    async () => {
       const { data, error } = await supabase
         .from('data_structures')
         .select(`
@@ -253,12 +258,12 @@ export default function TeacherMaterialsPage() {
         subject_name: ds.edu_subjects?.name
       }));
     }
-  });
+  );
 
   // Fetch grade levels
-  const { data: gradeLevels = [] } = useQuery({
-    queryKey: ['grade-levels'],
-    queryFn: async () => {
+  const { data: gradeLevels = [] } = useQuery(
+    ['grade-levels'],
+    async () => {
       const { data, error } = await supabase
         .from('grade_levels')
         .select('id, grade_name')
@@ -271,13 +276,15 @@ export default function TeacherMaterialsPage() {
       }
       return data.map(g => ({ id: g.id, name: g.grade_name }));
     },
-    retry: 1,
-    staleTime: 5 * 60 * 1000
-  });
+    {
+      retry: 1,
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // Create material mutation
-  const createMutation = useMutation({
-    mutationFn: async (materialData: any) => {
+  const createMutation = useMutation(
+    async (materialData: any) => {
       if (!teacherInfo) throw new Error('Teacher info not available');
       if (!uploadedFile) throw new Error('File is required');
 
@@ -294,54 +301,60 @@ export default function TeacherMaterialsPage() {
         teacher_id: teacherInfo.teacherId
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
-      toast.success('Material uploaded successfully');
-      setIsFormOpen(false);
-      setUploadedFile(null);
-      setFormErrors({});
-    },
-    onError: (error: any) => {
-      console.error('Error creating material:', error);
-      toast.error('Failed to upload material');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['teacher-materials']);
+        toast.success('Material uploaded successfully');
+        setIsFormOpen(false);
+        setUploadedFile(null);
+        setFormErrors({});
+      },
+      onError: (error: any) => {
+        console.error('Error creating material:', error);
+        toast.error('Failed to upload material');
+      }
     }
-  });
+  );
 
   // Update material mutation
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
+  const updateMutation = useMutation(
+    async ({ id, updates }: { id: string; updates: any }) => {
       await updateTeacherMaterial(id, updates);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
-      toast.success('Material updated successfully');
-      setIsFormOpen(false);
-      setEditingMaterial(null);
-    },
-    onError: (error: any) => {
-      console.error('Error updating material:', error);
-      toast.error('Failed to update material');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['teacher-materials']);
+        toast.success('Material updated successfully');
+        setIsFormOpen(false);
+        setEditingMaterial(null);
+      },
+      onError: (error: any) => {
+        console.error('Error updating material:', error);
+        toast.error('Failed to update material');
+      }
     }
-  });
+  );
 
   // Delete material mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (materials: Material[]) => {
+  const deleteMutation = useMutation(
+    async (materials: Material[]) => {
       await Promise.all(
         materials.map(m => deleteTeacherMaterial(m.id, m.file_path))
       );
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
-      toast.success(`Material(s) deleted successfully`);
-      setIsConfirmDialogOpen(false);
-      setMaterialsToDelete([]);
-    },
-    onError: (error: any) => {
-      console.error('Error deleting materials:', error);
-      toast.error('Failed to delete material(s)');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['teacher-materials']);
+        toast.success(`Material(s) deleted successfully`);
+        setIsConfirmDialogOpen(false);
+        setMaterialsToDelete([]);
+      },
+      onError: (error: any) => {
+        console.error('Error deleting materials:', error);
+        toast.error('Failed to delete material(s)');
+      }
     }
-  });
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -487,7 +500,7 @@ export default function TeacherMaterialsPage() {
     <div className="flex items-center justify-end gap-2">
       <button
         onClick={() => setPreviewMaterial(row)}
-        className={`${iconColors.view.full} ${iconColors.view.bg} p-1 rounded transition-colors`}
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
         title={row.type === 'video' ? 'Stream Video' : 'Preview'}
       >
         <Eye className="h-4 w-4" />
@@ -497,7 +510,7 @@ export default function TeacherMaterialsPage() {
         <a
           href={row.file_url}
           download
-          className={`${iconColors.create.full} ${iconColors.create.bg} p-1 rounded transition-colors`}
+          className="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 p-1 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
           title="Download"
         >
           <Download className="h-4 w-4" />
@@ -524,14 +537,14 @@ export default function TeacherMaterialsPage() {
           });
           setIsFormOpen(true);
         }}
-        className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded transition-colors`}
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
         title="Edit"
       >
         <Edit2 className="h-4 w-4" />
       </button>
       <button
         onClick={() => handleDelete([row])}
-        className={`${iconColors.delete.full} ${iconColors.delete.bg} p-1 rounded transition-colors`}
+        className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
         title="Delete"
       >
         <Trash2 className="h-4 w-4" />
@@ -563,9 +576,9 @@ export default function TeacherMaterialsPage() {
               <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
               <button
                 onClick={() => {
-                  queryClient.invalidateQueries({ queryKey: ['entity-user'] });
-                  queryClient.invalidateQueries({ queryKey: ['teacher-schools'] });
-                  queryClient.invalidateQueries({ queryKey: ['teacher-materials'] });
+                  queryClient.invalidateQueries(['entity-user']);
+                  queryClient.invalidateQueries(['teacher-schools']);
+                  queryClient.invalidateQueries(['teacher-materials']);
                 }}
                 className="mt-3 text-sm font-medium text-red-800 dark:text-red-200 hover:text-red-900 dark:hover:text-red-100 underline"
               >

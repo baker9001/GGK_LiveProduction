@@ -847,26 +847,26 @@ export default function OrganizationStructureTab({
   }, [companyData?.schools, showInactive]);
 
   // Fetch schools for branch form dropdown
-  const { data: schoolsForForm = [] } = useQuery({
-    queryKey: ['schools-for-form', companyId],
-    queryFn: async () => {
+  const { data: schoolsForForm = [] } = useQuery(
+    ['schools-for-form', companyId],
+    async () => {
       const { data, error } = await supabase
         .from('schools')
         .select('id, name')
         .eq('company_id', companyId)
         .eq('status', 'active')
         .order('name');
-
+      
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId
-  });
+    { enabled: !!companyId }
+  );
 
   // Fetch complete hierarchical data
-  const { data: completeHierarchyData, isLoading: isHierarchyLoading } = useQuery({
-    queryKey: ['complete-hierarchy', companyId, showInactive, expandedNodes],
-    queryFn: async () => {
+  const { data: completeHierarchyData, isLoading: isHierarchyLoading } = useQuery(
+    ['complete-hierarchy', companyId, showInactive, expandedNodes],
+    async () => {
       if (!companyId || !filteredSchools || filteredSchools.length === 0) return null;
 
       const schoolIds = filteredSchools.map((s: any) => s.id);
@@ -935,8 +935,8 @@ export default function OrganizationStructureTab({
       return {
         branches: branches?.map(b => ({
           ...b,
-          additional: Array.isArray(b.branches_additional)
-            ? b.branches_additional[0]
+          additional: Array.isArray(b.branches_additional) 
+            ? b.branches_additional[0] 
             : b.branches_additional || {},
           student_count: b.branches_additional?.[0]?.student_count || 
                         b.branches_additional?.student_count || 
@@ -949,10 +949,12 @@ export default function OrganizationStructureTab({
         classSections: classSections || []
       };
     },
-    enabled: !!companyId && filteredSchools.length > 0,
-    staleTime: 60 * 1000,
-    gcTime: 5 * 60 * 1000
-  });
+    {
+      enabled: !!companyId && filteredSchools.length > 0,
+      staleTime: 60 * 1000,
+      cacheTime: 5 * 60 * 1000
+    }
+  );
 
   // Process hierarchy data for tree building
   const processedSchoolData = useMemo(() => {

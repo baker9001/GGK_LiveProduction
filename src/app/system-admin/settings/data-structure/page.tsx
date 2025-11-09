@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
@@ -64,9 +64,9 @@ export default function DataStructurePage() {
   const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
 
   // Fetch regions with React Query
-  const { data: regions = [] } = useQuery<Option[]>({
-    queryKey: ['regions'],
-    queryFn: async () => {
+  const { data: regions = [] } = useQuery<Option[]>(
+    ['regions'],
+    async () => {
       const { data, error } = await supabase
         .from('regions')
         .select('id, name')
@@ -76,15 +76,17 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 10 * 60 * 1000 // 10 minutes
-  });
+    {
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    }
+  );
 
   // Fetch programs with React Query
-  const { data: programs = [] } = useQuery<Option[]>({
-    queryKey: ['programs', formRegionId],
-    queryFn: async () => {
+  const { data: programs = [] } = useQuery<Option[]>(
+    ['programs', formRegionId],
+    async () => {
       if (!formRegionId) return [];
-
+      
       const { data, error } = await supabase
         .from('programs')
         .select('id, name')
@@ -94,16 +96,18 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!formRegionId,
-    staleTime: 5 * 60 * 1000 // 5 minutes
-  });
+    {
+      enabled: !!formRegionId,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
 
   // Fetch providers with React Query
-  const { data: providers = [] } = useQuery<Option[]>({
-    queryKey: ['providers', formRegionId, formProgramId],
-    queryFn: async () => {
+  const { data: providers = [] } = useQuery<Option[]>(
+    ['providers', formRegionId, formProgramId],
+    async () => {
       if (!formRegionId || !formProgramId) return [];
-
+      
       const { data, error } = await supabase
         .from('providers')
         .select('id, name')
@@ -113,16 +117,18 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!formRegionId && !!formProgramId,
-    staleTime: 5 * 60 * 1000 // 5 minutes
-  });
+    {
+      enabled: !!formRegionId && !!formProgramId,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
 
   // Fetch subjects with React Query
-  const { data: subjects = [] } = useQuery<Option[]>({
-    queryKey: ['subjects', formRegionId, formProgramId, formProviderId],
-    queryFn: async () => {
+  const { data: subjects = [] } = useQuery<Option[]>(
+    ['subjects', formRegionId, formProgramId, formProviderId],
+    async () => {
       if (!formRegionId || !formProgramId || !formProviderId) return [];
-
+      
       const { data, error } = await supabase
         .from('edu_subjects')
         .select('id, name, code, status')
@@ -132,18 +138,20 @@ export default function DataStructurePage() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!formRegionId && !!formProgramId && !!formProviderId,
-    staleTime: 5 * 60 * 1000 // 5 minutes
-  });
+    {
+      enabled: !!formRegionId && !!formProgramId && !!formProviderId,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
 
   // Fetch data structures with React Query
   const { 
     data: dataStructures = [], 
     isLoading, 
     isFetching 
-  } = useQuery<DataStructure[]>({
-    queryKey: ['data-structures', filters],
-    queryFn: async () => {
+  } = useQuery<DataStructure[]>(
+    ['data-structures', filters],
+    async () => {
       let query = supabase
         .from('data_structures')
         .select(`
@@ -194,13 +202,15 @@ export default function DataStructurePage() {
         subject_name: subjectMap.get(item.subject_id) ?? 'Unknown Subject'
       }));
     },
-    placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000 // 5 minutes
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
 
   // Create/update data structure mutation
-  const mutation = useMutation({
-    mutationFn: async () => {
+  const mutation = useMutation(
+    async () => {
       const data = {
         region_id: formRegionId,
         program_id: formProgramId,
@@ -240,23 +250,25 @@ export default function DataStructurePage() {
         return newStructure;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['data-structures'] });
-      setIsFormOpen(false);
-      setEditingStructure(null);
-      resetFormState();
-      setFormErrors({});
-      toast.success(`Structure ${editingStructure ? 'updated' : 'created'} successfully`);
-    },
-    onError: (error: any) => {
-      setFormErrors({ form: error.message || 'An error occurred' });
-      toast.error('Failed to save structure');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['data-structures']);
+        setIsFormOpen(false);
+        setEditingStructure(null);
+        resetFormState();
+        setFormErrors({});
+        toast.success(`Structure ${editingStructure ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error: any) => {
+        setFormErrors({ form: error.message || 'An error occurred' });
+        toast.error('Failed to save structure');
+      }
     }
-  });
+  );
 
   // Delete data structure mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (structures: DataStructure[]) => {
+  const deleteMutation = useMutation(
+    async (structures: DataStructure[]) => {
       const { error } = await supabase
         .from('data_structures')
         .delete()
@@ -265,19 +277,21 @@ export default function DataStructurePage() {
       if (error) throw error;
       return structures;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['data-structures'] });
-      setIsConfirmDialogOpen(false);
-      setStructuresToDelete([]);
-      toast.success('Structure(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting structures:', error);
-      toast.error('Failed to delete structure(s)');
-      setIsConfirmDialogOpen(false);
-      setStructuresToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['data-structures']);
+        setIsConfirmDialogOpen(false);
+        setStructuresToDelete([]);
+        toast.success('Structure(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting structures:', error);
+        toast.error('Failed to delete structure(s)');
+        setIsConfirmDialogOpen(false);
+        setStructuresToDelete([]);
+      }
     }
-  });
+  );
 
   // Update form state when editing structure changes
   React.useEffect(() => {

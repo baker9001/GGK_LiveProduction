@@ -29,16 +29,15 @@
  */
 
 import React, { memo } from 'react';
-import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Calendar,
-  AlertTriangle
+import { 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  Calendar, 
+  AlertTriangle 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { capitalize } from '@/lib/helpers/formatting';
-import { iconColors } from '@/lib/constants/iconConfig';
 
 interface StatusBadgeProps {
   status: string;
@@ -49,98 +48,96 @@ interface StatusBadgeProps {
   label?: string;
 }
 
-export const StatusBadge = memo(({
-  status,
-  size = 'sm',
+export const StatusBadge = memo(({ 
+  status, 
+  size = 'sm', 
   className,
-  showIcon = true,
+  showIcon = false,
   showPulse = false,
   label
 }: StatusBadgeProps) => {
-
+  
   // Normalize status for comparison
   const normalizedStatus = status?.toLowerCase() || '';
-
+  
   // Get status configuration with colors and icons
   const getStatusConfig = () => {
-    const iconSize = size === 'xs' ? 'w-3 h-3' : size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5';
-
     switch (normalizedStatus) {
       case 'active':
         return {
           color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-700',
-          icon: <CheckCircle2 className={cn(iconSize, iconColors.active.full)} />,
+          icon: <CheckCircle2 className="w-3 h-3" />,
           pulse: true
         };
-
+      
       case 'inactive':
         return {
           color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-700',
-          icon: <XCircle className={cn(iconSize, iconColors.inactive.full)} />,
+          icon: <XCircle className="w-3 h-3" />,
           pulse: false
         };
-
+      
       case 'pending':
         return {
           color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700',
-          icon: <Clock className={cn(iconSize, iconColors.pending.full)} />,
+          icon: <Clock className="w-3 h-3" />,
           pulse: true
         };
-
+      
       case 'qa_review':
       case 'under_review':
         return {
           color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-700',
-          icon: <AlertTriangle className={cn(iconSize, iconColors.warning.full)} />,
+          icon: <AlertTriangle className="w-3 h-3" />,
           pulse: false
         };
-
+      
       case 'draft':
         return {
           color: 'bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-600',
-          icon: <Clock className={cn(iconSize, iconColors.neutral.full)} />,
+          icon: <Clock className="w-3 h-3" />,
           pulse: false
         };
-
+      
       case 'planned':
         return {
           color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 border-blue-200 dark:border-blue-700',
-          icon: <Calendar className={cn(iconSize, iconColors.info.full)} />,
+          icon: <Calendar className="w-3 h-3" />,
           pulse: false
         };
-
+      
       case 'completed':
         return {
           color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 border-purple-200 dark:border-purple-700',
-          icon: <CheckCircle2 className={cn(iconSize, 'text-purple-600 dark:text-purple-400')} />,
+          icon: <CheckCircle2 className="w-3 h-3" />,
           pulse: false
         };
-
+      
       case 'published':
         return {
           color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-700',
-          icon: <CheckCircle2 className={cn(iconSize, iconColors.success.full)} />,
+          icon: <CheckCircle2 className="w-3 h-3" />,
           pulse: false
         };
-
+      
       case 'archived':
         return {
           color: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-700',
-          icon: <XCircle className={cn(iconSize, iconColors.inactive.full)} />,
+          icon: <XCircle className="w-3 h-3" />,
           pulse: false
         };
-
+      
       default:
         return {
           color: 'bg-gray-100 dark:bg-gray-700/50 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-600',
-          icon: <AlertTriangle className={cn(iconSize, iconColors.neutral.full)} />,
+          icon: <AlertTriangle className="w-3 h-3" />,
           pulse: false
         };
     }
   };
 
   const config = getStatusConfig();
-
+  
   // Size classes mapping
   const sizeClasses = {
     xs: 'px-1.5 py-0.5 text-xs',
@@ -149,7 +146,7 @@ export const StatusBadge = memo(({
   };
 
   // Determine if we should show the pulse animation
-  const shouldShowPulse = showPulse && config.pulse;
+  const shouldShowPulse = showPulse && config.pulse && normalizedStatus === 'active';
 
   return (
     <span
@@ -161,18 +158,18 @@ export const StatusBadge = memo(({
         className
       )}
     >
-      {/* Pulse animation for active/pending status */}
+      {/* PRESERVED: Pulse animation for active status */}
       {shouldShowPulse && (
         <span className="absolute -top-0.5 -right-0.5 h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
         </span>
       )}
-
-      {/* Colored icon display */}
+      
+      {/* PRESERVED: Optional icon display */}
       {showIcon && config.icon}
-
-      {/* Status text with original casing or capitalization */}
+      
+      {/* PRESERVED: Status text with original casing or capitalization */}
       {label ?? status ?? capitalize(normalizedStatus) ?? 'Unknown'}
     </span>
   );

@@ -44,13 +44,13 @@ export default function RegionsTab() {
   const [regionsToDelete, setRegionsToDelete] = useState<Region[]>([]);
 
   // React Query for fetching regions
-  const {
-    data: regions = [],
-    isLoading,
-    isFetching
-  } = useQuery({
-    queryKey: ['regions', filters],
-    queryFn: async () => {
+  const { 
+    data: regions = [], 
+    isLoading, 
+    isFetching 
+  } = useQuery(
+    ['regions', filters],
+    async () => {
       let query = supabase
         .from('regions')
         .select('id, name, code, description, status, created_at')
@@ -69,13 +69,15 @@ export default function RegionsTab() {
       if (error) throw error;
       return data || [];
     },
-    placeholderData: (previousData) => previousData,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
 
   // Mutation for creating/updating regions
-  const mutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+  const mutation = useMutation(
+    async (formData: FormData) => {
       const data = {
         name: formData.get('name') as string,
         code: formData.get('code') as string,
@@ -104,38 +106,40 @@ export default function RegionsTab() {
         return newRegion;
       }
     },
-    onSuccess: () => {
-      // Invalidate and refetch
-      queryClient.invalidateQueries({ queryKey: ['regions'] });
-
-      // Close form and reset state
-      setIsFormOpen(false);
-      setEditingRegion(null);
-      setFormErrors({});
-
-      // Show success message
-      toast.success(`Region ${editingRegion ? 'updated' : 'created'} successfully`);
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0]] = err.message;
-          }
-        });
-        setFormErrors(errors);
-      } else {
-        console.error('Error saving region:', error);
-        setFormErrors({ form: 'Failed to save region. Please try again.' });
-        toast.error('Failed to save region');
+    {
+      onSuccess: (data) => {
+        // Invalidate and refetch
+        queryClient.invalidateQueries(['regions']);
+        
+        // Close form and reset state
+        setIsFormOpen(false);
+        setEditingRegion(null);
+        setFormErrors({});
+        
+        // Show success message
+        toast.success(`Region ${editingRegion ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving region:', error);
+          setFormErrors({ form: 'Failed to save region. Please try again.' });
+          toast.error('Failed to save region');
+        }
       }
     }
-  });
+  );
 
   // Mutation for deleting regions
-  const deleteMutation = useMutation({
-    mutationFn: async (regionsToDelete: Region[]) => {
+  const deleteMutation = useMutation(
+    async (regionsToDelete: Region[]) => {
       const { error } = await supabase
         .from('regions')
         .delete()
@@ -144,20 +148,22 @@ export default function RegionsTab() {
       if (error) throw error;
       return regionsToDelete;
     },
-    onSuccess: () => {
-      // Invalidate and refetch
-      queryClient.invalidateQueries({ queryKey: ['regions'] });
-      setIsConfirmDialogOpen(false);
-      setRegionsToDelete([]);
-      toast.success('Region(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting regions:', error);
-      toast.error('Failed to delete region(s)');
-      setIsConfirmDialogOpen(false);
-      setRegionsToDelete([]);
+    {
+      onSuccess: () => {
+        // Invalidate and refetch
+        queryClient.invalidateQueries(['regions']);
+        setIsConfirmDialogOpen(false);
+        setRegionsToDelete([]);
+        toast.success('Region(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting regions:', error);
+        toast.error('Failed to delete region(s)');
+        setIsConfirmDialogOpen(false);
+        setRegionsToDelete([]);
+      }
     }
-  });
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

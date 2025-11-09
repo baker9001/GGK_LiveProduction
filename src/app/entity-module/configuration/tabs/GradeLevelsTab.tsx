@@ -447,9 +447,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
   // ===== FETCH SCHOOLS AND BRANCHES =====
   
-  const { data: schools = [] } = useQuery({
-    queryKey: ['schools-for-grade-levels', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: schools = [] } = useQuery(
+    ['schools-for-grade-levels', companyId, scopeFilters],
+    async () => {
       if (!companyId) return [];
 
       let query = supabase
@@ -467,14 +467,16 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Fetch branches for schools
-  const { data: branches = [] } = useQuery({
-    queryKey: ['branches-for-grade-levels', schools],
-    queryFn: async () => {
+  const { data: branches = [] } = useQuery(
+    ['branches-for-grade-levels', schools],
+    async () => {
       if (!schools || schools.length === 0) return [];
 
       const { data, error } = await supabase
@@ -487,9 +489,11 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       if (error) throw error;
       return data || [];
     },
-    enabled: schools.length > 0,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: schools.length > 0,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Combine schools with their branches
   const schoolsWithBranches = useMemo(() => {
@@ -507,9 +511,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     isLoading, 
     isFetching,
     error: hierarchyError 
-  } = useQuery({
-    queryKey: ['grade-hierarchy', companyId, filters, scopeFilters],
-    queryFn: async (): Promise<HierarchyData> => {
+  } = useQuery(
+    ['grade-hierarchy', companyId, filters, scopeFilters],
+    async (): Promise<HierarchyData> => {
       if (!companyId) return { schools: [] };
 
       // Fetch schools
@@ -664,10 +668,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
       return { schools };
     },
-    enabled: !!companyId,
-    placeholderData: (previousData) => previousData,
-    staleTime: 2 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId,
+      keepPreviousData: true,
+      staleTime: 2 * 60 * 1000,
+    }
+  );
 
   // FIXED: Calculate summary statistics including branches
   const summaryStats = useMemo(() => {
@@ -1057,8 +1063,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         }
         
         // Force refresh the data
-        await queryClient.invalidateQueries({ queryKey: ['grade-hierarchy'] });
-        await queryClient.refetchQueries({ queryKey: ['grade-hierarchy'] });
+        await queryClient.invalidateQueries(['grade-hierarchy']);
+        await queryClient.refetchQueries(['grade-hierarchy']);
         
         // Show detailed result
         if (successCount > 0 && errorCount === 0) {
@@ -1914,7 +1920,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             }
 
             // Refresh data
-            await queryClient.invalidateQueries({ queryKey: ['grade-hierarchy'] });
+            await queryClient.invalidateQueries(['grade-hierarchy']);
             setIsFormOpen(false);
             setEditingGradeLevel(null);
             setEditingSection(null);
@@ -2151,7 +2157,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             }
             
             // Refresh data
-            await queryClient.invalidateQueries({ queryKey: ['grade-hierarchy'] });
+            await queryClient.invalidateQueries(['grade-hierarchy']);
             setIsConfirmDialogOpen(false);
             setItemsToDelete({ type: 'grade', items: [] });
           } catch (error) {

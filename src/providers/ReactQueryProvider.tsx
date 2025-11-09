@@ -56,7 +56,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
+      cacheTime: 10 * 60 * 1000, // 10 minutes
       retry: (failureCount, error) => {
         // Don't retry on session expiration
         if (isSessionExpirationError(error)) {
@@ -65,14 +65,7 @@ const queryClient = new QueryClient({
         // Retry once for other errors
         return failureCount < 1;
       },
-      throwOnError: (error) => {
-        // Handle session expiration errors globally
-        if (isSessionExpirationError(error)) {
-          handleQueryError(error);
-          return false; // Don't throw, we handle it
-        }
-        return false; // Don't throw by default
-      },
+      onError: handleQueryError,
     },
     mutations: {
       retry: (failureCount, error) => {
@@ -82,14 +75,7 @@ const queryClient = new QueryClient({
         }
         return false; // Don't retry mutations by default
       },
-      throwOnError: (error) => {
-        // Handle session expiration errors globally
-        if (isSessionExpirationError(error)) {
-          handleMutationError(error);
-          return false; // Don't throw, we handle it
-        }
-        return false; // Don't throw by default
-      },
+      onError: handleMutationError,
     },
   },
 });

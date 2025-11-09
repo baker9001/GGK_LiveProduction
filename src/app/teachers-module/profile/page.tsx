@@ -192,9 +192,9 @@ export default function TeacherProfilePage() {
     isLoading, 
     error,
     refetch 
-  } = useQuery<TeacherProfileData>({
-    queryKey: ['teacher-profile', user?.id],
-    queryFn: async () => {
+  } = useQuery<TeacherProfileData>(
+    ['teacher-profile', user?.id],
+    async () => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -279,10 +279,12 @@ export default function TeacherProfilePage() {
         department_name: teacherData.departments?.name
       } as TeacherProfileData;
     },
-    enabled: !!user?.id && user?.role === 'TEACHER',
-    staleTime: 2 * 60 * 1000,
-    retry: 2
-  });
+    {
+      enabled: !!user?.id && user?.role === 'TEACHER',
+      staleTime: 2 * 60 * 1000,
+      retry: 2
+    }
+  );
 
   // Initialize form data when profile data is loaded
   useEffect(() => {
@@ -300,8 +302,8 @@ export default function TeacherProfilePage() {
   }, [profileData, isEditing]);
 
   // Update profile mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async (data: EditableProfileData) => {
+  const updateProfileMutation = useMutation(
+    async (data: EditableProfileData) => {
       if (!user?.id || !profileData) {
         throw new Error('User not authenticated or profile not loaded');
       }
@@ -345,33 +347,35 @@ export default function TeacherProfilePage() {
 
       return validatedData;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['teacher-profile', user?.id] });
-      setIsEditing(false);
-      setFormErrors({});
-      toast.success('Profile updated successfully!');
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0]] = err.message;
-          }
-        });
-        setFormErrors(errors);
-        toast.error('Please fix the validation errors');
-      } else {
-        console.error('Profile update error:', error);
-        setFormErrors({ form: error instanceof Error ? error.message : 'Failed to update profile' });
-        toast.error('Failed to update profile. Please try again.');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['teacher-profile', user?.id]);
+        setIsEditing(false);
+        setFormErrors({});
+        toast.success('Profile updated successfully!');
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+          toast.error('Please fix the validation errors');
+        } else {
+          console.error('Profile update error:', error);
+          setFormErrors({ form: error instanceof Error ? error.message : 'Failed to update profile' });
+          toast.error('Failed to update profile. Please try again.');
+        }
       }
     }
-  });
+  );
 
   // Password change mutation
-  const changePasswordMutation = useMutation({
-    mutationFn: async ({ newPassword }: { newPassword: string }) => {
+  const changePasswordMutation = useMutation(
+    async ({ newPassword }: { newPassword: string }) => {
       if (!user?.id) {
         throw new Error('User not authenticated');
       }
@@ -394,17 +398,19 @@ export default function TeacherProfilePage() {
         throw new Error(`Failed to update password: ${error.message}`);
       }
     },
-    onSuccess: () => {
-      setNewPassword('');
-      setConfirmPassword('');
-      setIsChangingPassword(false);
-      toast.success('Password changed successfully!');
-    },
-    onError: (error) => {
-      console.error('Password change error:', error);
-      toast.error('Failed to change password. Please try again.');
+    {
+      onSuccess: () => {
+        setNewPassword('');
+        setConfirmPassword('');
+        setIsChangingPassword(false);
+        toast.success('Password changed successfully!');
+      },
+      onError: (error) => {
+        console.error('Password change error:', error);
+        toast.error('Failed to change password. Please try again.');
+      }
     }
-  });
+  );
 
   // Form handlers
   const handleFieldChange = (field: keyof EditableProfileData, value: any) => {

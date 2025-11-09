@@ -85,14 +85,14 @@ export function ConfirmationDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div
+      <div 
         className={cn(
-          "bg-card rounded-lg shadow-xl dark:shadow-black/30 max-w-md w-full overflow-hidden",
+          "bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-black/30 max-w-md w-full overflow-hidden",
           className
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-theme bg-card">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
           <button
             onClick={onCancel}
@@ -103,7 +103,7 @@ export function ConfirmationDialog({
         </div>
         
         {/* Content */}
-        <div className="px-6 py-4 bg-card">
+        <div className="px-6 py-4">
           <div className="flex items-start">
             <Icon className={cn('h-5 w-5 mt-0.5 mr-3 flex-shrink-0', iconClass)} />
             <div className="text-gray-700 dark:text-gray-300 space-y-2">{message}</div>
@@ -111,7 +111,7 @@ export function ConfirmationDialog({
         </div>
         
         {/* Footer */}
-        <div className="px-6 py-4 bg-card-elevated border-t border-theme flex justify-end space-x-3">
+        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/80 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
           <Button
             variant="outline"
             onClick={onCancel}

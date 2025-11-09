@@ -4,11 +4,10 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Key, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, Loader2, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
-import { iconColors } from '../../../../lib/constants/iconConfig';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -473,10 +472,6 @@ export default function UsersTab() {
     role: '',
     status: []
   });
-
-  // Sorting state
-  const [sortColumn, setSortColumn] = useState<string>('created_at');
-  const [sortAscending, setSortAscending] = useState(false);
   
   // Test mode checks
   const inTestMode = isInTestMode();
@@ -533,9 +528,9 @@ export default function UsersTab() {
   // ===== QUERIES =====
   
   // Fetch roles
-  const { data: roles = [] } = useQuery<Role[]>({
-    queryKey: ['roles'],
-    queryFn: async () => {
+  const { data: roles = [] } = useQuery<Role[]>(
+    ['roles'],
+    async () => {
       const { data, error } = await supabase
         .from('roles')
         .select('id, name')
@@ -544,8 +539,8 @@ export default function UsersTab() {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 10 * 60 * 1000
-  });
+    { staleTime: 10 * 60 * 1000 }
+  );
 
   const roleLookup = useMemo(() => {
     return roles.reduce((acc, role) => {
@@ -561,9 +556,9 @@ export default function UsersTab() {
     isFetching,
     refetch: refetchUsers,
     error: usersError
-  } = useQuery<AdminUser[]>({
-    queryKey: ['admin-users', filters],
-    queryFn: async () => {
+  } = useQuery<AdminUser[]>(
+    ['admin-users', filters],
+    async () => {
       // ENHANCED: Fetch from admin_users with proper joins
       let query = supabase
         .from('admin_users')
@@ -630,11 +625,17 @@ export default function UsersTab() {
         avatar_url: user.avatar_url
       })) as AdminUser[];
     },
-    placeholderData: keepPreviousData,
-    staleTime: 30 * 1000,
-    refetchInterval: 30 * 1000,
-    retry: 3
-  });
+    { 
+      keepPreviousData: true, 
+      staleTime: 30 * 1000,
+      refetchInterval: 30 * 1000,
+      retry: 3,
+      onError: (error) => {
+        console.error('Query error:', error);
+        toast.error('Failed to load users. Please check your database connection.');
+      }
+    }
+  );
 
   // Fetch pending invitations
   const {
@@ -642,9 +643,9 @@ export default function UsersTab() {
     isLoading: invitationsLoading,
     error: invitationsError,
     refetch: refetchInvitations
-  } = useQuery<AdminInvitation[]>({
-    queryKey: ['admin-invitations', showInvitations],
-    queryFn: async () => {
+  } = useQuery<AdminInvitation[]>(
+    ['admin-invitations', showInvitations],
+    async () => {
       if (!showInvitations) return [];
 
       const { data, error } = await supabase
@@ -689,22 +690,16 @@ export default function UsersTab() {
         invited_by_name: invitation.invited_by ? invitedByLookup[invitation.invited_by] : undefined
       })) as AdminInvitation[];
     },
-    enabled: showInvitations,
-    staleTime: 30 * 1000,
-    retry: 1
-  });
-
-  useEffect(() => {
-    if (!usersError) return;
-    console.error('Query error:', usersError);
-    toast.error('Failed to load users. Please check your database connection.');
-  }, [usersError]);
-
-  useEffect(() => {
-    if (!invitationsError) return;
-    console.error('Invitations query error:', invitationsError);
-    toast.error('Failed to load pending invitations.');
-  }, [invitationsError]);
+    {
+      enabled: showInvitations,
+      staleTime: 30 * 1000,
+      retry: 1,
+      onError: (error) => {
+        console.error('Invitations query error:', error);
+        toast.error('Failed to load pending invitations.');
+      }
+    }
+  );
 
   const isInvitationExpired = (invitation: AdminInvitation) => {
     if (!invitation.expires_at) return false;
@@ -769,160 +764,119 @@ export default function UsersTab() {
     return invitations.filter((invitation) => invitation.status === 'pending' && !isInvitationExpired(invitation)).length;
   }, [invitations]);
 
-  // Handle sorting
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      setSortAscending(!sortAscending);
-    } else {
-      setSortColumn(column);
-      setSortAscending(true);
-    }
-  };
-
-  // Sort users
-  const sortedUsers = useMemo(() => {
-    const sorted = [...users];
-    sorted.sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortColumn) {
-        case 'name':
-          aValue = a.name?.toLowerCase() || '';
-          bValue = b.name?.toLowerCase() || '';
-          break;
-        case 'email':
-          aValue = a.email?.toLowerCase() || '';
-          bValue = b.email?.toLowerCase() || '';
-          break;
-        case 'role_name':
-          aValue = a.role_name?.toLowerCase() || '';
-          bValue = b.role_name?.toLowerCase() || '';
-          break;
-        case 'status':
-          aValue = a.status || '';
-          bValue = b.status || '';
-          break;
-        case 'created_at':
-          aValue = new Date(a.created_at || 0).getTime();
-          bValue = new Date(b.created_at || 0).getTime();
-          break;
-        default:
-          return 0;
-      }
-
-      if (aValue < bValue) return sortAscending ? -1 : 1;
-      if (aValue > bValue) return sortAscending ? 1 : -1;
-      return 0;
-    });
-    return sorted;
-  }, [users, sortColumn, sortAscending]);
-
   // ===== MUTATIONS =====
   
   // Invite user mutation - now uses Edge Function
-  const inviteUserMutation = useMutation({
-    mutationFn: async (data: any) => {
+  const inviteUserMutation = useMutation(
+    async (data: any) => {
       const validatedData = createUserSchema.parse(data);
       return await createAdminUser(validatedData);
     },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
-      setIsInviteFormOpen(false);
-      setInviteFormState({
-        name: '',
-        email: '',
-        role_id: '',
-        personal_message: '',
-        phone: '',
-        position: '',
-        department: ''
-      });
-      emailValidationCache.current = {};
-      setEmailValidation({ checking: false, exists: false, message: undefined });
-      toast.success(result.message || 'Admin user created successfully');
-    },
-    onError: (error: any) => {
-      console.error('Invite user error:', error);
-
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0] as string] = err.message;
-          }
+    {
+      onSuccess: (result) => {
+        queryClient.invalidateQueries(['admin-users']);
+        queryClient.invalidateQueries(['admin-invitations']);
+        setIsInviteFormOpen(false);
+        setInviteFormState({
+          name: '',
+          email: '',
+          role_id: '',
+          personal_message: '',
+          phone: '',
+          position: '',
+          department: ''
         });
-        setFormErrors(errors);
-        toast.error('Please check the form for errors');
-      } else if (error.message) {
-        toast.error(error.message);
-
-        // If it's a session error, suggest refreshing
-        if (error.message.includes('session') || error.message.includes('expired')) {
-          setTimeout(() => {
-            toast.info('Try refreshing the page if the problem persists');
-          }, 2000);
+        emailValidationCache.current = {};
+        setEmailValidation({ checking: false, exists: false, message: undefined });
+        toast.success(result.message || 'Admin user created successfully');
+      },
+      onError: (error: any) => {
+        console.error('Invite user error:', error);
+        
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0] as string] = err.message;
+            }
+          });
+          setFormErrors(errors);
+          toast.error('Please check the form for errors');
+        } else if (error.message) {
+          toast.error(error.message);
+          
+          // If it's a session error, suggest refreshing
+          if (error.message.includes('session') || error.message.includes('expired')) {
+            setTimeout(() => {
+              toast.info('Try refreshing the page if the problem persists');
+            }, 2000);
+          }
+        } else {
+          toast.error('Failed to create admin user. Please try again.');
         }
-      } else {
-        toast.error('Failed to create admin user. Please try again.');
       }
     }
-  });
+  );
 
   // Update user mutation
-  const updateUserMutation = useMutation({
-    mutationFn: async (data: { id: string; updates: any }) => {
+  const updateUserMutation = useMutation(
+    async (data: { id: string; updates: any }) => {
       return await updateAdminUser(data.id, data.updates);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setIsEditFormOpen(false);
-      setEditingUser(null);
-      toast.success('User updated successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to update user');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['admin-users']);
+        setIsEditFormOpen(false);
+        setEditingUser(null);
+        toast.success('User updated successfully');
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to update user');
+      }
     }
-  });
+  );
 
   // Resend invitation mutation
-  const resendInviteMutation = useMutation({
-    mutationFn: resendInvitation,
-    onMutate: (invitation) => {
-      setResendingInvitationId(invitation.id);
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
-      toast.success(result?.message || 'Invitation resent successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to resend invitation');
-    },
-    onSettled: () => {
-      setResendingInvitationId(null);
+  const resendInviteMutation = useMutation(
+    resendInvitation,
+    {
+      onMutate: (invitation) => {
+        setResendingInvitationId(invitation.id);
+      },
+      onSuccess: (result) => {
+        queryClient.invalidateQueries(['admin-invitations']);
+        toast.success(result?.message || 'Invitation resent successfully');
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to resend invitation');
+      },
+      onSettled: () => {
+        setResendingInvitationId(null);
+      }
     }
-  });
+  );
 
-  const sendPasswordResetMutation = useMutation({
-    mutationFn: sendPasswordResetEmail,
-    onMutate: (adminUser) => {
-      setResettingUserId(adminUser.id);
-    },
-    onSuccess: (result) => {
-      toast.success(result?.message || 'Password reset email sent successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to send password reset email');
-    },
-    onSettled: () => {
-      setResettingUserId(null);
+  const sendPasswordResetMutation = useMutation(
+    sendPasswordResetEmail,
+    {
+      onMutate: (adminUser) => {
+        setResettingUserId(adminUser.id);
+      },
+      onSuccess: (result) => {
+        toast.success(result?.message || 'Password reset email sent successfully');
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to send password reset email');
+      },
+      onSettled: () => {
+        setResettingUserId(null);
+      }
     }
-  });
+  );
 
   // Process users mutation (deactivate or delete)
-  const processUsersMutation = useMutation({
-    mutationFn: async ({ users, action }: { users: AdminUser[], action: 'deactivate' | 'delete' }) => {
+  const processUsersMutation = useMutation(
+    async ({ users, action }: { users: AdminUser[], action: 'deactivate' | 'delete' }) => {
       const results = [];
       let sessionToken: string | null = null;
 
@@ -1024,27 +978,29 @@ export default function UsersTab() {
 
       return { results, action };
     },
-    onSuccess: ({ results, action }) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setIsConfirmDialogOpen(false);
-      setUsersToProcess([]);
-
-      const successCount = results.filter(r => r.success).length;
-      const failCount = results.filter(r => !r.success).length;
-
-      if (failCount === 0) {
-        toast.success(`${successCount} user(s) ${action}d successfully`);
-      } else {
-        results
-          .filter(r => !r.success && r.error)
-          .forEach(r => toast.error(r.error));
+    {
+      onSuccess: ({ results, action }) => {
+        queryClient.invalidateQueries(['admin-users']);
+        setIsConfirmDialogOpen(false);
+        setUsersToProcess([]);
+        
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.filter(r => !r.success).length;
+        
+        if (failCount === 0) {
+          toast.success(`${successCount} user(s) ${action}d successfully`);
+        } else {
+          results
+            .filter(r => !r.success && r.error)
+            .forEach(r => toast.error(r.error));
+        }
+      },
+      onError: (error) => {
+        console.error('Error processing users:', error);
+        toast.error(`Failed to ${confirmAction} user(s)`);
       }
-    },
-    onError: (error) => {
-      console.error('Error processing users:', error);
-      toast.error(`Failed to ${confirmAction} user(s)`);
     }
-  });
+  );
 
   // ===== HANDLERS =====
   
@@ -1170,7 +1126,7 @@ export default function UsersTab() {
 
       if (!updateError) {
         toast.success(`${adminUser.name} marked as verified`);
-        queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+        queryClient.invalidateQueries(['admin-users']);
         
         try {
           await supabase
@@ -1482,7 +1438,7 @@ export default function UsersTab() {
           setEditingUser(row);
           setIsEditFormOpen(true);
         }}
-        className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded-full transition-colors`}
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
         title="Edit"
       >
         <Edit2 className="h-4 w-4" />
@@ -1493,7 +1449,7 @@ export default function UsersTab() {
           <button
             onClick={() => handleDeactivate([row])}
             disabled={processUsersMutation.isLoading}
-            className={`${iconColors.warning.full} ${iconColors.warning.bg} p-1 rounded-full transition-colors disabled:opacity-50`}
+            className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors disabled:opacity-50"
             title={row.status === 'active' ? 'Deactivate user' : 'User already inactive'}
           >
             <XCircle className="h-4 w-4" />
@@ -1502,7 +1458,7 @@ export default function UsersTab() {
           <button
             onClick={() => handleDelete([row])}
             disabled={processUsersMutation.isLoading}
-            className={`${iconColors.delete.full} ${iconColors.delete.bg} p-1 rounded-full transition-colors disabled:opacity-50`}
+            className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors disabled:opacity-50"
             title="Delete user permanently"
           >
             <Trash2 className="h-4 w-4" />
@@ -1588,18 +1544,18 @@ export default function UsersTab() {
       )}
 
       {showInvitations && (
-        <div className="rounded-xl border border-panel bg-panel shadow-md">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-panel px-5 py-4 bg-card-elevated">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
             <div>
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Pending Invitations</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 Monitor outstanding invitations and resend secure setup emails when needed.
               </p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => refetchInvitations()}
-                className="p-2 rounded-full hover:bg-card-hover transition-colors text-gray-600 dark:text-gray-300 hover:text-[#5d7e23] dark:hover:text-[#9ed050]"
+                className="p-1.5 rounded-full hover:bg-gray-100 transition-colors dark:hover:bg-gray-800"
                 title="Refresh invitations"
               >
                 <RefreshCw className={`h-4 w-4 ${invitationsLoading ? 'animate-spin' : ''}`} />
@@ -1614,7 +1570,7 @@ export default function UsersTab() {
             </div>
           </div>
 
-          <div className="space-y-3 px-5 py-4 bg-panel">
+          <div className="space-y-3 px-4 py-4">
             {invitationsError ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
                 Failed to load invitations. Please try refreshing.
@@ -1636,20 +1592,20 @@ export default function UsersTab() {
                 return (
                   <div
                     key={invitation.id}
-                    className="rounded-lg border border-filter bg-invitation-card px-5 py-4 shadow-sm transition-all hover:border-[#8CC63F]/50 hover:shadow-md hover:bg-invitation-hover"
+                    className="rounded-lg border border-gray-200 px-4 py-3 shadow-sm transition hover:border-[#8CC63F]/60 hover:shadow-md dark:border-gray-700 dark:hover:border-[#8CC63F]/50"
                   >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{invitation.email}</span>
                           <span
-                            className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${getInvitationStatusBadgeClass(invitation.status, expired)}`}
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${getInvitationStatusBadgeClass(invitation.status, expired)}`}
                           >
                             {expired ? 'Expired' : invitation.status.replace(/^(\w)/, (m) => m.toUpperCase())}
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
-                          <span className="font-medium">Role: <span className="font-normal">{invitation.role_name || roleLookup[invitation.role_id] || 'Unknown Role'}</span></span>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                          <span>Role: {invitation.role_name || roleLookup[invitation.role_id] || 'Unknown Role'}</span>
                           <span>{formatInvitationExpiry(invitation)}</span>
                           <span>Invited: {formatTimestamp(invitation.created_at)}</span>
                           {invitation.resent_at && (
@@ -1664,11 +1620,11 @@ export default function UsersTab() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleCopyInvitationEmail(invitation)}
-                          className="rounded-full p-2 text-gray-500 transition-colors hover:bg-card-hover hover:text-[#5d7e23] dark:text-gray-400 dark:hover:text-[#9ed050]"
+                          className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                           title="Copy email"
                         >
                           {copiedInvitationId === invitation.id ? (
-                            <Check className="h-4 w-4 text-[#8CC63F]" />
+                            <Check className="h-4 w-4 text-emerald-500" />
                           ) : (
                             <Copy className="h-4 w-4" />
                           )}
@@ -1677,7 +1633,7 @@ export default function UsersTab() {
                         <button
                           onClick={() => resendInviteMutation.mutate(invitation)}
                           disabled={!canResend || resendInviteMutation.isLoading}
-                          className="rounded-full p-2 text-[#5d7e23] dark:text-[#9ed050] transition-colors hover:bg-[#8CC63F]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-full p-1.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-200"
                           title={canResend ? 'Resend invitation email' : 'Invitation cannot be resent'}
                         >
                           {resendingInvitationId === invitation.id && resendInviteMutation.isLoading ? (
@@ -1755,7 +1711,7 @@ export default function UsersTab() {
 
       {/* Main Users Table */}
       <DataTable
-        data={sortedUsers}
+        data={users}
         columns={columns}
         keyField="id"
         caption="List of system users with their roles and status"
@@ -1764,10 +1720,6 @@ export default function UsersTab() {
         isFetching={isFetching}
         renderActions={renderActions}
         emptyMessage="No system users found"
-        sorting={{
-          sort: { column: sortColumn, ascending: sortAscending },
-          handleSort: handleSort
-        }}
       />
 
       {/* Info about email verification */}

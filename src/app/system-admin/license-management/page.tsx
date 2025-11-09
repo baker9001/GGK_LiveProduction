@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, Loader2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
-import { iconColors } from '../../../lib/constants/iconConfig';
 import dayjs from 'dayjs';
 import { supabase } from '../../../lib/supabase';
 import { DataTable } from '../../../components/shared/DataTable';
@@ -12,10 +11,7 @@ import { FilterCard } from '../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../components/shared/SlideInForm';
 import { FormField, Input, Select } from '../../../components/shared/FormField';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
-import { CountBadge } from '../../../components/shared/Badge';
 import { Button } from '../../../components/shared/Button';
-import ModulePageShell from '../../../components/layout/ModulePageShell';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/shared/Card';
 import { SearchableMultiSelect } from '../../../components/shared/SearchableMultiSelect';
 import { LicenseActionForm, type LicenseActionFormRef } from './LicenseActionForm';
 import { LicenseForm } from './LicenseForm';
@@ -113,9 +109,9 @@ export default function LicenseManagementPage() {
   }, []);
 
   // Fetch filter options with React Query
-  const { data: filterOptions } = useQuery({
-    queryKey: ['licenseFilterOptions'],
-    queryFn: async () => {
+  const { data: filterOptions } = useQuery(
+    ['licenseFilterOptions'],
+    async () => {
       const [
         { data: companiesData },
         { data: regionsData },
@@ -138,17 +134,19 @@ export default function LicenseManagementPage() {
         subjects: subjectsData || []
       };
     },
-    staleTime: 10 * 60 * 1000 // 10 minutes
-  });
+    {
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    }
+  );
 
   // Fetch licenses with React Query
-  const {
-    data: rawLicenses = [],
-    isLoading,
-    isFetching
-  } = useQuery<License[]>({
-    queryKey: ['licenses', filters],
-    queryFn: async () => {
+  const { 
+    data: rawLicenses = [], 
+    isLoading, 
+    isFetching 
+  } = useQuery<License[]>(
+    ['licenses', filters],
+    async () => {
       let query = supabase
         .from('licenses')
         .select(`
@@ -223,9 +221,11 @@ export default function LicenseManagementPage() {
 
       return formattedLicenses;
     },
-    placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000 // 5 minutes
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
   
   // Group licenses by company
   const groupedLicenses: CompanyLicenses[] = React.useMemo(() => {
@@ -268,8 +268,8 @@ export default function LicenseManagementPage() {
   } = usePagination(groupedLicenses);
 
   // License action mutation
-  const actionMutation = useMutation({
-    mutationFn: async (payload: any) => {
+  const actionMutation = useMutation(
+    async (payload: any) => {
       try {
         // Fetch the license details
         const { data: license, error: fetchError } = await supabase
@@ -375,38 +375,40 @@ export default function LicenseManagementPage() {
         throw error;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['licenses'] });
-      queryClient.invalidateQueries({ queryKey: ['licenseActions'] });
-      setIsActionFormOpen(false);
-      setSelectedAction(null);
-      setEditingLicense(null);
-      toast.success(`License ${selectedAction?.toLowerCase()}ed successfully`);
-    },
-    onError: (error: any) => {
-      console.error('Error processing license action:', error);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['licenses']);
+        queryClient.invalidateQueries(['licenseActions']);
+        setIsActionFormOpen(false);
+        setSelectedAction(null);
+        setEditingLicense(null);
+        toast.success(`License ${selectedAction?.toLowerCase()}ed successfully`);
+      },
+      onError: (error: any) => {
+        console.error('Error processing license action:', error);
 
-      let errorMessage = 'Failed to process license action. Please try again.';
+        let errorMessage = 'Failed to process license action. Please try again.';
 
-      if (error?.message) {
-        if (error.message.includes('relation') && error.message.includes('does not exist')) {
-          errorMessage = 'Database table missing. Please contact system administrator.';
-        } else if (error.message.includes('permission denied') || error.message.includes('policy')) {
-          errorMessage = 'You do not have permission to perform this action.';
-        } else if (error.message.includes('Failed to record license action')) {
-          errorMessage = 'Failed to record the action history. The license may have been updated.';
-        } else {
-          errorMessage = error.message;
+        if (error?.message) {
+          if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            errorMessage = 'Database table missing. Please contact system administrator.';
+          } else if (error.message.includes('permission denied') || error.message.includes('policy')) {
+            errorMessage = 'You do not have permission to perform this action.';
+          } else if (error.message.includes('Failed to record license action')) {
+            errorMessage = 'Failed to record the action history. The license may have been updated.';
+          } else {
+            errorMessage = error.message;
+          }
         }
-      }
 
-      toast.error(errorMessage);
+        toast.error(errorMessage);
+      }
     }
-  });
+  );
 
   // Delete license mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (licenses: License[]) => {
+  const deleteMutation = useMutation(
+    async (licenses: License[]) => {
       const { error } = await supabase
         .from('licenses')
         .delete()
@@ -415,19 +417,21 @@ export default function LicenseManagementPage() {
       if (error) throw error;
       return licenses;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['licenses'] });
-      setIsConfirmDialogOpen(false);
-      setLicensesToDelete([]);
-      toast.success('License(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting licenses:', error);
-      toast.error('Failed to delete license(s). Please try again.');
-      setIsConfirmDialogOpen(false);
-      setLicensesToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['licenses']);
+        setIsConfirmDialogOpen(false);
+        setLicensesToDelete([]);
+        toast.success('License(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting licenses:', error);
+        toast.error('Failed to delete license(s). Please try again.');
+        setIsConfirmDialogOpen(false);
+        setLicensesToDelete([]);
+      }
     }
-  });
+  );
 
   // Main table columns (company level)
   const companyColumns = [
@@ -564,7 +568,7 @@ export default function LicenseManagementPage() {
             setEditingLicense(row);
             setIsFormOpen(true);
           }}
-          className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded-full transition-colors`}
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
           title="Edit"
         >
           <Edit2 className="h-4 w-4" />
@@ -715,8 +719,8 @@ export default function LicenseManagementPage() {
     return (
       <React.Fragment key={company.id}>
         {/* Main company row */}
-        <tr
-          className={`bg-table-row transition-theme hover:bg-table-row-hover ${expanded ? 'border-b-0' : ''}`}
+        <tr 
+          className={`bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${expanded ? 'border-b-0' : ''}`}
           onClick={() => toggleExpansion(company.id)}
           style={{ cursor: 'pointer' }}
         >
@@ -727,26 +731,27 @@ export default function LicenseManagementPage() {
                   e.stopPropagation();
                   toggleExpansion(company.id);
                 }}
-                className="mr-3 rounded-full p-2 transition-theme hover:bg-card-hover focus:outline-none focus:ring-2 focus:ring-ggk-primary-500"
+                className="mr-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label={expanded ? "Collapse" : "Expand"}
               >
-                {expanded ? (
-                  <ChevronDown className="h-5 w-5 text-theme-secondary" />
-                ) : (
-                  <ChevronRight className="h-5 w-5 text-theme-secondary" />
-                )}
+                {expanded ? 
+                  <ChevronDown className="h-5 w-5 text-gray-500" /> : 
+                  <ChevronRight className="h-5 w-5 text-gray-500" />
+                }
               </button>
               <div className="flex items-center">
-                <Building className="h-5 w-5 text-ggk-primary-500 mr-3" />
-                <span className="font-semibold text-theme-primary">{company.company}</span>
+                <Building className="h-5 w-5 text-blue-500 mr-2" />
+                <span className="font-medium text-gray-900 dark:text-white">{company.company}</span>
               </div>
             </div>
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <CountBadge count={company.licenseCount} variant="primary" className="justify-center" />
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+              {company.licenseCount}
+            </span>
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <span className="font-medium text-theme-primary">{company.totalQuantity}</span>
+            <span className="text-gray-900 dark:text-white">{company.totalQuantity}</span>
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-right">
             <Button
@@ -766,38 +771,38 @@ export default function LicenseManagementPage() {
         
         {/* Expanded content */}
         {expanded && (
-          <tr className="bg-theme-subtle">
+          <tr className="bg-gray-50 dark:bg-gray-700/50">
             <td colSpan={4} className="px-6 py-4">
-              <div className="rounded-ggk-xl border border-filter bg-card overflow-hidden shadow-theme-elevated">
-                <table className="min-w-full divide-y divide-filter">
-                  <thead className="bg-table-header">
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       {licenseColumns.map(column => (
                         <th
                           key={column.id}
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-theme-secondary"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {column.header}
                         </th>
                       ))}
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-theme-secondary">
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-filter">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {paginatedLicenses.length === 0 ? (
                       <tr>
-                        <td colSpan={licenseColumns.length + 1} className="px-6 py-4 text-center text-sm text-theme-muted">
+                        <td colSpan={licenseColumns.length + 1} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                           No licenses found for this company
                         </td>
                       </tr>
                     ) : (
                       paginatedLicenses.map(license => (
-                        <tr key={license.id} className="transition-theme hover:bg-table-row-hover">
+                        <tr key={license.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           {licenseColumns.map(column => (
-                            <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-theme-primary">
+                            <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                               {column.cell ? column.cell(license) : (license as any)[column.accessorKey || '']}
                             </td>
                           ))}
@@ -829,10 +834,14 @@ export default function LicenseManagementPage() {
   };
 
   return (
-    <ModulePageShell
-      title="License Management"
-      subtitle="Manage and track all system licenses with consolidated filtering and insights."
-      actions={(
+    <div className="p-6 space-y-6" ref={contentRef}>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">License Management</h1>
+        <p className="mt-1 text-gray-600 dark:text-gray-400">Manage and track all system licenses</p>
+      </div>
+
+      <div className="flex justify-between items-center">
+        <div />
         <Button
           onClick={() => {
             setEditingLicense(null);
@@ -843,15 +852,14 @@ export default function LicenseManagementPage() {
         >
           Add License
         </Button>
-      )}
-    >
-      <div ref={contentRef} className="space-y-24">
-        <FilterCard
-          title="Filters"
-          onApply={() => {}} // No need for explicit apply with React Query
-          onClear={() => {
-            setFilters({
-              company_ids: [],
+      </div>
+
+      <FilterCard
+        title="Filters"
+        onApply={() => {}} // No need for explicit apply with React Query
+        onClear={() => {
+          setFilters({
+            company_ids: [],
             region_ids: [],
             program_ids: [],
             provider_ids: [],
@@ -912,118 +920,112 @@ export default function LicenseManagementPage() {
             placeholder="Select status..."
           />
         </div>
-        <Card variant="outlined" className="bg-card/95 backdrop-blur-sm">
-          <CardHeader accent>
-            <CardTitle>Company Licenses</CardTitle>
-            <CardDescription>
-              Expand each company to inspect allocations, renewal dates, and quick actions without leaving the page.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-12">
-            {isLoading ? (
-              <div className="flex h-64 items-center justify-center text-theme-muted">
-                <Loader2 className="h-8 w-8 animate-spin text-ggk-primary-500" />
-              </div>
-            ) : companiesTotalCount === 0 ? (
-              <div className="py-24 text-center text-theme-muted">
-                <p>No licenses found</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-filter">
-                  <thead className="bg-table-header">
-                    <tr>
-                      {companyColumns.map(column => (
-                        <th
-                          key={column.id}
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-theme-secondary"
-                        >
-                          {column.header}
-                        </th>
-                      ))}
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-theme-secondary">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-filter">
-                    {paginatedCompanies.map(company => renderRow(company))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <PaginationControls
-              page={companiesPage}
-              rowsPerPage={companiesRowsPerPage}
-              totalCount={companiesTotalCount}
-              totalPages={companiesTotalPages}
-              onPageChange={goToCompaniesPage}
-              onNextPage={nextCompaniesPage}
-              onPreviousPage={previousCompaniesPage}
-              onRowsPerPageChange={changeCompaniesRowsPerPage}
-              showingRange={{ start: companiesStart, end: companiesEnd }}
-            />
-          </CardContent>
-        </Card>
-        </FilterCard>
+      </FilterCard>
 
-        <SlideInForm
-          key={selectedAction ? `${editingLicense?.id || 'new'}-${selectedAction}` : undefined}
-          title={selectedAction ? `${selectedAction} License` : ''}
-          isOpen={isActionFormOpen}
-          onClose={() => {
-            setIsActionFormOpen(false);
-            setSelectedAction(null);
-            setEditingLicense(null);
-          }}
-          onSave={() => {
-            actionFormRef.current?.validateAndSubmit();
-          }}
-          loading={actionMutation.isLoading}
-        >
-          {selectedAction && editingLicense && (
-            <LicenseActionForm
-              ref={actionFormRef}
-              actionType={selectedAction}
-              license={editingLicense}
-              onSubmit={handleActionSubmit}
-              onCancel={() => {
-                setIsActionFormOpen(false);
-                setSelectedAction(null);
-                setEditingLicense(null);
-              }}
-            />
-          )}
-        </SlideInForm>
-
-        <LicenseForm
-          key={editingLicense?.id || `new-${Date.now()}`}
-          isOpen={isFormOpen}
-          initialCompanyId={selectedCompanyId}
-          onClose={() => {
-            setIsFormOpen(false);
-            setEditingLicense(null);
-            setSelectedCompanyId(null);
-          }}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['licenses'] })}
-          editingLicense={editingLicense}
-        />
-
-        {/* Scroll Navigator */}
-        <ScrollNavigator scrollContainerRef={contentRef} />
-
-        {/* Confirmation Dialog */}
-        <ConfirmationDialog
-          isOpen={isConfirmDialogOpen}
-          title="Delete License"
-          message={`Are you sure you want to delete ${licensesToDelete.length} license(s)? This action cannot be undone.`}
-          confirmText="Delete"
-          cancelText="Cancel"
-          onConfirm={confirmDelete}
-          onCancel={cancelDelete}
-        />
+      {/* Custom table with expandable rows */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-gray-900/20 transition-colors duration-200">
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+          </div>
+        ) : companiesTotalCount === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">No licenses found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  {companyColumns.map(column => (
+                    <th
+                      key={column.id}
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    >
+                      {column.header}
+                    </th>
+                  ))}
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {paginatedCompanies.map(company => renderRow(company))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-    </ModulePageShell>
+
+      <PaginationControls
+        page={companiesPage}
+        rowsPerPage={companiesRowsPerPage}
+        totalCount={companiesTotalCount}
+        totalPages={companiesTotalPages}
+        onPageChange={goToCompaniesPage}
+        onNextPage={nextCompaniesPage}
+        onPreviousPage={previousCompaniesPage}
+        onRowsPerPageChange={changeCompaniesRowsPerPage}
+        showingRange={{ start: companiesStart, end: companiesEnd }}
+      />
+
+      <SlideInForm
+        key={selectedAction ? `${editingLicense?.id || 'new'}-${selectedAction}` : undefined}
+        title={selectedAction ? `${selectedAction} License` : ''}
+        isOpen={isActionFormOpen}
+        onClose={() => {
+          setIsActionFormOpen(false);
+          setSelectedAction(null);
+          setEditingLicense(null);
+        }}
+        onSave={() => {
+          actionFormRef.current?.validateAndSubmit();
+        }}
+        loading={actionMutation.isLoading}
+      >
+        {selectedAction && editingLicense && (
+          <LicenseActionForm
+            ref={actionFormRef}
+            actionType={selectedAction}
+            license={editingLicense}
+            onSubmit={handleActionSubmit}
+            onCancel={() => {
+              setIsActionFormOpen(false);
+              setSelectedAction(null);
+              setEditingLicense(null);
+            }}
+          />
+        )}
+      </SlideInForm>
+
+      <LicenseForm
+        key={editingLicense?.id || `new-${Date.now()}`}
+        isOpen={isFormOpen}
+        initialCompanyId={selectedCompanyId}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingLicense(null);
+          setSelectedCompanyId(null);
+        }}
+        onSuccess={() => queryClient.invalidateQueries(['licenses'])}
+        editingLicense={editingLicense}
+      />
+      
+      {/* Scroll Navigator */}
+      <ScrollNavigator scrollContainerRef={contentRef} />
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={isConfirmDialogOpen}
+        title="Delete License"
+        message={`Are you sure you want to delete ${licensesToDelete.length} license(s)? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
+    </div>
   );
 }
