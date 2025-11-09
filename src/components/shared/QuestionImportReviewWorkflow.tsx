@@ -2673,6 +2673,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                             {Array.isArray(part.subparts) && part.subparts.length > 0 && (
                               <div className="space-y-4 border-t border-dashed border-gray-300 pt-4 dark:border-gray-700/60">
                                 {part.subparts.map((subpart, subIndex) => {
+                                  // CRITICAL FIX: Only show figure UI when figure_required is explicitly true OR figure flag is true
+                                  // BUT distinguish between "figure required" (from JSON) vs "figure attached" (has actual attachments)
                                   const subRequiresFigure = Boolean(subpart.figure_required ?? subpart.figure);
                                   const subHasAttachments = Array.isArray(subpart.attachments)
                                     ? subpart.attachments.length > 0

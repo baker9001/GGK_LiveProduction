@@ -19,6 +19,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { suppressSessionExpiredNoticeOnce } from '../lib/auth';
 
 // ============= TYPE DEFINITIONS =============
 
@@ -308,6 +309,7 @@ export const userCreationService = {
       }
       
       // Sign out after password reset to force re-login with new password
+      suppressSessionExpiredNoticeOnce();
       await supabase.auth.signOut();
       
       return { success: true };

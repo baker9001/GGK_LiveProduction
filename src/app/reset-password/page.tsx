@@ -7,7 +7,7 @@ import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, Ar
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { supabase } from '../../lib/supabase';
-import { getCurrentUser } from '../../lib/auth';
+import { getCurrentUser, suppressSessionExpiredNoticeOnce } from '../../lib/auth';
 import { toast } from '../../components/shared/Toast';
 
 interface PasswordStrength {
@@ -337,6 +337,7 @@ export default function ResetPasswordPage() {
         window.history.replaceState(null, '', window.location.pathname);
 
         // Sign out after password reset
+        suppressSessionExpiredNoticeOnce();
         await supabase.auth.signOut();
         
       } else if (legacyTokenData) {

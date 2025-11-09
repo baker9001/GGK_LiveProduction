@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase';
 import {
   setAuthenticatedUser,
   clearAuthenticatedUser,
+  suppressSessionExpiredNoticeOnce,
   type User,
   type UserRole,
   getRedirectPathForUser,
@@ -72,6 +73,7 @@ export default function AuthCallbackPage() {
 
         // Clear any previous session data before establishing the new session
         clearAuthenticatedUser();
+        suppressSessionExpiredNoticeOnce();
         await supabase.auth.signOut();
 
         const { data: sessionData, error: sessionError } = await supabase.auth.setSession({

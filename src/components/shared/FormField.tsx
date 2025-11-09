@@ -16,6 +16,7 @@ interface FormFieldProps {
   className?: string;
   children: React.ReactNode;
   description?: string;
+  labelClassName?: string;
 }
 
 export function FormField({
@@ -26,12 +27,16 @@ export function FormField({
   className,
   children,
   description,
+  labelClassName,
 }: FormFieldProps) {
   return (
     <div className={cn('mb-4', className)}>
       <label
         htmlFor={id}
-        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        className={cn(
+          'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1',
+          labelClassName
+        )}
       >
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
