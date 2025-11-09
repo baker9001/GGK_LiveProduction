@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils';
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-  variant?: 'default' | 'outlined' | 'elevated';
+  variant?: 'default' | 'outlined' | 'elevated' | 'glass' | 'dark-glass';
   padding?: 'none' | 'sm' | 'md' | 'lg';
 }
 
@@ -24,11 +24,13 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-ggk-2xl bg-card transition-all duration-base',
+        'rounded-ggk-2xl transition-all duration-base',
         {
-          'shadow-ggk-md': variant === 'default',
-          'shadow-ggk-lg hover:shadow-ggk-xl': variant === 'elevated',
-          'border-2 border-ggk-neutral-200 dark:border-ggk-neutral-700': variant === 'outlined',
+          'bg-white shadow-ggk-md': variant === 'default',
+          'bg-white shadow-ggk-lg hover:shadow-ggk-xl': variant === 'elevated',
+          'bg-white border border-ggk-neutral-200 dark:border-ggk-neutral-700 shadow-ggk-sm': variant === 'outlined',
+          'bg-slate-800/40 backdrop-blur-xl border border-slate-700/50 shadow-2xl': variant === 'glass',
+          'bg-slate-900/60 backdrop-blur-2xl border border-slate-600/30 shadow-2xl': variant === 'dark-glass',
           'p-0': padding === 'none',
           'p-16': padding === 'sm',
           'p-24': padding === 'md',

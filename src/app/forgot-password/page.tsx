@@ -153,7 +153,7 @@ export default function ForgotPasswordPage() {
             onContextMenu={(e) => e.preventDefault()}
             style={{ userSelect: 'none' }}
           />
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70" />
         </div>
         
         {/* Content */}
@@ -170,7 +170,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-          <div className="bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+          <div className="bg-slate-800/40 backdrop-blur-xl py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 border border-slate-700/50">
             <div className="text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100/20 backdrop-blur">
                 <CheckCircle className="h-6 w-6 text-green-400" />
@@ -192,7 +192,7 @@ export default function ForgotPasswordPage() {
                     setEmail('');
                   }}
                   variant="outline"
-                  className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                  className="w-full justify-center bg-slate-900/30 backdrop-blur border-slate-600 text-gray-300 hover:bg-slate-800/50"
                 >
                   Send to Different Email
                 </Button>
@@ -250,11 +250,11 @@ export default function ForgotPasswordPage() {
         </div>
         
         {/* Form Container - Matching signin page style */}
-        <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+        <div className="mt-8 bg-slate-800/40 backdrop-blur-xl py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 border border-slate-700/50">
           {/* Error Message */}
           {error && (
-            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
-              <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-300 p-4 rounded-lg flex items-start border border-red-500/30">
+              <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 text-red-400" />
               <span className="text-sm">{error}</span>
             </div>
           )}
@@ -277,7 +277,7 @@ export default function ForgotPasswordPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                  className="pl-10 bg-slate-900/30 border-slate-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                   placeholder="Enter your email address"
                   disabled={loading}
                   autoComplete="email"
@@ -307,7 +307,7 @@ export default function ForgotPasswordPage() {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
+                <div className="w-full border-t border-slate-700" />
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-2 bg-gray-900/50 text-gray-400">
@@ -321,7 +321,7 @@ export default function ForgotPasswordPage() {
               <Button
                 onClick={() => navigate('/signin')}
                 variant="outline"
-                className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                className="w-full justify-center bg-slate-900/30 backdrop-blur border-slate-600 text-gray-300 hover:bg-slate-800/50"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Sign In
@@ -333,7 +333,7 @@ export default function ForgotPasswordPage() {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
+                <div className="w-full border-t border-slate-700" />
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-2 bg-gray-900/50 text-gray-400">
@@ -345,13 +345,13 @@ export default function ForgotPasswordPage() {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Link
                 to="/contact-support"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+                className="w-full inline-flex justify-center py-2 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-medium text-gray-300 hover:bg-slate-800/50 transition-colors"
               >
                 Contact Support
               </Link>
               <Link
                 to="/"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+                className="w-full inline-flex justify-center py-2 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-medium text-gray-300 hover:bg-slate-800/50 transition-colors"
               >
                 Back to Home
               </Link>

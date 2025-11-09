@@ -412,48 +412,48 @@ export default function SignInPage() {
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <img
-          src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
+          src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
           alt="Educational background"
-          className="w-full h-full object-cover blur-sm select-none pointer-events-none"
+          className="w-full h-full object-cover select-none pointer-events-none"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
-        {/* Enhanced overlay for better contrast */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-gray-50/90 to-white/95 backdrop-blur-xl" />
+        {/* Dark overlay for glassmorphic design */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center bg-white/95 backdrop-blur-md px-6 py-4 rounded-2xl shadow-lg border border-gray-200" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)' }}>
+          <div className="inline-flex items-center justify-center">
             <GraduationCap className="h-12 w-12 text-[#8CC63F]" />
-            <span className="ml-3 text-3xl font-bold text-gray-900">
-              Go Green Knowledge
+            <span className="ml-3 text-3xl font-bold text-white">
+              GGK Learning
             </span>
           </div>
-          <div className="mt-6 bg-white/95 backdrop-blur-md px-6 py-4 rounded-xl shadow-md border border-gray-200 inline-block" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)' }}>
-            <h2 className="text-2xl font-bold text-gray-900">
+          <div className="mt-6">
+            <h2 className="text-2xl font-bold text-white">
               Sign in to your account
             </h2>
-            <p className="mt-2 text-sm font-medium text-gray-700">
+            <p className="mt-2 text-sm font-medium text-gray-300">
               Enter your registered email and password to access the platform
             </p>
           </div>
         </div>
 
         {/* Sign-in Form */}
-        <div className="bg-white/98 backdrop-blur-md shadow-2xl sm:rounded-2xl border-2 border-gray-300 overflow-hidden" style={{ backgroundColor: 'rgba(255, 255, 255, 0.98)' }}>
+        <div className="bg-slate-800/40 backdrop-blur-xl shadow-2xl sm:rounded-2xl border border-slate-700/50 overflow-hidden">
           <div className="py-8 px-6 sm:px-10">
             {/* Session expiration inline notice */}
             {sessionExpiredMessage && (
-              <div className="mb-6 bg-blue-50 text-blue-900 p-4 rounded-lg border border-blue-200">
+              <div className="mb-6 bg-blue-500/10 backdrop-blur text-blue-300 p-4 rounded-lg border border-blue-500/30">
                 <div className="flex items-start">
-                  <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-blue-600" />
+                  <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-blue-400" />
                   <div>
-                    <p className="font-semibold text-blue-900">Session expired</p>
-                    <p className="text-sm mt-1 text-blue-800">{sessionExpiredMessage}</p>
+                    <p className="font-semibold text-blue-300">Session expired</p>
+                    <p className="text-sm mt-1 text-blue-200">{sessionExpiredMessage}</p>
                   </div>
                 </div>
               </div>
@@ -463,19 +463,19 @@ export default function SignInPage() {
             {error && (
               <div className="mb-6">
                 {verificationNeeded ? (
-                  <div className="bg-amber-50 text-amber-900 p-4 rounded-lg border border-amber-200">
+                  <div className="bg-amber-500/10 backdrop-blur text-amber-300 p-4 rounded-lg border border-amber-500/30">
                     <div className="flex items-start">
-                      <MailWarning className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-amber-600" />
+                      <MailWarning className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-amber-400" />
                       <div className="flex-1">
-                        <p className="font-semibold text-amber-900">Email Verification Required</p>
-                        <p className="text-sm mt-1 text-amber-800">Your email address is not verified. Please check your inbox for the verification link.</p>
-                        <p className="text-xs mt-2 text-amber-700">
+                        <p className="font-semibold text-amber-300">Email Verification Required</p>
+                        <p className="text-sm mt-1 text-amber-200">Your email address is not verified. Please check your inbox for the verification link.</p>
+                        <p className="text-xs mt-2 text-amber-300/80">
                           Can't find the email? Check your spam folder or click below to resend.
                         </p>
                         <button
                           onClick={handleResendVerification}
                           disabled={loading}
-                          className="text-sm mt-3 text-amber-800 hover:text-amber-900 font-semibold underline disabled:opacity-50"
+                          className="text-sm mt-3 text-amber-300 hover:text-amber-200 font-semibold underline disabled:opacity-50"
                         >
                           {loading ? 'Sending...' : 'Resend verification email'}
                         </button>
@@ -483,15 +483,15 @@ export default function SignInPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-red-50 text-red-900 p-4 rounded-lg flex items-start border border-red-200">
-                    <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-red-600" />
+                  <div className="bg-red-500/10 backdrop-blur text-red-300 p-4 rounded-lg flex items-start border border-red-500/30">
+                    <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-red-400" />
                     <div>
-                      <span className="text-sm font-medium text-red-900">{error}</span>
+                      <span className="text-sm font-medium text-red-300">{error}</span>
                       {loginErrorType === 'invalid_credentials' && (
                         <div className="mt-3">
                           <Link
                             to="/forgot-password"
-                            className="inline-flex items-center text-sm font-semibold text-red-700 hover:text-red-800 underline"
+                            className="inline-flex items-center text-sm font-semibold text-red-300 hover:text-red-200 underline"
                           >
                             Forgot your password?
                           </Link>
@@ -509,7 +509,7 @@ export default function SignInPage() {
                 id="email"
                 label="Email address"
                 required
-                labelClassName="text-sm font-semibold text-gray-900"
+                labelClassName="text-sm font-semibold text-gray-200"
               >
                 <div className="relative mt-1">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -522,8 +522,8 @@ export default function SignInPage() {
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
-                    placeholder="baker@ggknowledge.com"
+                    className="pl-10 bg-slate-900/50 border-slate-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
+                    placeholder="Enter your email"
                     disabled={loading}
                     autoFocus
                   />
@@ -535,7 +535,7 @@ export default function SignInPage() {
                 id="password"
                 label="Password"
                 required
-                labelClassName="text-sm font-semibold text-gray-900"
+                labelClassName="text-sm font-semibold text-gray-200"
               >
                 <div className="relative mt-1">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -548,14 +548,14 @@ export default function SignInPage() {
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
+                    className="pl-10 pr-10 bg-slate-900/50 border-slate-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
                     placeholder="Enter your password"
                     disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
                     tabIndex={-1}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -583,9 +583,9 @@ export default function SignInPage() {
                         localStorage.removeItem('ggk_remember_session');
                       }
                     }}
-                    className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-300 rounded cursor-pointer"
+                    className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-slate-600 bg-slate-900/50 rounded cursor-pointer"
                   />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-gray-900 cursor-pointer">
+                  <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-gray-300 cursor-pointer">
                     Remember me
                   </label>
                 </div>
@@ -621,9 +621,9 @@ export default function SignInPage() {
 
 
             {/* Additional Links */}
-            <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="mt-8 pt-6 border-t border-slate-700/50">
               <div className="flex justify-center mb-4">
-                <span className="text-sm font-semibold text-gray-900">
+                <span className="text-sm font-semibold text-gray-300">
                   Need help?
                 </span>
               </div>
@@ -631,13 +631,13 @@ export default function SignInPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Link
                   to="/contact-support"
-                  className="w-full inline-flex justify-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-semibold text-gray-900 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-300 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
                 >
                   Contact Support
                 </Link>
                 <Link
                   to="/request-access"
-                  className="w-full inline-flex justify-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-semibold text-gray-900 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-300 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
                 >
                   Request Access
                 </Link>
@@ -649,7 +649,7 @@ export default function SignInPage() {
               <Button
                 onClick={() => navigate('/')}
                 variant="outline"
-                className="w-full justify-center bg-white border-gray-300 text-gray-900 hover:bg-gray-50 hover:border-gray-400 font-semibold py-2.5 transition-colors"
+                className="w-full justify-center bg-slate-900/30 backdrop-blur border-slate-600 text-gray-300 hover:bg-slate-800/50 hover:border-slate-500 font-semibold py-2.5 transition-colors"
               >
                 Back to Home
               </Button>
@@ -658,7 +658,7 @@ export default function SignInPage() {
         </div>
 
         {/* Bottom text */}
-        <p className="mt-6 text-center text-sm font-medium text-gray-900 bg-white/95 backdrop-blur-md py-3 px-6 rounded-xl inline-block mx-auto shadow-md border border-gray-200" style={{ display: 'block', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}>
+        <p className="mt-6 text-center text-sm font-medium text-gray-400">
           Protected by industry-standard encryption
         </p>
       </div>
