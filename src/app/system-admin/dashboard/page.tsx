@@ -73,7 +73,7 @@ export default function SystemAdminDashboard() {
     subjectId: subjectId || undefined
   });
 
-  const { data: filterOptions } = useFilterOptions();
+  const { data: filterOptions = { regions: [], programs: [], providers: [], subjects: [] } } = useFilterOptions();
 
   const activeFilterCount = useMemo(
     () => [regionId, programId, providerId, subjectId].filter(Boolean).length,
@@ -265,7 +265,7 @@ export default function SystemAdminDashboard() {
                   className={selectClassName}
                 >
                   <option value="">All Regions</option>
-                  {filterOptions?.regions.map((region) => (
+                  {(filterOptions?.regions || []).map((region) => (
                     <option key={region.id} value={region.id}>
                       {region.label}
                     </option>
@@ -281,7 +281,7 @@ export default function SystemAdminDashboard() {
                   className={selectClassName}
                 >
                   <option value="">All Programs</option>
-                  {filterOptions?.programs.map((program) => (
+                  {(filterOptions?.programs || []).map((program) => (
                     <option key={program.id} value={program.id}>
                       {program.label}
                     </option>
@@ -297,7 +297,7 @@ export default function SystemAdminDashboard() {
                   className={selectClassName}
                 >
                   <option value="">All Providers</option>
-                  {filterOptions?.providers.map((provider) => (
+                  {(filterOptions?.providers || []).map((provider) => (
                     <option key={provider.id} value={provider.id}>
                       {provider.label}
                     </option>
@@ -313,7 +313,7 @@ export default function SystemAdminDashboard() {
                   className={selectClassName}
                 >
                   <option value="">All Subjects</option>
-                  {filterOptions?.subjects.map((subject) => (
+                  {(filterOptions?.subjects || []).map((subject) => (
                     <option key={subject.id} value={subject.id}>
                       {subject.label}
                     </option>
