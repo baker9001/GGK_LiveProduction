@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -34,6 +34,10 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
   showingRange,
   className,
 }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
   const resolvedTotalPages = totalPages ?? Math.max(1, Math.ceil(totalCount / Math.max(rowsPerPage, 1)));
   const safePage = Math.min(Math.max(page, 1), resolvedTotalPages);
   const isFirstPage = safePage <= 1;
@@ -46,6 +50,45 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
 
   const displayStart = showingRange?.start ?? calculatedStart;
   const displayEnd = showingRange?.end ?? calculatedEnd;
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  // Close on escape key
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => document.removeEventListener('keydown', handleEscapeKey);
+  }, [isOpen]);
+
+  const handleSelectOption = (option: number) => {
+    onRowsPerPageChange?.(option);
+    setIsOpen(false);
+  };
 
   return (
     <nav
@@ -60,25 +103,55 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
           Rows per page
         </label>
         <div className="relative">
-          <select
+          <button
+            ref={buttonRef}
+            type="button"
             id="rows-per-page"
-            name="rows-per-page"
             className={cn(
-              'brand-select brand-pagination__select appearance-none block w-full rounded-md border px-3 py-1.5 pr-10 text-sm font-semibold shadow-sm transition focus-visible:outline-none',
+              'brand-select brand-pagination__select appearance-none w-20 rounded-md border px-3 py-1.5 pr-8 text-sm font-semibold shadow-sm transition focus-visible:outline-none bg-theme-surface text-theme-primary border-theme hover:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]',
+              isOpen && 'ring-2 ring-[#8CC63F] border-[#8CC63F]'
             )}
-            value={rowsPerPage}
             aria-label="Rows per page"
-            onChange={(event) => onRowsPerPageChange?.(Number(event.target.value))}
+            onClick={() => setIsOpen(!isOpen)}
+            aria-expanded={isOpen}
+            aria-haspopup="listbox"
           >
-            {rowsPerPageOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            <span>{rowsPerPage}</span>
+          </button>
           <div className="brand-pagination__icon pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
             <ChevronDownIcon />
           </div>
+
+          {/* Custom Dropdown */}
+          {isOpen && (
+            <div
+              ref={dropdownRef}
+              className="absolute z-50 mt-1 w-20 rounded-md border border-theme shadow-lg bg-card"
+              role="listbox"
+              aria-labelledby="rows-per-page"
+            >
+              <div className="py-1 bg-card">
+                {rowsPerPageOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    role="option"
+                    aria-selected={rowsPerPage === option}
+                    className={cn(
+                      'w-full px-4 py-2 text-left text-sm transition-colors',
+                      'hover:bg-[#e8f5dc] dark:hover:bg-[#8CC63F]/20',
+                      rowsPerPage === option
+                        ? 'bg-[#d4edc4] dark:bg-[#8CC63F]/30 text-[#5d7e23] dark:text-[#9ed050] font-semibold'
+                        : 'text-gray-900 dark:text-gray-100'
+                    )}
+                    onClick={() => handleSelectOption(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <span className="brand-pagination__text hidden text-sm font-medium sm:inline">
           Showing <span>{displayStart}</span> - <span>{displayEnd}</span> of <span>{totalCount}</span>
