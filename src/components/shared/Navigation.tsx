@@ -31,11 +31,11 @@ export function Navigation() {
   return (
     <nav
       className={clsx(
-        'sticky top-0 z-[100] transition-all duration-300 border-b',
+        'sticky top-0 z-[100] transition-all duration-300 border-b backdrop-blur-md',
         isLandingPage
           ? isDark
-            ? 'text-white bg-slate-900 border-slate-800 shadow-2xl'
-            : 'text-slate-900 bg-white border-slate-200 shadow-lg'
+            ? 'text-white bg-slate-900/95 border-slate-800 shadow-2xl'
+            : 'text-slate-900 bg-white/95 border-slate-200 shadow-lg'
           : 'bg-white dark:bg-gray-900 shadow-md border-gray-200 dark:border-gray-800'
       )}
     >
@@ -63,21 +63,24 @@ export function Navigation() {
                   key={item.path}
                   to={item.path}
                   className={clsx(
-                    'inline-flex items-center px-2 pt-1 text-base font-semibold transition-all duration-200 border-b-2 border-transparent',
+                    'inline-flex items-center px-3 pt-1 text-base font-semibold transition-all duration-300 border-b-2 relative group',
                     isLandingPage
                       ? isDark
                         ? location.pathname === item.path
                           ? 'text-white border-[#8CC63F]'
-                          : 'text-slate-300 hover:text-white hover:border-slate-600'
+                          : 'text-slate-300 hover:text-white border-transparent hover:border-[#8CC63F]/50'
                         : location.pathname === item.path
                           ? 'text-slate-900 border-[#8CC63F]'
-                          : 'text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                          : 'text-slate-600 hover:text-slate-900 border-transparent hover:border-[#8CC63F]/50'
                       : location.pathname === item.path
                         ? 'text-action-contrast border-[color:var(--color-action-primary)]'
-                        : 'text-theme-secondary hover:text-theme-primary hover:border-theme-muted'
+                        : 'text-theme-secondary hover:text-theme-primary border-transparent hover:border-theme-muted'
                   )}
                 >
-                  {item.label}
+                  <span className="relative z-10">{item.label}</span>
+                  {location.pathname === item.path && (
+                    <span className="absolute inset-0 bg-[#8CC63F]/5 rounded-t-md" />
+                  )}
                 </Link>
               ))}
             </div>
@@ -140,11 +143,11 @@ export function Navigation() {
         <div className="md:hidden">
           <div
             className={clsx(
-              'px-2 pt-2 pb-3 space-y-1 transition-all duration-300',
+              'px-2 pt-2 pb-3 space-y-1 transition-all duration-300 backdrop-blur-md',
               isLandingPage
                 ? isDark
-                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-2xl'
-                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-lg'
+                  ? 'bg-slate-900/95 text-white border-t border-slate-800 shadow-2xl'
+                  : 'bg-white/95 text-slate-900 border-t border-slate-200 shadow-lg'
                 : 'bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800'
             )}
           >
@@ -153,15 +156,15 @@ export function Navigation() {
                 key={item.path}
                 to={item.path}
                 className={clsx(
-                  'block px-3 py-2 rounded-md text-base font-medium transition-all duration-200',
+                  'block px-3 py-2 rounded-md text-base font-medium transition-all duration-300 relative overflow-hidden',
                   isLandingPage
                     ? isDark
                       ? location.pathname === item.path
-                        ? 'text-white bg-slate-800'
-                        : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                        ? 'text-white bg-slate-800 border-l-4 border-[#8CC63F]'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/50 hover:border-l-4 hover:border-[#8CC63F]/50'
                       : location.pathname === item.path
-                        ? 'text-slate-900 bg-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? 'text-slate-900 bg-slate-100 border-l-4 border-[#8CC63F]'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/50 hover:border-l-4 hover:border-[#8CC63F]/50'
                     : location.pathname === item.path
                       ? 'text-action-contrast bg-[color:var(--color-action-primary-soft)]'
                       : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-subtle'
