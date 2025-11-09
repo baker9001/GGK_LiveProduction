@@ -414,13 +414,13 @@ export default function SignInPage() {
         <img
           src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
           alt="Educational background"
-          className="w-full h-full object-cover select-none pointer-events-none"
+          className="w-full h-full object-cover select-none pointer-events-none blur-sm"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
-        {/* Dark overlay for glassmorphic design */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70" />
+        {/* Transparent gray overlay with blur */}
+        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" />
       </div>
 
       {/* Content */}
