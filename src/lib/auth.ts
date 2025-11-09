@@ -26,6 +26,7 @@ const TEST_USER_KEY = 'test_mode_user';
 const AUTH_TOKEN_KEY = 'ggk_auth_token';
 const REMEMBER_SESSION_KEY = 'ggk_remember_session';
 const SESSION_EXPIRED_NOTICE_KEY = 'ggk_session_expired_notice';
+const SESSION_EXPIRED_NOTICE_SUPPRESS_KEY = 'ggk_session_notice_suppress';
 const SUPABASE_SESSION_STORAGE_KEY = 'supabase.auth.token';
 const SUPABASE_SESSION_REQUIRED_KEY = 'ggk_supabase_session_required';
 const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
@@ -191,6 +192,7 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(SUPABASE_SESSION_REQUIRED_KEY);
   localStorage.removeItem(LAST_LOGIN_TIME_KEY);
   localStorage.removeItem(LAST_PAGE_LOAD_TIME_KEY);
+  localStorage.removeItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY);
 
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
@@ -234,6 +236,44 @@ export function markSessionExpired(message: string = 'Your session has expired. 
   } catch (error) {
     console.warn('[Auth] Unable to persist session expiration notice:', error);
   }
+}
+
+export function suppressSessionExpiredNoticeOnce(): void {
+  try {
+    const payload = {
+      timestamp: Date.now()
+    };
+    localStorage.setItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn('[Auth] Unable to set session notice suppression flag:', error);
+  }
+}
+
+export function consumeSessionExpiredNoticeSuppression(): boolean {
+  try {
+    const rawValue = localStorage.getItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY);
+    if (!rawValue) {
+      return false;
+    }
+
+    localStorage.removeItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY);
+
+    try {
+      const parsed = JSON.parse(rawValue) as { timestamp?: number };
+      if (parsed && typeof parsed.timestamp === 'number') {
+        const elapsed = Date.now() - parsed.timestamp;
+        // Only suppress if the flag was set within the last 10 seconds
+        if (elapsed >= 0 && elapsed <= 10_000) {
+          return true;
+        }
+      }
+    } catch {
+      // If parsing fails, fall through and do not suppress
+    }
+  } catch (error) {
+    console.warn('[Auth] Unable to read session notice suppression flag:', error);
+  }
+  return false;
 }
 
 // Determine if Supabase session validation is required for the current user
