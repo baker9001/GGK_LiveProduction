@@ -420,29 +420,31 @@ export default function SignInPage() {
           style={{ userSelect: 'none' }}
         />
         {/* Enhanced overlay for better contrast */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-gray-100/70 to-white/80 backdrop-blur-md" />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-gray-50/90 to-white/95 backdrop-blur-xl" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center">
+          <div className="inline-flex items-center justify-center bg-white/95 backdrop-blur-md px-6 py-4 rounded-2xl shadow-lg border border-gray-200" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)' }}>
             <GraduationCap className="h-12 w-12 text-[#8CC63F]" />
             <span className="ml-3 text-3xl font-bold text-gray-900">
               Go Green Knowledge
             </span>
           </div>
-          <h2 className="mt-6 text-2xl font-bold text-gray-900">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-sm font-medium text-gray-700">
-            Enter your registered email and password to access the platform
-          </p>
+          <div className="mt-6 bg-white/95 backdrop-blur-md px-6 py-4 rounded-xl shadow-md border border-gray-200 inline-block" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)' }}>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Sign in to your account
+            </h2>
+            <p className="mt-2 text-sm font-medium text-gray-700">
+              Enter your registered email and password to access the platform
+            </p>
+          </div>
         </div>
 
         {/* Sign-in Form */}
-        <div className="bg-white shadow-2xl sm:rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="bg-white/98 backdrop-blur-md shadow-2xl sm:rounded-2xl border-2 border-gray-300 overflow-hidden" style={{ backgroundColor: 'rgba(255, 255, 255, 0.98)' }}>
           <div className="py-8 px-6 sm:px-10">
             {/* Session expiration inline notice */}
             {sessionExpiredMessage && (
@@ -656,7 +658,7 @@ export default function SignInPage() {
         </div>
 
         {/* Bottom text */}
-        <p className="mt-6 text-center text-sm font-medium text-gray-800 bg-white/60 backdrop-blur-sm py-2 px-4 rounded-lg inline-block mx-auto" style={{ display: 'block' }}>
+        <p className="mt-6 text-center text-sm font-medium text-gray-900 bg-white/95 backdrop-blur-md py-3 px-6 rounded-xl inline-block mx-auto shadow-md border border-gray-200" style={{ display: 'block', backgroundColor: 'rgba(255, 255, 255, 0.95)' }}>
           Protected by industry-standard encryption
         </p>
       </div>
