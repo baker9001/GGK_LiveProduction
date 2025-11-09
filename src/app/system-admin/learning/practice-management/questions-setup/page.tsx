@@ -45,15 +45,6 @@ export interface CorrectAnswer {
   answer: string;
   marks?: number;
   alternative_id?: number;
-  linked_alternatives?: number[];
-  alternative_type?: string;
-  unit?: string;
-  accepts_equivalent_phrasing?: boolean;
-  accepts_reverse_argument?: boolean;
-  error_carried_forward?: boolean;
-  acceptable_variations?: string[];
-  marking_criteria?: string | null;
-  working?: string | null;
   context_type?: string;
   context_value?: string;
   context_label?: string;
@@ -67,7 +58,6 @@ export interface SubQuestion {
   difficulty?: string;
   type: 'mcq' | 'tf' | 'descriptive';
   status: string;
-  description?: string | null;
   topic_id?: string;
   topic_name?: string;
   unit_name?: string;
@@ -83,8 +73,6 @@ export interface SubQuestion {
   total_alternatives?: number;
   correct_answers?: CorrectAnswer[];
   correct_answer?: string;
-  has_direct_answer?: boolean;
-  is_contextual_only?: boolean;
   parent_id?: string | null;
   level?: number | null;
   order_index?: number | null;
@@ -294,15 +282,6 @@ export default function QuestionsSetupPage() {
             answer,
             marks,
             alternative_id,
-            linked_alternatives,
-            alternative_type,
-            unit,
-            accepts_equivalent_phrasing,
-            accepts_reverse_argument,
-            error_carried_forward,
-            acceptable_variations,
-            marking_criteria,
-            working,
             context_type,
             context_value,
             context_label
@@ -314,9 +293,7 @@ export default function QuestionsSetupPage() {
             part_label,
             topic_id,
             subtopic_id,
-            description,
             question_description,
-            difficulty,
             marks,
             hint,
             sort_order,
@@ -332,8 +309,6 @@ export default function QuestionsSetupPage() {
             answer_requirement,
             total_alternatives,
             correct_answer,
-            has_direct_answer,
-            is_contextual_only,
             primary_subtopic:edu_subtopics!sub_questions_subtopic_id_fkey (
               id,
               name,
@@ -360,15 +335,6 @@ export default function QuestionsSetupPage() {
               answer,
               marks,
               alternative_id,
-              linked_alternatives,
-              alternative_type,
-              unit,
-              accepts_equivalent_phrasing,
-              accepts_reverse_argument,
-              error_carried_forward,
-              acceptable_variations,
-              marking_criteria,
-              working,
               context_type,
               context_value,
               context_label
@@ -580,25 +546,6 @@ export default function QuestionsSetupPage() {
             answer: answer.answer,
             marks: answer.marks ?? undefined,
             alternative_id: answer.alternative_id ?? undefined,
-            linked_alternatives: Array.isArray(answer.linked_alternatives)
-              ? answer.linked_alternatives
-              : undefined,
-            alternative_type: answer.alternative_type ?? undefined,
-            unit: answer.unit ?? undefined,
-            accepts_equivalent_phrasing: typeof answer.accepts_equivalent_phrasing === 'boolean'
-              ? answer.accepts_equivalent_phrasing
-              : undefined,
-            accepts_reverse_argument: typeof answer.accepts_reverse_argument === 'boolean'
-              ? answer.accepts_reverse_argument
-              : undefined,
-            error_carried_forward: typeof answer.error_carried_forward === 'boolean'
-              ? answer.error_carried_forward
-              : undefined,
-            acceptable_variations: Array.isArray(answer.acceptable_variations)
-              ? answer.acceptable_variations
-              : undefined,
-            marking_criteria: answer.marking_criteria ?? undefined,
-            working: answer.working ?? undefined,
             context_type: answer.context_type ?? undefined,
             context_value: answer.context_value ?? undefined,
             context_label: answer.context_label ?? undefined
@@ -669,10 +616,9 @@ export default function QuestionsSetupPage() {
                 part_label: sq.part_label || `Part ${String.fromCharCode(97 + index)}`,
                 question_description: sq.question_description,
                 marks: sq.marks,
-                difficulty: sq.difficulty || 'medium',
+                difficulty: 'medium', // Default since sub_questions doesn't have difficulty column
                 type: sq.type,
                 status: sq.status, // Use actual sub-question status from database
-                description: sq.description || null,
                 topic_id: subQuestionTopicId || undefined,
                 topic_name: subQuestionTopicInfo?.name,
                 unit_name: subQuestionUnitName,
@@ -688,12 +634,6 @@ export default function QuestionsSetupPage() {
                 total_alternatives: sq.total_alternatives || undefined,
                 correct_answers: mapCorrectAnswers(sq.question_correct_answers),
                 correct_answer: sq.correct_answer || undefined,
-                has_direct_answer: typeof sq.has_direct_answer === 'boolean'
-                  ? sq.has_direct_answer
-                  : undefined,
-                is_contextual_only: typeof sq.is_contextual_only === 'boolean'
-                  ? sq.is_contextual_only
-                  : undefined,
                 parent_id: sq.parent_id || null,
                 level: sq.level ?? null,
                 order_index: sq.sort_order || sq.order_index || sq.order || index

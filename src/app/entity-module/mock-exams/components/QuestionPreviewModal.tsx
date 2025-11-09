@@ -69,20 +69,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
           question_correct_answers (
             id,
             answer,
-            marks,
-            alternative_id,
-            linked_alternatives,
-            alternative_type,
-            unit,
-            accepts_equivalent_phrasing,
-            accepts_reverse_argument,
-            error_carried_forward,
-            acceptable_variations,
-            marking_criteria,
-            working,
-            context_type,
-            context_value,
-            context_label
+            marks
           )
         `)
         .eq('id', question.id)
