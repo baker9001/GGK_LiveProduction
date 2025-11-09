@@ -1,12 +1,12 @@
 {
-  "timestamp": "2025-11-09T20:24:55.202Z",
+  "timestamp": "2025-11-09T20:30:22.861Z",
   "summary": {
     "totalPages": 60,
-    "averageScore": "22.4",
-    "complete": 3,
+    "averageScore": "23.8",
+    "complete": 4,
     "partial": 1,
     "minimal": 28,
-    "none": 28
+    "none": 27
   },
   "pages": [
     {
@@ -573,19 +573,19 @@
     {
       "path": "src/app/student-module/page.tsx",
       "module": "Student Module",
-      "hasPageHeader": false,
-      "hasCard": false,
+      "hasPageHeader": true,
+      "hasCard": true,
       "hasButton": false,
       "hasFilterPanel": false,
-      "hasBadge": false,
+      "hasBadge": true,
       "hasStepper": false,
-      "usesTokens": false,
+      "usesTokens": true,
       "usesShadowTokens": false,
-      "usesRadiusTokens": false,
-      "linesOfCode": 328,
-      "hasModernLayout": false,
-      "adoptionScore": 0,
-      "adoptionLevel": "None"
+      "usesRadiusTokens": true,
+      "linesOfCode": 350,
+      "hasModernLayout": true,
+      "adoptionScore": 80,
+      "adoptionLevel": "Complete"
     },
     {
       "path": "src/app/student-module/pathways/materials/page.tsx",
@@ -1583,6 +1583,23 @@
     ],
     "Student Module": [
       {
+        "path": "src/app/student-module/page.tsx",
+        "module": "Student Module",
+        "hasPageHeader": true,
+        "hasCard": true,
+        "hasButton": false,
+        "hasFilterPanel": false,
+        "hasBadge": true,
+        "hasStepper": false,
+        "usesTokens": true,
+        "usesShadowTokens": false,
+        "usesRadiusTokens": true,
+        "linesOfCode": 350,
+        "hasModernLayout": true,
+        "adoptionScore": 80,
+        "adoptionLevel": "Complete"
+      },
+      {
         "path": "src/app/student-module/profile/page.tsx",
         "module": "Student Module",
         "hasPageHeader": false,
@@ -1665,23 +1682,6 @@
         "linesOfCode": 431,
         "hasModernLayout": false,
         "adoptionScore": 5,
-        "adoptionLevel": "None"
-      },
-      {
-        "path": "src/app/student-module/page.tsx",
-        "module": "Student Module",
-        "hasPageHeader": false,
-        "hasCard": false,
-        "hasButton": false,
-        "hasFilterPanel": false,
-        "hasBadge": false,
-        "hasStepper": false,
-        "usesTokens": false,
-        "usesShadowTokens": false,
-        "usesRadiusTokens": false,
-        "linesOfCode": 328,
-        "hasModernLayout": false,
-        "adoptionScore": 0,
         "adoptionLevel": "None"
       }
     ],

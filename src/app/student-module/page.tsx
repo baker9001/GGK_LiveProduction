@@ -8,6 +8,9 @@ import { useUser } from '../../contexts/UserContext';
 import { supabase } from '../../lib/supabase';
 import { getPublicUrl } from '../../lib/storageHelpers';
 import { BookOpen, Award, Clock, TrendingUp, Key, Video, Building2, MapPin, GraduationCap } from 'lucide-react';
+import { PageHeader } from '../../components/shared/PageHeader';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/shared/Card';
+import { Badge } from '../../components/shared/Badge';
 import LicensesPage from './licenses/page';
 import LearningPathPage from './pathways/page';
 import StudentProfileSettingsPage from './profile/page';
@@ -82,10 +85,18 @@ function DashboardPage() {
   });
 
   return (
-    <div className="p-6 space-y-6">
-      {/* School Identity Banner */}
-      {studentInfo?.schoolName && (
-        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 rounded-3xl shadow-xl p-6 md:p-8 border border-blue-500/20">
+    <div className="min-h-screen bg-ggk-neutral-50 dark:bg-ggk-neutral-900">
+      <PageHeader
+        title="Student Dashboard"
+        subtitle="Access your courses, track progress, and manage your learning journey"
+        accent={true}
+      />
+
+      <div className="px-24 pb-32 space-y-24">
+        {/* School Identity Banner */}
+        {studentInfo?.schoolName && (
+          <Card variant="elevated" className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 border-blue-500/20">
+            <CardContent className="p-24 md:p-32">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             {/* School Logo */}
             {studentInfo.schoolLogoUrl ? (
@@ -142,126 +153,137 @@ function DashboardPage() {
                 )}
               </div>
             </div>
-          </div>
-        </div>
-      )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Welcome Section */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Student Dashboard
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Access your courses, track progress, and manage your learning journey
-        </p>
-      </div>
+        {/* Welcome Card */}
+        <Card variant="elevated" className="bg-gradient-to-r from-ggk-success-50 to-teal-50 dark:from-ggk-success-900/20 dark:to-teal-900/20 border-ggk-success-200 dark:border-ggk-success-800">
+          <CardContent className="p-24">
+            <div className="flex items-center gap-16">
+              <div className="flex-shrink-0 w-56 h-56 rounded-ggk-lg bg-ggk-success-100 dark:bg-ggk-success-800/50 flex items-center justify-center">
+                <BookOpen className="h-32 w-32 text-ggk-success-600 dark:text-ggk-success-400" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-semibold text-ggk-success-900 dark:text-ggk-success-100 mb-8">
+                  Welcome to Your Learning Hub
+                </h2>
+                <p className="text-ggk-success-700 dark:text-ggk-success-300">
+                  This module provides access to all your learning resources, practice materials, and progress tracking tools.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-6 mb-8">
-        <div className="flex items-center">
-          <BookOpen className="h-8 w-8 text-emerald-600 dark:text-emerald-400 mr-4" />
-          <div>
-            <h2 className="text-xl font-semibold text-emerald-900 dark:text-emerald-100 mb-2">
-              Welcome to Your Learning Hub
-            </h2>
-            <p className="text-emerald-700 dark:text-emerald-300">
-              This module provides access to all your learning resources, practice materials, and progress tracking tools.
-            </p>
-          </div>
-        </div>
-      </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
+          <Card variant="elevated" hover>
+            <CardHeader accent>
+              <div className="flex items-center gap-12">
+                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-blue-100 dark:bg-blue-800/50 flex items-center justify-center">
+                  <BookOpen className="h-24 w-24 text-blue-600 dark:text-blue-400" />
+                </div>
+                <CardTitle>My Courses</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-16">
+              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
+                Access all your enrolled courses, materials, and learning resources.
+              </p>
+              <Link
+                to="/app/student-module/practice"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-ggk-primary-600 hover:text-ggk-primary-700"
+              >
+                Open Practice Arena
+              </Link>
+            </CardContent>
+          </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-4">
-            <BookOpen className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              My Courses
-            </h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Access all your enrolled courses, materials, and learning resources.
-          </p>
-          <Link
-            to="/app/student-module/practice"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
-          >
-            Open Practice Arena
-          </Link>
-        </div>
+          <Card variant="elevated" hover>
+            <CardHeader accent>
+              <div className="flex items-center gap-12">
+                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-orange-100 dark:bg-orange-800/50 flex items-center justify-center">
+                  <Clock className="h-24 w-24 text-orange-600 dark:text-orange-400" />
+                </div>
+                <CardTitle>Practice & Assignments</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-16">
+              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
+                Complete assignments, practice questions, and mock exams.
+              </p>
+              <Badge variant="default">Coming Soon</Badge>
+            </CardContent>
+          </Card>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-4">
-            <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Practice & Assignments
-            </h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Complete assignments, practice questions, and mock exams.
-          </p>
-          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
-            Coming Soon
-          </div>
-        </div>
+          <Card variant="elevated" hover>
+            <CardHeader accent>
+              <div className="flex items-center gap-12">
+                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-ggk-success-100 dark:bg-ggk-success-800/50 flex items-center justify-center">
+                  <TrendingUp className="h-24 w-24 text-ggk-success-600 dark:text-ggk-success-400" />
+                </div>
+                <CardTitle>Progress Tracking</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-16">
+              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
+                Monitor your learning progress, scores, and performance metrics.
+              </p>
+              <Badge variant="default">Coming Soon</Badge>
+            </CardContent>
+          </Card>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-4">
-            <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Progress Tracking
-            </h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Monitor your learning progress, scores, and performance metrics.
-          </p>
-          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
-            Coming Soon
-          </div>
-        </div>
+          <Card variant="elevated" hover>
+            <CardHeader accent>
+              <div className="flex items-center gap-12">
+                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-ggk-primary-100 dark:bg-ggk-primary-800/50 flex items-center justify-center">
+                  <Key className="h-24 w-24 text-ggk-primary-600 dark:text-ggk-primary-400" />
+                </div>
+                <CardTitle>My Licenses</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-16">
+              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
+                View and manage your active learning licenses and subscriptions.
+              </p>
+              <Badge variant="success">Available</Badge>
+            </CardContent>
+          </Card>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-4">
-            <Key className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              My Licenses
-            </h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            View and manage your active learning licenses and subscriptions.
-          </p>
-          <div className="text-sm text-green-600 dark:text-green-400 font-medium">
-            Available
-          </div>
-        </div>
+          <Card variant="elevated" hover>
+            <CardHeader accent>
+              <div className="flex items-center gap-12">
+                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-purple-100 dark:bg-purple-800/50 flex items-center justify-center">
+                  <Video className="h-24 w-24 text-purple-600 dark:text-purple-400" />
+                </div>
+                <CardTitle>Video Lessons</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-16">
+              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
+                Watch video tutorials and recorded lessons from your teachers.
+              </p>
+              <Badge variant="default">Coming Soon</Badge>
+            </CardContent>
+          </Card>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-4">
-            <Video className="h-6 w-6 text-purple-600 dark:text-purple-400 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Video Lessons
-            </h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Watch video tutorials and recorded lessons from your teachers.
-          </p>
-          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
-            Coming Soon
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center mb-4">
-            <Award className="h-6 w-6 text-yellow-600 dark:text-yellow-400 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Achievements
-            </h3>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Track your achievements, badges, and learning milestones.
-          </p>
-          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
-            Coming Soon
-          </div>
+          <Card variant="elevated" hover>
+            <CardHeader accent>
+              <div className="flex items-center gap-12">
+                <div className="flex-shrink-0 w-48 h-48 rounded-ggk-md bg-yellow-100 dark:bg-yellow-800/50 flex items-center justify-center">
+                  <Award className="h-24 w-24 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <CardTitle>Achievements</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-16">
+              <p className="text-ggk-neutral-700 dark:text-ggk-neutral-300">
+                Track your achievements, badges, and learning milestones.
+              </p>
+              <Badge variant="default">Coming Soon</Badge>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
