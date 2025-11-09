@@ -104,19 +104,23 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
   };
 
   return (
-    <div className={cn('border-b-2 border-gray-200 dark:border-gray-700 pb-4 mb-4 pt-4', className)}>
+    <div className={cn(
+      'pb-4 mb-4 pt-4 bg-gradient-to-b from-gray-50/80 to-transparent rounded-lg transition-all duration-300',
+      'border-b-2 border-gray-200/60 dark:border-gray-700',
+      className
+    )}>
       {/* Module switcher title */}
       <div className={cn(
         'px-4 mb-3',
         !sidebarOpen && 'hidden'
       )}>
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
           Modules
         </h3>
       </div>
 
       {/* Module icons */}
-      <div className="space-y-3 px-2">
+      <div className="space-y-2 px-2">
         {visibleModules.length === 0 ? (
           <div className="text-sm text-gray-500 dark:text-gray-400 px-3 py-2">
             No modules available
@@ -170,25 +174,27 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
                 key={module.id}
                 to={module.path}
                 className={cn(
-                  'group relative flex items-center rounded-lg p-2 transition-all duration-200 hover:bg-[#64BC46]/5 dark:hover:bg-[#64BC46]/10 hover:translate-x-1',
-                  isCurrentModule && 'bg-[#64BC46]/15 dark:bg-[#64BC46]/20',
+                  'group relative flex items-center rounded-lg p-2.5 transition-all duration-200',
+                  'hover:bg-gradient-to-r hover:from-[#8CC63F]/10 hover:to-[#7AB635]/10 hover:translate-x-0.5 hover:shadow-sm',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F] focus-visible:ring-offset-2',
+                  isCurrentModule && 'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] shadow-md',
                   !sidebarOpen && 'justify-center'
                 )}
                 title={sidebarOpen ? undefined : module.name}
               >
                 <div className={cn(
-                  'flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-200',
-                  isCurrentModule 
-                    ? 'bg-[#64BC46] text-white shadow-lg ring-2 ring-offset-2 ring-[#64BC46]' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 group-hover:bg-[#64BC46] group-hover:text-white'
+                  'flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200',
+                  isCurrentModule
+                    ? 'bg-white/20 text-white shadow-inner ring-2 ring-white/30'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 group-hover:bg-[#8CC63F]/20 group-hover:text-[#8CC63F] group-hover:scale-105'
                 )}>
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
                 </div>
-                
+
                 {sidebarOpen && (
                   <span className={cn(
-                    'ml-3 text-sm font-medium transition-colors duration-200',
-                    isCurrentModule ? 'text-[#64BC46]' : 'text-gray-700 dark:text-gray-300 group-hover:text-[#64BC46]'
+                    'ml-3 text-sm font-semibold transition-all duration-200',
+                    isCurrentModule ? 'text-white' : 'text-gray-700 dark:text-gray-300 group-hover:text-[#8CC63F]'
                   )}>
                     {module.name}
                   </span>
@@ -196,15 +202,15 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
 
                 {/* Active indicator */}
                 {isCurrentModule && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#64BC46] rounded-r-full"></div>
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-full shadow-lg animate-pulse"></div>
                 )}
 
                 {/* Tooltip for collapsed sidebar */}
                 {!sidebarOpen && (
                   <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-                    <div className="bg-gray-900 dark:bg-gray-700 text-white dark:text-gray-100 text-xs rounded py-2 px-3 whitespace-nowrap">
+                    <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white text-xs font-semibold rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
                       {module.name}
-                      <div className="absolute left-0 top-1/2 transform -translate-x-1 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900 dark:border-r-gray-700"></div>
+                      <div className="absolute left-0 top-1/2 transform -translate-x-1 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-[#8CC63F]"></div>
                     </div>
                   </div>
                 )}

@@ -380,52 +380,67 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     
     if (hasChildren) {
       return (
-        <div className={cn("mb-1", depth > 0 && "ml-3")}>
+        <div className={cn("mb-0.5", depth > 0 && "ml-3")}>
           <div
             onClick={() => toggleExpanded(item.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleExpanded(item.id);
+              }
+            }}
+            role="button"
+            tabIndex={0}
             className={cn(
-              'w-full group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer',
-              'hover:bg-gray-50',
-              isActive && 'bg-[#E8F5DC] text-gray-900'
+              'w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer',
+              'hover:bg-gradient-to-r hover:from-[#8CC63F]/10 hover:to-[#7AB635]/5 hover:shadow-sm',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F] focus-visible:ring-offset-1',
+              isActive && 'bg-gradient-to-r from-[#E8F5DC] to-[#E8F5DC]/70 text-gray-900 shadow-sm'
             )}
           >
             {depth === 0 ? (
               <div className={cn(
-                "flex items-center justify-center w-8 h-8 rounded-lg transition-colors mr-3",
+                "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200 mr-3",
                 isActive
-                  ? "bg-gradient-to-br from-[#8CC63F] to-[#7AB635] text-white"
-                  : "bg-gray-100 text-gray-600"
+                  ? "bg-gradient-to-br from-[#8CC63F] to-[#7AB635] text-white shadow-md"
+                  : "bg-gray-100 text-gray-600 group-hover:bg-[#8CC63F]/20 group-hover:text-[#8CC63F] group-hover:scale-105"
               )}>
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
               </div>
             ) : (
               <div className="w-8 h-8 flex items-center justify-center mr-3">
                 <div className={cn(
-                  "w-2 h-2 rounded-full",
-                  isActive ? "bg-[#8CC63F]" : "bg-gray-300"
+                  "w-2 h-2 rounded-full transition-all duration-200",
+                  isActive ? "bg-[#8CC63F] shadow-sm" : "bg-gray-300 group-hover:bg-[#8CC63F]/60"
                 )} />
               </div>
             )}
             <span className={cn(
-              'flex-1 text-left font-medium transition-colors',
-              isActive ? 'text-gray-900' : 'text-gray-700',
+              'flex-1 text-left font-medium transition-colors duration-200',
+              isActive ? 'text-gray-900 font-semibold' : 'text-gray-700 group-hover:text-[#8CC63F]',
               !sidebarOpen && 'hidden'
             )}>
               {item.label}
             </span>
             {sidebarOpen && (
               isExpanded ? (
-                <ChevronDown className={cn("h-4 w-4", isActive ? "text-[#8CC63F]" : "text-gray-400")} />
+                <ChevronDown className={cn(
+                  "h-4 w-4 transition-all duration-200",
+                  isActive ? "text-[#8CC63F]" : "text-gray-400 group-hover:text-[#8CC63F]"
+                )} />
               ) : (
-                <ChevronRight className={cn("h-4 w-4", isActive ? "text-[#8CC63F]" : "text-gray-400")} />
+                <ChevronRight className={cn(
+                  "h-4 w-4 transition-all duration-200",
+                  isActive ? "text-[#8CC63F]" : "text-gray-400 group-hover:text-[#8CC63F]"
+                )} />
               )
             )}
           </div>
 
           {isExpanded && (
             <div className={cn(
-              "mt-1 space-y-0.5",
-              depth === 0 && "ml-4 pl-4"
+              "mt-1 space-y-0.5 animate-in fade-in slide-in-from-top-2 duration-200",
+              depth === 0 && "ml-4 pl-4 border-l-2 border-gray-200/60"
             )}>
               {item.children.map((child) => (
                 <NavItem key={child.id} item={child} depth={depth + 1} />
@@ -440,35 +455,36 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       <Link
         to={item.path}
         className={cn(
-          'group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors mb-1',
+          'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 mb-0.5',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F] focus-visible:ring-offset-1',
           isActive
-            ? 'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white'
-            : 'hover:bg-gray-50 text-gray-700'
+            ? 'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white shadow-md'
+            : 'hover:bg-gradient-to-r hover:from-[#8CC63F]/10 hover:to-[#7AB635]/5 hover:shadow-sm text-gray-700'
         )}
       >
         {depth === 0 ? (
           <div className={cn(
-            "flex items-center justify-center w-8 h-8 rounded-lg transition-colors mr-3",
+            "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200 mr-3",
             isActive
-              ? "bg-white/20"
-              : "bg-gray-100"
+              ? "bg-white/20 shadow-inner"
+              : "bg-gray-100 group-hover:bg-[#8CC63F]/20 group-hover:text-[#8CC63F] group-hover:scale-105"
           )}>
             <Icon className={cn(
-              "h-4 w-4",
-              isActive ? "text-white" : "text-gray-600"
+              "h-4 w-4 transition-all duration-200",
+              isActive ? "text-white" : "text-gray-600 group-hover:text-[#8CC63F] group-hover:scale-110"
             )} />
           </div>
         ) : (
           <div className="w-8 h-8 flex items-center justify-center mr-3">
             <div className={cn(
-              "w-2 h-2 rounded-full",
-              isActive ? "bg-white" : "bg-gray-300"
+              "w-2 h-2 rounded-full transition-all duration-200",
+              isActive ? "bg-white shadow-sm" : "bg-gray-300 group-hover:bg-[#8CC63F]/60"
             )} />
           </div>
         )}
         <span className={cn(
-          'font-medium transition-colors',
-          isActive ? 'text-white' : '',
+          'font-medium transition-colors duration-200',
+          isActive ? 'text-white font-semibold' : 'group-hover:text-[#8CC63F]',
           !sidebarOpen && depth === 0 && 'hidden'
         )}>
           {item.label}
@@ -495,7 +511,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       {/* Sidebar - Fixed to use flex column layout */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex flex-col bg-white transition-theme',
+          'fixed inset-y-0 left-0 z-40 flex flex-col bg-white shadow-xl transition-all duration-300',
           sidebarOpen ? 'w-64' : 'w-16',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
@@ -527,14 +543,14 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         {/* Main Navigation - Flexible and scrollable */}
         <nav
           ref={navRef}
-          className="flex-1 min-h-0 overflow-y-auto px-3 py-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400"
+          className="flex-1 min-h-0 overflow-y-auto px-3 py-4 bg-gradient-to-b from-gray-50/40 via-white to-white scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400"
         >
           {sidebarOpen && (
-            <h3 className="px-3 mb-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <h3 className="px-3 mb-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">
               Navigation
             </h3>
           )}
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {navigationItems.map((item) => (
               <NavItem key={item.id} item={item} />
             ))}
@@ -543,7 +559,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
         {/* User Info - Fixed height at bottom */}
         {sidebarOpen && (
-          <div className="shrink-0 p-4">
+          <div className="shrink-0 p-4 bg-gradient-to-t from-gray-50/80 to-transparent border-t border-gray-200/60">
             <div className="flex items-center">
               <div
                 className={cn(
