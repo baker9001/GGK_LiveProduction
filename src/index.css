@@ -813,26 +813,50 @@ body.font-dyslexic {
 /* Utility classes for enforcing solid backgrounds */
 .bg-solid-white {
   background-color: #ffffff !important;
+  opacity: 1 !important;
 }
 
 .bg-solid-gray-50 {
   background-color: #f9fafb !important;
+  opacity: 1 !important;
 }
 
 .bg-solid-gray-100 {
   background-color: #f3f4f6 !important;
+  opacity: 1 !important;
 }
 
 .dark .bg-solid-white {
   background-color: rgb(31, 41, 55) !important;
+  opacity: 1 !important;
 }
 
 .dark .bg-solid-gray-50 {
   background-color: rgb(26, 35, 50) !important;
+  opacity: 1 !important;
 }
 
 .dark .bg-solid-gray-100 {
   background-color: rgb(55, 65, 81) !important;
+  opacity: 1 !important;
+}
+
+/* Navigation solid background enforcement */
+nav[class*="sticky"] {
+  background-color: inherit !important;
+  opacity: 1 !important;
+}
+
+nav.bg-white {
+  background-color: #ffffff !important;
+}
+
+nav.bg-slate-900 {
+  background-color: #0f172a !important;
+}
+
+.dark nav.bg-gray-900 {
+  background-color: rgb(17, 24, 39) !important;
 }
 
 /* Enforce solid backgrounds for form controls */

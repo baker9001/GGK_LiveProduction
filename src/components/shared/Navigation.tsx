@@ -34,10 +34,11 @@ export function Navigation() {
         'sticky top-0 z-[100] transition-all duration-300 border-b',
         isLandingPage
           ? isDark
-            ? 'text-white bg-slate-900 border-slate-800 shadow-2xl'
-            : 'text-slate-900 bg-white border-slate-200 shadow-lg'
-          : 'bg-white dark:bg-gray-900 shadow-md border-gray-200 dark:border-gray-800'
+            ? 'text-white bg-slate-900 border-slate-800 shadow-2xl opacity-100'
+            : 'text-slate-900 bg-white border-slate-200 shadow-lg opacity-100'
+          : 'bg-white dark:bg-gray-900 shadow-md border-gray-200 dark:border-gray-800 opacity-100'
       )}
+      style={{ backgroundColor: isLandingPage ? (isDark ? '#0f172a' : '#ffffff') : undefined }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 items-center">
@@ -146,10 +147,11 @@ export function Navigation() {
               'px-2 pt-2 pb-3 space-y-1 transition-all duration-300',
               isLandingPage
                 ? isDark
-                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-2xl'
-                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-lg'
-                : 'bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800'
+                  ? 'bg-slate-900 text-white border-t border-slate-800 shadow-2xl opacity-100'
+                  : 'bg-white text-slate-900 border-t border-slate-200 shadow-lg opacity-100'
+                : 'bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 opacity-100'
             )}
+            style={{ backgroundColor: isLandingPage ? (isDark ? '#0f172a' : '#ffffff') : undefined }}
           >
             {NAV_ITEMS.map((item) => (
               <Link
