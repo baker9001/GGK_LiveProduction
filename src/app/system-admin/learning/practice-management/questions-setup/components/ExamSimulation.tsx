@@ -1300,7 +1300,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.enableTimer}
                     onChange={(e) => setFeatures(prev => ({ ...prev, enableTimer: e.target.checked }))}
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1309,7 +1309,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.showHints}
                     onChange={(e) => setFeatures(prev => ({ ...prev, showHints: e.target.checked }))}
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1318,7 +1318,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.showExplanations}
                     onChange={(e) => setFeatures(prev => ({ ...prev, showExplanations: e.target.checked }))}
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1327,7 +1327,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.showCorrectAnswers}
                     onChange={(e) => setFeatures(prev => ({ ...prev, showCorrectAnswers: e.target.checked }))}
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1336,7 +1336,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.allowAnswerInput}
                     onChange={(e) => setFeatures(prev => ({ ...prev, allowAnswerInput: e.target.checked }))}
-                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
                   />
                 </label>
               </div>

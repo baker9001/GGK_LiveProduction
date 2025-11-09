@@ -414,13 +414,13 @@ export default function SignInPage() {
         <img
           src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
           alt="Educational background"
-          className="w-full h-full object-cover select-none pointer-events-none blur-sm"
+          className="w-full h-full object-cover select-none pointer-events-none blur-[2px]"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
         {/* Transparent gray overlay with blur */}
-        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-md" />
+        <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-md" />
       </div>
 
       {/* Content */}
@@ -437,7 +437,7 @@ export default function SignInPage() {
             <h2 className="text-2xl font-bold text-white">
               Sign in to your account
             </h2>
-            <p className="mt-2 text-sm font-medium text-gray-300">
+            <p className="mt-2 text-sm font-medium text-gray-100">
               Enter your registered email and password to access the platform
             </p>
           </div>
@@ -509,7 +509,7 @@ export default function SignInPage() {
                 id="email"
                 label="Email address"
                 required
-                labelClassName="text-sm font-semibold text-gray-200"
+                labelClassName="text-sm font-semibold text-gray-100"
               >
                 <div className="relative mt-1">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -522,7 +522,7 @@ export default function SignInPage() {
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 bg-slate-900/50 border-slate-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
+                    className="pl-10 bg-slate-900/50 border-slate-600 text-white placeholder-gray-300 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
                     placeholder="Enter your email"
                     disabled={loading}
                     autoFocus
@@ -535,7 +535,7 @@ export default function SignInPage() {
                 id="password"
                 label="Password"
                 required
-                labelClassName="text-sm font-semibold text-gray-200"
+                labelClassName="text-sm font-semibold text-gray-100"
               >
                 <div className="relative mt-1">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -548,7 +548,7 @@ export default function SignInPage() {
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 bg-slate-900/50 border-slate-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
+                    className="pl-10 pr-10 bg-slate-900/50 border-slate-600 text-white placeholder-gray-300 focus:border-[#8CC63F] focus:ring-[#8CC63F] transition-colors"
                     placeholder="Enter your password"
                     disabled={loading}
                   />
@@ -583,9 +583,9 @@ export default function SignInPage() {
                         localStorage.removeItem('ggk_remember_session');
                       }
                     }}
-                    className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-slate-600 bg-slate-900/50 rounded cursor-pointer"
+                    className="h-4 w-4 rounded cursor-pointer transition-colors border-slate-600 bg-slate-900/50 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
                   />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-gray-300 cursor-pointer">
+                  <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-gray-100 cursor-pointer">
                     Remember me
                   </label>
                 </div>
@@ -623,7 +623,7 @@ export default function SignInPage() {
             {/* Additional Links */}
             <div className="mt-8 pt-6 border-t border-slate-700/50">
               <div className="flex justify-center mb-4">
-                <span className="text-sm font-semibold text-gray-300">
+                <span className="text-sm font-semibold text-gray-100">
                   Need help?
                 </span>
               </div>
@@ -631,13 +631,13 @@ export default function SignInPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Link
                   to="/contact-support"
-                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-300 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-100 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
                 >
                   Contact Support
                 </Link>
                 <Link
                   to="/request-access"
-                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-300 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-100 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
                 >
                   Request Access
                 </Link>
@@ -649,7 +649,7 @@ export default function SignInPage() {
               <Button
                 onClick={() => navigate('/')}
                 variant="outline"
-                className="w-full justify-center bg-slate-900/30 backdrop-blur border-slate-600 text-gray-300 hover:bg-slate-800/50 hover:border-slate-500 font-semibold py-2.5 transition-colors"
+                className="w-full justify-center bg-slate-900/30 backdrop-blur border-slate-600 text-gray-100 hover:bg-slate-800/50 hover:border-slate-500 font-semibold py-2.5 transition-colors"
               >
                 Back to Home
               </Button>
@@ -658,7 +658,7 @@ export default function SignInPage() {
         </div>
 
         {/* Bottom text */}
-        <p className="mt-6 text-center text-sm font-medium text-gray-400">
+        <p className="mt-6 text-center text-sm font-medium text-gray-300">
           Protected by industry-standard encryption
         </p>
       </div>

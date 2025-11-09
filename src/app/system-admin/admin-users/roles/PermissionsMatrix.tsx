@@ -165,7 +165,7 @@ export const PermissionsMatrix = forwardRef<PermissionsMatrixRef, PermissionsMat
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded opacity-0 cursor-default dark:bg-gray-700"
+                  className="h-4 w-4 rounded opacity-0 cursor-default border-gray-300 dark:border-gray-600 dark:bg-gray-700"
                   disabled
                 />
               </th>
@@ -182,7 +182,7 @@ export const PermissionsMatrix = forwardRef<PermissionsMatrixRef, PermissionsMat
                     <span className="mb-2">{header}</span>
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                      className="h-4 w-4 rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F] dark:bg-gray-700"
                       checked={isColumnAllSelected(`can_${header.toLowerCase()}` as keyof PermissionRecord)}
                       ref={input => {
                         if (input) {
@@ -202,7 +202,7 @@ export const PermissionsMatrix = forwardRef<PermissionsMatrixRef, PermissionsMat
                 <td className="px-6 py-4 whitespace-nowrap">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                    className="h-4 w-4 rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F] dark:bg-gray-700"
                     checked={isRowAllSelected(route.path)}
                     ref={input => {
                       if (input) {
@@ -222,7 +222,7 @@ export const PermissionsMatrix = forwardRef<PermissionsMatrixRef, PermissionsMat
                   <td key={permission} className="px-6 py-4 whitespace-nowrap text-center">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                      className="h-4 w-4 rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F] dark:bg-gray-700"
                       checked={permissions[route.path]?.[`can_${permission}` as keyof PermissionRecord] || false}
                       onChange={() => togglePermission(route.path, `can_${permission}` as keyof PermissionRecord)}
                     />
