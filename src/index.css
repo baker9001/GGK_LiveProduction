@@ -576,6 +576,39 @@ body.font-dyslexic {
   letter-spacing: 0.0125em;
 }
 
+/* Global Checkbox Styling - Green Theme */
+input[type="checkbox"] {
+  accent-color: #8CC63F;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:focus {
+  outline: 2px solid #8CC63F;
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:hover:not(:disabled) {
+  border-color: #8CC63F;
+}
+
+input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Dark mode checkbox support */
+.dark input[type="checkbox"] {
+  accent-color: #9ed050;
+}
+
+.dark input[type="checkbox"]:focus {
+  outline-color: #9ed050;
+}
+
+.dark input[type="checkbox"]:hover:not(:disabled) {
+  border-color: #9ed050;
+}
+
 .brand-pagination-icon-button:disabled {
   background-color: rgb(200 225 170 / 0.9);
   color: rgb(79 140 31 / 0.6);

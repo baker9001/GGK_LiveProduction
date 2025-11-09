@@ -198,7 +198,7 @@ export function DataTable<T>({
                   <input
                     id="select-all-checkbox"
                     type="checkbox"
-                    className="h-4 w-4 text-[#8CC63F] rounded border-filter focus:ring-[#8CC63F] focus:ring-offset-0 dark:bg-gray-700"
+                    className="h-4 w-4 rounded cursor-pointer transition-colors border-filter checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F] dark:bg-gray-700 dark:border-gray-600"
                     checked={allRowsSelected}
                     ref={input => input && (input.indeterminate = someRowsSelected)}
                     onChange={toggleSelectAll}
@@ -312,7 +312,7 @@ export function DataTable<T>({
                       <div className="flex items-center justify-center">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 text-[#8CC63F] rounded border-filter focus:ring-[#8CC63F] focus:ring-offset-0 dark:bg-gray-700"
+                          className="h-4 w-4 rounded cursor-pointer transition-colors border-filter checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F] dark:bg-gray-700 dark:border-gray-600"
                           aria-label={`Select row ${rowKey}`}
                           checked={isSelected}
                           onChange={() => toggleRowSelection(rowKey)}
