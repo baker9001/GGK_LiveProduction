@@ -414,13 +414,13 @@ export default function SignInPage() {
         <img
           src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
           alt="Educational background"
-          className="w-full h-full object-cover select-none pointer-events-none blur-[2px]"
+          className="w-full h-full object-cover select-none pointer-events-none"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           style={{ userSelect: 'none' }}
         />
-        {/* Transparent gray overlay with blur */}
-        <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-md" />
+        {/* Transparent light gray overlay */}
+        <div className="absolute inset-0 bg-gray-400/50" />
       </div>
 
       {/* Content */}
@@ -444,11 +444,11 @@ export default function SignInPage() {
         </div>
 
         {/* Sign-in Form */}
-        <div className="bg-slate-800/40 backdrop-blur-xl shadow-2xl sm:rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div className="bg-slate-800/95 shadow-2xl sm:rounded-2xl border border-slate-700/50 overflow-hidden">
           <div className="py-8 px-6 sm:px-10">
             {/* Session expiration inline notice */}
             {sessionExpiredMessage && (
-              <div className="mb-6 bg-blue-500/10 backdrop-blur text-blue-300 p-4 rounded-lg border border-blue-500/30">
+              <div className="mb-6 bg-blue-500/10 text-blue-300 p-4 rounded-lg border border-blue-500/30">
                 <div className="flex items-start">
                   <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-blue-400" />
                   <div>
@@ -463,7 +463,7 @@ export default function SignInPage() {
             {error && (
               <div className="mb-6">
                 {verificationNeeded ? (
-                  <div className="bg-amber-500/10 backdrop-blur text-amber-300 p-4 rounded-lg border border-amber-500/30">
+                  <div className="bg-amber-500/10 text-amber-300 p-4 rounded-lg border border-amber-500/30">
                     <div className="flex items-start">
                       <MailWarning className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-amber-400" />
                       <div className="flex-1">
@@ -483,7 +483,7 @@ export default function SignInPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-red-500/10 backdrop-blur text-red-300 p-4 rounded-lg flex items-start border border-red-500/30">
+                  <div className="bg-red-500/10 text-red-300 p-4 rounded-lg flex items-start border border-red-500/30">
                     <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 text-red-400" />
                     <div>
                       <span className="text-sm font-medium text-red-300">{error}</span>
@@ -631,13 +631,13 @@ export default function SignInPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Link
                   to="/contact-support"
-                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-100 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/70 text-sm font-semibold text-gray-100 hover:bg-slate-800/80 hover:border-slate-500 transition-colors"
                 >
                   Contact Support
                 </Link>
                 <Link
                   to="/request-access"
-                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/30 backdrop-blur text-sm font-semibold text-gray-100 hover:bg-slate-800/50 hover:border-slate-500 transition-colors"
+                  className="w-full inline-flex justify-center py-2.5 px-4 border border-slate-600 rounded-lg shadow-sm bg-slate-900/70 text-sm font-semibold text-gray-100 hover:bg-slate-800/80 hover:border-slate-500 transition-colors"
                 >
                   Request Access
                 </Link>
@@ -649,7 +649,7 @@ export default function SignInPage() {
               <Button
                 onClick={() => navigate('/')}
                 variant="outline"
-                className="w-full justify-center bg-slate-900/30 backdrop-blur border-slate-600 text-gray-100 hover:bg-slate-800/50 hover:border-slate-500 font-semibold py-2.5 transition-colors"
+                className="w-full justify-center bg-slate-900/70 border-slate-600 text-gray-100 hover:bg-slate-800/80 hover:border-slate-500 font-semibold py-2.5 transition-colors"
               >
                 Back to Home
               </Button>
