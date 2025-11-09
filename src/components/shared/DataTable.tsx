@@ -212,7 +212,7 @@ export function DataTable<T>({
                   key={column.id}
                   scope="col"
                   className={cn(
-                    'px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider',
+                    'px-6 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider',
                     column.enableSorting !== false && 'cursor-pointer select-none hover:text-[#5d7e23] dark:hover:text-[#9ed050] focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-2'
                   )}
                   tabIndex={column.enableSorting !== false ? 0 : -1}
