@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import {
   X,
   ChevronLeft,
@@ -35,6 +35,18 @@ import { ConfirmationDialog } from './ConfirmationDialog';
 import { cn } from '../../lib/utils';
 import { useAnswerValidation } from '../../hooks/useAnswerValidation';
 import DynamicAnswerField from './DynamicAnswerField';
+
+// Memoized wrapper for DynamicAnswerField to prevent unnecessary re-renders
+const MemoizedAnswerField = React.memo(DynamicAnswerField, (prev, next) => {
+  return (
+    prev.question.id === next.question.id &&
+    prev.value === next.value &&
+    prev.disabled === next.disabled &&
+    prev.showHints === next.showHints &&
+    prev.showCorrectAnswer === next.showCorrectAnswer &&
+    prev.mode === next.mode
+  );
+});
 import { EnhancedTestResultsView } from './EnhancedTestResultsView';
 import toast from 'react-hot-toast';
 
@@ -330,7 +342,7 @@ const buildNormalisedCorrectAnswers = (source: AnswerSource): CorrectAnswer[] =>
   return normalisedAnswers;
 };
 
-const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attachments }) => {
+const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = React.memo(({ attachments }) => {
   const [previewAttachment, setPreviewAttachment] = React.useState<AttachmentAsset | null>(null);
 
   if (!attachments || attachments.length === 0) {
@@ -552,7 +564,7 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
       )}
     </>
   );
-};
+});
 
 interface TeacherInsightsProps {
   correctAnswers?: CorrectAnswer[];
@@ -562,7 +574,7 @@ interface TeacherInsightsProps {
   label?: string;
 }
 
-const TeacherInsights: React.FC<TeacherInsightsProps> = ({
+const TeacherInsights: React.FC<TeacherInsightsProps> = React.memo(({
   correctAnswers,
   answerRequirement,
   markingCriteria,
@@ -689,7 +701,7 @@ const TeacherInsights: React.FC<TeacherInsightsProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export function UnifiedTestSimulation({
   paper,
@@ -731,8 +743,8 @@ export function UnifiedTestSimulation({
   const exitActionRef = useRef<(() => void) | null>(null);
   const { validateAnswer } = useAnswerValidation();
 
-  const currentQuestion = paper.questions[currentQuestionIndex];
-  const totalQuestions = paper.questions.length;
+  const currentQuestion = useMemo(() => paper.questions[currentQuestionIndex], [paper.questions, currentQuestionIndex]);
+  const totalQuestions = useMemo(() => paper.questions.length, [paper.questions]);
 
   const requiresAnswer = useCallback(
     (item?: { has_direct_answer?: boolean; is_contextual_only?: boolean; answer_requirement?: string; answer_format?: string }) => {
@@ -1262,7 +1274,7 @@ export function UnifiedTestSimulation({
     setCurrentQuestionIndex(prevIndex => Math.min(prevIndex + 1, totalQuestions - 1));
   }, [totalQuestions]);
 
-  const getQuestionStatus = (questionId: string, parts: SubQuestion[]) => {
+  const getQuestionStatus = useCallback((questionId: string, parts: SubQuestion[]) => {
     if (parts.length > 0) {
       let anyAnswered = false;
 
@@ -1296,19 +1308,18 @@ export function UnifiedTestSimulation({
 
     const answer = userAnswers[questionId];
     return answer?.answer !== undefined && answer?.answer !== '' ? 'answered' : 'unanswered';
-  };
+  }, [userAnswers]);
 
-  const getAnsweredCount = () => {
+  const getAnsweredCount = useMemo(() => {
     return paper.questions.filter(q => {
       const status = getQuestionStatus(q.id, q.parts);
       return status === 'answered';
     }).length;
-  };
+  }, [paper.questions, getQuestionStatus]);
 
-  const calculateProgress = () => {
-    const answeredQuestions = getAnsweredCount();
-    return totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
-  };
+  const calculateProgress = useMemo(() => {
+    return totalQuestions > 0 ? (getAnsweredCount / totalQuestions) * 100 : 0;
+  }, [getAnsweredCount, totalQuestions]);
 
   if (showResults && results) {
     return (
@@ -1377,11 +1388,11 @@ export function UnifiedTestSimulation({
 
                 <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
                   <span>Progress:</span>
-                  <span className="font-medium">{getAnsweredCount()}/{paper.questions.length}</span>
+                  <span className="font-medium">{getAnsweredCount}/{paper.questions.length}</span>
                   <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-blue-500 transition-all duration-300"
-                      style={{ width: `${calculateProgress()}%` }}
+                      style={{ width: `${calculateProgress}%` }}
                     />
                   </div>
                 </div>
@@ -1774,7 +1785,7 @@ export function UnifiedTestSimulation({
                       {currentQuestion.parts.length === 0 && (
                         requiresAnswer(currentQuestion) ? (
                           <div className="mb-6">
-                            <DynamicAnswerField
+                            <MemoizedAnswerField
                               question={{
                                 ...currentQuestion,
                                 subject: paper.subject,
@@ -1866,7 +1877,7 @@ export function UnifiedTestSimulation({
                                   )}
 
                                   {requiresAnswer(part) ? (
-                                    <DynamicAnswerField
+                                    <MemoizedAnswerField
                                       question={{
                                         ...part,
                                         subject: paper.subject,
@@ -1936,7 +1947,7 @@ export function UnifiedTestSimulation({
                                               )}
 
                                               {requiresAnswer(subpart) ? (
-                                                <DynamicAnswerField
+                                                <MemoizedAnswerField
                                                   question={{
                                                     ...subpart,
                                                     id: subpart.id,

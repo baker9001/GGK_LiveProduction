@@ -126,8 +126,17 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
       editorRef.current.innerHTML = sanitized;
       ensureParagraphStructure(editorRef.current);
     }
-    onChange(sanitized);
+    // Debounce onChange to reduce re-renders
+    if (handleInput.timeout) {
+      clearTimeout(handleInput.timeout);
+    }
+    handleInput.timeout = setTimeout(() => {
+      onChange(sanitized);
+    }, 100);
   }, [onChange]);
+
+  // Add timeout property to handleInput
+  (handleInput as any).timeout = null;
 
   const handlePaste = useCallback((event: ClipboardEvent) => {
     event.preventDefault();
