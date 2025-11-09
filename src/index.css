@@ -1,6 +1,13 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+}
+
+@plugin "tailwind-scrollbar";
+
+@config "../tailwind.config.js";
 
 :root {
   --brand-accent: #7dc242;

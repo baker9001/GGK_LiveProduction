@@ -330,10 +330,16 @@ export default function LandingPage() {
             className="w-full h-full object-cover"
             loading="eager"
           />
-          <div className="absolute inset-0 bg-black bg-opacity-60" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(120deg, rgba(4, 9, 30, 0.82) 0%, rgba(8, 28, 21, 0.76) 55%, rgba(22, 58, 36, 0.58) 100%)',
+            }}
+          />
         </div>
         <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
-          <div className="text-center w-full">
+          <div className="text-center w-full text-white">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6">
               Master IGCSE, O-Level & A-Level
               <span className="block text-[#8CC63F]">Cambridge & Edexcel Excellence</span>
@@ -357,7 +363,7 @@ export default function LandingPage() {
                 variant="outline"
                 size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[180px] !border-white !text-white hover:!bg-white/20"
+                className="w-full sm:w-auto min-w-[180px] border-white text-white hover:bg-white/20 hover:text-white"
                 leftIcon={<PlayCircle />}
               >
                 Watch Demo
