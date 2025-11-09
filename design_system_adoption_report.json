@@ -1,12 +1,12 @@
 {
-  "timestamp": "2025-11-09T20:10:07.969Z",
+  "timestamp": "2025-11-09T20:24:55.202Z",
   "summary": {
     "totalPages": 60,
-    "averageScore": "20.1",
-    "complete": 1,
+    "averageScore": "22.4",
+    "complete": 3,
     "partial": 1,
-    "minimal": 29,
-    "none": 29
+    "minimal": 28,
+    "none": 28
   },
   "pages": [
     {
@@ -199,19 +199,19 @@
     {
       "path": "src/app/entity-module/page.tsx",
       "module": "Entity Module",
-      "hasPageHeader": false,
+      "hasPageHeader": true,
       "hasCard": true,
       "hasButton": false,
       "hasFilterPanel": false,
-      "hasBadge": false,
+      "hasBadge": true,
       "hasStepper": false,
-      "usesTokens": false,
+      "usesTokens": true,
       "usesShadowTokens": false,
-      "usesRadiusTokens": false,
-      "linesOfCode": 232,
-      "hasModernLayout": false,
-      "adoptionScore": 20,
-      "adoptionLevel": "Minimal"
+      "usesRadiusTokens": true,
+      "linesOfCode": 261,
+      "hasModernLayout": true,
+      "adoptionScore": 80,
+      "adoptionLevel": "Complete"
     },
     {
       "path": "src/app/entity-module/profile/page.tsx",
@@ -964,19 +964,19 @@
     {
       "path": "src/app/teachers-module/page.tsx",
       "module": "Teachers Module",
-      "hasPageHeader": false,
-      "hasCard": false,
+      "hasPageHeader": true,
+      "hasCard": true,
       "hasButton": false,
       "hasFilterPanel": false,
-      "hasBadge": false,
+      "hasBadge": true,
       "hasStepper": false,
-      "usesTokens": false,
+      "usesTokens": true,
       "usesShadowTokens": false,
-      "usesRadiusTokens": false,
-      "linesOfCode": 165,
-      "hasModernLayout": false,
-      "adoptionScore": 0,
-      "adoptionLevel": "None"
+      "usesRadiusTokens": true,
+      "linesOfCode": 179,
+      "hasModernLayout": true,
+      "adoptionScore": 80,
+      "adoptionLevel": "Complete"
     },
     {
       "path": "src/app/teachers-module/profile/page.tsx",
@@ -1102,6 +1102,23 @@
       }
     ],
     "Entity Module": [
+      {
+        "path": "src/app/entity-module/page.tsx",
+        "module": "Entity Module",
+        "hasPageHeader": true,
+        "hasCard": true,
+        "hasButton": false,
+        "hasFilterPanel": false,
+        "hasBadge": true,
+        "hasStepper": false,
+        "usesTokens": true,
+        "usesShadowTokens": false,
+        "usesRadiusTokens": true,
+        "linesOfCode": 261,
+        "hasModernLayout": true,
+        "adoptionScore": 80,
+        "adoptionLevel": "Complete"
+      },
       {
         "path": "src/app/entity-module/license-management/page.tsx",
         "module": "Entity Module",
@@ -1234,23 +1251,6 @@
         "usesShadowTokens": false,
         "usesRadiusTokens": false,
         "linesOfCode": 3575,
-        "hasModernLayout": false,
-        "adoptionScore": 20,
-        "adoptionLevel": "Minimal"
-      },
-      {
-        "path": "src/app/entity-module/page.tsx",
-        "module": "Entity Module",
-        "hasPageHeader": false,
-        "hasCard": true,
-        "hasButton": false,
-        "hasFilterPanel": false,
-        "hasBadge": false,
-        "hasStepper": false,
-        "usesTokens": false,
-        "usesShadowTokens": false,
-        "usesRadiusTokens": false,
-        "linesOfCode": 232,
         "hasModernLayout": false,
         "adoptionScore": 20,
         "adoptionLevel": "Minimal"
@@ -1961,6 +1961,23 @@
     ],
     "Teachers Module": [
       {
+        "path": "src/app/teachers-module/page.tsx",
+        "module": "Teachers Module",
+        "hasPageHeader": true,
+        "hasCard": true,
+        "hasButton": false,
+        "hasFilterPanel": false,
+        "hasBadge": true,
+        "hasStepper": false,
+        "usesTokens": true,
+        "usesShadowTokens": false,
+        "usesRadiusTokens": true,
+        "linesOfCode": 179,
+        "hasModernLayout": true,
+        "adoptionScore": 80,
+        "adoptionLevel": "Complete"
+      },
+      {
         "path": "src/app/teachers-module/learning-management/materials/page.tsx",
         "module": "Teachers Module",
         "hasPageHeader": false,
@@ -2007,23 +2024,6 @@
         "usesShadowTokens": false,
         "usesRadiusTokens": false,
         "linesOfCode": 124,
-        "hasModernLayout": false,
-        "adoptionScore": 0,
-        "adoptionLevel": "None"
-      },
-      {
-        "path": "src/app/teachers-module/page.tsx",
-        "module": "Teachers Module",
-        "hasPageHeader": false,
-        "hasCard": false,
-        "hasButton": false,
-        "hasFilterPanel": false,
-        "hasBadge": false,
-        "hasStepper": false,
-        "usesTokens": false,
-        "usesShadowTokens": false,
-        "usesRadiusTokens": false,
-        "linesOfCode": 165,
         "hasModernLayout": false,
         "adoptionScore": 0,
         "adoptionLevel": "None"
