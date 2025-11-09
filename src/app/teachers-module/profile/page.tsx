@@ -55,12 +55,15 @@ import { z } from 'zod';
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { Button } from '../../../components/shared/Button';
-import { FormField, Input, Textarea, Select } from '../../../components/shared/FormField';
+import { FormField, Input, Textarea } from '../../../components/shared/FormField';
 import { PhoneInput } from '../../../components/shared/PhoneInput';
 import { SearchableMultiSelect } from '../../../components/shared/SearchableMultiSelect';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { toast } from '../../../components/shared/Toast';
 import { cn } from '../../../lib/utils';
+import { PageHeader } from '../../../components/shared/PageHeader';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../../components/shared/Card';
+import { Badge } from '../../../components/shared/Badge';
 
 // ===== TYPE DEFINITIONS =====
 interface TeacherProfileData {
@@ -459,28 +462,59 @@ export default function TeacherProfilePage() {
     changePasswordMutation.mutate({ newPassword });
   };
 
+  const headerActions = !isEditing ? (
+    <Button
+      onClick={() => setIsEditing(true)}
+      leftIcon={<Edit3 className="w-4 h-4" />}
+    >
+      Edit profile
+    </Button>
+  ) : (
+    <div className="flex items-center gap-12">
+      <Button
+        variant="secondary"
+        onClick={handleCancel}
+        leftIcon={<X className="w-4 h-4" />}
+        disabled={updateProfileMutation.isPending}
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleSave}
+        leftIcon={<Save className="w-4 h-4" />}
+        loading={updateProfileMutation.isPending}
+      >
+        Save changes
+      </Button>
+    </div>
+  );
+
   // Calculate experience badge color
   const getExperienceBadgeColor = (years?: number) => {
-    if (!years || years === 0) return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
-    if (years < 2) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
-    if (years < 5) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-    if (years < 10) return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
-    return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
+    if (!years || years === 0) return 'bg-ggk-neutral-100 text-ggk-neutral-600 dark:bg-ggk-neutral-800 dark:text-ggk-neutral-300';
+    if (years < 2) return 'bg-ggk-primary-100 text-ggk-primary-700 dark:bg-ggk-primary-900/40 dark:text-ggk-primary-200';
+    if (years < 5) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200';
+    if (years < 10) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200';
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
   };
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-[#8CC63F] mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            Loading Profile
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Fetching your teacher profile information...
-          </p>
-        </div>
+      <div className="min-h-[calc(100vh-4rem)] bg-ggk-neutral-50 dark:bg-ggk-neutral-950 flex items-center justify-center px-20">
+        <Card variant="elevated" className="max-w-md text-center">
+          <CardContent className="space-y-10">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-ggk-primary-100 text-ggk-primary-600">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-ggk-neutral-900 dark:text-ggk-neutral-50">Loading profile</h2>
+              <p className="text-sm text-ggk-neutral-600 dark:text-ggk-neutral-400">
+                Fetching your teacher profile information...
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -488,172 +522,144 @@ export default function TeacherProfilePage() {
   // Error state
   if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-6">
-          <div className="flex items-center">
-            <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400 mr-3" />
-            <div>
-              <h3 className="font-semibold text-red-800 dark:text-red-200">
-                Error Loading Profile
-              </h3>
-              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                {error instanceof Error ? error.message : 'Failed to load profile data. Please try again.'}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                className="mt-3"
-              >
-                Try Again
-              </Button>
+      <div className="mx-auto max-w-3xl px-20 py-20">
+        <Card variant="outlined" className="border-red-200 bg-red-50/80 text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+          <CardContent className="space-y-6">
+            <div className="flex items-center gap-8">
+              <AlertCircle className="h-6 w-6" />
+              <div>
+                <h3 className="text-base font-semibold">Error loading profile</h3>
+                <p className="mt-2 text-sm leading-relaxed">
+                  {error instanceof Error ? error.message : 'Failed to load profile data. Please try again.'}
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (!profileData) {
     return (
-      <div className="p-6">
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6">
-          <div className="flex items-center">
-            <AlertCircle className="h-6 w-6 text-yellow-600 dark:text-yellow-400 mr-3" />
-            <div>
-              <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">
-                Profile Not Found
-              </h3>
-              <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
-                Your teacher profile could not be found. Please contact your administrator.
-              </p>
+      <div className="mx-auto max-w-3xl px-20 py-20">
+        <Card variant="outlined" className="border-amber-200 bg-amber-50/80 text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-8">
+              <AlertCircle className="h-6 w-6" />
+              <div>
+                <h3 className="text-base font-semibold">Profile not found</h3>
+                <p className="mt-2 text-sm leading-relaxed">
+                  Your teacher profile could not be found. Please contact your administrator.
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      {/* Header Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#8CC63F]/20 to-[#7AB635]/20 rounded-full flex items-center justify-center">
-              <GraduationCap className="w-8 h-8 text-[#8CC63F]" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Teacher Profile
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                Manage your personal and professional information
-              </p>
-            </div>
-          </div>
+    <div className="mx-auto max-w-6xl px-20 py-20 space-y-24">
+      <PageHeader
+        title="Teacher profile"
+        subtitle="Manage your personal details, professional credentials, and security settings with the refreshed GGK design system."
+        actions={headerActions}
+      />
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            {!isEditing ? (
-              <Button
-                onClick={() => setIsEditing(true)}
-                leftIcon={<Edit3 className="w-4 h-4" />}
-                className="bg-[#8CC63F] hover:bg-[#7AB635]"
-              >
-                Edit Profile
-              </Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleCancel}
-                  leftIcon={<X className="w-4 h-4" />}
-                  disabled={updateProfileMutation.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  leftIcon={<Save className="w-4 h-4" />}
-                  loading={updateProfileMutation.isPending}
-                  className="bg-[#8CC63F] hover:bg-[#7AB635]"
-                >
-                  Save Changes
-                </Button>
+      <Card variant="elevated">
+        <CardContent className="space-y-16">
+          <div className="flex flex-col gap-12 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-12">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-ggk-primary-100 text-ggk-primary-600">
+                <GraduationCap className="h-8 w-8" />
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Profile Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-r from-[#8CC63F]/10 to-[#7AB635]/10 dark:from-[#8CC63F]/20 dark:to-[#7AB635]/20 border border-[#8CC63F]/30 dark:border-[#8CC63F]/40 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <Award className="h-6 w-6 text-[#8CC63F]" />
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Experience
-                </p>
-                <p className="text-lg font-bold text-[#7AB635] dark:text-[#8CC63F]">
-                  {profileData.experience_years || 0} years
+              <div className="space-y-2">
+                <h2 className="text-xl font-semibold text-ggk-neutral-900 dark:text-ggk-neutral-50">
+                  {profileData.raw_user_meta_data?.name || 'Teacher profile'}
+                </h2>
+                <p className="text-sm text-ggk-neutral-600 dark:text-ggk-neutral-400">
+                  {profileData.email}
                 </p>
               </div>
             </div>
-          </div>
 
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Specializations
-                </p>
-                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                  {profileData.specialization?.length || 0} subjects
-                </p>
-              </div>
+            <div className="flex flex-wrap items-center gap-8">
+              <Badge variant="primary" size="sm">
+                {profileData.status === 'active' ? 'Active' : profileData.status.replace('_', ' ')}
+              </Badge>
+              <Badge variant="outline" size="sm">
+                Joined {new Date(profileData.created_at).toLocaleDateString()}
+              </Badge>
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <Calendar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Hire Date
-                </p>
-                <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                  {profileData.hire_date 
-                    ? new Date(profileData.hire_date).toLocaleDateString()
-                    : 'Not set'
-                  }
-                </p>
+          <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-ggk-xl border border-ggk-primary-200/70 bg-ggk-primary-50/80 p-16 shadow-ggk-sm dark:border-ggk-primary-800/60 dark:bg-ggk-primary-900/30">
+              <div className="flex items-center gap-8">
+                <Award className="h-6 w-6 text-ggk-primary-600" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ggk-neutral-600">Experience</p>
+                  <p className="mt-2 text-lg font-semibold text-ggk-primary-700 dark:text-ggk-primary-200">
+                    {profileData.experience_years || 0} years
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-ggk-xl border border-ggk-neutral-200/70 bg-white/80 p-16 shadow-ggk-sm dark:border-ggk-neutral-800/70 dark:bg-ggk-neutral-900/50">
+              <div className="flex items-center gap-8">
+                <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-300" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ggk-neutral-600">Specialisations</p>
+                  <p className="mt-2 text-lg font-semibold text-blue-600 dark:text-blue-300">
+                    {profileData.specialization?.length || 0} subjects
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-ggk-xl border border-ggk-neutral-200/70 bg-white/80 p-16 shadow-ggk-sm dark:border-ggk-neutral-800/70 dark:bg-ggk-neutral-900/50">
+              <div className="flex items-center gap-8">
+                <Calendar className="h-6 w-6 text-purple-600 dark:text-purple-300" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ggk-neutral-600">Hire date</p>
+                  <p className="mt-2 text-lg font-semibold text-purple-600 dark:text-purple-300">
+                    {profileData.hire_date
+                      ? new Date(profileData.hire_date).toLocaleDateString()
+                      : 'Not set'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Personal Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center gap-2 mb-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <User className="h-5 w-5 text-[#8CC63F]" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Personal Information
-          </h2>
-        </div>
-
-        {formErrors.form && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
-            <div className="flex items-center">
-              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2" />
-              <span className="text-sm text-red-700 dark:text-red-300">{formErrors.form}</span>
+      <Card variant="outlined">
+        <CardHeader accent>
+          <div className="flex items-center gap-8">
+            <User className="h-5 w-5 text-ggk-primary-600" />
+            <div>
+              <CardTitle className="text-lg">Personal information</CardTitle>
+              <CardDescription className="mt-4">
+                Update your contact details and basic information.
+              </CardDescription>
             </div>
           </div>
-        )}
+        </CardHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="space-y-16">
+          {formErrors.form && (
+            <div className="rounded-ggk-xl border border-red-200 bg-red-50/80 p-12 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+              {formErrors.form}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
           {/* Name */}
           <FormField
             id="name"
@@ -667,13 +673,13 @@ export default function TeacherProfilePage() {
                 value={formData.name}
                 onChange={(e) => handleFieldChange('name', e.target.value)}
                 placeholder="Enter your full name"
-                leftIcon={<User className="h-4 w-4 text-gray-400" />}
-                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                leftIcon={<User className="h-4 w-4 text-ggk-neutral-400" />}
+                className="focus:ring-ggk-primary-500 focus:border-ggk-primary-500"
               />
             ) : (
-              <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                <User className="h-4 w-4 text-gray-400" />
-                <span className="text-gray-900 dark:text-white">
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
+                <User className="h-4 w-4 text-ggk-neutral-400" />
+                <span className="text-ggk-neutral-900 dark:text-ggk-neutral-50">
                   {profileData.raw_user_meta_data?.name || 'Not set'}
                 </span>
               </div>
@@ -694,13 +700,13 @@ export default function TeacherProfilePage() {
                 value={formData.email}
                 onChange={(e) => handleFieldChange('email', e.target.value)}
                 placeholder="Enter your email address"
-                leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
-                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                leftIcon={<Mail className="h-4 w-4 text-ggk-neutral-400" />}
+                className="focus:ring-ggk-primary-500 focus:border-ggk-primary-500"
               />
             ) : (
-              <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                <Mail className="h-4 w-4 text-gray-400" />
-                <span className="text-gray-900 dark:text-white">
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
+                <Mail className="h-4 w-4 text-ggk-neutral-400" />
+                <span className="text-ggk-neutral-900 dark:text-ggk-neutral-50">
                   {profileData.email}
                 </span>
               </div>
@@ -721,9 +727,9 @@ export default function TeacherProfilePage() {
                 disabled={updateProfileMutation.isPending}
               />
             ) : (
-              <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                <Phone className="h-4 w-4 text-gray-400" />
-                <span className="text-gray-900 dark:text-white">
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
+                <Phone className="h-4 w-4 text-ggk-neutral-400" />
+                <span className="text-ggk-neutral-900 dark:text-ggk-neutral-50">
                   {profileData.phone || 'Not set'}
                 </span>
               </div>
@@ -735,9 +741,9 @@ export default function TeacherProfilePage() {
             id="teacher_code"
             label="Teacher Code"
           >
-            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <Briefcase className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-900 dark:text-white font-mono">
+            <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
+              <Briefcase className="h-4 w-4 text-ggk-neutral-400" />
+              <span className="font-mono text-ggk-neutral-900 dark:text-ggk-neutral-50">
                 {profileData.teacher_code}
               </span>
             </div>
@@ -746,19 +752,23 @@ export default function TeacherProfilePage() {
       </div>
 
       {/* Professional Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center gap-2 mb-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <BookOpen className="h-5 w-5 text-[#8CC63F]" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Professional Information
-          </h2>
-        </div>
+      <Card variant="outlined">
+        <CardHeader accent>
+          <div className="flex items-center gap-8">
+            <BookOpen className="h-5 w-5 text-ggk-primary-600" />
+            <div>
+              <CardTitle className="text-lg">Professional information</CardTitle>
+              <CardDescription className="mt-4">
+                Share your teaching expertise and experiences.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
 
-        <div className="space-y-6">
-          {/* Specialization */}
+        <CardContent className="space-y-16">
           <FormField
             id="specialization"
-            label="Subject Specializations"
+            label="Subject specialisations"
             error={formErrors.specialization}
           >
             {isEditing ? (
@@ -767,36 +777,31 @@ export default function TeacherProfilePage() {
                 options={SPECIALIZATION_OPTIONS}
                 selectedValues={formData.specialization}
                 onChange={(values) => handleFieldChange('specialization', values)}
-                placeholder="Select your subject specializations..."
-                className="green-theme"
+                placeholder="Select your subject specialisations..."
               />
             ) : (
-              <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+              <div className="rounded-ggk-xl bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
                 {profileData.specialization && profileData.specialization.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-6">
                     {profileData.specialization.map((spec, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#8CC63F]/15 text-[#5A8A2C] dark:bg-[#8CC63F]/25 dark:text-[#8CC63F]"
-                      >
+                      <Badge key={index} variant="primary" size="sm">
                         {SPECIALIZATION_OPTIONS.find(opt => opt.value === spec)?.label || spec}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-gray-500 dark:text-gray-400 italic">
-                    No specializations set
+                  <span className="text-sm text-ggk-neutral-500 dark:text-ggk-neutral-400 italic">
+                    No specialisations set
                   </span>
                 )}
               </div>
             )}
           </FormField>
 
-          {/* Qualification and Experience */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
             <FormField
               id="qualification"
-              label="Highest Qualification"
+              label="Highest qualification"
               error={formErrors.qualification}
             >
               {isEditing ? (
@@ -805,22 +810,20 @@ export default function TeacherProfilePage() {
                   value={formData.qualification}
                   onChange={(e) => handleFieldChange('qualification', e.target.value)}
                   placeholder="e.g., M.Sc. Mathematics, B.Ed."
-                  leftIcon={<Award className="h-4 w-4 text-gray-400" />}
-                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                  leftIcon={<Award className="h-4 w-4 text-ggk-neutral-400" />}
+                  className="focus:ring-ggk-primary-500 focus:border-ggk-primary-500"
                 />
               ) : (
-                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                  <Award className="h-4 w-4 text-gray-400" />
-                  <span className="text-gray-900 dark:text-white">
-                    {profileData.qualification || 'Not set'}
-                  </span>
+                <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 text-ggk-neutral-900 dark:bg-ggk-neutral-900/50 dark:text-ggk-neutral-50">
+                  <Award className="h-4 w-4 text-ggk-neutral-400" />
+                  <span>{profileData.qualification || 'Not set'}</span>
                 </div>
               )}
             </FormField>
 
             <FormField
               id="experience_years"
-              label="Years of Experience"
+              label="Years of experience"
               error={formErrors.experience_years}
             >
               {isEditing ? (
@@ -832,16 +835,18 @@ export default function TeacherProfilePage() {
                   value={formData.experience_years.toString()}
                   onChange={(e) => handleFieldChange('experience_years', parseInt(e.target.value) || 0)}
                   placeholder="Enter years of experience"
-                  leftIcon={<Clock className="h-4 w-4 text-gray-400" />}
-                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                  leftIcon={<Clock className="h-4 w-4 text-ggk-neutral-400" />}
+                  className="focus:ring-ggk-primary-500 focus:border-ggk-primary-500"
                 />
               ) : (
-                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                  <Clock className="h-4 w-4 text-gray-400" />
-                  <span className={cn(
-                    "px-3 py-1 rounded-full text-sm font-medium",
-                    getExperienceBadgeColor(profileData.experience_years)
-                  )}>
+                <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
+                  <Clock className="h-4 w-4 text-ggk-neutral-400" />
+                  <span
+                    className={cn(
+                      'px-6 py-2 rounded-full text-sm font-medium',
+                      getExperienceBadgeColor(profileData.experience_years)
+                    )}
+                  >
                     {profileData.experience_years || 0} years
                   </span>
                 </div>
@@ -849,10 +854,9 @@ export default function TeacherProfilePage() {
             </FormField>
           </div>
 
-          {/* Bio */}
           <FormField
             id="bio"
-            label="Professional Bio"
+            label="Professional bio"
             error={formErrors.bio}
           >
             {isEditing ? (
@@ -863,188 +867,154 @@ export default function TeacherProfilePage() {
                 placeholder="Tell us about your teaching philosophy, interests, and experience..."
                 rows={4}
                 maxLength={1000}
-                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                className="focus:ring-ggk-primary-500 focus:border-ggk-primary-500"
               />
             ) : (
-              <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg min-h-[100px]">
+              <div className="min-h-[100px] rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
                 {profileData.bio ? (
-                  <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                  <p className="text-sm text-ggk-neutral-900 dark:text-ggk-neutral-50 whitespace-pre-wrap">
                     {profileData.bio}
                   </p>
                 ) : (
-                  <span className="text-gray-500 dark:text-gray-400 italic">
+                  <span className="text-sm text-ggk-neutral-500 dark:text-ggk-neutral-400 italic">
                     No bio provided
                   </span>
                 )}
               </div>
             )}
           </FormField>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Assignment Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center gap-2 mb-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <Building2 className="h-5 w-5 text-[#8CC63F]" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Assignment Information
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Company */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Organization
-            </label>
-            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <Building2 className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-900 dark:text-white">
-                {profileData.company_name || 'Not assigned'}
-              </span>
+      <Card variant="outlined">
+        <CardHeader accent>
+          <div className="flex items-center gap-8">
+            <Building2 className="h-5 w-5 text-ggk-primary-600" />
+            <div>
+              <CardTitle className="text-lg">Assignment information</CardTitle>
+              <CardDescription className="mt-4">
+                Organisation and school details for your role.
+              </CardDescription>
             </div>
           </div>
+        </CardHeader>
 
-          {/* School */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              School
-            </label>
-            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <School className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-900 dark:text-white">
-                {profileData.school_name || 'Not assigned'}
-              </span>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
+            <div className="space-y-4">
+              <label className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">Organisation</label>
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 text-ggk-neutral-900 dark:bg-ggk-neutral-900/50 dark:text-ggk-neutral-50">
+                <Building2 className="h-4 w-4 text-ggk-neutral-400" />
+                <span>{profileData.company_name || 'Not assigned'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">School</label>
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 text-ggk-neutral-900 dark:bg-ggk-neutral-900/50 dark:text-ggk-neutral-50">
+                <School className="h-4 w-4 text-ggk-neutral-400" />
+                <span>{profileData.school_name || 'Not assigned'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">Branch</label>
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 text-ggk-neutral-900 dark:bg-ggk-neutral-900/50 dark:text-ggk-neutral-50">
+                <MapPin className="h-4 w-4 text-ggk-neutral-400" />
+                <span>{profileData.branch_name || 'Not assigned'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">Department</label>
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 text-ggk-neutral-900 dark:bg-ggk-neutral-900/50 dark:text-ggk-neutral-50">
+                <Users className="h-4 w-4 text-ggk-neutral-400" />
+                <span>{profileData.department_name || 'Not assigned'}</span>
+              </div>
             </div>
           </div>
-
-          {/* Branch */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Branch
-            </label>
-            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <MapPin className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-900 dark:text-white">
-                {profileData.branch_name || 'Not assigned'}
-              </span>
-            </div>
-          </div>
-
-          {/* Department */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Department
-            </label>
-            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <Users className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-900 dark:text-white">
-                {profileData.department_name || 'Not assigned'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Account Security Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center gap-2 mb-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <Eye className="h-5 w-5 text-[#8CC63F]" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Account Security
-          </h2>
-        </div>
-
-        <div className="space-y-6">
-          {/* Account Status */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+      <Card variant="outlined">
+        <CardHeader accent>
+          <div className="flex items-center gap-8">
+            <Eye className="h-5 w-5 text-ggk-primary-600" />
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Account Status
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Your account access level
-              </p>
+              <CardTitle className="text-lg">Account security</CardTitle>
+              <CardDescription className="mt-4">
+                Manage your login credentials and account activity.
+              </CardDescription>
             </div>
-            <StatusBadge 
-              status={profileData.is_active ? 'active' : 'inactive'} 
-              size="sm"
-            />
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-16">
+          <div className="flex items-center justify-between rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
+            <div>
+              <p className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">Account status</p>
+              <p className="mt-2 text-xs text-ggk-neutral-500 dark:text-ggk-neutral-400">Your account access level</p>
+            </div>
+            <StatusBadge status={profileData.is_active ? 'active' : 'inactive'} size="sm" />
           </div>
 
-          {/* Password Change Section */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Password
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Change your account password
-                </p>
+                <p className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">Password</p>
+                <p className="mt-2 text-xs text-ggk-neutral-500 dark:text-ggk-neutral-400">Change your account password</p>
               </div>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => setIsChangingPassword(!isChangingPassword)}
-                className="border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F]/10"
               >
-                {isChangingPassword ? 'Cancel' : 'Change Password'}
+                {isChangingPassword ? 'Cancel' : 'Change password'}
               </Button>
             </div>
 
             {isChangingPassword && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    id="new_password"
-                    label="New Password"
-                    required
-                  >
+              <div className="space-y-6 rounded-ggk-xl border border-ggk-primary-200/60 bg-ggk-primary-50/60 p-12 dark:border-ggk-primary-800/60 dark:bg-ggk-primary-900/30">
+                <div className="grid grid-cols-1 gap-12 md:grid-cols-2">
+                  <FormField id="new_password" label="New password" required>
                     <div className="relative">
                       <Input
                         id="new_password"
-                        type={showPassword ? "text" : "password"}
+                        type={showPassword ? 'text' : 'password'}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="Enter new password"
-                        leftIcon={<Eye className="h-4 w-4 text-gray-400" />}
-                        className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                        leftIcon={<Eye className="h-4 w-4 text-ggk-neutral-400" />}
+                        className="focus:ring-ggk-primary-500 focus:border-ggk-primary-500"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        className="absolute inset-y-0 right-0 pr-4 text-ggk-neutral-500"
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-gray-400" />
-                        )}
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                   </FormField>
 
-                  <FormField
-                    id="confirm_password"
-                    label="Confirm Password"
-                    required
-                  >
+                  <FormField id="confirm_password" label="Confirm password" required>
                     <Input
                       id="confirm_password"
-                      type={showPassword ? "text" : "password"}
+                      type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Confirm new password"
-                      leftIcon={<Eye className="h-4 w-4 text-gray-400" />}
-                      className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                      leftIcon={<Eye className="h-4 w-4 text-ggk-neutral-400" />}
+                      className="focus:ring-ggk-primary-500 focus:border-ggk-primary-500"
                     />
                   </FormField>
                 </div>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-12">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => {
                       setIsChangingPassword(false);
@@ -1058,97 +1028,88 @@ export default function TeacherProfilePage() {
                     size="sm"
                     onClick={handlePasswordChange}
                     loading={changePasswordMutation.isPending}
-                    className="bg-[#8CC63F] hover:bg-[#7AB635]"
                   >
-                    Update Password
+                    Update password
                   </Button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Last Login */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+          <div className="flex items-center justify-between rounded-ggk-lg bg-ggk-neutral-50 p-12 text-sm text-ggk-neutral-700 dark:bg-ggk-neutral-900/50 dark:text-ggk-neutral-200">
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Last Login
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                When you last accessed the system
-              </p>
+              <p className="font-medium">Last login</p>
+              <p className="mt-2 text-xs text-ggk-neutral-500 dark:text-ggk-neutral-400">When you last accessed the system</p>
             </div>
-            <span className="text-sm text-gray-900 dark:text-white">
-              {profileData.last_login_at 
+            <span className="text-sm text-ggk-neutral-900 dark:text-ggk-neutral-50">
+              {profileData.last_login_at
                 ? new Date(profileData.last_login_at).toLocaleString()
-                : 'Never'
-              }
+                : 'Never'}
             </span>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Account Information Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center gap-2 mb-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <FileText className="h-5 w-5 text-[#8CC63F]" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Account Information
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Account Created
-            </label>
-            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <Calendar className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-900 dark:text-white">
-                {new Date(profileData.created_at).toLocaleDateString()}
-              </span>
+      <Card variant="outlined">
+        <CardHeader accent>
+          <div className="flex items-center gap-8">
+            <FileText className="h-5 w-5 text-ggk-primary-600" />
+            <div>
+              <CardTitle className="text-lg">Account information</CardTitle>
+              <CardDescription className="mt-4">
+                Quick snapshot of your account activity and employment status.
+              </CardDescription>
             </div>
           </div>
+        </CardHeader>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Employment Status
-            </label>
-            <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <Briefcase className="h-4 w-4 text-gray-400" />
-              <StatusBadge status={profileData.status} size="sm" />
+        <CardContent>
+          <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
+            <div className="space-y-4">
+              <label className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">Account created</label>
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 text-ggk-neutral-900 dark:bg-ggk-neutral-900/50 dark:text-ggk-neutral-50">
+                <Calendar className="h-4 w-4 text-ggk-neutral-400" />
+                <span>{new Date(profileData.created_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-medium text-ggk-neutral-700 dark:text-ggk-neutral-300">Employment status</label>
+              <div className="flex items-center gap-2 rounded-ggk-lg bg-ggk-neutral-50 p-12 dark:bg-ggk-neutral-900/50">
+                <Briefcase className="h-4 w-4 text-ggk-neutral-400" />
+                <StatusBadge status={profileData.status} size="sm" />
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Development Status */}
-      <div className="bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 border border-[#8CC63F]/30 dark:border-[#8CC63F]/40 rounded-lg p-6">
-        <div className="flex items-center gap-2 text-[#5A8A2C] dark:text-[#8CC63F] mb-3">
-          <CheckCircle className="w-5 h-5" />
-          <span className="font-semibold">Teacher Profile Management</span>
-        </div>
-        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-          Complete teacher profile management system with secure data handling and professional information tracking.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle className="w-4 h-4 text-[#8CC63F]" />
-            <span className="text-gray-700 dark:text-gray-300">Personal Information Management ✓</span>
+      <Card variant="outlined" className="bg-ggk-primary-50/60 dark:bg-ggk-primary-900/30">
+        <CardContent className="space-y-8">
+          <div className="flex items-center gap-6 text-ggk-primary-700 dark:text-ggk-primary-200">
+            <CheckCircle className="h-5 w-5" />
+            <span className="text-sm font-semibold uppercase tracking-wide">Teacher profile management</span>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle className="w-4 h-4 text-[#8CC63F]" />
-            <span className="text-gray-700 dark:text-gray-300">Professional Data Tracking ✓</span>
+          <p className="text-sm text-ggk-neutral-700 dark:text-ggk-neutral-300">
+            Complete teacher profile management system with secure data handling and professional information tracking.
+          </p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {[
+              'Personal information management ✓',
+              'Professional data tracking ✓',
+              'Secure password management ✓',
+              'Assignment information display ✓',
+            ].map(item => (
+              <div key={item} className="flex items-center gap-4 text-sm text-ggk-neutral-700 dark:text-ggk-neutral-200">
+                <CheckCircle className="h-4 w-4 text-ggk-primary-600 dark:text-ggk-primary-200" />
+                <span>{item}</span>
+              </div>
+            ))}
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle className="w-4 h-4 text-[#8CC63F]" />
-            <span className="text-gray-700 dark:text-gray-300">Secure Password Management ✓</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle className="w-4 h-4 text-[#8CC63F]" />
-            <span className="text-gray-700 dark:text-gray-300">Assignment Information Display ✓</span>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
