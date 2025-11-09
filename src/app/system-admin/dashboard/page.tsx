@@ -1,451 +1,528 @@
-// /src/app/system-admin/dashboard/page.tsx
+'use client';
 
-import React, { useEffect, useState } from 'react';
-import clsx from 'clsx';
-import {
-  Building2,
-  Users,
-  Key,
-  ClipboardList,
-  FlaskConical,
-  MapPin,
-  Thermometer,
-  Clock3,
-  Loader2
-} from 'lucide-react';
-import { Button } from '../../../components/shared/Button';
-import { TestAnyUserModal } from '../../../components/admin/TestAnyUserModal';
-import { getRealAdminUser, isInTestMode } from '../../../lib/auth';
-import { getPreferredName, getTimeBasedGreeting } from '../../../lib/greeting';
+/**
+ * System Admin Dashboard
+ *
+ * Modern, accessible, token-driven dashboard with live Supabase data.
+ * All queries are read-only with graceful fallbacks.
+ */
 
-interface EnvironmentSnapshot {
-  locationLabel: string;
-  temperatureC: number;
-  temperatureF: number;
-  condition: string;
-  timezone?: string;
-  fetchedAt: Date;
+import React, { useState } from 'react';
+import { RefreshCw, Download, Building2, School, MapPin, Key, Users, GraduationCap, Clock, Activity } from 'lucide-react';
+import { PageHeader } from '../../../components/shared/PageHeader';
+import { DashboardCard } from '../../../components/shared/DashboardCard';
+import { KPIStat } from '../../../components/shared/KPIStat';
+import { TimeRangePicker, type TimeRange } from '../../../components/shared/TimeRangePicker';
+import { EmptyState } from '../../../components/shared/EmptyState';
+import { DataTable, type Column } from '../../../components/shared/DataTable';
+import { useSysAdminDashboard, useFilterOptions } from './hooks/useSysAdminDashboard';
+import type { ActivityEvent, SchoolStats } from './hooks/types';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { cn } from '../../../lib/utils';
+
+// Helper to get initial time range
+function getInitialTimeRange(): TimeRange {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setDate(start.getDate() - 30);
+  start.setHours(0, 0, 0, 0);
+
+  return { start, end, preset: '30d' };
 }
 
-type EnvironmentStatus = 'idle' | 'loading' | 'ready' | 'error';
+export default function SystemAdminDashboard() {
+  const [timeRange, setTimeRange] = useState<TimeRange>(getInitialTimeRange());
+  const [regionId, setRegionId] = useState<string>('');
+  const [programId, setProgramId] = useState<string>('');
+  const [providerId, setProviderId] = useState<string>('');
+  const [subjectId, setSubjectId] = useState<string>('');
 
-const weatherCodeDescriptions: Record<number, string> = {
-  0: 'Clear skies',
-  1: 'Mostly clear',
-  2: 'Partly cloudy',
-  3: 'Overcast',
-  45: 'Foggy',
-  48: 'Icy fog',
-  51: 'Light drizzle',
-  53: 'Drizzle',
-  55: 'Steady drizzle',
-  61: 'Light rain',
-  63: 'Rain showers',
-  65: 'Heavy rain',
-  66: 'Light freezing rain',
-  67: 'Icy rain',
-  71: 'Light snow',
-  73: 'Snowfall',
-  75: 'Heavy snow',
-  77: 'Snow grains',
-  80: 'Scattered showers',
-  81: 'Frequent showers',
-  82: 'Intense showers',
-  85: 'Snow showers',
-  86: 'Heavy snow showers',
-  95: 'Thunderstorms',
-  96: 'Storms with hail',
-  99: 'Severe storms'
-};
+  const { data: dashboardData, isLoading, error, refetch } = useSysAdminDashboard({
+    timeRange,
+    regionId: regionId || undefined,
+    programId: programId || undefined,
+    providerId: providerId || undefined,
+    subjectId: subjectId || undefined
+  });
 
-const DASHBOARD_PRIORITIES = [
-  'Review pending license approvals',
-  'Check onboarding progress for new cohorts',
-  'Share insights with regional leads'
-];
+  const { data: filterOptions } = useFilterOptions();
 
-function getWeatherDescription(code: number | undefined): string {
-  if (typeof code !== 'number') {
-    return 'Conditions unavailable';
-  }
+  const handleRefresh = () => {
+    refetch();
+  };
 
-  return weatherCodeDescriptions[code] ?? 'Outdoor conditions unavailable';
-}
+  const handleExportCSV = () => {
+    if (!dashboardData) return;
 
-interface EnvironmentSummaryProps {
-  environment: EnvironmentSnapshot | null;
-  status: EnvironmentStatus;
-  timeDisplay: string;
-}
+    const csvData = [
+      ['Metric', 'Value'],
+      ['Total Companies', dashboardData.kpis.totalCompanies],
+      ['Total Schools', dashboardData.kpis.totalSchools],
+      ['Total Branches', dashboardData.kpis.totalBranches],
+      ['Active Licenses', dashboardData.kpis.activeLicenses],
+      ['Licenses Expiring (30d)', dashboardData.kpis.expiringLicenses30d],
+      ['Teachers', dashboardData.kpis.teachers],
+      ['Students', dashboardData.kpis.students]
+    ];
 
-function EnvironmentSummary({ environment, status, timeDisplay }: EnvironmentSummaryProps) {
-  const temperatureSummary = environment
-    ? `${Math.round(environment.temperatureC)}°C / ${Math.round(environment.temperatureF)}°F`
-    : null;
+    const csvContent = csvData.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dashboard-export-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
-  return (
-    <div className="w-full max-w-sm rounded-2xl border border-brand/30 bg-gradient-to-br from-white to-green-50/50 p-4 text-gray-900 shadow-lg backdrop-blur">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-gradient text-white shadow-md">
-          <Thermometer className="h-5 w-5" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-bold uppercase tracking-wide text-brand-dark">
-            Local outlook
-          </span>
-          {status === 'loading' && (
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Checking nearby weather…
-            </span>
-          )}
-          {status === 'error' && (
-            <span className="text-sm font-medium">Weather data is unavailable right now.</span>
-          )}
-          {status === 'ready' && temperatureSummary && (
-            <span className="text-sm font-semibold">
-              {temperatureSummary} • {environment?.condition}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold text-gray-700">
-        <span className="flex items-center gap-1">
-          <MapPin className="h-4 w-4 text-brand-primary" />
-          {environment?.locationLabel ?? 'Locating you'}
+  // Activity columns
+  const activityColumns: Column<ActivityEvent>[] = [
+    {
+      id: 'time',
+      header: 'Time',
+      accessorFn: (row) => new Date(row.time).toLocaleString(),
+      enableSorting: true
+    },
+    {
+      id: 'actorName',
+      header: 'Actor',
+      accessorKey: 'actorName',
+      enableSorting: true
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      accessorFn: (row) => (
+        <span className={cn(
+          'px-2 py-1 text-xs font-medium rounded-md',
+          row.action === 'create' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+          row.action === 'update' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+          row.action === 'delete' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+          (row.action === 'assign' || row.action === 'renew') && 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+        )}>
+          {row.action}
         </span>
-        <span className="flex items-center gap-1">
-          <Clock3 className="h-4 w-4 text-brand-primary" />
-          {timeDisplay} local time
-        </span>
-        {status === 'ready' && environment && (
-          <span className="flex items-center gap-1 text-brand-primary">
-            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-brand-accent animate-pulse" />
-            Updated moments ago
-          </span>
-        )}
-      </div>
-
-      {status === 'error' && (
-        <p className="mt-2 text-xs font-medium text-gray-600">
-          You can continue monitoring metrics while we retry in the background.
-        </p>
-      )}
-    </div>
-  );
-}
-
-export default function DashboardPage() {
-  const [showTestModal, setShowTestModal] = useState(false);
-  const [environment, setEnvironment] = useState<EnvironmentSnapshot | null>(null);
-  const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus>('idle');
-  const [timeDisplay, setTimeDisplay] = useState<string>(() =>
-    new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date())
-  );
-
-  const realAdmin = getRealAdminUser();
-  const isSSA = realAdmin?.role === 'SSA';
-  const inTestMode = isInTestMode();
-
-  const greeting = getTimeBasedGreeting();
-  const preferredName = getPreferredName(realAdmin?.name) ?? 'Admin';
-
-  useEffect(() => {
-    let cancelled = false;
-    let retryTimer: number | undefined;
-
-    async function loadEnvironmentSnapshot() {
-      try {
-        setEnvironmentStatus(previous => (previous === 'ready' ? previous : 'loading'));
-
-        const locationResponse = await fetch('https://ipapi.co/json/');
-        if (!locationResponse.ok) {
-          throw new Error('Failed to determine location');
-        }
-
-        const locationData: {
-          city?: string;
-          region?: string;
-          region_code?: string;
-          country_name?: string;
-          latitude?: number | string;
-          longitude?: number | string;
-          timezone?: string;
-        } = await locationResponse.json();
-
-        const latitude = Number(locationData.latitude);
-        const longitude = Number(locationData.longitude);
-
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-          throw new Error('Location did not include coordinates');
-        }
-
-        const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast');
-        weatherUrl.searchParams.set('latitude', latitude.toString());
-        weatherUrl.searchParams.set('longitude', longitude.toString());
-        weatherUrl.searchParams.set('current_weather', 'true');
-
-        const weatherResponse = await fetch(weatherUrl.toString());
-        if (!weatherResponse.ok) {
-          throw new Error('Failed to fetch weather');
-        }
-
-        const weatherData: {
-          current_weather?: { temperature?: number; weathercode?: number };
-        } = await weatherResponse.json();
-
-        const temperatureC = Number(weatherData.current_weather?.temperature);
-        const weatherCode = Number(weatherData.current_weather?.weathercode);
-
-        if (!Number.isFinite(temperatureC)) {
-          throw new Error('Weather response missing temperature');
-        }
-
-        const locationParts = [locationData.city, locationData.region_code ?? locationData.region]
-          .map(part => (typeof part === 'string' && part.trim() ? part.trim() : null))
-          .filter((part): part is string => Boolean(part));
-
-        const locationLabel = locationParts.join(', ') || locationData.country_name || 'your area';
-
-        if (cancelled) {
-          return;
-        }
-
-        const snapshot: EnvironmentSnapshot = {
-          locationLabel,
-          temperatureC,
-          temperatureF: (temperatureC * 9) / 5 + 32,
-          condition: getWeatherDescription(weatherCode),
-          timezone: locationData.timezone,
-          fetchedAt: new Date()
-        };
-
-        setEnvironment(snapshot);
-        setEnvironmentStatus('ready');
-      } catch (error) {
-        console.warn('[Dashboard] Failed to load environment snapshot:', error);
-        if (!cancelled) {
-          setEnvironmentStatus('error');
-          retryTimer = window.setTimeout(() => {
-            loadEnvironmentSnapshot();
-          }, 60_000);
-        }
-      }
+      )
+    },
+    {
+      id: 'target',
+      header: 'Target',
+      accessorKey: 'target'
+    },
+    {
+      id: 'scope',
+      header: 'Scope',
+      accessorKey: 'scope'
     }
+  ];
 
-    loadEnvironmentSnapshot();
-
-    return () => {
-      cancelled = true;
-      if (retryTimer) {
-        window.clearTimeout(retryTimer);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const targetTimezone = environment?.timezone;
-
-    function updateTimeDisplay() {
-      try {
-        const formatter = new Intl.DateTimeFormat([], {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: targetTimezone
-        });
-        setTimeDisplay(formatter.format(new Date()));
-      } catch (error) {
-        console.warn('[Dashboard] Failed to format time for timezone:', targetTimezone, error);
-        setTimeDisplay(
-          new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date())
+  // School stats columns
+  const schoolColumns: Column<SchoolStats>[] = [
+    {
+      id: 'schoolName',
+      header: 'School',
+      accessorKey: 'schoolName',
+      enableSorting: true
+    },
+    {
+      id: 'companyName',
+      header: 'Company',
+      accessorKey: 'companyName',
+      enableSorting: true
+    },
+    {
+      id: 'regionProgram',
+      header: 'Region/Program',
+      accessorKey: 'regionProgram'
+    },
+    {
+      id: 'activeStudents',
+      header: 'Active Students',
+      accessorFn: (row) => row.activeStudents.toLocaleString(),
+      enableSorting: true
+    },
+    {
+      id: 'trend',
+      header: 'Trend',
+      accessorFn: (row) => {
+        if (row.trendPct === 0) return '-';
+        const direction = row.trendPct > 0 ? 'up' : row.trendPct < 0 ? 'down' : 'flat';
+        return (
+          <span className={cn(
+            'text-sm font-medium',
+            direction === 'up' && 'text-green-600 dark:text-green-400',
+            direction === 'down' && 'text-red-600 dark:text-red-400'
+          )}>
+            {row.trendPct > 0 ? '+' : ''}{row.trendPct.toFixed(1)}%
+          </span>
         );
       }
     }
-
-    updateTimeDisplay();
-    const interval = window.setInterval(updateTimeDisplay, 60_000);
-    return () => window.clearInterval(interval);
-  }, [environment?.timezone]);
+  ];
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header with Test Mode Button */}
-      <section
-        className={clsx(
-          'relative overflow-hidden rounded-2xl border border-brand/20',
-          'bg-gradient-to-br from-white via-green-50/30 to-white p-8 shadow-lg'
-        )}
-        aria-live="polite"
-      >
-        <div
-          className={clsx(
-            'pointer-events-none absolute -right-12 top-0 hidden h-52 w-52 rounded-full',
-            'bg-gradient-to-br from-brand/20 to-transparent blur-3xl sm:block'
-          )}
-          aria-hidden="true"
-        />
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-brand-dark">
-              {greeting}, {preferredName}
-            </p>
-            <h1 className="mt-2 text-3xl font-bold text-gray-900">
-              Here's what's happening across your organization today.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm font-medium text-gray-700">
-              Stay ahead of adoption, licensing, and engagement trends with a quick scan of live metrics
-              and local operating conditions.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {DASHBOARD_PRIORITIES.map(priority => (
-                <span
-                  key={priority}
-                  className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-4 py-2 text-xs font-bold text-brand-dark shadow-sm"
-                >
-                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-brand-accent" />
-                  {priority}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:items-end">
-            <EnvironmentSummary environment={environment} status={environmentStatus} timeDisplay={timeDisplay} />
-
-            {/* Test Mode Button - Only show for SSA and not already in test mode */}
-            {isSSA && !inTestMode && (
-              <Button
-                onClick={() => setShowTestModal(true)}
-                variant="outline"
-                leftIcon={<FlaskConical className="h-4 w-4" />}
-                className="border-brand text-brand-dark backdrop-blur hover:bg-brand-soft font-semibold"
-              >
-                Test as User
-              </Button>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Simple Statistics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-white to-green-50 rounded-2xl shadow-lg border border-brand/20 p-6 hover:shadow-xl transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-gray-700">Total Companies</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">24</p>
-              <p className="text-xs font-semibold text-brand-primary mt-2 flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-brand-accent"></span>
-                +2 this month
-              </p>
-            </div>
-            <div className="w-14 h-14 rounded-xl bg-brand-gradient flex items-center justify-center shadow-md">
-              <Building2 className="h-7 w-7 text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-lg border border-blue-200/40 p-6 hover:shadow-xl transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-gray-700">Total Users</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">1,234</p>
-              <p className="text-xs font-semibold text-brand-primary mt-2 flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-brand-accent"></span>
-                +48 this week
-              </p>
-            </div>
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
-              <Users className="h-7 w-7 text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-white to-purple-50 rounded-2xl shadow-lg border border-purple-200/40 p-6 hover:shadow-xl transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-gray-700">Active Licenses</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">892</p>
-              <p className="text-xs font-semibold text-purple-600 mt-2 flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-purple-500"></span>
-                86% utilization
-              </p>
-            </div>
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-md">
-              <Key className="h-7 w-7 text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-white to-amber-50 rounded-2xl shadow-lg border border-amber-200/40 p-6 hover:shadow-xl transition-all">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-gray-700">License Requests</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">8</p>
-              <p className="text-xs font-semibold text-amber-600 mt-2 flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
-                Pending approval
-              </p>
-            </div>
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-md">
-              <ClipboardList className="h-7 w-7 text-white" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity Section */}
-      <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-200/50">
-        <div className="px-6 py-5 border-b border-brand/20 bg-gradient-to-r from-transparent to-green-50/30">
-          <h2 className="text-lg font-bold text-gray-900">
-            Recent Activity
-          </h2>
-        </div>
-        <div className="p-6">
-          <div className="space-y-5">
-            <div className="flex items-start space-x-4 p-4 rounded-xl hover:bg-green-50/50 transition-colors">
-              <div className="flex-shrink-0 w-3 h-3 mt-1.5 bg-gradient-to-br from-brand-accent to-brand-primary rounded-full shadow-sm"></div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-900">
-                  <span className="font-bold">Sarah Johnson</span> added new company
-                  <span className="font-bold text-brand-dark ml-1">Eco Innovations</span>
-                </p>
-                <p className="text-xs font-medium text-gray-600 mt-1">12:30 PM</p>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-4 p-4 rounded-xl hover:bg-blue-50/50 transition-colors">
-              <div className="flex-shrink-0 w-3 h-3 mt-1.5 bg-gradient-to-br from-blue-400 to-blue-500 rounded-full shadow-sm"></div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-900">
-                  <span className="font-bold">Mike Brown</span> updated user role
-                  <span className="font-bold text-brand-dark ml-1">Sustainable Corp</span>
-                </p>
-                <p className="text-xs font-medium text-gray-600 mt-1">11:45 AM</p>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-4 p-4 rounded-xl hover:bg-amber-50/50 transition-colors">
-              <div className="flex-shrink-0 w-3 h-3 mt-1.5 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full shadow-sm"></div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-900">
-                  <span className="font-bold">John Smith</span> allocated license
-                  <span className="font-bold text-brand-dark ml-1">Green Tech Solutions</span>
-                </p>
-                <p className="text-xs font-medium text-gray-600 mt-1">10:15 AM</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Test Any User Modal */}
-      <TestAnyUserModal
-        isOpen={showTestModal}
-        onClose={() => setShowTestModal(false)}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <PageHeader
+        title="System Admin Dashboard"
+        subtitle="Overview & quick actions"
       />
+
+      <div className="px-6 pb-6 space-y-6">
+        {/* Filter Row */}
+        <DashboardCard>
+          <div className="space-y-4">
+            <TimeRangePicker value={timeRange} onChange={setTimeRange} />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Region Filter */}
+              <div>
+                <label htmlFor="region-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Region
+                </label>
+                <select
+                  id="region-filter"
+                  value={regionId}
+                  onChange={(e) => setRegionId(e.target.value)}
+                  className={cn(
+                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
+                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
+                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
+                    'transition-all duration-200'
+                  )}
+                >
+                  <option value="">All Regions</option>
+                  {filterOptions?.regions.map((region) => (
+                    <option key={region.id} value={region.id}>
+                      {region.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Program Filter */}
+              <div>
+                <label htmlFor="program-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Program
+                </label>
+                <select
+                  id="program-filter"
+                  value={programId}
+                  onChange={(e) => setProgramId(e.target.value)}
+                  className={cn(
+                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
+                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
+                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
+                    'transition-all duration-200'
+                  )}
+                >
+                  <option value="">All Programs</option>
+                  {filterOptions?.programs.map((program) => (
+                    <option key={program.id} value={program.id}>
+                      {program.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Provider Filter */}
+              <div>
+                <label htmlFor="provider-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Provider
+                </label>
+                <select
+                  id="provider-filter"
+                  value={providerId}
+                  onChange={(e) => setProviderId(e.target.value)}
+                  className={cn(
+                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
+                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
+                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
+                    'transition-all duration-200'
+                  )}
+                >
+                  <option value="">All Providers</option>
+                  {filterOptions?.providers.map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Subject Filter */}
+              <div>
+                <label htmlFor="subject-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Subject
+                </label>
+                <select
+                  id="subject-filter"
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  className={cn(
+                    'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600',
+                    'bg-white dark:bg-gray-900 text-gray-900 dark:text-white',
+                    'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent',
+                    'transition-all duration-200'
+                  )}
+                >
+                  <option value="">All Subjects</option>
+                  {filterOptions?.subjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleRefresh}
+                disabled={isLoading}
+                className={cn(
+                  'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg',
+                  'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300',
+                  'border border-gray-300 dark:border-gray-600',
+                  'hover:bg-gray-50 dark:hover:bg-gray-700',
+                  'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-1',
+                  'transition-all duration-200',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+              >
+                <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+                Refresh
+              </button>
+
+              <button
+                onClick={handleExportCSV}
+                disabled={!dashboardData}
+                className={cn(
+                  'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg',
+                  'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white',
+                  'hover:shadow-md',
+                  'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-1',
+                  'transition-all duration-200',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
+            </div>
+          </div>
+        </DashboardCard>
+
+        {/* KPI Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPIStat
+            label="Total Companies"
+            value={dashboardData?.kpis.totalCompanies || 0}
+            caption="Active companies"
+            loading={isLoading}
+          />
+          <KPIStat
+            label="Total Schools"
+            value={dashboardData?.kpis.totalSchools || 0}
+            caption="Active schools"
+            loading={isLoading}
+          />
+          <KPIStat
+            label="Total Branches"
+            value={dashboardData?.kpis.totalBranches || 0}
+            caption="Active branches"
+            loading={isLoading}
+          />
+          <KPIStat
+            label="Active Licenses"
+            value={dashboardData?.kpis.activeLicenses || 0}
+            caption="Current period"
+            trend={dashboardData?.kpis.trends.activeLicenses}
+            loading={isLoading}
+          />
+          <KPIStat
+            label="Expiring Soon"
+            value={dashboardData?.kpis.expiringLicenses30d || 0}
+            caption="Within 30 days"
+            loading={isLoading}
+          />
+          <KPIStat
+            label="Teachers"
+            value={dashboardData?.kpis.teachers || 0}
+            caption="Active teachers"
+            trend={dashboardData?.kpis.trends.teachers}
+            loading={isLoading}
+          />
+          <KPIStat
+            label="Students"
+            value={dashboardData?.kpis.students || 0}
+            caption="Active students"
+            trend={dashboardData?.kpis.trends.students}
+            loading={isLoading}
+          />
+        </div>
+
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Licenses by Subject */}
+          <DashboardCard
+            title="Active Licenses by Subject"
+            subtitle="Top 10 subjects"
+            loading={isLoading}
+            error={error ? 'Failed to load chart data' : undefined}
+            onRetry={handleRefresh}
+          >
+            {isLoading ? (
+              <div className="h-80 flex items-center justify-center">
+                <div className="animate-pulse text-gray-400">Loading chart...</div>
+              </div>
+            ) : dashboardData?.charts.licensesBySubject.length === 0 ? (
+              <EmptyState
+                icon={<Key className="h-12 w-12" />}
+                title="No License Data"
+                description="No active licenses found for the selected period."
+              />
+            ) : (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={dashboardData?.charts.licensesBySubject}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="subject"
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={100}
+                  />
+                  <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Bar dataKey="active" fill="#8CC63F" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </DashboardCard>
+
+          {/* New Users by Role */}
+          <DashboardCard
+            title="New Users by Role"
+            subtitle="Daily breakdown"
+            loading={isLoading}
+            error={error ? 'Failed to load chart data' : undefined}
+            onRetry={handleRefresh}
+          >
+            {isLoading ? (
+              <div className="h-80 flex items-center justify-center">
+                <div className="animate-pulse text-gray-400">Loading chart...</div>
+              </div>
+            ) : dashboardData?.charts.newUsersByRole.length === 0 ? (
+              <EmptyState
+                icon={<Users className="h-12 w-12" />}
+                title="No User Data"
+                description="No new users registered during the selected period."
+              />
+            ) : (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={dashboardData?.charts.newUsersByRole}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  />
+                  <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px'
+                    }}
+                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="teachers" stroke="#8CC63F" strokeWidth={2} dot={{ fill: '#8CC63F' }} />
+                  <Line type="monotone" dataKey="students" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6' }} />
+                  <Line type="monotone" dataKey="admins" stroke="#a855f7" strokeWidth={2} dot={{ fill: '#a855f7' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </DashboardCard>
+        </div>
+
+        {/* Tables Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Activity */}
+          <DashboardCard
+            title="Recent Activity"
+            subtitle="Latest 15 events"
+            loading={isLoading}
+            error={error ? 'Failed to load activity data' : undefined}
+            onRetry={handleRefresh}
+          >
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="animate-pulse h-12 bg-gray-200 dark:bg-gray-700 rounded" />
+                ))}
+              </div>
+            ) : dashboardData?.recentActivity.length === 0 ? (
+              <EmptyState
+                icon={<Activity className="h-12 w-12" />}
+                title="No Activity"
+                description="No recent activity found for the selected period."
+              />
+            ) : (
+              <DataTable
+                data={dashboardData?.recentActivity || []}
+                columns={activityColumns}
+                keyField="id"
+                emptyMessage="No activity found"
+                className="max-h-96 overflow-auto"
+              />
+            )}
+          </DashboardCard>
+
+          {/* Top Schools */}
+          <DashboardCard
+            title="Top Schools by Active Students"
+            subtitle="Filtered by time range"
+            loading={isLoading}
+            error={error ? 'Failed to load school data' : undefined}
+            onRetry={handleRefresh}
+          >
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="animate-pulse h-12 bg-gray-200 dark:bg-gray-700 rounded" />
+                ))}
+              </div>
+            ) : dashboardData?.topSchools.length === 0 ? (
+              <EmptyState
+                icon={<School className="h-12 w-12" />}
+                title="No School Data"
+                description="No schools found matching the selected filters."
+                action={{
+                  label: 'View All Schools',
+                  href: '/app/system-admin/tenants'
+                }}
+              />
+            ) : (
+              <DataTable
+                data={dashboardData?.topSchools || []}
+                columns={schoolColumns}
+                keyField="id"
+                emptyMessage="No schools found"
+                className="max-h-96 overflow-auto"
+              />
+            )}
+          </DashboardCard>
+        </div>
+      </div>
     </div>
   );
 }
