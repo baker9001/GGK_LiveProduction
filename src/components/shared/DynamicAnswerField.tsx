@@ -23,7 +23,7 @@ import {
   Link as LinkIcon,
   Target
 } from 'lucide-react';
-import ScientificEditor from './ScientificEditor';
+import { RichTextEditor } from './RichTextEditor';
 import Button from './Button';
 import { cn } from '@/lib/utils';
 
@@ -623,13 +623,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
     if (needsScientificEditor) {
       return (
-        <ScientificEditor
+        <RichTextEditor
           value={value}
           onChange={onChange}
-          disabled={disabled && !isEditing}
-          subject={question.subject}
-          format={format}
           placeholder="Enter answer"
+          className={disabled && !isEditing ? 'opacity-60 pointer-events-none' : ''}
         />
       );
     }
@@ -1460,8 +1458,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               </div>
               
               {component.type === 'formula' || needsScientificEditor ? (
-                <ScientificEditor
-                  value={componentAnswers[component.id] || ''}
+                <RichTextEditor
+                  value={String(componentAnswers[component.id] || '')}
                   onChange={(content) => {
                     const newAnswers = { ...componentAnswers, [component.id]: content };
                     setComponentAnswers(newAnswers);
@@ -1469,10 +1467,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     onChange(nextValue);
                     performValidation(nextValue);
                   }}
-                  disabled={disabled}
-                  subject={question.subject}
-                  format={format}
                   placeholder={`Enter ${component.label || component.type}`}
+                  className={disabled ? 'opacity-60 pointer-events-none' : ''}
                 />
               ) : (
                 <input
@@ -1605,7 +1601,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     if (needsScientificEditor) {
       return (
         <div>
-          <ScientificEditor
+          <RichTextEditor
             value={textAnswers.main || ''}
             onChange={(content) => {
               const newAnswers = { ...textAnswers, main: content };
@@ -1614,10 +1610,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               setHasAnswered(true);
               performValidation(content);
             }}
-            disabled={disabled}
-            subject={question.subject}
-            format={format}
-            placeholder="Enter your answer using the scientific editor"
+            placeholder="Enter your answer"
+            className={disabled ? 'opacity-60 pointer-events-none' : ''}
           />
           {renderCorrectAnswers()}
         </div>
