@@ -1,48 +1,66 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
+import type { LucideIcon } from 'lucide-react';
 
 interface DashboardCardProps {
   title?: string;
   subtitle?: string;
+  icon?: LucideIcon;
   toolbar?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
+  animationDelay?: number;
 }
 
 export function DashboardCard({
   title,
   subtitle,
+  icon: Icon,
   toolbar,
   children,
   className,
   loading = false,
   error,
-  onRetry
+  onRetry,
+  animationDelay = 0
 }: DashboardCardProps) {
   return (
     <div
       className={cn(
-        'bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700',
-        'transition-all duration-200 hover:shadow-lg',
+        'bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50',
+        'transition-all duration-300 ease-out',
+        'hover:shadow-2xl hover:shadow-[#8CC63F]/10 hover:scale-[1.02] hover:border-[#8CC63F]/30',
+        'animate-fade-in',
         className
       )}
+      style={{
+        animationDelay: `${animationDelay}ms`,
+        animationFillMode: 'both'
+      }}
     >
-      {(title || subtitle || toolbar) && (
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex-1 min-w-0">
-            {title && (
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                {title}
-              </h3>
+      {(title || subtitle || toolbar || Icon) && (
+        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200/50 dark:border-gray-700/50">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            {Icon && (
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-[#8CC63F] to-[#7AB635] flex items-center justify-center shadow-md">
+                <Icon className="h-5 w-5 text-white" />
+              </div>
             )}
-            {subtitle && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-                {subtitle}
-              </p>
-            )}
+            <div className="flex-1 min-w-0">
+              {title && (
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                  {title}
+                </h3>
+              )}
+              {subtitle && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+                  {subtitle}
+                </p>
+              )}
+            </div>
           </div>
           {toolbar && (
             <div className="flex-shrink-0">

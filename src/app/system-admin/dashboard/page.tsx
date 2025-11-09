@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from 'react';
-import { RefreshCw, Download, Building2, School, MapPin, Key, Users, GraduationCap, Clock, Activity } from 'lucide-react';
+import { RefreshCw, Download, Building2, School, MapPin, Key, Users, GraduationCap, Clock, Activity, TrendingUp, Filter } from 'lucide-react';
 import { PageHeader } from '../../../components/shared/PageHeader';
 import { DashboardCard } from '../../../components/shared/DashboardCard';
 import { KPIStat } from '../../../components/shared/KPIStat';
@@ -170,7 +170,10 @@ export default function SystemAdminDashboard() {
 
       <div className="px-6 pb-6 space-y-6">
         {/* Filter Row */}
-        <DashboardCard>
+        <DashboardCard
+          icon={Filter}
+          className="bg-gradient-to-br from-white/90 to-white/70 dark:from-gray-800/90 dark:to-gray-800/70 backdrop-blur-2xl border-white/60 dark:border-gray-700/60"
+        >
           <div className="space-y-4">
             <TimeRangePicker value={timeRange} onChange={setTimeRange} />
 
@@ -320,46 +323,67 @@ export default function SystemAdminDashboard() {
             label="Total Companies"
             value={dashboardData?.kpis.totalCompanies || 0}
             caption="Active companies"
+            icon={Building2}
+            iconColor="from-blue-500 to-blue-600"
             loading={isLoading}
+            animationDelay={0}
           />
           <KPIStat
             label="Total Schools"
             value={dashboardData?.kpis.totalSchools || 0}
             caption="Active schools"
+            icon={School}
+            iconColor="from-purple-500 to-purple-600"
             loading={isLoading}
+            animationDelay={100}
           />
           <KPIStat
             label="Total Branches"
             value={dashboardData?.kpis.totalBranches || 0}
             caption="Active branches"
+            icon={MapPin}
+            iconColor="from-orange-500 to-orange-600"
             loading={isLoading}
+            animationDelay={200}
           />
           <KPIStat
             label="Active Licenses"
             value={dashboardData?.kpis.activeLicenses || 0}
             caption="Current period"
+            icon={Key}
+            iconColor="from-[#8CC63F] to-[#7AB635]"
             trend={dashboardData?.kpis.trends.activeLicenses}
             loading={isLoading}
+            animationDelay={300}
           />
           <KPIStat
             label="Expiring Soon"
             value={dashboardData?.kpis.expiringLicenses30d || 0}
             caption="Within 30 days"
+            icon={Clock}
+            iconColor="from-amber-500 to-amber-600"
             loading={isLoading}
+            animationDelay={400}
           />
           <KPIStat
             label="Teachers"
             value={dashboardData?.kpis.teachers || 0}
             caption="Active teachers"
+            icon={Users}
+            iconColor="from-teal-500 to-teal-600"
             trend={dashboardData?.kpis.trends.teachers}
             loading={isLoading}
+            animationDelay={500}
           />
           <KPIStat
             label="Students"
             value={dashboardData?.kpis.students || 0}
             caption="Active students"
+            icon={GraduationCap}
+            iconColor="from-pink-500 to-pink-600"
             trend={dashboardData?.kpis.trends.students}
             loading={isLoading}
+            animationDelay={600}
           />
         </div>
 
@@ -369,9 +393,11 @@ export default function SystemAdminDashboard() {
           <DashboardCard
             title="Active Licenses by Subject"
             subtitle="Top 10 subjects"
+            icon={Key}
             loading={isLoading}
             error={error ? 'Failed to load chart data' : undefined}
             onRetry={handleRefresh}
+            animationDelay={700}
           >
             {isLoading ? (
               <div className="h-80 flex items-center justify-center">
@@ -412,9 +438,11 @@ export default function SystemAdminDashboard() {
           <DashboardCard
             title="New Users by Role"
             subtitle="Daily breakdown"
+            icon={TrendingUp}
             loading={isLoading}
             error={error ? 'Failed to load chart data' : undefined}
             onRetry={handleRefresh}
+            animationDelay={800}
           >
             {isLoading ? (
               <div className="h-80 flex items-center justify-center">
@@ -460,9 +488,11 @@ export default function SystemAdminDashboard() {
           <DashboardCard
             title="Recent Activity"
             subtitle="Latest 15 events"
+            icon={Activity}
             loading={isLoading}
             error={error ? 'Failed to load activity data' : undefined}
             onRetry={handleRefresh}
+            animationDelay={900}
           >
             {isLoading ? (
               <div className="space-y-3">
@@ -491,9 +521,11 @@ export default function SystemAdminDashboard() {
           <DashboardCard
             title="Top Schools by Active Students"
             subtitle="Filtered by time range"
+            icon={School}
             loading={isLoading}
             error={error ? 'Failed to load school data' : undefined}
             onRetry={handleRefresh}
+            animationDelay={1000}
           >
             {isLoading ? (
               <div className="space-y-3">
