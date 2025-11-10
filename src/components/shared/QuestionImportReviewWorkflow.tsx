@@ -2430,7 +2430,9 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                       <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Parts & subparts</h4>
                       {question.parts.map((part, partIndex) => {
                         const partRequiresFigure = Boolean(part.figure_required ?? part.figure);
-                        const partHasAttachments = Array.isArray(part.attachments) ? part.attachments.length > 0 : false;
+                        const partHasAttachments = Array.isArray(part.attachments)
+                          ? part.attachments.some(att => att.file_url?.startsWith('data:'))
+                          : false;
                         const partAnswerFormatValue = part.answer_format ?? '';
                         const partAnswerFormatOptions = [...answerFormatOptions];
                         if (
@@ -2677,7 +2679,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                   // BUT distinguish between "figure required" (from JSON) vs "figure attached" (has actual attachments)
                                   const subRequiresFigure = Boolean(subpart.figure_required ?? subpart.figure);
                                   const subHasAttachments = Array.isArray(subpart.attachments)
-                                    ? subpart.attachments.length > 0
+                                    ? subpart.attachments.some(att => att.file_url?.startsWith('data:'))
                                     : false;
                                   const subAnswerFormatValue = subpart.answer_format ?? '';
                                   const subAnswerFormatOptions = [...answerFormatOptions];
@@ -2869,6 +2871,17 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                             usePortal={false}
                                           />
                                         </FormField>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-3">
+                                        <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                          <input
+                                            type="checkbox"
+                                            checked={subRequiresFigure}
+                                            onChange={(event) => handleSubpartFieldChange(question, partIndex, subIndex, { figure_required: event.target.checked })}
+                                            className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
+                                          />
+                                          Figure required for this subpart
+                                        </label>
                                       </div>
 
                                       {renderAnswerEditorList(subpart.correct_answers, {
