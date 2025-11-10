@@ -1,10 +1,11 @@
 // src/app/system-admin/learning/practice-management/questions-setup/page.tsx
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2, FileText, BarChart3, X, CheckCircle, Clock, Archive, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Loader2, FileText, BarChart3, X, CheckCircle, Clock, Archive, AlertTriangle, Menu } from 'lucide-react';
 import { Button } from '../../../../../components/shared/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
+import EnhancedQuestionNavigator, { buildEnhancedNavigationItems, NavigationItem, QuestionStatus, AttachmentStatus } from '../../../../../components/shared/EnhancedQuestionNavigator';
 import { PaperCard } from './components/PaperCard';
 import { ExamSimulation } from './components/ExamSimulation';
 import { QuestionAnalytics } from './components/QuestionAnalytics';
@@ -184,7 +185,11 @@ export default function QuestionsSetupPage() {
   });
   const [simulationPaper, setSimulationPaper] = useState<SimulationPaper | null>(null);
   const [isQAMode, setIsQAMode] = useState(true);
+  const [showNavigator, setShowNavigator] = useState(false);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | undefined>();
+  const [selectedPaperId, setSelectedPaperId] = useState<string | undefined>();
   const queryClient = useQueryClient();
+  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Fetch providers and subjects for filters
   const { data: providers = [] } = useQuery({
@@ -998,6 +1003,68 @@ export default function QuestionsSetupPage() {
     }
   };
 
+  const handleNavigate = (questionId: string) => {
+    setCurrentQuestionId(questionId);
+    const element = questionRefs.current[questionId];
+    if (element) {
+      const offset = 100;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const handlePaperSelect = (paperId: string) => {
+    setSelectedPaperId(paperId === selectedPaperId ? undefined : paperId);
+    if (paperId !== selectedPaperId) {
+      const paper = filteredPapers.find(p => p.id === paperId);
+      if (paper?.questions.length > 0) {
+        setCurrentQuestionId(paper.questions[0].id);
+      }
+    }
+  };
+
+  const getNavigationItemsForPaper = (paper: GroupedPaper): NavigationItem[] => {
+    const statusData = new Map<string, QuestionStatus>();
+    const attachmentData = new Map<string, AttachmentStatus>();
+
+    paper.questions.forEach((question) => {
+      const hasError = !question.topic_id || !question.difficulty;
+      const needsAttachment = question.attachments?.length === 0 &&
+        (question.question_description?.toLowerCase().includes('figure') ||
+         question.question_description?.toLowerCase().includes('diagram'));
+      const isComplete = question.status === 'active' && !hasError && !needsAttachment;
+
+      statusData.set(question.id, {
+        isComplete,
+        needsAttachment,
+        hasError,
+        inProgress: question.status === 'draft' || question.status === 'qa_review',
+        validationIssues: []
+      });
+
+      attachmentData.set(question.id, {
+        required: needsAttachment ? 1 : 0,
+        uploaded: question.attachments?.length || 0
+      });
+    });
+
+    return buildEnhancedNavigationItems(
+      paper.questions.map(q => ({
+        id: q.id,
+        question_number: q.question_number,
+        marks: q.marks,
+        type: q.type,
+        parts: q.parts || []
+      })),
+      attachmentData,
+      statusData
+    );
+  };
+
   if (simulationPaper) {
     return (
       <ExamSimulation
@@ -1035,21 +1102,81 @@ export default function QuestionsSetupPage() {
 
     return (
       <div className="space-y-6">
-        {papers.map((paper) => (
-          <PaperCard
-            key={paper.id}
-            paper={paper}
-            topics={topics}
-            subtopics={subtopics}
-            units={units}
-            onDeleteQuestion={handleDeleteQuestion}
-            onDeleteSubQuestion={handleDeleteSubQuestion}
-            onStartTestMode={() => handleStartTestMode(paper)}
-            onStartSimulation={() => handleStartTestMode(paper)}
-            showQAActions={isQAMode}
-            readOnly={!isQAMode}
-          />
-        ))}
+        {/* Navigation Toggle */}
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowNavigator(!showNavigator)}
+          >
+            {showNavigator ? <X className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
+            {showNavigator ? 'Hide' : 'Show'} Question Navigator
+          </Button>
+        </div>
+
+        {papers.map((paper) => {
+          const isExpanded = selectedPaperId === paper.id;
+          const navigationItems = isExpanded ? getNavigationItemsForPaper(paper) : [];
+
+          return (
+            <div key={paper.id} className="space-y-4">
+              {/* Navigator Panel for Selected Paper */}
+              {showNavigator && isExpanded && navigationItems.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      Question Navigator - {paper.code}
+                    </h3>
+                    <button
+                      onClick={() => setSelectedPaperId(undefined)}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <EnhancedQuestionNavigator
+                    items={navigationItems}
+                    currentId={currentQuestionId}
+                    onNavigate={handleNavigate}
+                    showParts={true}
+                    showSubparts={true}
+                    showMarks={true}
+                    showStatus={true}
+                    mode="setup"
+                    compact={true}
+                  />
+                </div>
+              )}
+
+              <PaperCard
+                key={paper.id}
+                paper={paper}
+                topics={topics}
+                subtopics={subtopics}
+                units={units}
+                onDeleteQuestion={handleDeleteQuestion}
+                onDeleteSubQuestion={handleDeleteSubQuestion}
+                onStartTestMode={() => handleStartTestMode(paper)}
+                onStartSimulation={() => handleStartTestMode(paper)}
+                showQAActions={isQAMode}
+                readOnly={!isQAMode}
+              />
+
+              {showNavigator && !isExpanded && (
+                <div className="flex justify-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handlePaperSelect(paper.id)}
+                  >
+                    <Menu className="h-4 w-4 mr-2" />
+                    Show Question Navigator for this Paper
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };

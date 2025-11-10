@@ -32,6 +32,7 @@ import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { DataTableSkeleton } from '../../../../../../components/shared/DataTableSkeleton';
 import { Select } from '../../../../../../components/shared/Select';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
+import EnhancedQuestionNavigator, { buildEnhancedNavigationItems, NavigationItem, QuestionStatus, AttachmentStatus } from '../../../../../../components/shared/EnhancedQuestionNavigator';
 
 // Import UnifiedTestSimulation component
 import { UnifiedTestSimulation } from '../../../../../../components/shared/UnifiedTestSimulation';
@@ -658,6 +659,9 @@ function QuestionsTabInner({
   }));
   const [attachments, setAttachments] = useState<Record<string, any[]>>({});
   const [deleteAttachmentConfirm, setDeleteAttachmentConfirm] = useState<any>(null);
+  const [showNavigator, setShowNavigator] = useState(false);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | undefined>();
+  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [showValidation, setShowValidation] = useState(false);
   
   // Data structure states
@@ -5280,6 +5284,101 @@ function QuestionsTabInner({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Navigation Toggle */}
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowNavigator(!showNavigator)}
+        >
+          {showNavigator ? <X className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
+          {showNavigator ? 'Hide' : 'Show'} Question Navigator
+        </Button>
+      </div>
+
+      {/* Question Navigator Panel */}
+      {showNavigator && questions.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Question Navigator ({questions.length} questions)
+            </h3>
+            <button
+              onClick={() => setShowNavigator(false)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <EnhancedQuestionNavigator
+            items={(() => {
+              const statusData = new Map<string, QuestionStatus>();
+              const attachmentData = new Map<string, AttachmentStatus>();
+
+              questions.forEach((question) => {
+                const hasError = !question.topic_id || !question.difficulty;
+                const needsAttachment = (question.figure || question.figure_required) && (!attachments[question.id] || attachments[question.id].length === 0);
+                const hasAttachment = attachments[question.id]?.length > 0;
+                const isComplete = !hasError && (!needsAttachment || hasAttachment);
+
+                statusData.set(question.id, {
+                  isComplete,
+                  needsAttachment,
+                  hasError,
+                  inProgress: !isComplete && !hasError,
+                  validationIssues: validationErrors[question.id] || []
+                });
+
+                attachmentData.set(question.id, {
+                  required: needsAttachment ? 1 : 0,
+                  uploaded: attachments[question.id]?.length || 0
+                });
+              });
+
+              return buildEnhancedNavigationItems(
+                questions.map(q => ({
+                  id: q.id,
+                  question_number: q.question_number,
+                  marks: q.marks,
+                  type: q.question_type as any,
+                  parts: (q.parts || []).map((p: any) => ({
+                    id: `${q.id}-${p.part_label || p.part}`,
+                    part_label: p.part_label || p.part,
+                    marks: p.marks,
+                    question_description: p.question_text || p.description,
+                    has_direct_answer: true,
+                    subparts: p.subparts || []
+                  }))
+                })),
+                attachmentData,
+                statusData
+              );
+            })()}
+            currentId={currentQuestionId}
+            onNavigate={(questionId) => {
+              setCurrentQuestionId(questionId);
+              const element = document.getElementById(`question-${questionId}`);
+              if (element) {
+                const offset = 100;
+                const elementPosition = element.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - offset;
+                window.scrollTo({
+                  top: offsetPosition,
+                  behavior: 'smooth'
+                });
+              }
+            }}
+            showParts={true}
+            showSubparts={true}
+            showMarks={true}
+            showStatus={true}
+            mode="setup"
+            compact={true}
+          />
         </div>
       )}
 
