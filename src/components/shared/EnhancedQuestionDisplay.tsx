@@ -566,16 +566,23 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
       return null;
     }
 
+    // Filter to only show attachments that belong to the main question (no sub_question_id)
+    const mainQuestionAttachments = question.attachments.filter(att => !att.sub_question_id);
+
+    if (mainQuestionAttachments.length === 0) {
+      return null;
+    }
+
     return (
       <div className="space-y-3">
         <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
           <ImageIcon className="h-4 w-4" />
-          Attachments ({question.attachments.length})
+          Attachments for Main Question ({mainQuestionAttachments.length})
         </h4>
         {/* Full width container aligned with question text box */}
         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
           <div className="flex flex-wrap justify-center gap-4">
-            {question.attachments.map((attachment, index) =>
+            {mainQuestionAttachments.map((attachment, index) =>
               renderAttachmentCard(attachment, index, 'question')
             )}
           </div>
@@ -622,6 +629,11 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
     };
 
     const displayMarks = calculatePartMarks(part);
+
+    // Get attachments for this specific part - either from part.attachments or filter from question.attachments
+    const partAttachments = part.attachments ||
+      question.attachments?.filter(att => att.sub_question_id === part.id) ||
+      [];
 
     // Generate fallback label ONLY if not provided - otherwise preserve exact database value
     const getPartLabel = (label: string | undefined, idx: number): string => {
@@ -772,16 +784,16 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
             {showAnswer && renderCorrectAnswers(part.correct_answers, part.answer_requirement)}
 
             {/* Attachments for this part */}
-            {part.attachments && part.attachments.length > 0 && (
+            {partAttachments.length > 0 && (
               <div className="space-y-2">
                 <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   <ImageIcon className="h-3 w-3" />
-                  Attachments ({part.attachments.length})
+                  Attachments for {displayLabel} ({partAttachments.length})
                 </h5>
                 {/* Full width container aligned with part content */}
                 <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                   <div className="flex flex-wrap justify-center gap-3">
-                    {part.attachments.map((attachment, attIdx) =>
+                    {partAttachments.map((attachment, attIdx) =>
                       renderAttachmentCard(attachment, attIdx, 'part')
                     )}
                   </div>

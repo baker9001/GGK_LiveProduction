@@ -109,6 +109,11 @@ export function EnhancedQuestionPreview({
   };
 
   const renderSubQuestion = (part: SubQuestion) => {
+    // Filter attachments that belong to this specific part
+    const partAttachments = question.attachments?.filter(att =>
+      att.sub_question_id === part.id
+    ) || part.attachments || [];
+
     return (
       <div
         key={part.id}
@@ -153,13 +158,13 @@ export function EnhancedQuestionPreview({
             </p>
           </div>
 
-          {part.attachments && part.attachments.length > 0 && (
+          {partAttachments.length > 0 && (
             <div className="mt-4 space-y-3">
               <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                Attachments
+                Attachments for Part {part.part_label}
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {part.attachments.map((attachment, idx) => renderAttachment(attachment, idx))}
+                {partAttachments.map((attachment, idx) => renderAttachment(attachment, idx))}
               </div>
             </div>
           )}
@@ -307,13 +312,14 @@ export function EnhancedQuestionPreview({
                   </p>
                 </div>
 
-                {question.attachments && question.attachments.length > 0 && (
+                {/* Only show attachments that belong to the main question (no sub_question_id) */}
+                {question.attachments && question.attachments.filter(att => !att.sub_question_id).length > 0 && (
                   <div className="mt-4 space-y-3">
                     <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                      Main Question Attachments
+                      Attachments for Main Question
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {question.attachments.map((attachment, idx) => renderAttachment(attachment, idx))}
+                      {question.attachments.filter(att => !att.sub_question_id).map((attachment, idx) => renderAttachment(attachment, idx))}
                     </div>
                   </div>
                 )}

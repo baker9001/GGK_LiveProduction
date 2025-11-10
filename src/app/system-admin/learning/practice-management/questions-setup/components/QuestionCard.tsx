@@ -936,7 +936,7 @@ export function QuestionCard({
           </div>
         </div>
         
-        {/* Attachments Manager - Updated without pdfDataUrl and onPdfUpload */}
+        {/* Attachments Manager - Only show attachments for main question (no sub_question_id) */}
         <div className={cn(
           "mb-8 border rounded-xl p-6 bg-gray-50 dark:bg-gray-800/50 shadow-sm",
           needsAttachmentWarning && showQAActions
@@ -945,10 +945,10 @@ export function QuestionCard({
         )}>
           <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
             <FileText className="h-5 w-5 mr-2" />
-            Attachments:
+            Attachments for Main Question:
           </h4>
           <AttachmentManager
-            attachments={question.attachments}
+            attachments={question.attachments?.filter(att => !att.sub_question_id) || []}
             questionId={question.id}
             onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
             readOnly={readOnly}
@@ -1434,7 +1434,7 @@ export function QuestionCard({
                     </div>
                   </div>
                   
-                  {/* Sub-question attachments - Updated without pdfDataUrl and onPdfUpload */}
+                  {/* Sub-question attachments - Filter attachments for this specific part */}
                   <div className={cn(
                     "border rounded p-3 bg-gray-50 dark:bg-gray-800/50",
                     subNeedsAttachmentWarning && showQAActions
@@ -1442,7 +1442,11 @@ export function QuestionCard({
                       : "border-gray-200 dark:border-gray-700"
                   )}>
                     <AttachmentManager
-                      attachments={subQuestion.attachments}
+                      attachments={
+                        subQuestion.attachments ||
+                        question.attachments?.filter(att => att.sub_question_id === subQuestion.id) ||
+                        []
+                      }
                       questionId={question.id}
                       subQuestionId={subQuestion.id}
                       onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
