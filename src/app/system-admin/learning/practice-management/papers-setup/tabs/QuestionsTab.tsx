@@ -4338,11 +4338,75 @@ function QuestionsTabInner({
     toast.success('Metadata updated');
   };
 
+  /**
+   * Helper function to map parts and subparts with their attachments from the attachments state.
+   * This ensures that attachments stored with composite keys are properly retrieved and attached
+   * to their corresponding part/subpart objects for display in the review workflow.
+   */
+  const mapPartsWithAttachments = (
+    parts: ProcessedPart[] | undefined,
+    questionId: string,
+    attachmentsState: Record<string, any[]>
+  ): ProcessedPart[] => {
+    if (!Array.isArray(parts) || parts.length === 0) {
+      return [];
+    }
+
+    return parts.map((part, partIndex) => {
+      // Generate attachment key for this part
+      const partAttachmentKey = generateAttachmentKey(questionId, partIndex);
+      const partAttachments = attachmentsState[partAttachmentKey] || [];
+
+      if (partAttachments.length > 0) {
+        console.log(`🔗 Mapping ${partAttachments.length} attachment(s) to part ${partIndex} of question ${questionId}`);
+      }
+
+      // Map subparts with their attachments
+      const mappedSubparts = Array.isArray(part.subparts)
+        ? part.subparts.map((subpart, subpartIndex) => {
+            // Generate attachment key for this subpart
+            const subpartAttachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
+            const subpartAttachments = attachmentsState[subpartAttachmentKey] || [];
+
+            if (subpartAttachments.length > 0) {
+              console.log(`🔗 Mapping ${subpartAttachments.length} attachment(s) to subpart ${subpartIndex} of part ${partIndex} in question ${questionId}`);
+            }
+
+            return {
+              ...subpart,
+              attachments: subpartAttachments
+            };
+          })
+        : [];
+
+      return {
+        ...part,
+        attachments: partAttachments,
+        subparts: mappedSubparts
+      };
+    });
+  };
+
   const handleSnippingComplete = (snippedData: any) => {
     if (!attachmentTarget) return;
 
     const { questionId, partIndex, subpartIndex } = attachmentTarget;
     const attachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
+
+    // Determine context for logging and feedback
+    let contextLabel = 'question';
+    if (partIndex !== undefined && subpartIndex !== undefined) {
+      contextLabel = `part ${partIndex}, subpart ${subpartIndex}`;
+    } else if (partIndex !== undefined) {
+      contextLabel = `part ${partIndex}`;
+    }
+
+    console.log(`📎 Adding attachment to ${contextLabel}:`, {
+      attachmentKey,
+      questionId,
+      partIndex,
+      subpartIndex
+    });
 
     const newAttachment = {
       id: `att_${Date.now()}`,
@@ -4359,20 +4423,25 @@ function QuestionsTabInner({
       attachmentKey: attachmentKey,
       originalId: `att_${Date.now()}`
     };
-    
+
     // Store with primary key
     setAttachments(prev => {
       const updated = {
         ...prev,
         [attachmentKey]: [...(prev[attachmentKey] || []), newAttachment]
       };
-      
+
+      console.log(`✅ Attachment stored with key: ${attachmentKey}`, {
+        totalAttachmentsForKey: updated[attachmentKey].length,
+        allKeys: Object.keys(updated)
+      });
+
       // Also store with alternative keys for compatibility
       if (partIndex !== undefined) {
         const question = questions.find(q => q.id === questionId);
         if (question && question.parts && question.parts[partIndex]) {
           const part = question.parts[partIndex];
-          
+
           if (subpartIndex !== undefined && part.subparts && part.subparts[subpartIndex]) {
             const subpart = part.subparts[subpartIndex];
             // Store with alternative key formats
@@ -4381,18 +4450,18 @@ function QuestionsTabInner({
           }
         }
       }
-      
+
       return updated;
     });
-    
+
     // Update staged attachments if callback is provided
     if (updateStagedAttachments) {
       updateStagedAttachments(attachmentKey, [...(attachments[attachmentKey] || []), newAttachment]);
     }
-    
+
     setShowSnippingTool(false);
     setAttachmentTarget(null);
-    toast.success('Attachment added');
+    toast.success(`Attachment added to ${contextLabel}`);
   };
 
   const handleSnippingViewStateChange = useCallback((state: { page: number; scale: number }) => {
@@ -5238,7 +5307,7 @@ function QuestionsTabInner({
           explanation: q.explanation,
           requires_manual_marking: q.requires_manual_marking,
           marking_criteria: q.marking_criteria,
-          parts: Array.isArray(q.parts) ? q.parts : [],
+          parts: mapPartsWithAttachments(q.parts, q.id, attachments),
           figure_required: typeof q.figure_required === 'boolean' ? q.figure_required : (q.figure ?? false),
           figure: q.figure
         }))}
