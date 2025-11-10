@@ -14,7 +14,12 @@ import {
   ChevronDown,
   ChevronUp,
   Award,
-  Trash2
+  Trash2,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Download
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
@@ -140,6 +145,8 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageZoom, setImageZoom] = useState<number>(1);
+  const [imageRotation, setImageRotation] = useState<number>(0);
 
   const handleAttachmentPreviewKeyDown = (
     event: React.KeyboardEvent<HTMLDivElement>,
@@ -190,7 +197,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         <button
           type="button"
           onClick={handleRemove}
-          className="absolute top-2 right-2 rounded-full bg-white/95 dark:bg-gray-900/90 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/40 shadow focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800"
+          className="absolute top-2 right-2 z-10 p-2 rounded-full bg-white dark:bg-white text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-100 shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
           title="Remove attachment"
           aria-label="Remove attachment"
         >
@@ -203,7 +210,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         <div
           key={attachment.id || index}
           className={cn(
-            'relative bg-gray-200 dark:bg-gray-700 rounded-lg text-center flex flex-col items-center justify-center text-xs text-gray-600 dark:text-gray-400',
+            'group relative bg-white dark:bg-white rounded-lg text-center flex flex-col items-center justify-center text-xs text-gray-600 dark:text-gray-700 border-2 border-gray-200 dark:border-gray-300 shadow-sm',
             fallbackWidthClass,
             variant === 'question' ? 'p-4' : 'p-3'
           )}
@@ -211,13 +218,13 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
           {commonRemoveButton}
           <FileText
             className={cn(
-              'text-gray-400',
+              'text-gray-400 dark:text-gray-500',
               variant === 'question' ? 'h-8 w-8 mb-2' : 'h-6 w-6 mb-1'
             )}
           />
           <p className="truncate w-full px-2">{fallbackLabel}</p>
           {attachment.file_type && (
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wide">
+            <p className="text-[10px] text-gray-500 dark:text-gray-600 mt-1 uppercase tracking-wide">
               {attachment.file_type}
             </p>
           )}
@@ -225,61 +232,82 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
       );
     }
 
+    const handleEnlarge = () => {
+      if (imageSrc) {
+        setImagePreview(imageSrc);
+        setImageZoom(1);
+        setImageRotation(0);
+      }
+    };
+
     return (
       <div
         key={attachment.id || index}
-        role="button"
-        tabIndex={0}
-        onClick={() => imageSrc && setImagePreview(imageSrc)}
-        onKeyDown={event =>
-          imageSrc &&
-          handleAttachmentPreviewKeyDown(event, () => setImagePreview(imageSrc))
-        }
         className={cn(
-          'group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden transition-all shadow-sm hover:shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-800',
-          variant === 'question'
-            ? 'border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400'
-            : 'border border-gray-200 dark:border-gray-700 hover:border-blue-400/70 dark:hover:border-blue-300/60'
+          'group relative inline-flex flex-col bg-white dark:bg-white rounded-lg overflow-hidden transition-all shadow-sm hover:shadow-lg border-2 border-gray-200 dark:border-gray-300 hover:border-blue-500 dark:hover:border-blue-500',
+          'focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2'
         )}
-        style={{ maxWidth: '100%' }}
       >
         {commonRemoveButton}
-        <div className="relative">
+
+        {/* Enlarge Button */}
+        <button
+          type="button"
+          onClick={handleEnlarge}
+          className="absolute top-2 left-2 z-10 p-2 rounded-full bg-white dark:bg-white text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-100 shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          title="Enlarge image"
+          aria-label="Enlarge image"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </button>
+
+        {/* Image Container - Centers and respects actual size */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={handleEnlarge}
+          onKeyDown={event => handleAttachmentPreviewKeyDown(event, handleEnlarge)}
+          className="relative flex items-center justify-center p-4 cursor-pointer min-h-[120px]"
+        >
           <img
             src={imageSrc}
             alt={fallbackLabel}
-            className={cn(
-              'max-w-full h-auto object-contain',
-              variant === 'question' ? 'max-h-96' : 'max-h-80'
-            )}
+            className="max-w-full h-auto object-contain"
+            style={{
+              maxHeight: variant === 'question' ? '400px' : '300px',
+            }}
             onError={(e) => {
               const target = e.target as HTMLImageElement;
               target.style.display = 'none';
-              const parent = target.parentElement?.parentElement;
+              const parent = target.parentElement;
               if (parent) {
                 parent.innerHTML = `
-                  <div class="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 text-center ${fallbackWidthClass}">
-                    <svg class="h-8 w-8 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div class="flex flex-col items-center justify-center p-4 text-center ${fallbackWidthClass}">
+                    <svg class="h-8 w-8 mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <p class="text-xs text-gray-600 dark:text-gray-400">Image not available</p>
+                    <p class="text-xs text-gray-600">Image not available</p>
                   </div>
                 `;
               }
             }}
           />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
-            <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center pointer-events-none">
+            <div className="bg-white/90 dark:bg-white/90 rounded-full p-3 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+              <Eye className="h-6 w-6 text-blue-600" />
+            </div>
           </div>
         </div>
+
+        {/* File Name Footer */}
         {attachment.file_name && (
           <div
             className={cn(
-              'bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600',
-              variant === 'question' ? 'px-3 py-2' : 'px-2 py-1'
+              'bg-gray-50 dark:bg-gray-100 border-t border-gray-200 dark:border-gray-300',
+              variant === 'question' ? 'px-3 py-2' : 'px-2 py-1.5'
             )}
           >
-            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+            <p className="text-xs text-gray-700 dark:text-gray-800 truncate font-medium">
               {attachment.file_name}
             </p>
           </div>
@@ -577,10 +605,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
       <div className="space-y-3">
         <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
           <ImageIcon className="h-4 w-4" />
-          Attachments for Main Question ({mainQuestionAttachments.length})
+          Attached Figure{mainQuestionAttachments.length > 1 ? 's' : ''} for Question {question.question_number}
         </h4>
-        {/* Full width container aligned with question text box */}
-        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        {/* Full width container with white background */}
+        <div className="bg-white dark:bg-white rounded-lg p-4 border-2 border-gray-200 dark:border-gray-300 shadow-sm">
           <div className="flex flex-wrap justify-center gap-4">
             {mainQuestionAttachments.map((attachment, index) =>
               renderAttachmentCard(attachment, index, 'question')
@@ -788,10 +816,10 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
               <div className="space-y-2">
                 <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   <ImageIcon className="h-3 w-3" />
-                  Attachments for {displayLabel} ({partAttachments.length})
+                  Attached Figure{partAttachments.length > 1 ? 's' : ''} for {displayLabel}
                 </h5>
-                {/* Full width container aligned with part content */}
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                {/* Full width container with white background */}
+                <div className="bg-white dark:bg-white rounded-lg p-3 border-2 border-gray-200 dark:border-gray-300 shadow-sm">
                   <div className="flex flex-wrap justify-center gap-3">
                     {partAttachments.map((attachment, attIdx) =>
                       renderAttachmentCard(attachment, attIdx, 'part')
@@ -1011,25 +1039,138 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         </div>
       )}
 
-      {/* Image Preview Modal */}
+      {/* Enhanced Image Preview Modal with Zoom and Controls */}
       {imagePreview && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setImagePreview(null)}
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col"
+          onClick={() => {
+            setImagePreview(null);
+            setImageZoom(1);
+            setImageRotation(0);
+          }}
         >
-          <div className="relative max-w-6xl max-h-[90vh]">
-            <button
-              onClick={() => setImagePreview(null)}
-              className="absolute -top-12 right-0 text-white hover:text-gray-300 transition-colors"
-            >
-              <XCircle className="h-8 w-8" />
-            </button>
+          {/* Header with Controls */}
+          <div className="flex items-center justify-between p-4 bg-black/50 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <span className="text-white font-medium">Image Preview</span>
+              <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-1.5">
+                <span className="text-white text-sm">{Math.round(imageZoom * 100)}%</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Zoom Out */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageZoom(prev => Math.max(0.5, prev - 0.25));
+                }}
+                disabled={imageZoom <= 0.5}
+                className="p-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white transition-colors"
+                title="Zoom out"
+              >
+                <ZoomOut className="h-5 w-5" />
+              </button>
+
+              {/* Reset Zoom */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageZoom(1);
+                }}
+                className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm transition-colors"
+                title="Reset zoom"
+              >
+                100%
+              </button>
+
+              {/* Zoom In */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageZoom(prev => Math.min(3, prev + 0.25));
+                }}
+                disabled={imageZoom >= 3}
+                className="p-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white transition-colors"
+                title="Zoom in"
+              >
+                <ZoomIn className="h-5 w-5" />
+              </button>
+
+              {/* Rotate */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageRotation(prev => (prev + 90) % 360);
+                }}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+                title="Rotate 90°"
+              >
+                <RotateCw className="h-5 w-5" />
+              </button>
+
+              {/* Download */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const link = document.createElement('a');
+                  link.href = imagePreview;
+                  link.download = 'attachment.png';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+                title="Download image"
+              >
+                <Download className="h-5 w-5" />
+              </button>
+
+              {/* Close */}
+              <button
+                onClick={() => {
+                  setImagePreview(null);
+                  setImageZoom(1);
+                  setImageRotation(0);
+                }}
+                className="p-2 bg-red-500/80 hover:bg-red-600 rounded-lg text-white transition-colors ml-2"
+                title="Close preview"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Image Container */}
+          <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
             <img
               src={imagePreview}
               alt="Preview"
-              className="max-w-full max-h-[90vh] object-contain"
+              className="max-w-full max-h-full object-contain transition-all duration-300"
+              style={{
+                transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
+                cursor: imageZoom > 1 ? 'move' : 'default'
+              }}
               onClick={(e) => e.stopPropagation()}
             />
+          </div>
+
+          {/* Instructions Footer */}
+          <div className="p-4 bg-black/50 backdrop-blur-sm">
+            <div className="flex items-center justify-center gap-6 text-white/70 text-sm">
+              <span className="flex items-center gap-2">
+                <ZoomIn className="h-4 w-4" />
+                Use controls to zoom
+              </span>
+              <span className="flex items-center gap-2">
+                <RotateCw className="h-4 w-4" />
+                Rotate image
+              </span>
+              <span className="flex items-center gap-2">
+                <X className="h-4 w-4" />
+                Click outside to close
+              </span>
+            </div>
           </div>
         </div>
       )}

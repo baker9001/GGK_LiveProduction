@@ -148,51 +148,66 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
 
       {/* Attachment List */}
       {attachments.length > 0 && (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3">
           {attachments.map((attachment) => (
             <div
               key={attachment.id}
-              className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+              className="group relative bg-white dark:bg-white rounded-lg border-2 border-gray-200 dark:border-gray-300 shadow-sm hover:shadow-lg transition-all overflow-hidden"
             >
-              {/* Preview */}
+              {/* Preview for images */}
               {showPreview && isImage(attachment.file_type) && (
-                <div className="flex-shrink-0">
+                <div className="flex items-center justify-center p-3 min-h-[140px] cursor-pointer"
+                  onClick={() => window.open(attachment.file_url, '_blank')}
+                >
                   <img
                     src={attachment.file_url}
                     alt={attachment.file_name}
-                    className="h-12 w-12 object-cover rounded border border-gray-300 dark:border-gray-600"
+                    className="max-w-full h-auto object-contain"
+                    style={{ maxHeight: '200px' }}
                   />
                 </div>
               )}
 
               {/* Icon for non-images */}
               {showPreview && !isImage(attachment.file_type) && (
-                <div className="flex-shrink-0 h-12 w-12 flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded border border-gray-300 dark:border-gray-600">
-                  <Image className="h-6 w-6 text-gray-400" />
+                <div className="flex items-center justify-center p-6 min-h-[140px] bg-gray-50 dark:bg-gray-100">
+                  <div className="flex flex-col items-center">
+                    <Image className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-2" />
+                    <span className="text-xs text-gray-500 dark:text-gray-600 font-medium">
+                      {attachment.file_type}
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {/* Details */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {attachment.file_name}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {attachment.file_type}
-                </p>
-              </div>
-
-              {/* Actions */}
+              {/* Action buttons overlay */}
               {!readOnly && attachment.canDelete && (
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
                   onClick={() => handleRemove(attachment.id)}
-                  className="flex-shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="absolute top-2 right-2 z-10 p-2 rounded-full bg-white dark:bg-white text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-100 shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  title="Remove attachment"
                 >
                   <Trash2 className="h-4 w-4" />
-                </Button>
+                </button>
               )}
+
+              {/* Enlarge button for images */}
+              {showPreview && isImage(attachment.file_type) && (
+                <button
+                  onClick={() => window.open(attachment.file_url, '_blank')}
+                  className="absolute top-2 left-2 z-10 p-2 rounded-full bg-white dark:bg-white text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-100 shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  title="View full size"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
+              )}
+
+              {/* File name footer */}
+              <div className="bg-gray-50 dark:bg-gray-100 border-t border-gray-200 dark:border-gray-300 px-2 py-1.5">
+                <p className="text-xs text-gray-700 dark:text-gray-800 truncate font-medium">
+                  {attachment.file_name}
+                </p>
+              </div>
             </div>
           ))}
         </div>

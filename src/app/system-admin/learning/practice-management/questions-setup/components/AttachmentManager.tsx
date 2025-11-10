@@ -702,42 +702,52 @@ export function AttachmentManager({
               <span>Open all</span>
             </button>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3">
             {attachments
               .filter(a => a.file_type.startsWith('image/'))
               .map((attachment) => (
                 <div key={attachment.id} className="relative group">
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden p-2">
-                    <img 
-                      src={attachment.file_url} 
-                      alt={attachment.file_name}
-                      className="w-full h-32 object-contain cursor-pointer"
-                      onClick={() => handlePreview(attachment)}
-                      loading="lazy"
-                    />
-                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* White background card with centered image */}
+                  <div className="bg-white dark:bg-white border-2 border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-all">
+                    {/* Image container with proper centering */}
+                    <div className="flex items-center justify-center p-3 min-h-[140px] cursor-pointer" onClick={() => handlePreview(attachment)}>
+                      <img
+                        src={attachment.file_url}
+                        alt={attachment.file_name}
+                        className="max-w-full h-auto object-contain"
+                        style={{ maxHeight: '200px' }}
+                        loading="lazy"
+                      />
+                    </div>
+
+                    {/* Action buttons overlay */}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handlePreview(attachment)}
-                        className="p-1 bg-white dark:bg-gray-800 rounded shadow hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="p-1.5 bg-white dark:bg-white rounded-full shadow-md hover:bg-blue-50 dark:hover:bg-blue-100 text-blue-600 hover:text-blue-700"
                         title="View Full Size"
                       >
-                        <Eye size={14} />
+                        <Eye size={16} />
                       </button>
                       {!readOnly && (
                         <button
                           onClick={() => handleDelete(attachment)}
-                          className="p-1 bg-white dark:bg-gray-800 rounded shadow hover:bg-red-100 dark:hover:bg-red-900/20"
+                          className="p-1.5 bg-white dark:bg-white rounded-full shadow-md hover:bg-red-50 dark:hover:bg-red-100 text-red-600 hover:text-red-700"
                           title="Delete"
                         >
-                          <Trash2 size={14} className="text-red-600" />
+                          <Trash2 size={16} />
                         </button>
                       )}
                     </div>
+
+                    {/* File name footer */}
+                    <div className="bg-gray-50 dark:bg-gray-100 border-t border-gray-200 dark:border-gray-300 px-2 py-1.5">
+                      <p className="text-xs text-gray-700 dark:text-gray-800 truncate font-medium">
+                        {attachment.file_name}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
-                    {attachment.file_name}
-                  </p>
                 </div>
               ))}
           </div>
