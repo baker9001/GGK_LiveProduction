@@ -4279,8 +4279,8 @@ function QuestionsTabInner({
     }));
   };
 
-  const handleRequestSnippingTool = (questionId: string) => {
-    handleAddAttachment(questionId);
+  const handleRequestSnippingTool = (questionId: string, context?: { partIndex?: number; subpartIndex?: number }) => {
+    handleAddAttachment(questionId, context?.partIndex, context?.subpartIndex);
   };
 
   const handleAttachmentUpload = (questionId: string, partPath: string[]) => {
