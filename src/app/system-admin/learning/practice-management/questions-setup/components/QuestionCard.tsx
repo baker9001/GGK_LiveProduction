@@ -953,6 +953,7 @@ export function QuestionCard({
             onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
             readOnly={readOnly}
             questionDescription={question.question_description}
+            contextLabel={`Question ${question.question_number}`}
           />
         </div>
         
@@ -1447,6 +1448,7 @@ export function QuestionCard({
                       onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
                       readOnly={readOnly}
                       questionDescription={subQuestion.question_description}
+                      contextLabel={`${formatPartLabel(subQuestion.part_label)}`}
                     />
                   </div>
                 </div>

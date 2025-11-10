@@ -33,6 +33,7 @@ interface AttachmentManagerProps {
   onUpdate: () => void;
   readOnly?: boolean;
   questionDescription?: string; // To detect if figures are mentioned
+  contextLabel?: string; // Label to display in snipping tool (e.g., "Question 2", "Part (a)", "Subpart i")
 }
 
 // Global PDF storage to share across all attachment managers
@@ -51,7 +52,8 @@ export function AttachmentManager({
   subQuestionId,
   onUpdate,
   readOnly = false,
-  questionDescription = ''
+  questionDescription = '',
+  contextLabel
 }: AttachmentManagerProps) {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -568,6 +570,19 @@ export function AttachmentManager({
               <span>Click and drag to select areas. Use zoom controls for precision. Multiple snips allowed.</span>
             </div>
 
+            {/* Context Label Display */}
+            {contextLabel && (
+              <div className="mt-2 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700 rounded-md px-3 py-2">
+                <p className="text-xs font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                  <Scissors className="h-3 w-3" />
+                  Snipping for: {contextLabel}
+                </p>
+                <p className="text-[10px] text-blue-600 dark:text-blue-300 mt-0.5">
+                  All captured images will be attached to this location
+                </p>
+              </div>
+            )}
+
             {recentSnips.length > 0 && (
               <div className="mt-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-2">
                 <div className="flex items-center justify-between mb-2">
@@ -605,6 +620,7 @@ export function AttachmentManager({
               initialPage={snippingViewState.page}
               initialScale={snippingViewState.scale}
               onViewStateChange={handleSnippingViewStateChange}
+              questionLabel={contextLabel}
             />
           </div>
         </div>
