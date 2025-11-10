@@ -20,7 +20,7 @@ import {
   Loader2, Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
   Calculator, PenTool, Table, Code, Mic, LineChart, FileUp,
   HelpCircle, BookOpen, Lightbulb, Target, Award, PlayCircle,
-  Flag, CheckSquare, FileCheck, ShieldCheck, MinusCircle
+  Flag, CheckSquare, FileCheck, ShieldCheck, MinusCircle, Menu
 } from 'lucide-react';
 
 // Import shared components
