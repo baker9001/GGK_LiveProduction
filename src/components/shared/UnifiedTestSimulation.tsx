@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense, startTransition } from 'react';
 import {
   X,
   ChevronLeft,
@@ -718,6 +718,7 @@ export function UnifiedTestSimulation({
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState<SimulationResults | null>(null);
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<string>>(new Set());
+  const [isNavigating, setIsNavigating] = useState(false);
   // Unified simulation features - all toggleable independently
   const [features, setFeatures] = useState<SimulationFeatures>({
     showHints: isQAMode,
@@ -741,9 +742,53 @@ export function UnifiedTestSimulation({
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const exitActionRef = useRef<(() => void) | null>(null);
+  const navigationDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const { validateAnswer } = useAnswerValidation();
+  const normalizedQuestionsRef = useRef<Map<string, Question>>(new Map());
 
-  const currentQuestion = useMemo(() => paper.questions[currentQuestionIndex], [paper.questions, currentQuestionIndex]);
+  const normalizedQuestions = useMemo(() => {
+    const questionMap = new Map<string, Question>();
+    paper.questions.forEach(q => {
+      if (!normalizedQuestionsRef.current.has(q.id)) {
+        const normalizedParts = q.parts.map(part => {
+          const normalizedSubparts = part.subparts?.map(subpart => ({
+            ...subpart,
+            options: subpart.options || [],
+            correct_answers: subpart.correct_answers || [],
+            attachments: subpart.attachments || []
+          })) || [];
+
+          return {
+            ...part,
+            options: part.options || [],
+            correct_answers: part.correct_answers || [],
+            attachments: part.attachments || [],
+            subparts: normalizedSubparts
+          };
+        });
+
+        const normalizedQuestion: Question = {
+          ...q,
+          options: q.options || [],
+          correct_answers: q.correct_answers || [],
+          attachments: q.attachments || [],
+          parts: normalizedParts
+        };
+
+        questionMap.set(q.id, normalizedQuestion);
+        normalizedQuestionsRef.current.set(q.id, normalizedQuestion);
+      } else {
+        questionMap.set(q.id, normalizedQuestionsRef.current.get(q.id)!);
+      }
+    });
+    return questionMap;
+  }, [paper.questions]);
+
+  const currentQuestion = useMemo(() => {
+    const q = paper.questions[currentQuestionIndex];
+    return q ? normalizedQuestions.get(q.id) : undefined;
+  }, [paper.questions, currentQuestionIndex, normalizedQuestions]);
+
   const totalQuestions = useMemo(() => paper.questions.length, [paper.questions]);
 
   const requiresAnswer = useCallback(
@@ -967,64 +1012,60 @@ export function UnifiedTestSimulation({
     });
   };
 
-  const handleAnswerChange = (
-    questionId: string,
-    partId: string | undefined,
-    subpartId: string | undefined,
-    answer: unknown
-  ) => {
-    const key = subpartId
-      ? `${questionId}-${partId}-${subpartId}`
-      : partId
-        ? `${questionId}-${partId}`
-        : questionId;
-    const startKey = subpartId
-      ? key
-      : partId
-        ? `${questionId}-${partId}`
-        : questionId;
-    const startTime = questionStartTimes[startKey] || Date.now();
-    const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+  const handleAnswerChange = useCallback(
+    (questionId: string, partId: string | undefined, subpartId: string | undefined, answer: unknown) => {
+      const key = subpartId
+        ? `${questionId}-${partId}-${subpartId}`
+        : partId
+          ? `${questionId}-${partId}`
+          : questionId;
+      const startKey = subpartId ? key : partId ? `${questionId}-${partId}` : questionId;
 
-    if (!questionStartTimes[startKey]) {
-      setQuestionStartTimes(prev => ({
-        ...prev,
-        [startKey]: Date.now()
-      }));
-    }
+      const question = normalizedQuestions.get(questionId);
+      if (!question) return;
 
-    const question = paper.questions.find(q => q.id === questionId);
-    if (!question) return;
-
-    let questionToValidate;
-    if (subpartId && partId) {
-      questionToValidate = question.parts
-        .find(p => p.id === partId)?.subparts
-        ?.find(sp => sp.id === subpartId);
-    } else if (partId) {
-      questionToValidate = question.parts.find(p => p.id === partId);
-    } else {
-      questionToValidate = question;
-    }
-
-    if (!questionToValidate) return;
-
-    const validation = validateAnswer(questionToValidate, answer);
-
-    setUserAnswers(prev => ({
-      ...prev,
-      [key]: {
-        questionId,
-        partId,
-        subpartId,
-        answer,
-        isCorrect: validation.isCorrect,
-        marksAwarded: (validation.score || 0) * (questionToValidate.marks || 0),
-        timeSpent,
-        partialCredit: validation.partialCredit
+      let questionToValidate;
+      if (subpartId && partId) {
+        questionToValidate = question.parts
+          .find(p => p.id === partId)?.subparts
+          ?.find(sp => sp.id === subpartId);
+      } else if (partId) {
+        questionToValidate = question.parts.find(p => p.id === partId);
+      } else {
+        questionToValidate = question;
       }
-    }));
-  };
+
+      if (!questionToValidate) return;
+
+      const validation = validateAnswer(questionToValidate, answer);
+
+      startTransition(() => {
+        const now = Date.now();
+        const startTime = questionStartTimes[startKey] || now;
+        const timeSpent = Math.floor((now - startTime) / 1000);
+
+        setQuestionStartTimes(prev => {
+          if (prev[startKey]) return prev;
+          return { ...prev, [startKey]: now };
+        });
+
+        setUserAnswers(prev => ({
+          ...prev,
+          [key]: {
+            questionId,
+            partId,
+            subpartId,
+            answer,
+            isCorrect: validation.isCorrect,
+            marksAwarded: (validation.score || 0) * (questionToValidate.marks || 0),
+            timeSpent,
+            partialCredit: validation.partialCredit
+          }
+        }));
+      });
+    },
+    [normalizedQuestions, questionStartTimes, validateAnswer]
+  );
 
   const handleSubmitExam = () => {
     setIsRunning(false);
@@ -1258,20 +1299,51 @@ export function UnifiedTestSimulation({
   }, []);
 
   const goToQuestion = useCallback((index: number) => {
-    setCurrentQuestionIndex(prevIndex => {
-      if (index >= 0 && index < totalQuestions) {
-        return index;
+    if (index >= 0 && index < totalQuestions) {
+      if (navigationDebounceRef.current) {
+        clearTimeout(navigationDebounceRef.current);
       }
-      return prevIndex;
-    });
+
+      setIsNavigating(true);
+      navigationDebounceRef.current = setTimeout(() => {
+        startTransition(() => {
+          setCurrentQuestionIndex(index);
+          requestAnimationFrame(() => {
+            setIsNavigating(false);
+          });
+        });
+      }, 50);
+    }
   }, [totalQuestions]);
 
   const goToPreviousQuestion = useCallback(() => {
-    setCurrentQuestionIndex(prevIndex => Math.max(prevIndex - 1, 0));
+    setCurrentQuestionIndex(prevIndex => {
+      const newIndex = Math.max(prevIndex - 1, 0);
+      if (newIndex !== prevIndex) {
+        setIsNavigating(true);
+        startTransition(() => {
+          requestAnimationFrame(() => {
+            setIsNavigating(false);
+          });
+        });
+      }
+      return newIndex;
+    });
   }, []);
 
   const goToNextQuestion = useCallback(() => {
-    setCurrentQuestionIndex(prevIndex => Math.min(prevIndex + 1, totalQuestions - 1));
+    setCurrentQuestionIndex(prevIndex => {
+      const newIndex = Math.min(prevIndex + 1, totalQuestions - 1);
+      if (newIndex !== prevIndex) {
+        setIsNavigating(true);
+        startTransition(() => {
+          requestAnimationFrame(() => {
+            setIsNavigating(false);
+          });
+        });
+      }
+      return newIndex;
+    });
   }, [totalQuestions]);
 
   const getQuestionStatus = useCallback((questionId: string, parts: SubQuestion[]) => {
@@ -1310,12 +1382,17 @@ export function UnifiedTestSimulation({
     return answer?.answer !== undefined && answer?.answer !== '' ? 'answered' : 'unanswered';
   }, [userAnswers]);
 
+  const questionStatusMap = useMemo(() => {
+    const statusMap = new Map<string, 'answered' | 'partial' | 'unanswered'>();
+    paper.questions.forEach(q => {
+      statusMap.set(q.id, getQuestionStatus(q.id, q.parts));
+    });
+    return statusMap;
+  }, [paper.questions, getQuestionStatus, userAnswers]);
+
   const getAnsweredCount = useMemo(() => {
-    return paper.questions.filter(q => {
-      const status = getQuestionStatus(q.id, q.parts);
-      return status === 'answered';
-    }).length;
-  }, [paper.questions, getQuestionStatus]);
+    return Array.from(questionStatusMap.values()).filter(status => status === 'answered').length;
+  }, [questionStatusMap]);
 
   const calculateProgress = useMemo(() => {
     return totalQuestions > 0 ? (getAnsweredCount / totalQuestions) * 100 : 0;
@@ -1620,7 +1697,7 @@ export function UnifiedTestSimulation({
                 {navigatorSize === 'compact' ? (
                   <div className="p-2 space-y-1">
                     {paper.questions.map((question, index) => {
-                      const status = getQuestionStatus(question.id, question.parts);
+                      const status = questionStatusMap.get(question.id) || 'unanswered';
                       const isCurrent = index === currentQuestionIndex;
                       const isFlagged = flaggedQuestions.has(question.id);
 
@@ -1649,7 +1726,7 @@ export function UnifiedTestSimulation({
                   <div className="p-4">
                     <div className="grid grid-cols-5 gap-2">
                       {paper.questions.map((question, index) => {
-                        const status = getQuestionStatus(question.id, question.parts);
+                        const status = questionStatusMap.get(question.id) || 'unanswered';
                         const isCurrent = index === currentQuestionIndex;
                         const isFlagged = flaggedQuestions.has(question.id);
 
@@ -1719,7 +1796,14 @@ export function UnifiedTestSimulation({
 
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-4xl mx-auto p-6">
-                {currentQuestion && (
+                {isNavigating && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-pulse text-gray-500 dark:text-gray-400">
+                      Loading question...
+                    </div>
+                  </div>
+                )}
+                {!isNavigating && currentQuestion && (
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div className="bg-gray-50 dark:bg-gray-900 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                       <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 // src/components/shared/DynamicAnswerField.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   AlertCircle,
   Calculator,
@@ -178,7 +178,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   validationMode = 'flexible',
   subjectSpecificConfig
 }) => {
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const questionIdRef = useRef(question.id);
+  const isInitializedRef = useRef(false);
+
+  const initialSelectedOptions = useMemo(() => {
+    if (questionIdRef.current !== question.id || !isInitializedRef.current) {
+      questionIdRef.current = question.id;
+      isInitializedRef.current = true;
+      return [];
+    }
+    return [];
+  }, [question.id]);
+
+  const [selectedOptions, setSelectedOptions] = useState<string[]>(initialSelectedOptions);
   const [textAnswers, setTextAnswers] = useState<{ [key: string]: string }>({});
   const [contextAnswers, setContextAnswers] = useState<{ [key: string]: string }>({});
   const [componentAnswers, setComponentAnswers] = useState<Record<string, AnswerPrimitive>>({});
@@ -188,7 +200,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   const [measurementUnits, setMeasurementUnits] = useState<{ [key: string]: string }>({});
 
   // Admin mode states
-  const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>([]);
+  const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>(() => question.correct_answers || []);
   const [editingAnswerIndex, setEditingAnswerIndex] = useState<number | null>(null);
 
   const getCurrentStructuredValue = useCallback((): StructuredAnswerValue => {
@@ -313,6 +325,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
   // Initialize value from props
   useEffect(() => {
+    if (questionIdRef.current !== question.id) {
+      questionIdRef.current = question.id;
+      setSelectedOptions([]);
+      setTextAnswers({});
+      setContextAnswers({});
+      setComponentAnswers({});
+      setMeasurementUnits({});
+      setHasAnswered(false);
+      setShowAllCorrectAnswers(false);
+    }
+  }, [question.id]);
+
+  useEffect(() => {
     if (mode === 'admin' && question.correct_answers) {
       setAdminCorrectAnswers(question.correct_answers);
       return;
@@ -321,16 +346,25 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     if (question.type === 'mcq') {
       if (Array.isArray(value)) {
         const selections = value.filter((entry): entry is string => typeof entry === 'string');
-        setSelectedOptions(selections);
-        setHasAnswered(selections.length > 0);
+        const currentSelectionsStr = selectedOptions.sort().join(',');
+        const newSelectionsStr = selections.sort().join(',');
+        if (currentSelectionsStr !== newSelectionsStr) {
+          setSelectedOptions(selections);
+          setHasAnswered(selections.length > 0);
+        }
       } else if (typeof value === 'string') {
-        setSelectedOptions(value ? [value] : []);
-        setHasAnswered(Boolean(value));
-      } else {
+        const newSelections = value ? [value] : [];
+        const currentSelectionsStr = selectedOptions.sort().join(',');
+        const newSelectionsStr = newSelections.sort().join(',');
+        if (currentSelectionsStr !== newSelectionsStr) {
+          setSelectedOptions(newSelections);
+          setHasAnswered(Boolean(value));
+        }
+      } else if (selectedOptions.length > 0) {
         setSelectedOptions([]);
         setHasAnswered(false);
       }
-    } else if (question.type === 'descriptive') {
+    } else if (question.type === 'descriptive' && value !== undefined) {
       const structuredValue = getCurrentStructuredValue();
       const { main, components, context, units, ...rest } = structuredValue;
 
@@ -344,12 +378,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
         }
       });
 
-      setTextAnswers(nextTextAnswers);
-      setComponentAnswers(components ?? {});
-      setContextAnswers(context ?? {});
-      setMeasurementUnits(units ?? {});
+      const hasTextChanged = JSON.stringify(textAnswers) !== JSON.stringify(nextTextAnswers);
+      const hasComponentsChanged = JSON.stringify(componentAnswers) !== JSON.stringify(components ?? {});
+      const hasContextChanged = JSON.stringify(contextAnswers) !== JSON.stringify(context ?? {});
+      const hasUnitsChanged = JSON.stringify(measurementUnits) !== JSON.stringify(units ?? {});
+
+      if (hasTextChanged || hasComponentsChanged || hasContextChanged || hasUnitsChanged) {
+        setTextAnswers(nextTextAnswers);
+        setComponentAnswers(components ?? {});
+        setContextAnswers(context ?? {});
+        setMeasurementUnits(units ?? {});
+      }
     }
-  }, [getCurrentStructuredValue, mode, question.correct_answers, question.type, value]);
+  }, [getCurrentStructuredValue, mode, question.correct_answers, question.type, value, selectedOptions, textAnswers, componentAnswers, contextAnswers, measurementUnits]);
 
   // Admin mode handlers
   const handleAddCorrectAnswer = () => {
