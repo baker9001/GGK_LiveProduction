@@ -4501,28 +4501,59 @@ function QuestionsTabInner({
   }, []);
 
   const handleDeleteAttachment = (attachmentKey: string, attachmentId: string) => {
-    console.log('🗑️ Deleting attachment:', { attachmentKey, attachmentId });
+    console.log('🗑️ [handleDeleteAttachment] Called with:', { attachmentKey, attachmentId });
 
     // Safety check: ensure attachmentKey exists
     if (!attachments[attachmentKey]) {
-      console.error('❌ Attachment key not found:', attachmentKey);
+      console.error('❌ [handleDeleteAttachment] Attachment key not found:', attachmentKey);
       console.error('Available keys:', Object.keys(attachments));
       toast.error('Failed to delete attachment: Invalid attachment key');
       return false;
     }
 
-    // Find the attachment to confirm it exists
-    const attachmentToDelete = attachments[attachmentKey].find(att => att.id === attachmentId);
+    console.log('🔍 [handleDeleteAttachment] Searching for attachment in key:', {
+      attachmentKey,
+      attachmentId,
+      attachmentsInKey: attachments[attachmentKey].map(a => ({
+        id: a.id,
+        originalId: a.originalId,
+        fileName: a.file_name
+      }))
+    });
+
+    // Find the attachment by id OR originalId
+    const attachmentToDelete = attachments[attachmentKey].find(
+      att => att.id === attachmentId || att.originalId === attachmentId
+    );
+
     if (!attachmentToDelete) {
-      console.error('❌ Attachment not found:', { attachmentId, availableIds: attachments[attachmentKey].map(a => a.id) });
+      console.error('❌ [handleDeleteAttachment] Attachment not found:', {
+        attachmentId,
+        availableIds: attachments[attachmentKey].map(a => ({ id: a.id, originalId: a.originalId }))
+      });
       toast.error('Failed to delete attachment: Attachment not found');
       return false;
     }
 
-    console.log('✅ Found attachment to delete:', attachmentToDelete);
+    console.log('✅ [handleDeleteAttachment] Found attachment to delete:', {
+      id: attachmentToDelete.id,
+      originalId: attachmentToDelete.originalId,
+      fileName: attachmentToDelete.file_name
+    });
+
+    console.log('✅ [handleDeleteAttachment] Found attachment to delete (duplicate log):', attachmentToDelete);
 
     // Filter the attachments immediately to avoid stale closure
-    const filteredAttachments = attachments[attachmentKey].filter(att => att.id !== attachmentId);
+    // Match by BOTH id and originalId to handle all cases
+    const filteredAttachments = attachments[attachmentKey].filter(
+      att => att.id !== attachmentId && att.originalId !== attachmentId
+    );
+
+    console.log('🔍 [handleDeleteAttachment] Filtering attachments:', {
+      before: attachments[attachmentKey].length,
+      after: filteredAttachments.length,
+      removed: attachments[attachmentKey].length - filteredAttachments.length
+    });
 
     // Update main attachments state
     setAttachments(prev => {
@@ -5391,8 +5422,21 @@ function QuestionsTabInner({
         onQuestionUpdate={handleQuestionUpdateFromReview}
         onRequestSnippingTool={handleRequestSnippingTool}
         onRequestAttachmentDelete={(attachmentKey, attachmentId) => {
+          console.log('📞 [onRequestAttachmentDelete Called]', {
+            attachmentKey,
+            attachmentId,
+            hasKey: !!attachmentKey,
+            hasId: !!attachmentId
+          });
+
           if (attachmentKey && attachmentId) {
+            console.log('✅ [Setting delete confirmation state]', { attachmentKey, attachmentId });
             setDeleteAttachmentConfirm({ key: attachmentKey, attachmentId });
+          } else {
+            console.error('❌ [Missing attachmentKey or attachmentId]', {
+              attachmentKey,
+              attachmentId
+            });
           }
         }}
         onRequestSimulation={handleStartSimulation}

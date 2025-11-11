@@ -177,6 +177,21 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
     const removalKey = attachment.attachmentKey;
     const removalId = getAttachmentRemovalId(attachment);
     const fallbackWidthClass = variant === 'question' ? 'min-w-[200px]' : 'min-w-[160px]';
+
+    // DIAGNOSTIC LOGGING: Check attachment deletion properties
+    console.log('🔍 [Attachment Delete Debug]', {
+      fileName: attachment.file_name,
+      variant,
+      attachmentId: attachment.id,
+      originalId: attachment.originalId,
+      attachmentKey: attachment.attachmentKey,
+      canDelete: attachment.canDelete,
+      hasCallback: !!onAttachmentRemove,
+      removalKey,
+      removalId,
+      fullAttachment: attachment
+    });
+
     const canRemove = Boolean(
       onAttachmentRemove &&
         attachment.canDelete &&
@@ -184,11 +199,35 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
         removalId
     );
 
+    console.log('🔍 [Can Remove?]', {
+      fileName: attachment.file_name,
+      canRemove,
+      hasCallback: !!onAttachmentRemove,
+      canDelete: attachment.canDelete,
+      hasRemovalKey: !!removalKey,
+      hasRemovalId: !!removalId
+    });
+
     const handleRemove = (event: React.MouseEvent<HTMLButtonElement>) => {
+      console.log('🗑️ [Remove Button Clicked]', {
+        fileName: attachment.file_name,
+        removalKey,
+        removalId,
+        canRemove
+      });
+
       event.stopPropagation();
       event.preventDefault();
+
       if (canRemove && removalKey && removalId) {
+        console.log('✅ [Calling onAttachmentRemove]', { removalKey, removalId });
         onAttachmentRemove?.(removalKey, removalId);
+      } else {
+        console.error('❌ [Cannot remove - missing requirements]', {
+          canRemove,
+          removalKey,
+          removalId
+        });
       }
     };
 
