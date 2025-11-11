@@ -5675,32 +5675,41 @@ function QuestionsTabInner({
 
       {/* Delete Attachment Confirmation */}
       {deleteAttachmentConfirm && (
-        <ConfirmationDialog
-          open={true}
-          onClose={() => setDeleteAttachmentConfirm(null)}
-          onConfirm={() => {
-            if (deleteAttachmentConfirm) {
-              const success = handleDeleteAttachment(
-                deleteAttachmentConfirm.key,
-                deleteAttachmentConfirm.attachmentId
-              );
+        <>
+          {console.log('🔔 [Rendering Delete Confirmation Dialog]', deleteAttachmentConfirm)}
+          <ConfirmationDialog
+            open={true}
+            onClose={() => {
+              console.log('❌ [Dialog Closed]');
+              setDeleteAttachmentConfirm(null);
+            }}
+            onConfirm={() => {
+              console.log('✅ [Dialog Confirmed]', deleteAttachmentConfirm);
+              if (deleteAttachmentConfirm) {
+                const success = handleDeleteAttachment(
+                  deleteAttachmentConfirm.key,
+                  deleteAttachmentConfirm.attachmentId
+                );
 
-              // Close dialog after state updates have been scheduled
-              // Use setTimeout to ensure React processes the state update
-              if (success) {
-                setTimeout(() => {
+                console.log('🔍 [Delete Result]', { success });
+
+                // Close dialog after state updates have been scheduled
+                // Use setTimeout to ensure React processes the state update
+                if (success) {
+                  setTimeout(() => {
+                    setDeleteAttachmentConfirm(null);
+                  }, 0);
+                } else {
                   setDeleteAttachmentConfirm(null);
-                }, 0);
-              } else {
-                setDeleteAttachmentConfirm(null);
+                }
               }
-            }
-          }}
-          title="Delete Attachment"
-          message="Are you sure you want to delete this attachment?"
-          confirmText="Delete"
-          confirmVariant="danger"
-        />
+            }}
+            title="Delete Attachment"
+            message="Are you sure you want to delete this attachment?"
+            confirmText="Delete"
+            confirmVariant="danger"
+          />
+        </>
       )}
 
       {/* Validation Modal */}
