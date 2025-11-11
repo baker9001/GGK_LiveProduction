@@ -183,7 +183,10 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
               {/* Action buttons overlay */}
               {!readOnly && attachment.canDelete && (
                 <button
-                  onClick={() => handleRemove(attachment.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemove(attachment.id);
+                  }}
                   className="absolute top-2 right-2 z-10 p-2 rounded-full bg-white dark:bg-white text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-100 shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                   title="Remove attachment"
                 >
@@ -194,7 +197,10 @@ export const AttachmentManager: React.FC<AttachmentManagerProps> = ({
               {/* Enlarge button for images */}
               {showPreview && isImage(attachment.file_type) && (
                 <button
-                  onClick={() => window.open(attachment.file_url, '_blank')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(attachment.file_url, '_blank');
+                  }}
                   className="absolute top-2 left-2 z-10 p-2 rounded-full bg-white dark:bg-white text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-100 shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   title="View full size"
                 >

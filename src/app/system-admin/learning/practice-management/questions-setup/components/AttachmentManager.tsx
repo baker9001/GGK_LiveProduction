@@ -724,7 +724,10 @@ export function AttachmentManager({
                     {/* Action buttons overlay */}
                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => handlePreview(attachment)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreview(attachment);
+                        }}
                         className="p-1.5 bg-white dark:bg-white rounded-full shadow-md hover:bg-blue-50 dark:hover:bg-blue-100 text-blue-600 hover:text-blue-700"
                         title="View Full Size"
                       >
@@ -732,7 +735,10 @@ export function AttachmentManager({
                       </button>
                       {!readOnly && (
                         <button
-                          onClick={() => handleDelete(attachment)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(attachment);
+                          }}
                           className="p-1.5 bg-white dark:bg-white rounded-full shadow-md hover:bg-red-50 dark:hover:bg-red-100 text-red-600 hover:text-red-700"
                           title="Delete"
                         >
