@@ -374,6 +374,22 @@ const AttachmentGallery: React.FC<{
 
   const closePreview = () => setPreviewAttachment(null);
 
+  // Debug logging for attachment structure
+  React.useEffect(() => {
+    console.log('🔍 [AttachmentGallery] Rendered with:', {
+      attachmentCount: validAttachments.length,
+      attachmentKey,
+      isQAMode,
+      hasCallback: !!onAttachmentRemove,
+      attachments: validAttachments.map(a => ({
+        id: a.id,
+        file_name: a.file_name,
+        file_type: a.file_type,
+        hasId: !!a.id
+      }))
+    });
+  }, [validAttachments, attachmentKey, isQAMode, onAttachmentRemove]);
+
   return (
     <>
       <div className="space-y-6">
@@ -383,6 +399,17 @@ const AttachmentGallery: React.FC<{
           const isDescriptionOnly = !hasValidUrl && attachment.file_type === 'text/description';
           const isImage = attachment.file_type?.startsWith('image/');
           const id = attachment.id || `attachment-${index}`;
+
+          // Debug: Check if delete button should appear
+          const shouldShowDelete = isQAMode && onAttachmentRemove && attachmentKey && attachment.id;
+          console.log('🔍 [AttachmentGallery] Processing attachment:', {
+            fileName: attachment.file_name,
+            id: attachment.id,
+            attachmentKey,
+            isQAMode,
+            hasCallback: !!onAttachmentRemove,
+            shouldShowDelete
+          });
 
           // Handle description-only attachments (placeholders)
           if (isDescriptionOnly || !hasValidUrl) {
@@ -459,12 +486,18 @@ const AttachmentGallery: React.FC<{
                       />
 
                       <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/60 p-2 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
-                        {isQAMode && onAttachmentRemove && attachmentKey && (
+                        {isQAMode && onAttachmentRemove && attachmentKey && attachment.id && (
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
+                              console.log('🗑️ [AttachmentGallery Image] Delete clicked:', {
+                                attachmentKey,
+                                attachmentId: attachment.id,
+                                fileName: attachment.file_name,
+                                hasCallback: !!onAttachmentRemove
+                              });
                               onAttachmentRemove(attachmentKey, attachment.id);
                             }}
                             className="inline-flex h-9 w-9 items-center justify-center rounded-full text-red-400 hover:bg-red-500/80 hover:text-white transition-colors"
@@ -534,12 +567,18 @@ const AttachmentGallery: React.FC<{
 
                 {!isImage && (
                   <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-800">
-                    {isQAMode && onAttachmentRemove && attachmentKey && (
+                    {isQAMode && onAttachmentRemove && attachmentKey && attachment.id && (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
+                          console.log('🗑️ [AttachmentGallery File] Delete clicked:', {
+                            attachmentKey,
+                            attachmentId: attachment.id,
+                            fileName: attachment.file_name,
+                            hasCallback: !!onAttachmentRemove
+                          });
                           onAttachmentRemove(attachmentKey, attachment.id);
                         }}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
