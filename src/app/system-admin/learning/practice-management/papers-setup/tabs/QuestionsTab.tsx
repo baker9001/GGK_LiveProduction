@@ -5678,8 +5678,8 @@ function QuestionsTabInner({
         <>
           {console.log('🔔 [Rendering Delete Confirmation Dialog]', deleteAttachmentConfirm)}
           <ConfirmationDialog
-            open={true}
-            onClose={() => {
+            isOpen={true}
+            onCancel={() => {
               console.log('❌ [Dialog Closed]');
               setDeleteAttachmentConfirm(null);
             }}
@@ -5707,7 +5707,7 @@ function QuestionsTabInner({
             title="Delete Attachment"
             message="Are you sure you want to delete this attachment?"
             confirmText="Delete"
-            confirmVariant="danger"
+            confirmVariant="destructive"
           />
         </>
       )}
