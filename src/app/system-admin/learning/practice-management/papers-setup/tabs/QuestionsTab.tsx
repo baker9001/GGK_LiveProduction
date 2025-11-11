@@ -4372,7 +4372,12 @@ function QuestionsTabInner({
     return parts.map((part, partIndex) => {
       // Generate attachment key for this part
       const partAttachmentKey = generateAttachmentKey(questionId, partIndex);
-      const partAttachments = attachmentsState[partAttachmentKey] || [];
+      const partAttachments = (attachmentsState[partAttachmentKey] || []).map(att => ({
+        ...att,
+        canDelete: true,
+        attachmentKey: partAttachmentKey,
+        originalId: att.originalId || att.id
+      }));
 
       if (partAttachments.length > 0) {
         console.log(`🔗 Mapping ${partAttachments.length} attachment(s) to part ${partIndex} of question ${questionId}`);
@@ -4383,7 +4388,12 @@ function QuestionsTabInner({
         ? part.subparts.map((subpart, subpartIndex) => {
             // Generate attachment key for this subpart
             const subpartAttachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
-            const subpartAttachments = attachmentsState[subpartAttachmentKey] || [];
+            const subpartAttachments = (attachmentsState[subpartAttachmentKey] || []).map(att => ({
+              ...att,
+              canDelete: true,
+              attachmentKey: subpartAttachmentKey,
+              originalId: att.originalId || att.id
+            }));
 
             if (subpartAttachments.length > 0) {
               console.log(`🔗 Mapping ${subpartAttachments.length} attachment(s) to subpart ${subpartIndex} of part ${partIndex} in question ${questionId}`);
@@ -5354,7 +5364,12 @@ function QuestionsTabInner({
           answer_requirement: q.answer_requirement,
           correct_answers: Array.isArray(q.correct_answers) ? q.correct_answers : (q.correct_answers ? [q.correct_answers] : []),
           options: Array.isArray(q.options) ? q.options : [],
-          attachments: attachments[q.id] || [],
+          attachments: (attachments[q.id] || []).map(att => ({
+            ...att,
+            canDelete: true,
+            attachmentKey: q.id,
+            originalId: att.originalId || att.id
+          })),
           hint: q.hint,
           explanation: q.explanation,
           requires_manual_marking: q.requires_manual_marking,
