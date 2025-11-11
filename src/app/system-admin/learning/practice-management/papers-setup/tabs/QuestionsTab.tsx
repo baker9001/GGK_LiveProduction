@@ -4508,7 +4508,7 @@ function QuestionsTabInner({
       console.error('❌ Attachment key not found:', attachmentKey);
       console.error('Available keys:', Object.keys(attachments));
       toast.error('Failed to delete attachment: Invalid attachment key');
-      return;
+      return false;
     }
 
     // Find the attachment to confirm it exists
@@ -4516,15 +4516,19 @@ function QuestionsTabInner({
     if (!attachmentToDelete) {
       console.error('❌ Attachment not found:', { attachmentId, availableIds: attachments[attachmentKey].map(a => a.id) });
       toast.error('Failed to delete attachment: Attachment not found');
-      return;
+      return false;
     }
 
     console.log('✅ Found attachment to delete:', attachmentToDelete);
 
+    // Filter the attachments immediately to avoid stale closure
+    const filteredAttachments = attachments[attachmentKey].filter(att => att.id !== attachmentId);
+
+    // Update main attachments state
     setAttachments(prev => {
       const updated = {
         ...prev,
-        [attachmentKey]: (prev[attachmentKey] || []).filter(att => att.id !== attachmentId)
+        [attachmentKey]: filteredAttachments
       };
       console.log('📦 Updated attachments state:', {
         key: attachmentKey,
@@ -4534,14 +4538,14 @@ function QuestionsTabInner({
       return updated;
     });
 
-    // Update staged attachments
+    // Update staged attachments using the same filtered result
     if (updateStagedAttachments) {
-      const filteredAttachments = attachments[attachmentKey].filter(att => att.id !== attachmentId);
       updateStagedAttachments(attachmentKey, filteredAttachments);
       console.log('📤 Updated staged attachments');
     }
 
     toast.success('Attachment deleted successfully');
+    return true;
   };
 
   // FIXED: Scroll to question function
@@ -5631,11 +5635,20 @@ function QuestionsTabInner({
           onClose={() => setDeleteAttachmentConfirm(null)}
           onConfirm={() => {
             if (deleteAttachmentConfirm) {
-              handleDeleteAttachment(
+              const success = handleDeleteAttachment(
                 deleteAttachmentConfirm.key,
                 deleteAttachmentConfirm.attachmentId
               );
-              setDeleteAttachmentConfirm(null);
+
+              // Close dialog after state updates have been scheduled
+              // Use setTimeout to ensure React processes the state update
+              if (success) {
+                setTimeout(() => {
+                  setDeleteAttachmentConfirm(null);
+                }, 0);
+              } else {
+                setDeleteAttachmentConfirm(null);
+              }
             }
           }}
           title="Delete Attachment"
