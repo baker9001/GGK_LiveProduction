@@ -12,6 +12,7 @@ import {
   Download,
   ZoomIn,
   Check,
+  Trash2,
 } from 'lucide-react';
 import { Button, IconButton } from './Button';
 import type { Question, SubQuestion, QuestionAttachment } from './EnhancedQuestionSelector';
@@ -25,6 +26,8 @@ interface EnhancedQuestionPreviewProps {
   canNavigatePrev?: boolean;
   canNavigateNext?: boolean;
   isAdded?: boolean;
+  isEditMode?: boolean;
+  onAttachmentRemove?: (attachmentId: string) => Promise<void>;
 }
 
 export function EnhancedQuestionPreview({
@@ -36,8 +39,12 @@ export function EnhancedQuestionPreview({
   canNavigatePrev = false,
   canNavigateNext = false,
   isAdded = false,
+  isEditMode = false,
+  onAttachmentRemove,
 }: EnhancedQuestionPreviewProps) {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
+  const [attachmentToDelete, setAttachmentToDelete] = useState<QuestionAttachment | null>(null);
 
   if (!isOpen) return null;
 
@@ -59,8 +66,31 @@ export function EnhancedQuestionPreview({
     }
   };
 
+  const handleAttachmentDelete = (attachment: QuestionAttachment) => {
+    setAttachmentToDelete(attachment);
+  };
+
+  const confirmAttachmentDelete = async () => {
+    if (!attachmentToDelete || !onAttachmentRemove) return;
+
+    setDeletingAttachmentId(attachmentToDelete.id);
+    try {
+      await onAttachmentRemove(attachmentToDelete.id);
+      setAttachmentToDelete(null);
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  };
+
+  const cancelAttachmentDelete = () => {
+    setAttachmentToDelete(null);
+  };
+
   const renderAttachment = (attachment: QuestionAttachment, index: number) => {
     const isImage = attachment.file_type?.startsWith('image/');
+    const isDeleting = deletingAttachmentId === attachment.id;
 
     return (
       <div
@@ -75,12 +105,27 @@ export function EnhancedQuestionPreview({
               className="w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setExpandedImage(attachment.file_url)}
             />
-            <button
-              onClick={() => setExpandedImage(attachment.file_url)}
-              className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/70 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </button>
+            <div className="absolute top-2 right-2 flex gap-2">
+              <button
+                onClick={() => setExpandedImage(attachment.file_url)}
+                className="p-2 bg-black/50 hover:bg-black/70 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              {isEditMode && onAttachmentRemove && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAttachmentDelete(attachment);
+                  }}
+                  disabled={isDeleting}
+                  className="p-2 bg-red-500/80 hover:bg-red-600 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Remove attachment"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="p-4 bg-gray-50 dark:bg-gray-900/50">
@@ -94,13 +139,28 @@ export function EnhancedQuestionPreview({
                   {attachment.file_type}
                 </p>
               </div>
-              <a
-                href={attachment.file_url}
-                download={attachment.file_name}
-                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <Download className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              </a>
+              <div className="flex gap-2">
+                <a
+                  href={attachment.file_url}
+                  download={attachment.file_name}
+                  className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <Download className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                </a>
+                {isEditMode && onAttachmentRemove && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAttachmentDelete(attachment);
+                    }}
+                    disabled={isDeleting}
+                    className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors text-red-600 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Remove attachment"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -409,6 +469,59 @@ export function EnhancedQuestionPreview({
           </div>
         </div>
       </div>
+
+      {/* Attachment Deletion Confirmation Dialog */}
+      {attachmentToDelete && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4"
+          onClick={cancelAttachmentDelete}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Delete Attachment?
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Are you sure you want to permanently delete this attachment? This action cannot be undone.
+                </p>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-gray-500" />
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {attachmentToDelete.file_name}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={cancelAttachmentDelete}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={confirmAttachmentDelete}
+                    leftIcon={<Trash2 className="w-4 h-4" />}
+                    disabled={deletingAttachmentId !== null}
+                  >
+                    {deletingAttachmentId ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Image Zoom Modal */}
       {expandedImage && (
