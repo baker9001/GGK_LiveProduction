@@ -26,7 +26,8 @@ import {
   AlertTriangle,
   BarChart3,
   TrendingUp,
-  MinusCircle
+  MinusCircle,
+  Trash2
 } from 'lucide-react';
 import { Button } from './Button';
 import { StatusBadge } from './StatusBadge';
@@ -253,6 +254,7 @@ interface UnifiedTestSimulationProps {
   onPaperStatusChange?: (status: string) => void;
   allowPause?: boolean;
   showAnswersOnCompletion?: boolean;
+  onAttachmentRemove?: (attachmentKey: string, attachmentId: string) => void;
 }
 
 const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
@@ -342,7 +344,12 @@ const buildNormalisedCorrectAnswers = (source: AnswerSource): CorrectAnswer[] =>
   return normalisedAnswers;
 };
 
-const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = React.memo(({ attachments }) => {
+const AttachmentGallery: React.FC<{
+  attachments: AttachmentAsset[];
+  onAttachmentRemove?: (attachmentKey: string, attachmentId: string) => void;
+  attachmentKey?: string;
+  isQAMode?: boolean;
+}> = React.memo(({ attachments, onAttachmentRemove, attachmentKey, isQAMode }) => {
   const [previewAttachment, setPreviewAttachment] = React.useState<AttachmentAsset | null>(null);
 
   if (!attachments || attachments.length === 0) {
@@ -452,6 +459,21 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = React.me
                       />
 
                       <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/60 p-2 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                        {isQAMode && onAttachmentRemove && attachmentKey && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              onAttachmentRemove(attachmentKey, attachment.id);
+                            }}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-red-400 hover:bg-red-500/80 hover:text-white transition-colors"
+                            aria-label="Remove attachment"
+                            title="Remove attachment"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setPreviewAttachment(attachment)}
@@ -512,6 +534,21 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = React.me
 
                 {!isImage && (
                   <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-800">
+                    {isQAMode && onAttachmentRemove && attachmentKey && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          onAttachmentRemove(attachmentKey, attachment.id);
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
+                        aria-label="Remove attachment"
+                        title="Remove attachment"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                     <a
                       href={attachment.file_url}
                       target="_blank"
@@ -709,7 +746,8 @@ export function UnifiedTestSimulation({
   isQAMode = false,
   onPaperStatusChange,
   allowPause = true,
-  showAnswersOnCompletion = true
+  showAnswersOnCompletion = true,
+  onAttachmentRemove
 }: UnifiedTestSimulationProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, UserAnswer>>({});
@@ -1862,7 +1900,12 @@ export function UnifiedTestSimulation({
                           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                             Reference Materials:
                           </h4>
-                          <AttachmentGallery attachments={currentQuestion.attachments} />
+                          <AttachmentGallery
+                            attachments={currentQuestion.attachments}
+                            onAttachmentRemove={onAttachmentRemove}
+                            attachmentKey={currentQuestion.id}
+                            isQAMode={isQAMode}
+                          />
                         </div>
                       )}
 
@@ -1956,7 +1999,12 @@ export function UnifiedTestSimulation({
                                       <h5 className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">
                                         Supporting resources
                                       </h5>
-                                      <AttachmentGallery attachments={part.attachments} />
+                                      <AttachmentGallery
+                                        attachments={part.attachments}
+                                        onAttachmentRemove={onAttachmentRemove}
+                                        attachmentKey={`${currentQuestion.id}_p${partIndex}`}
+                                        isQAMode={isQAMode}
+                                      />
                                     </div>
                                   )}
 
@@ -2027,7 +2075,12 @@ export function UnifiedTestSimulation({
                                               </p>
 
                                               {subpart.attachments && subpart.attachments.length > 0 && (
-                                                <AttachmentGallery attachments={subpart.attachments} />
+                                                <AttachmentGallery
+                                                  attachments={subpart.attachments}
+                                                  onAttachmentRemove={onAttachmentRemove}
+                                                  attachmentKey={`${currentQuestion.id}_p${partIndex}_s${subIndex}`}
+                                                  isQAMode={isQAMode}
+                                                />
                                               )}
 
                                               {requiresAnswer(subpart) ? (

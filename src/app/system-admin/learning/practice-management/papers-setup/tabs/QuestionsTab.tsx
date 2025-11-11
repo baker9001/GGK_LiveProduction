@@ -5174,6 +5174,7 @@ function QuestionsTabInner({
           // Handle paper status changes during simulation
           console.log('Paper status changed to:', newStatus);
         }}
+        onAttachmentRemove={handleDeleteAttachment}
       />
     );
   }
