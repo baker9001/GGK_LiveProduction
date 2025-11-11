@@ -4235,18 +4235,32 @@ function QuestionsTabInner({
       const reader = new FileReader();
       reader.onload = (event) => {
         setPdfDataUrl(event.target?.result as string);
+
+        // Auto-open snipping tool after successful PDF load
+        setShowSnippingTool(true);
+
+        toast.success(
+          <div className="flex items-center">
+            <FileCheck className="h-4 w-4 mr-2" />
+            <span>PDF loaded! Draw rectangles to capture figures.</span>
+          </div>
+        );
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleAddAttachment = (questionId: string, partIndex?: number, subpartIndex?: number) => {
+    // Set the attachment target first so it's ready when PDF loads
+    setAttachmentTarget({ questionId, partIndex, subpartIndex });
+
     if (!pdfDataUrl) {
+      // Trigger file picker - snipping tool will auto-open after PDF loads
       fileInputRef.current?.click();
       return;
     }
 
-    setAttachmentTarget({ questionId, partIndex, subpartIndex });
+    // PDF already loaded, open snipping tool immediately
     setShowSnippingTool(true);
   };
 
