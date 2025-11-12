@@ -2244,17 +2244,49 @@ function QuestionsTabInner({
       console.log(`  [Subpart ${subpartLabel}] Auto-detected as contextual-only (empty subpart)`);
     }
 
-    let answerRequirement = subpart.answer_requirement ||
-      (hasCorrectAnswers
-        ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks)
-        : undefined);
+    // CRITICAL FIX: Derive answerRequirement from actual answer data
+    let answerRequirement = subpart.answer_requirement;
+
+    // If no explicit answer_requirement but we have correct_answers, derive it
+    if (!answerRequirement && hasCorrectAnswers) {
+      answerRequirement = parseAnswerRequirement(
+        JSON.stringify(subpart.correct_answers),
+        subpart.marks
+      );
+    }
+
+    // If STILL undefined but we have correct_answers, derive a sensible default
+    if (!answerRequirement && hasCorrectAnswers) {
+      console.log(`  [Subpart ${subpartLabel}] Deriving answerRequirement from ${subpart.correct_answers.length} answers`);
+
+      if (subpart.correct_answers.length === 1) {
+        answerRequirement = 'single_choice';
+      } else {
+        // Check alternative_type from answers
+        const altType = subpart.correct_answers[0]?.alternative_type;
+        if (altType === 'one_required') {
+          answerRequirement = 'any_one_from';
+        } else if (altType === 'all_required') {
+          answerRequirement = 'all_required';
+        } else {
+          answerRequirement = 'multiple_alternatives';
+        }
+      }
+
+      console.log(`  [Subpart ${subpartLabel}] Derived answerRequirement: ${answerRequirement}`);
+    }
+
     if (typeof answerRequirement === 'string' && answerRequirement.toLowerCase() === 'not applicable') {
       answerRequirement = 'not_applicable';
     }
 
-    // FIX: Treat undefined answerRequirement as not applicable for expectsAnswer check
-    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable' && answerRequirement !== undefined;
-    if (!expectsAnswer) {
+    // CRITICAL FIX: Data-driven answer expectation
+    // If we have correct_answers data, we EXPECT an answer regardless of metadata flags
+    const expectsAnswer = hasCorrectAnswers ||
+                          (hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable');
+
+    // Only override format/requirement if we truly have no answer data
+    if (!expectsAnswer && !hasCorrectAnswers) {
       answerFormat = 'not_applicable';
       answerRequirement = 'not_applicable';
     }
@@ -2270,7 +2302,7 @@ function QuestionsTabInner({
       answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
       answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       attachments: ensureArray(subpart.attachments),
-      correct_answers: expectsAnswer && subpart.correct_answers
+      correct_answers: hasCorrectAnswers
         ? processAnswers(subpart.correct_answers, answerRequirement)
         : [],
       options: expectsAnswer && subpart.options
