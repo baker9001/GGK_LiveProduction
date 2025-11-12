@@ -424,17 +424,21 @@ function transformQuestionSubpart(
   const hasDirectAnswer = answerExpectation.has_direct_answer ?? true; // Subparts typically have direct answers
   const isContextualOnly = answerExpectation.is_contextual_only ?? false;
 
-  // CRITICAL FIX: Prioritize explicit answer_format from JSON, with proper validation
-  // Check if answer_format exists and is a non-empty, valid string
+  // CRITICAL FIX: ALWAYS prioritize explicit answer_format from JSON if it exists and is meaningful
   let answerFormat = subpart.answer_format;
-  const isValidAnswerFormat = answerFormat &&
-    typeof answerFormat === 'string' &&
-    answerFormat.trim() !== '' &&
-    answerFormat !== 'undefined' &&
-    answerFormat !== 'null';
 
-  if (!isValidAnswerFormat) {
-    // Only derive if not provided or invalid
+  // Validate that the JSON value is truly present and meaningful
+  // Do NOT accept 'not_applicable' from JSON if we have correct answers
+  const hasAnswers = correctAnswers && correctAnswers.length > 0;
+  const isExplicitFormat = answerFormat &&
+    typeof answerFormat === 'string' &&
+    answerFormat.trim().length > 0 &&
+    answerFormat.toLowerCase() !== 'undefined' &&
+    answerFormat.toLowerCase() !== 'null' &&
+    !(answerFormat === 'not_applicable' && hasAnswers); // Reject not_applicable if answers exist
+
+  if (!isExplicitFormat) {
+    // Only derive if JSON didn't provide a valid format
     answerFormat =
       deriveAnswerFormat({
         type: normalizedSubpartType || 'descriptive',
@@ -443,6 +447,23 @@ function transformQuestionSubpart(
         has_direct_answer: hasDirectAnswer,
         is_contextual_only: isContextualOnly
       }) || undefined;
+
+    // SAFEGUARD: If we derived "not_applicable" but have answers, override it
+    if (answerFormat === 'not_applicable' && hasAnswers) {
+      console.warn('[jsonTransformer] Derived not_applicable but correct_answers exist - using answer-based format');
+      // Derive format based on answer content
+      if (correctAnswers.length === 1) {
+        const answer = correctAnswers[0].answer || '';
+        answerFormat = answer.includes(' ') ? 'single_line' : 'single_word';
+      } else if (correctAnswers.length === 2) {
+        answerFormat = 'two_items';
+      } else {
+        answerFormat = 'multi_line';
+      }
+    }
+  } else {
+    // We have an explicit format from JSON - use it
+    console.log(`[jsonTransformer] Using explicit answer_format from JSON: "${answerFormat}" for subpart with ${correctAnswers.length} answers`);
   }
 
   // CRITICAL FIX: Prioritize explicit answer_requirement from JSON, with proper validation

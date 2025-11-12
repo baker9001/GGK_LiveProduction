@@ -177,7 +177,7 @@ export function deriveAnswerFormat(question: {
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
 }): string | null {
-  const { type, question_description = '', correct_answers = [], has_direct_answer, is_contextual_only } = question;
+  const { type, question_description = '', correct_answers = [] } = question;
   const desc = question_description.toLowerCase();
 
   // CRITICAL SAFEGUARD: If there are valid correct_answers, NEVER return 'not_applicable'
@@ -186,15 +186,24 @@ export function deriveAnswerFormat(question: {
   );
   const hasValidAnswers = validAnswers.length > 0;
 
-  // Contextual-only questions should be marked as 'not_applicable'
-  // BUT only if they truly have no answers
-  if ((is_contextual_only === true || has_direct_answer === false) && !hasValidAnswers) {
-    return 'not_applicable';
+  // SAFEGUARD: If we have valid answers, override conflicting flags
+  // The presence of actual answer data takes precedence over metadata flags
+  // Use local variables to avoid reassignment of const parameters
+  let isContextualOnly = question.is_contextual_only;
+  let hasDirectAnswer = question.has_direct_answer;
+
+  if (hasValidAnswers) {
+    if (isContextualOnly === true || hasDirectAnswer === false) {
+      console.warn('[deriveAnswerFormat] Flags indicate no answer but correct_answers exist - correcting flags');
+      isContextualOnly = false;
+      hasDirectAnswer = true;
+    }
   }
 
-  // If we have valid answers but flags say no answer, the flags are wrong - ignore them
-  if (hasValidAnswers && (is_contextual_only === true || has_direct_answer === false)) {
-    console.warn('Answer format derivation: has_direct_answer/is_contextual_only flags conflict with correct_answers data - prioritizing data');
+  // Contextual-only questions should be marked as 'not_applicable'
+  // BUT ONLY if they truly have NO answers
+  if ((isContextualOnly === true || hasDirectAnswer === false) && !hasValidAnswers) {
+    return 'not_applicable';
   }
 
   // MCQ/TF questions don't need a specific format - return null to prevent auto-fill
@@ -284,12 +293,13 @@ export function deriveAnswerRequirement(question: {
   const hasValidAnswers = validAnswers.length > 0;
 
   // If we have valid answers but flags say no answer, override the flags
+  // The presence of actual answer data takes precedence over metadata flags
   let hasDirectAnswer = question.has_direct_answer;
   let isContextualOnly = question.is_contextual_only;
 
   if (hasValidAnswers) {
     if (isContextualOnly === true || hasDirectAnswer === false) {
-      console.warn('Answer requirement derivation: has_direct_answer/is_contextual_only flags conflict with correct_answers data - prioritizing data');
+      console.warn('[deriveAnswerRequirement] Flags indicate no answer but correct_answers exist - correcting flags');
       hasDirectAnswer = true;
       isContextualOnly = false;
     }
