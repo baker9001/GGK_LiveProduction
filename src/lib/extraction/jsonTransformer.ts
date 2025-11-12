@@ -439,6 +439,7 @@ function transformQuestionSubpart(
 
   if (!isExplicitFormat) {
     // Only derive if JSON didn't provide a valid format
+    // Note: deriveAnswerFormat now has internal safeguards to never return 'not_applicable' when answers exist
     answerFormat =
       deriveAnswerFormat({
         type: normalizedSubpartType || 'descriptive',
@@ -448,10 +449,11 @@ function transformQuestionSubpart(
         is_contextual_only: isContextualOnly
       }) || undefined;
 
-    // SAFEGUARD: If we derived "not_applicable" but have answers, override it
+    // SAFEGUARD: Redundant check as deriveAnswerFormat now handles this, but kept for extra safety
+    // This catches any edge cases where deriveAnswerFormat logic might be bypassed
     if (answerFormat === 'not_applicable' && hasAnswers) {
-      console.warn('[jsonTransformer] Derived not_applicable but correct_answers exist - using answer-based format');
-      // Derive format based on answer content
+      console.warn('[jsonTransformer] UNEXPECTED: Derived not_applicable despite having answers - this should not happen after fix');
+      // Fallback: Derive format based on answer content
       if (correctAnswers.length === 1) {
         const answer = correctAnswers[0].answer || '';
         answerFormat = answer.includes(' ') ? 'single_line' : 'single_word';
