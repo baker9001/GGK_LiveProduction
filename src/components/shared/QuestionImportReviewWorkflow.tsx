@@ -2872,6 +2872,36 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                           />
                                         </FormField>
                                       </div>
+                                      <div className="grid gap-3 md:grid-cols-2">
+                                        <FormField
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-hint`}
+                                          label="Hint"
+                                          className="mb-0"
+                                        >
+                                          <RichTextEditor
+                                            value={subpart.hint ?? ''}
+                                            onChange={(content) => handleSubpartFieldChange(question, partIndex, subIndex, { hint: content })}
+                                            placeholder="Optional hint for this subpart"
+                                            ariaLabel="Subpart hint editor"
+                                            className="min-h-[140px]"
+                                          />
+                                        </FormField>
+                                        <FormField
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-explanation`}
+                                          label="Explanation"
+                                          className="mb-0"
+                                        >
+                                          <RichTextEditor
+                                            value={subpart.explanation ?? ''}
+                                            onChange={(content) =>
+                                              handleSubpartFieldChange(question, partIndex, subIndex, { explanation: content })
+                                            }
+                                            placeholder="Explain the answer expectations for this subpart"
+                                            ariaLabel="Subpart explanation editor"
+                                            className="min-h-[140px]"
+                                          />
+                                        </FormField>
+                                      </div>
                                       <div className="flex flex-wrap items-center gap-3">
                                         <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                                           <input
