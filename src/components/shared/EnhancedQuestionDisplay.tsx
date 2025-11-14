@@ -705,9 +705,27 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
     // Generate fallback label ONLY if not provided - otherwise preserve exact database value
     const getPartLabel = (label: string | undefined, idx: number): string => {
       if (!label || label === 'undefined' || label.trim() === '') {
-        // Generate label from index: 0 -> a, 1 -> b, etc.
-        const letter = String.fromCharCode(97 + idx);
-        return `Part (${letter})`;
+        if (level === 0) {
+          // Parts use letters: 0 -> a, 1 -> b, etc.
+          const letter = String.fromCharCode(97 + idx);
+          return `Part (${letter})`;
+        } else {
+          // Subparts use roman numerals: 0 -> i, 1 -> ii, etc.
+          const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+          const roman = romanNumerals[idx] || String(idx + 1);
+          return `Subpart ${roman}`;
+        }
+      }
+
+      // Return the exact label from database, but format it appropriately
+      // If it's a subpart (level > 0) and label doesn't start with "Subpart", prepend it
+      if (level > 0 && !label.toLowerCase().startsWith('subpart')) {
+        return `Subpart ${label}`;
+      }
+
+      // If it's a part (level 0) and label doesn't start with "Part", prepend it
+      if (level === 0 && !label.toLowerCase().startsWith('part')) {
+        return `Part (${label})`;
       }
 
       // Return the exact label from database as-is
@@ -717,7 +735,20 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
     // Get short label for badge (extract letter/number from label)
     const getShortLabel = (label: string | undefined, idx: number): string => {
       if (!label || label === 'undefined' || label.trim() === '') {
-        return String.fromCharCode(97 + idx);
+        if (level === 0) {
+          // Parts use letters
+          return String.fromCharCode(97 + idx);
+        } else {
+          // Subparts use roman numerals
+          const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+          return romanNumerals[idx] || String(idx + 1);
+        }
+      }
+
+      // Try to extract from "Subpart i", "Subpart ii", etc.
+      const subpartMatch = label.match(/Subpart\s+([ivx]+)/i);
+      if (subpartMatch) {
+        return subpartMatch[1].toLowerCase();
       }
 
       // Try to extract from parentheses: "Part (a)" -> "a", "(i)" -> "i"
@@ -742,7 +773,14 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
       if (/[a-z0-9ivx]/i.test(firstChar)) {
         return firstChar.toLowerCase();
       }
-      return String.fromCharCode(97 + idx);
+
+      // Final fallback based on level
+      if (level === 0) {
+        return String.fromCharCode(97 + idx);
+      } else {
+        const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+        return romanNumerals[idx] || String(idx + 1);
+      }
     };
 
     const displayLabel = getPartLabel(part.part_label, index);
