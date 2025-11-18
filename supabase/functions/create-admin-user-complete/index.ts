@@ -1,5 +1,5 @@
 // Enhanced Edge Function: create-admin-user-complete
-// Complete user creation with proper Supabase Auth integration
+// Complete user creation using Supabase's native invitation flow
 // Path: supabase/functions/create-admin-user-complete/index.ts
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -35,13 +35,13 @@ serve(async (req) => {
 
   try {
     const body: CreateUserPayload = await req.json()
-    console.log('Creating complete admin user for:', body.email)
+    console.log('Creating admin user with invitation for:', body.email)
 
     // Validate required fields
     if (!body.email || !body.name || !body.role_id) {
       return new Response(
-        JSON.stringify({ 
-          error: 'Missing required fields: email, name, and role_id are required' 
+        JSON.stringify({
+          error: 'Missing required fields: email, name, and role_id are required'
         }),
         { status: 400, headers: corsHeaders }
       )
@@ -71,11 +71,11 @@ serve(async (req) => {
     // Check if user already exists in auth.users
     const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers()
     const existingAuthUser = existingAuthUsers.users?.find(u => u.email === body.email.toLowerCase())
-    
+
     if (existingAuthUser) {
       return new Response(
-        JSON.stringify({ 
-          error: 'A user with this email already exists in the authentication system' 
+        JSON.stringify({
+          error: 'A user with this email already exists in the authentication system'
         }),
         { status: 400, headers: corsHeaders }
       )
@@ -90,8 +90,8 @@ serve(async (req) => {
 
     if (existingCustomUser) {
       return new Response(
-        JSON.stringify({ 
-          error: `User with email ${body.email} already exists in the system${!existingCustomUser.is_active ? ' (inactive)' : ''}` 
+        JSON.stringify({
+          error: `User with email ${body.email} already exists in the system${!existingCustomUser.is_active ? ' (inactive)' : ''}`
         }),
         { status: 400, headers: corsHeaders }
       )
@@ -121,89 +121,96 @@ serve(async (req) => {
       department: body.department || null,
       created_by: body.created_by || 'system',
       created_at: new Date().toISOString(),
-      user_type: 'system',  // CRITICAL: This is a SYSTEM admin, not entity admin
+      user_type: 'system',
       requires_password_change: true,
-      email_verification_required: true
+      personal_message: body.personal_message || null
     }
 
-    // Step 1: Create user in Supabase Auth (invitation-based)
-    // IMPORTANT: This creates a SYSTEM admin user, not an entity admin
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: body.email.toLowerCase(),
-      email_confirm: false, // Require email verification
-      user_metadata: userMetadata,
-      app_metadata: {
-        user_type: 'system',  // CRITICAL: Must be 'system' for system admins
-        role_id: body.role_id,
-        role_name: roleData.name,
-        created_via: 'admin_panel'
+    const appMetadata = {
+      user_type: 'system',
+      role_id: body.role_id,
+      role_name: roleData.name,
+      created_via: 'admin_panel'
+    }
+
+    const invitationRedirectUrl = body.redirect_to || DEFAULT_RESET_REDIRECT_URL
+
+    // Step 1: Invite user via Supabase Auth (creates user + sends email in one call)
+    // This is the ONLY email sending - no duplicate calls
+    console.log('Sending invitation via inviteUserByEmail...')
+
+    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      body.email.toLowerCase(),
+      {
+        data: userMetadata,
+        redirectTo: invitationRedirectUrl
       }
-    })
+    )
 
-    if (authError) {
-      console.error('Auth creation error:', authError)
+    if (inviteError) {
+      console.error('Invitation error:', inviteError)
       return new Response(
-        JSON.stringify({ error: authError.message }),
+        JSON.stringify({
+          error: `Failed to send invitation: ${inviteError.message}`
+        }),
         { status: 400, headers: corsHeaders }
       )
     }
 
-    if (!authUser.user) {
+    if (!inviteData?.user) {
       return new Response(
-        JSON.stringify({ error: 'User creation failed - no user returned' }),
+        JSON.stringify({ error: 'Invitation sent but no user data returned' }),
         { status: 400, headers: corsHeaders }
       )
     }
 
-    const userId = authUser.user.id
-    console.log('Auth user created successfully:', userId)
+    const userId = inviteData.user.id
+    console.log('User invited successfully:', userId)
 
     // Step 2: Create user in custom users table with user_type='system'
-    // CRITICAL: System admins must have user_type='system' (NOT 'entity')
     const { error: usersError } = await supabaseAdmin
       .from('users')
       .insert({
-        id: userId, // Use auth.users ID
+        id: userId,
         email: body.email.toLowerCase(),
-        user_type: 'system',  // CRITICAL: Must be 'system' for system admin users
+        user_type: 'system',
         is_active: true,
-        email_verified: false, // Will be true after email confirmation
+        email_verified: false, // Will be true after they click the invitation link
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        auth_user_id: userId, // Reference to auth.users
+        auth_user_id: userId,
         auth_sync_status: 'completed',
         raw_user_meta_data: userMetadata,
         raw_app_meta_data: {
           provider: 'email',
           providers: ['email'],
-          user_type: 'system',  // CRITICAL: Must be 'system'
+          user_type: 'system',
           role_id: body.role_id
         }
       })
 
     if (usersError) {
       console.error('Users table error:', usersError)
-      
-      // Rollback: Delete auth user
+
+      // Rollback: Delete auth user (this also cancels the invitation)
       await supabaseAdmin.auth.admin.deleteUser(userId)
-      
+
       return new Response(
-        JSON.stringify({ 
-          error: 'Failed to create user profile: ' + usersError.message 
+        JSON.stringify({
+          error: 'Failed to create user profile: ' + usersError.message
         }),
         { status: 400, headers: corsHeaders }
       )
     }
 
-    // Step 3: Create admin_users record (NOT entity_users)
-    // CRITICAL: System admins go in admin_users table, NOT entity_users table
+    // Step 3: Create admin_users record
     const { error: adminError } = await supabaseAdmin
       .from('admin_users')
       .insert({
-        id: userId, // Same ID as auth.users and users (foreign key reference)
+        id: userId,
         name: body.name,
         role_id: body.role_id,
-        can_manage_users: roleData.name === 'Super Admin', // Set based on role
+        can_manage_users: roleData.name === 'Super Admin',
         avatar_url: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -211,7 +218,6 @@ serve(async (req) => {
 
     if (adminError) {
       console.error('Admin users table error:', adminError)
-      console.error('Failed to create record in admin_users table (NOT entity_users)')
 
       // Rollback: Delete from users table and auth
       await supabaseAdmin.from('users').delete().eq('id', userId)
@@ -219,7 +225,7 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({
-          error: 'Failed to create admin profile in admin_users table: ' + adminError.message
+          error: 'Failed to create admin profile: ' + adminError.message
         }),
         { status: 400, headers: corsHeaders }
       )
@@ -228,92 +234,33 @@ serve(async (req) => {
     // Step 4: Create invitation tracking record
     let invitationStatusId: string | null = null
     try {
-      const { data: inviteStatus, error: inviteStatusError } = await supabaseAdmin
+      const { data: inviteStatus } = await supabaseAdmin
         .from('invitation_status')
         .insert({
           user_id: userId,
           email: body.email.toLowerCase(),
           user_type: 'system',
+          sent_at: new Date().toISOString(), // Mark as sent since inviteUserByEmail succeeded
           created_by: body.created_by || 'system',
           metadata: {
             role_id: body.role_id,
-            role_name: roleData.name
+            role_name: roleData.name,
+            personal_message: body.personal_message,
+            redirect_url: invitationRedirectUrl
           }
         })
         .select()
         .single()
 
-      if (!inviteStatusError && inviteStatus) {
+      if (inviteStatus) {
         invitationStatusId = inviteStatus.id
       }
     } catch (inviteStatusError) {
       console.error('Failed to create invitation status:', inviteStatusError)
+      // Don't fail the operation if tracking fails
     }
 
-    // Step 5: Send invitation email if requested
-    let invitationSent = false
-    let invitationError: string | null = null
-    const invitationRedirectUrl = body.redirect_to || DEFAULT_RESET_REDIRECT_URL
-
-    if (body.send_invitation !== false) {
-      try {
-        const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-          body.email.toLowerCase(),
-          {
-            data: {
-              ...userMetadata,
-              personal_message: body.personal_message
-            },
-            redirectTo: invitationRedirectUrl
-          }
-        )
-
-        if (inviteError) {
-          console.error('Invitation error:', inviteError)
-          invitationError = inviteError.message
-
-          // Update invitation status as failed
-          if (invitationStatusId) {
-            await supabaseAdmin
-              .from('invitation_status')
-              .update({
-                failed_at: new Date().toISOString(),
-                failed_reason: inviteError.message
-              })
-              .eq('id', invitationStatusId)
-          }
-        } else {
-          invitationSent = true
-          console.log('Invitation sent successfully')
-
-          // Update invitation status as sent
-          if (invitationStatusId) {
-            await supabaseAdmin
-              .from('invitation_status')
-              .update({
-                sent_at: new Date().toISOString()
-              })
-              .eq('id', invitationStatusId)
-          }
-        }
-      } catch (emailError) {
-        console.error('Email sending error:', emailError)
-        invitationError = emailError instanceof Error ? emailError.message : 'Unknown email error'
-
-        // Update invitation status as failed
-        if (invitationStatusId) {
-          await supabaseAdmin
-            .from('invitation_status')
-            .update({
-              failed_at: new Date().toISOString(),
-              failed_reason: invitationError
-            })
-            .eq('id', invitationStatusId)
-        }
-      }
-    }
-
-    // Step 6: Create audit log entry
+    // Step 5: Create audit log entry
     try {
       await supabaseAdmin
         .from('audit_logs')
@@ -328,9 +275,9 @@ serve(async (req) => {
             role_id: body.role_id,
             role_name: roleData.name,
             created_by: body.created_by || 'system',
-            invitation_sent: invitationSent,
-            invitation_error: invitationError,
-            invitation_status_id: invitationStatusId
+            invitation_sent: true,
+            invitation_status_id: invitationStatusId,
+            method: 'inviteUserByEmail'
           },
           created_at: new Date().toISOString()
         })
@@ -339,37 +286,32 @@ serve(async (req) => {
       // Don't fail the operation if audit logging fails
     }
 
-    // Return success response with complete information
+    // Return success response
     return new Response(
       JSON.stringify({
         success: true,
         user: {
           id: userId,
-          email: authUser.user.email,
+          email: inviteData.user.email,
           name: body.name,
           role_id: body.role_id,
           role_name: roleData.name,
-          created_at: authUser.user.created_at,
-          invitation_sent: invitationSent,
-          invitation_error: invitationError,
+          created_at: inviteData.user.created_at,
+          invitation_sent: true,
           invitation_status_id: invitationStatusId,
           requires_email_verification: true
         },
-        message: invitationSent
-          ? 'Admin user created successfully. Invitation email sent with setup instructions.'
-          : invitationError
-          ? `Admin user created but invitation email failed: ${invitationError}`
-          : 'Admin user created successfully. Please manually send invitation email.'
+        message: 'Admin user created successfully. Invitation email sent with setup instructions.'
       }),
       { status: 200, headers: corsHeaders }
     )
 
   } catch (error) {
     console.error('Unexpected error in create-admin-user-complete:', error)
-    
+
     return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Internal server error occurred' 
+      JSON.stringify({
+        error: error.message || 'Internal server error occurred'
       }),
       { status: 500, headers: corsHeaders }
     )
