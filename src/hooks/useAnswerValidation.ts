@@ -101,8 +101,20 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
 
       correctAnswers.push(...correctOptions);
 
+      // Debug logging for validation issues
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[MCQ Validation]', {
+          questionId: question.id,
+          userSelections,
+          correctOptions,
+          allOptions: question.options.map(o => ({ label: o.label, is_correct: o.is_correct })),
+          answerRequirement: question.answer_requirement
+        });
+      }
+
       if (correctOptions.length === 0) {
         // No options marked as correct, fallback to other methods
+        console.warn('[MCQ Validation] No options marked as correct for question:', question.id);
         // Continue to check correct_answer or correct_answers below
       } else {
         // Check user selections against correct options

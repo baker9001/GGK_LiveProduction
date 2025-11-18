@@ -88,6 +88,11 @@ interface QAReviewResultPayload {
   visitedQuestions: string[];
 }
 
+/**
+ * Generate consistent alphabetic label for MCQ options
+ * This MUST match the database label format (A, B, C, D, etc.)
+ * Uses the option's order field if available, otherwise array index
+ */
 const deriveOptionLabel = (orderIndex: number): string => {
   const alphabetLength = 26;
   let index = Math.max(orderIndex, 0);
@@ -99,6 +104,22 @@ const deriveOptionLabel = (orderIndex: number): string => {
   } while (index >= 0);
 
   return label;
+};
+
+/**
+ * Normalize option for consistent validation
+ * Ensures label is always alphabetic (A, B, C, D) based on order
+ */
+const normalizeQuestionOption = (opt: QuestionOption, index: number): { label: string; text: string; is_correct: boolean } => {
+  // Use the stored order field if available, otherwise use array index
+  const orderIndex = typeof opt.order === 'number' && opt.order >= 0 ? opt.order : index;
+  const label = deriveOptionLabel(orderIndex);
+
+  return {
+    label: label,
+    text: opt.option_text || '',
+    is_correct: opt.is_correct || false
+  };
 };
 
 type AnswerSource = {
@@ -1528,11 +1549,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                           question={{
                             ...currentQuestion,
                             subject: paper.subject,
-                            options: currentQuestion.options?.map((opt, optionIndex) => ({
-                              label: String.fromCharCode(65 + optionIndex),
-                              text: opt.option_text,
-                              is_correct: opt.is_correct
-                            }))
+                            options: currentQuestion.options?.map((opt, optionIndex) =>
+                              normalizeQuestionOption(opt, optionIndex)
+                            )
                           }}
                           value={userAnswers[currentQuestion.id]?.answer}
                           onChange={(answer) => handleAnswerChange(currentQuestion.id, undefined, undefined, answer)}
@@ -1612,11 +1631,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 question={{
                                   ...part,
                                   subject: paper.subject,
-                                  options: part.options?.map(opt => ({
-                                    label: opt.option_text || opt.id,
-                                    text: opt.option_text,
-                                    is_correct: opt.is_correct
-                                  }))
+                                  options: part.options?.map((opt, optionIndex) =>
+                                    normalizeQuestionOption(opt, optionIndex)
+                                  )
                                 }}
                                 value={userAnswers[`${currentQuestion.id}-${part.id}`]?.answer}
                                 onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, undefined, answer)}
@@ -1677,11 +1694,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                               id: subpart.id,
                                               type: subpart.type || 'descriptive',
                                               subject: paper.subject,
-                                              options: subpart.options?.map((opt, optIndex) => ({
-                                                label: opt?.option_text || opt?.id || String.fromCharCode(65 + optIndex),
-                                                text: opt?.option_text || opt?.label || '',
-                                                is_correct: opt?.is_correct
-                                              }))
+                                              options: subpart.options?.map((opt, optIndex) =>
+                                                normalizeQuestionOption(opt, optIndex)
+                                              )
                                             }}
                                             value={userAnswers[answerKey]?.answer}
                                             onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, subpart.id, answer)}
