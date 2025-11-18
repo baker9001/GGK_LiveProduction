@@ -101,20 +101,24 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
 
       correctAnswers.push(...correctOptions);
 
-      // Debug logging for validation issues
+      // Enhanced debug logging for validation issues
       if (process.env.NODE_ENV === 'development') {
-        console.log('[MCQ Validation]', {
-          questionId: question.id,
-          userSelections,
-          correctOptions,
-          allOptions: question.options.map(o => ({ label: o.label, is_correct: o.is_correct })),
-          answerRequirement: question.answer_requirement
-        });
+        console.group(`[MCQ Validation] Question ${question.id}`);
+        console.log('User Selections:', userSelections);
+        console.log('Correct Options:', correctOptions);
+        console.log('All Options:', question.options.map(o => ({
+          label: o.label,
+          text: o.text,
+          is_correct: o.is_correct
+        })));
+        console.log('Answer Requirement:', question.answer_requirement);
+        console.groupEnd();
       }
 
       if (correctOptions.length === 0) {
         // No options marked as correct, fallback to other methods
         console.warn('[MCQ Validation] No options marked as correct for question:', question.id);
+        console.warn('[MCQ Validation] Falling back to correct_answer or correct_answers field');
         // Continue to check correct_answer or correct_answers below
       } else {
         // Check user selections against correct options
@@ -244,6 +248,17 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
     const feedback: string[] = [];
     const partialCredit: { earned: number; reason: string }[] = [];
     const correctAnswers: string[] = [];
+
+    // Enhanced debug logging for complex question validation
+    if (process.env.NODE_ENV === 'development') {
+      console.group(`[Descriptive Validation] Question ${question.id}`);
+      console.log('User Answer:', userAnswer);
+      console.log('Answer Format:', question.answer_format);
+      console.log('Answer Requirement:', question.answer_requirement);
+      console.log('Correct Answers:', question.correct_answers);
+      console.log('Correct Answer (single):', question.correct_answer);
+      console.groupEnd();
+    }
 
     // Handle different answer formats
     if (question.answer_format === 'two_items_connected' && typeof userAnswer === 'object') {

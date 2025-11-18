@@ -327,14 +327,20 @@ const buildNormalisedCorrectAnswers = (source: AnswerSource): CorrectAnswer[] =>
         return;
       }
 
-      const orderIndex = typeof option.order === 'number' && option.order > 0 ? option.order - 1 : index;
+      // CRITICAL FIX: Use order directly when it's a valid number >= 0
+      // Previous bug: subtracted 1 from order, causing misalignment when order=0
+      const orderIndex = typeof option.order === 'number' && option.order >= 0
+        ? option.order
+        : index;
       const label = deriveOptionLabel(orderIndex);
-      const optionText = option.option_text?.trim() || option.id || `Option ${label}`;
-      const formattedAnswer = `${label}. ${optionText}`.trim();
 
-      if (!normalisedAnswers.some(existing => existing.answer === formattedAnswer)) {
+      // CRITICAL FIX: Store ONLY the label for MCQ validation
+      // The validation logic in useAnswerValidation expects just the label ("A", "B", "C")
+      // NOT the formatted string "A. Option Text"
+      // This mismatch was causing all MCQ answers to fail validation
+      if (!normalisedAnswers.some(existing => existing.answer === label)) {
         normalisedAnswers.push({
-          answer: formattedAnswer,
+          answer: label,  // Just "A", "B", "C", etc. - matches validation expectations
           alternative_id: option.id
         });
       }

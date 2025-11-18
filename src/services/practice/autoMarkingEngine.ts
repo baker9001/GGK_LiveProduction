@@ -126,6 +126,19 @@ export function autoMarkQuestion(context: AutoMarkContext): AutoMarkResult {
   const responseTokens = normalizeStudentResponse(context.rawAnswer, context.subjectArea);
   const evalResult = evaluateMarkingPoints(normalized, responseTokens, context);
 
+  // Enhanced debug logging for complex question marking
+  if (process.env.NODE_ENV === 'development') {
+    console.group(`[Auto-Marking] Question ${context.question.id}`);
+    console.log('Marking Points:', normalized);
+    console.log('Student Response Tokens:', responseTokens);
+    console.log('Evaluation Result:', evalResult);
+    console.log('Total Awarded:', evalResult.totalAwarded, '/', evalResult.totalAvailable);
+    if (evalResult.denied.length > 0) {
+      console.warn('Denied Points:', evalResult.denied);
+    }
+    console.groupEnd();
+  }
+
   return {
     awarded: evalResult.awarded,
     denied: evalResult.denied,
