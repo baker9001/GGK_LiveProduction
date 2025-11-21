@@ -44,6 +44,10 @@ import { detectAnswerExpectation } from '../../../../../../lib/extraction/answer
 import { EnhancedQuestionDisplay } from '../../../../../../components/shared/EnhancedQuestionDisplay';
 import { mapQuestionToDisplayData } from '../utils/questionMappers';
 import EnhancedAnswerFormatSelector from '../../../../../../components/shared/EnhancedAnswerFormatSelector';
+import { useAnswerFormatSync } from '../../../../../../hooks/useAnswerFormatSync';
+import { FormatChangeDialog } from '../../../../../../components/shared/FormatChangeDialog';
+import { RequirementChangeDialog } from '../../../../../../components/shared/RequirementChangeDialog';
+import { InlineAnswerAdaptor } from '../../../../../../components/shared/InlineAnswerAdaptor';
 
 interface QuestionCardProps {
   question: Question;
@@ -81,6 +85,37 @@ export function QuestionCard({
 
   const reviewDisplayData = useMemo(() => mapQuestionToDisplayData(question), [question]);
   const canEdit = !readOnly;
+
+  const formatSyncHook = useAnswerFormatSync({
+    currentFormat: question.answer_format || null,
+    currentRequirement: question.answer_requirement || null,
+    currentAnswers: question.correct_answers || [],
+    onFormatChange: async (format) => {
+      await updateField.mutateAsync({
+        questionId: question.id,
+        field: 'answer_format',
+        value: format,
+        isSubQuestion: false
+      });
+    },
+    onRequirementChange: async (requirement) => {
+      await updateField.mutateAsync({
+        questionId: question.id,
+        field: 'answer_requirement',
+        value: requirement,
+        isSubQuestion: false
+      });
+    },
+    onAnswersUpdate: async (answers) => {
+      await updateCorrectAnswers.mutateAsync({
+        questionId: question.id,
+        isSubQuestion: false,
+        correctAnswers: answers
+      });
+    },
+    autoAdapt: false,
+    enabled: canEdit
+  });
 
   // Compute suggested answer fields if missing
   const suggestedAnswerFields = useMemo(() => {
@@ -437,16 +472,43 @@ export function QuestionCard({
   };
   
   return (
-    <div
-      id={`question-${question.id}`}
-      className={cn(
-        'rounded-2xl border overflow-hidden bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
-        needsAttachmentWarning && showQAActions
-          ? 'border-amber-300/80 dark:border-amber-500/70 ring-1 ring-amber-200/60 dark:ring-amber-500/30'
-          : 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
+    <>
+      {/* Format Change Dialog */}
+      {formatSyncHook.state.showFormatDialog && formatSyncHook.state.pendingFormatChange && (
+        <FormatChangeDialog
+          isOpen={formatSyncHook.state.showFormatDialog}
+          oldFormat={formatSyncHook.state.pendingFormatChange.oldFormat}
+          newFormat={formatSyncHook.state.pendingFormatChange.newFormat}
+          compatibility={formatSyncHook.state.pendingFormatChange.compatibility}
+          currentAnswerCount={question.correct_answers?.length || 0}
+          onConfirm={formatSyncHook.confirmFormatChange}
+          onCancel={formatSyncHook.cancelFormatChange}
+        />
       )}
-    >
-      {/* Question Header - Clickable to expand/collapse */}
+
+      {/* Requirement Change Dialog */}
+      {formatSyncHook.state.showRequirementDialog && formatSyncHook.state.pendingRequirementChange && (
+        <RequirementChangeDialog
+          isOpen={formatSyncHook.state.showRequirementDialog}
+          oldRequirement={formatSyncHook.state.pendingRequirementChange.oldRequirement}
+          newRequirement={formatSyncHook.state.pendingRequirementChange.newRequirement}
+          compatibility={formatSyncHook.state.pendingRequirementChange.compatibility}
+          currentAnswers={question.correct_answers || []}
+          onConfirm={formatSyncHook.confirmRequirementChange}
+          onCancel={formatSyncHook.cancelRequirementChange}
+        />
+      )}
+
+      <div
+        id={`question-${question.id}`}
+        className={cn(
+          'rounded-2xl border overflow-hidden bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
+          needsAttachmentWarning && showQAActions
+            ? 'border-amber-300/80 dark:border-amber-500/70 ring-1 ring-amber-200/60 dark:ring-amber-500/30'
+            : 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
+        )}
+      >
+        {/* Question Header - Clickable to expand/collapse */}
       <div
         className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -628,6 +690,16 @@ export function QuestionCard({
 
       {isExpanded && (
         <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          {/* Inline Answer Adaptor */}
+          <InlineAnswerAdaptor
+            isVisible={formatSyncHook.state.showInlineAdaptor}
+            formatChange={formatSyncHook.state.pendingFormatChange}
+            requirementChange={formatSyncHook.state.pendingRequirementChange}
+            canUndo={formatSyncHook.state.canUndo}
+            onDismiss={formatSyncHook.dismissInlineAdaptor}
+            onUndo={formatSyncHook.undo}
+          />
+
           <EnhancedQuestionDisplay
             question={reviewDisplayData}
             showAttachments
@@ -1341,5 +1413,6 @@ export function QuestionCard({
         </div>
       )}
     </div>
+    </>
   );
 }
