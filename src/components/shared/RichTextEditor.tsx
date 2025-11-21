@@ -102,6 +102,38 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
     }
   }, []);
 
+  const handleInput = useCallback(() => {
+    if (!editorRef.current) return;
+
+    // Mark that user is actively typing
+    isTypingRef.current = true;
+
+    // Clear existing typing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    const rawHtml = editorRef.current.innerHTML;
+    const sanitized = sanitizeRichText(rawHtml);
+
+    // Only fix structure and sanitize if there are actual issues
+    // Don't update innerHTML during active typing to preserve cursor
+    if (sanitized !== rawHtml) {
+      const cursorPosition = getCursorPosition(editorRef.current);
+      editorRef.current.innerHTML = sanitized;
+      // Restore cursor immediately
+      setCursorPosition(editorRef.current, cursorPosition);
+    }
+
+    // Call onChange immediately to keep parent in sync
+    onChange(sanitized);
+
+    // Mark typing as finished after a delay
+    typingTimeoutRef.current = window.setTimeout(() => {
+      isTypingRef.current = false;
+    }, 300);
+  }, [onChange]);
+
   const applyCommand = useCallback((command: string, valueArg?: string) => {
     if (!editorRef.current) return;
     editorRef.current.focus();
@@ -258,38 +290,6 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
     updateSelection();
     handleInput();
   }, [savedRange, updateSelection, handleInput]);
-
-  const handleInput = useCallback(() => {
-    if (!editorRef.current) return;
-
-    // Mark that user is actively typing
-    isTypingRef.current = true;
-
-    // Clear existing typing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    const rawHtml = editorRef.current.innerHTML;
-    const sanitized = sanitizeRichText(rawHtml);
-
-    // Only fix structure and sanitize if there are actual issues
-    // Don't update innerHTML during active typing to preserve cursor
-    if (sanitized !== rawHtml) {
-      const cursorPosition = getCursorPosition(editorRef.current);
-      editorRef.current.innerHTML = sanitized;
-      // Restore cursor immediately
-      setCursorPosition(editorRef.current, cursorPosition);
-    }
-
-    // Call onChange immediately to keep parent in sync
-    onChange(sanitized);
-
-    // Mark typing as finished after a delay
-    typingTimeoutRef.current = window.setTimeout(() => {
-      isTypingRef.current = false;
-    }, 300);
-  }, [onChange]);
 
   const handlePaste = useCallback((event: ClipboardEvent) => {
     event.preventDefault();
