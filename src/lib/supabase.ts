@@ -207,8 +207,42 @@ export const handleSupabaseError = (error: any, context?: string) => {
     console.error(`🔐 Authentication Error${context ? ` in ${context}` : ''}:`, errorMessage);
     console.error('DIAGNOSIS: No valid authentication session found or session expired.');
 
-    // Clear authentication and redirect to login
-    import('./auth').then(({ clearAuthenticatedUser, markSessionExpired }) => {
+    // CRITICAL FIX: Check if we're in grace period or about to reload before marking session expired
+    import('./auth').then(({ clearAuthenticatedUser, markSessionExpired, isWithinGracePeriod }) => {
+      // Check grace period
+      if (isWithinGracePeriod()) {
+        console.log('[Supabase] Auth error during grace period - not marking session as expired');
+        throw new Error('Session validation skipped during grace period');
+      }
+
+      // Check for deliberate reload in progress
+      try {
+        const reloadMarker = localStorage.getItem('ggk_deliberate_reload');
+        if (reloadMarker) {
+          const reloadTime = parseInt(reloadMarker, 10);
+          const timeSinceMarker = Date.now() - reloadTime;
+
+          // If marker is less than 5 seconds old, we're about to reload
+          if (timeSinceMarker < 5000) {
+            console.log('[Supabase] Auth error during deliberate reload - not marking session as expired');
+            throw new Error('Session validation skipped during reload');
+          }
+        }
+
+        // Check critical operation flag
+        const criticalOp = sessionStorage.getItem('ggk_critical_operation');
+        if (criticalOp) {
+          console.log(`[Supabase] Auth error during critical operation: ${criticalOp} - not marking session as expired`);
+          throw new Error('Session validation skipped during critical operation');
+        }
+      } catch (checkError: any) {
+        // If checks themselves fail, rethrow to skip session expiration marking
+        if (checkError.message?.includes('skipped')) {
+          throw checkError;
+        }
+      }
+
+      // Only mark session as expired if none of the protective conditions are met
       clearAuthenticatedUser();
       markSessionExpired('Your session has expired. Please sign in again to continue.');
 

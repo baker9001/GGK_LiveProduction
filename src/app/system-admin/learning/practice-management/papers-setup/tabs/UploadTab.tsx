@@ -146,6 +146,14 @@ export function UploadTab({
       console.log('[UploadTab] Waiting for persistence before reload');
       await new Promise(resolve => setTimeout(resolve, 100));
 
+      // STEP 7.5: Clear any stale session expired flags before reload
+      try {
+        localStorage.removeItem('ggk_session_expired_notice');
+        console.log('[UploadTab] Cleared session expired flag before reload');
+      } catch (e) {
+        console.warn('[UploadTab] Could not clear session flag:', e);
+      }
+
       // STEP 8: Reload page
       console.log('[UploadTab] Initiating page reload with session protection');
       window.location.reload();
@@ -268,6 +276,14 @@ export function UploadTab({
 
       // STEP 5: Wait for persistence
       await new Promise(resolve => setTimeout(resolve, 100));
+
+      // STEP 5.5: Clear any stale session expired flags before reload
+      try {
+        localStorage.removeItem('ggk_session_expired_notice');
+        console.log('[UploadTab] Cleared session expired flag before reload');
+      } catch (e) {
+        console.warn('[UploadTab] Could not clear session flag:', e);
+      }
 
       // STEP 6: Reload
       console.log('[UploadTab] Initiating page reload with session protection');
