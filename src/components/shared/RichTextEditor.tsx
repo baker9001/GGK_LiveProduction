@@ -6,7 +6,9 @@ import {
   insertHtmlAtCaret,
   restoreSelection,
   sanitizeRichText,
-  saveSelection
+  saveSelection,
+  getCursorPosition,
+  setCursorPosition
 } from '../../utils/richText';
 import { Button } from './Button';
 import { cn } from '../../lib/utils';
@@ -57,14 +59,35 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
   const [isBlockEquation, setIsBlockEquation] = useState(false);
   const [savedRange, setSavedRange] = useState<Range | null>(null);
   const symbolPopoverRef = useRef<HTMLDivElement>(null);
+  const isTypingRef = useRef(false);
+  const typingTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!editorRef.current) return;
+
+    // Don't update innerHTML while user is actively typing
+    if (isTypingRef.current) return;
+
     const sanitized = sanitizeRichText(value || '');
-    if (editorRef.current.innerHTML !== sanitized) {
+    const currentContent = editorRef.current.innerHTML;
+
+    // Only update if content is actually different
+    if (currentContent !== sanitized) {
+      // Preserve cursor position if editor is focused
+      const cursorPosition = isFocused ? getCursorPosition(editorRef.current) : 0;
+
       editorRef.current.innerHTML = sanitized || '<p><br /></p>';
+
+      // Restore cursor position after update
+      if (isFocused && cursorPosition > 0) {
+        requestAnimationFrame(() => {
+          if (editorRef.current) {
+            setCursorPosition(editorRef.current, cursorPosition);
+          }
+        });
+      }
     }
-  }, [value]);
+  }, [value, isFocused]);
 
   const updateSelection = useCallback(() => {
     if (!editorRef.current) return;
@@ -120,23 +143,35 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
 
   const handleInput = useCallback(() => {
     if (!editorRef.current) return;
+
+    // Mark that user is actively typing
+    isTypingRef.current = true;
+
+    // Clear existing typing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
     const rawHtml = editorRef.current.innerHTML;
     const sanitized = sanitizeRichText(rawHtml);
-    if (sanitized !== rawHtml) {
-      editorRef.current.innerHTML = sanitized;
-      ensureParagraphStructure(editorRef.current);
-    }
-    // Debounce onChange to reduce re-renders
-    if (handleInput.timeout) {
-      clearTimeout(handleInput.timeout);
-    }
-    handleInput.timeout = setTimeout(() => {
-      onChange(sanitized);
-    }, 100);
-  }, [onChange]);
 
-  // Add timeout property to handleInput
-  (handleInput as any).timeout = null;
+    // Only fix structure and sanitize if there are actual issues
+    // Don't update innerHTML during active typing to preserve cursor
+    if (sanitized !== rawHtml) {
+      const cursorPosition = getCursorPosition(editorRef.current);
+      editorRef.current.innerHTML = sanitized;
+      // Restore cursor immediately
+      setCursorPosition(editorRef.current, cursorPosition);
+    }
+
+    // Call onChange immediately to keep parent in sync
+    onChange(sanitized);
+
+    // Mark typing as finished after a delay
+    typingTimeoutRef.current = window.setTimeout(() => {
+      isTypingRef.current = false;
+    }, 300);
+  }, [onChange]);
 
   const handlePaste = useCallback((event: ClipboardEvent) => {
     event.preventDefault();
@@ -184,6 +219,11 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
       editor.removeEventListener('paste', handlePaste);
       document.removeEventListener('selectionchange', handleSelectionChange);
       document.removeEventListener('mousedown', handleOutsideClick);
+
+      // Cleanup typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
   }, [handlePaste, updateSelection]);
 

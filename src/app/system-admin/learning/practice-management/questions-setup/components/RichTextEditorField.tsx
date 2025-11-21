@@ -41,12 +41,16 @@ export function RichTextEditorField({
   const [draft, setDraft] = useState<string>(() => sanitizeRichText(value || ''));
   const [savedValue, setSavedValue] = useState<string>(() => sanitizeRichText(value || ''));
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    const sanitized = sanitizeRichText(value || '');
-    setDraft(sanitized);
-    setSavedValue(sanitized);
-  }, [value]);
+    // Only sync from parent when not actively editing
+    if (!isEditing) {
+      const sanitized = sanitizeRichText(value || '');
+      setDraft(sanitized);
+      setSavedValue(sanitized);
+    }
+  }, [value, isEditing]);
 
   const sanitizedDraft = useMemo(() => sanitizeRichText(draft || ''), [draft]);
   const sanitizedSaved = useMemo(() => sanitizeRichText(savedValue || ''), [savedValue]);
@@ -123,13 +127,18 @@ export function RichTextEditorField({
           )}
         </div>
       )}
-      <RichTextEditor
-        value={draft}
-        onChange={setDraft}
-        placeholder={placeholder}
-        ariaLabel={ariaLabel}
-        className={className}
-      />
+      <div
+        onFocus={() => setIsEditing(true)}
+        onBlur={() => setIsEditing(false)}
+      >
+        <RichTextEditor
+          value={draft}
+          onChange={setDraft}
+          placeholder={placeholder}
+          ariaLabel={ariaLabel}
+          className={className}
+        />
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button
           onClick={handleSave}

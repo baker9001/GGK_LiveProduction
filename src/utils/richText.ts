@@ -266,3 +266,69 @@ export function ensureParagraphStructure(container: HTMLElement) {
     container.innerHTML = '<p><br /></p>';
   }
 }
+
+/**
+ * Get the current cursor position as an offset from the start of text content
+ */
+export function getCursorPosition(container: HTMLElement): number {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return 0;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!container.contains(range.startContainer)) {
+    return 0;
+  }
+
+  const preCaretRange = range.cloneRange();
+  preCaretRange.selectNodeContents(container);
+  preCaretRange.setEnd(range.startContainer, range.startOffset);
+
+  return preCaretRange.toString().length;
+}
+
+/**
+ * Set the cursor position to a specific offset from the start of text content
+ */
+export function setCursorPosition(container: HTMLElement, offset: number): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = document.createRange();
+  let currentOffset = 0;
+  let found = false;
+
+  function findOffset(node: Node): boolean {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const textContent = node.textContent || '';
+      if (currentOffset + textContent.length >= offset) {
+        range.setStart(node, offset - currentOffset);
+        range.collapse(true);
+        found = true;
+        return true;
+      }
+      currentOffset += textContent.length;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      for (const child of Array.from(node.childNodes)) {
+        if (findOffset(child)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  findOffset(container);
+
+  if (found) {
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } else {
+    // If offset not found, place cursor at the end
+    range.selectNodeContents(container);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+}
