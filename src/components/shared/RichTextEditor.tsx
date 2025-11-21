@@ -12,6 +12,7 @@ import {
 } from '../../utils/richText';
 import { Button } from './Button';
 import { cn } from '../../lib/utils';
+import { ACTIVE_STATE_CLASS } from '../../lib/theme';
 import { Highlighter, Quote, Code, AlignLeft, AlignCenter, AlignRight, AlignJustify, Type } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -44,8 +45,8 @@ const SYMBOL_GROUPS = [
 const TOOLBAR_BUTTON_CLASS =
   'h-9 w-9 flex items-center justify-center rounded-md border border-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/70 dark:hover:text-white transition-colors duration-150';
 
-const TOOLBAR_BUTTON_ACTIVE_CLASS =
-  'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700/50';
+// Use system theme color for active states
+const TOOLBAR_BUTTON_ACTIVE_CLASS = ACTIVE_STATE_CLASS;
 
 const BLOCK_FORMATS: Record<string, string> = {
   paragraph: 'p',
@@ -630,7 +631,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
                 type="button"
                 className={cn(
                   "w-full text-left px-2 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200",
-                  activeFormats.has('fontsize-sm') && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                  activeFormats.has('fontsize-sm') && "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
                 )}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyFontSize('sm')}
@@ -641,7 +642,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
                 type="button"
                 className={cn(
                   "w-full text-left px-2 py-1.5 text-base rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200",
-                  !activeFormats.has('fontsize-sm') && !activeFormats.has('fontsize-lg') && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                  !activeFormats.has('fontsize-sm') && !activeFormats.has('fontsize-lg') && "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
                 )}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyFontSize('base')}
@@ -652,7 +653,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
                 type="button"
                 className={cn(
                   "w-full text-left px-2 py-1.5 text-lg rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200",
-                  activeFormats.has('fontsize-lg') && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                  activeFormats.has('fontsize-lg') && "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
                 )}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyFontSize('lg')}
