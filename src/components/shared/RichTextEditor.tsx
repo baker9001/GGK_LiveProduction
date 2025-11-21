@@ -42,7 +42,10 @@ const SYMBOL_GROUPS = [
 ];
 
 const TOOLBAR_BUTTON_CLASS =
-  'h-9 w-9 flex items-center justify-center rounded-md border border-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/70 dark:hover:text-white';
+  'h-9 w-9 flex items-center justify-center rounded-md border border-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/70 dark:hover:text-white transition-colors duration-150';
+
+const TOOLBAR_BUTTON_ACTIVE_CLASS =
+  'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700/50';
 
 const BLOCK_FORMATS: Record<string, string> = {
   paragraph: 'p',
@@ -61,6 +64,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
   const [savedRange, setSavedRange] = useState<Range | null>(null);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
   const [showFontSizePicker, setShowFontSizePicker] = useState(false);
+  const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
   const symbolPopoverRef = useRef<HTMLDivElement>(null);
   const highlightPickerRef = useRef<HTMLDivElement>(null);
   const fontSizePickerRef = useRef<HTMLDivElement>(null);
@@ -94,13 +98,74 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
     }
   }, [value, isFocused]);
 
+  const checkActiveFormats = useCallback(() => {
+    if (!editorRef.current) return;
+
+    const formats = new Set<string>();
+
+    // Check for standard formatting commands
+    if (document.queryCommandState('bold')) formats.add('bold');
+    if (document.queryCommandState('italic')) formats.add('italic');
+    if (document.queryCommandState('underline')) formats.add('underline');
+    if (document.queryCommandState('strikeThrough')) formats.add('strikethrough');
+    if (document.queryCommandState('superscript')) formats.add('superscript');
+    if (document.queryCommandState('subscript')) formats.add('subscript');
+    if (document.queryCommandState('insertOrderedList')) formats.add('orderedlist');
+    if (document.queryCommandState('insertUnorderedList')) formats.add('unorderedlist');
+
+    // Check for block formats
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      let node = range.commonAncestorContainer;
+
+      // Traverse up to find formatting elements
+      while (node && node !== editorRef.current) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const element = node as Element;
+          const tagName = element.tagName.toLowerCase();
+
+          // Check for headings
+          if (tagName === 'h1') formats.add('heading1');
+          if (tagName === 'h2') formats.add('heading2');
+          if (tagName === 'h3') formats.add('heading3');
+          if (tagName === 'blockquote') formats.add('blockquote');
+          if (tagName === 'pre') formats.add('codeblock');
+
+          // Check for alignment
+          const textAlign = window.getComputedStyle(element).textAlign;
+          if (textAlign === 'left') formats.add('alignleft');
+          if (textAlign === 'center') formats.add('aligncenter');
+          if (textAlign === 'right') formats.add('alignright');
+          if (textAlign === 'justify') formats.add('alignjustify');
+
+          // Check for highlights
+          if (tagName === 'mark') {
+            if (element.className.includes('rt-highlight-yellow')) formats.add('highlight-yellow');
+            if (element.className.includes('rt-highlight-green')) formats.add('highlight-green');
+            if (element.className.includes('rt-highlight-pink')) formats.add('highlight-pink');
+            if (element.className.includes('rt-highlight-blue')) formats.add('highlight-blue');
+          }
+
+          // Check for font sizes
+          if (element.className.includes('text-sm')) formats.add('fontsize-sm');
+          if (element.className.includes('text-lg')) formats.add('fontsize-lg');
+        }
+        node = node.parentNode as Node;
+      }
+    }
+
+    setActiveFormats(formats);
+  }, []);
+
   const updateSelection = useCallback(() => {
     if (!editorRef.current) return;
     const range = saveSelection(editorRef.current);
     if (range) {
       setSavedRange(range);
     }
-  }, []);
+    checkActiveFormats();
+  }, [checkActiveFormats]);
 
   const handleInput = useCallback(() => {
     if (!editorRef.current) return;
@@ -399,6 +464,14 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
     return { charCount: chars, wordCount: words };
   }, [value]);
 
+  const getButtonClass = useCallback((formatKey: string) => {
+    const isActive = activeFormats.has(formatKey);
+    return cn(
+      TOOLBAR_BUTTON_CLASS,
+      isActive && TOOLBAR_BUTTON_ACTIVE_CLASS
+    );
+  }, [activeFormats]);
+
   const containerClasses = cn(
     'relative w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm',
     className
@@ -412,56 +485,56 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
   return (
     <div className={containerClasses}>
       <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800">
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('bold')} title="Bold">
+        <button type="button" className={getButtonClass('bold')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('bold')} title="Bold (Ctrl+B)">
           <span className="font-semibold">B</span>
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('italic')} title="Italic">
+        <button type="button" className={getButtonClass('italic')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('italic')} title="Italic (Ctrl+I)">
           <span className="italic">I</span>
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('underline')} title="Underline">
+        <button type="button" className={getButtonClass('underline')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('underline')} title="Underline (Ctrl+U)">
           <span className="underline">U</span>
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('strikeThrough')} title="Strikethrough">
+        <button type="button" className={getButtonClass('strikethrough')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('strikeThrough')} title="Strikethrough">
           <span className="line-through">S</span>
         </button>
-        <div className="mx-1 h-6 w-px bg-gray-300" />
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('superscript')} title="Superscript">
+        <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
+        <button type="button" className={getButtonClass('superscript')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('superscript')} title="Superscript">
           <span className="text-xs align-super">x²</span>
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('subscript')} title="Subscript">
+        <button type="button" className={getButtonClass('subscript')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('subscript')} title="Subscript">
           <span className="text-xs align-sub">x₂</span>
         </button>
-        <div className="mx-1 h-6 w-px bg-gray-300" />
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('insertOrderedList')} title="Numbered list">
+        <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
+        <button type="button" className={getButtonClass('orderedlist')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('insertOrderedList')} title="Numbered list">
           1.
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('insertUnorderedList')} title="Bullet list">
+        <button type="button" className={getButtonClass('unorderedlist')} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('insertUnorderedList')} title="Bullet list">
           •
         </button>
-        <div className="mx-1 h-6 w-px bg-gray-300" />
+        <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
         <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('outdent')} title="Decrease indent">
           ←
         </button>
         <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('indent')} title="Increase indent">
           →
         </button>
-        <div className="mx-1 h-6 w-px bg-gray-300" />
+        <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
         <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('paragraph')} title="Paragraph">
           ¶
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('heading2')} title="Heading 2">
+        <button type="button" className={getButtonClass('heading2')} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('heading2')} title="Heading 2">
           H2
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('heading3')} title="Heading 3">
+        <button type="button" className={getButtonClass('heading3')} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('heading3')} title="Heading 3">
           H3
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={insertBlockquote} title="Blockquote">
+        <button type="button" className={getButtonClass('blockquote')} onMouseDown={e => e.preventDefault()} onClick={insertBlockquote} title="Blockquote">
           <Quote className="h-4 w-4" />
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={insertCodeBlock} title="Code block">
+        <button type="button" className={getButtonClass('codeblock')} onMouseDown={e => e.preventDefault()} onClick={insertCodeBlock} title="Code block">
           <Code className="h-4 w-4" />
         </button>
-        <div className="mx-1 h-6 w-px bg-gray-300" />
+        <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
 
         {/* Highlight color picker */}
         <div className="relative" ref={highlightPickerRef}>
@@ -483,28 +556,40 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
               <div className="grid grid-cols-4 gap-2">
                 <button
                   type="button"
-                  className="h-8 w-8 flex items-center justify-center rounded bg-yellow-200 hover:ring-2 hover:ring-yellow-400 dark:bg-yellow-700"
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded bg-yellow-200 hover:ring-2 hover:ring-yellow-400 dark:bg-yellow-700",
+                    activeFormats.has('highlight-yellow') && "ring-2 ring-yellow-500 ring-offset-2 dark:ring-offset-gray-800"
+                  )}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => applyHighlight('yellow')}
                   title="Yellow highlight"
                 />
                 <button
                   type="button"
-                  className="h-8 w-8 flex items-center justify-center rounded bg-green-200 hover:ring-2 hover:ring-green-400 dark:bg-green-700"
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded bg-green-200 hover:ring-2 hover:ring-green-400 dark:bg-green-700",
+                    activeFormats.has('highlight-green') && "ring-2 ring-green-500 ring-offset-2 dark:ring-offset-gray-800"
+                  )}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => applyHighlight('green')}
                   title="Green highlight"
                 />
                 <button
                   type="button"
-                  className="h-8 w-8 flex items-center justify-center rounded bg-pink-200 hover:ring-2 hover:ring-pink-400 dark:bg-pink-700"
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded bg-pink-200 hover:ring-2 hover:ring-pink-400 dark:bg-pink-700",
+                    activeFormats.has('highlight-pink') && "ring-2 ring-pink-500 ring-offset-2 dark:ring-offset-gray-800"
+                  )}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => applyHighlight('pink')}
                   title="Pink highlight"
                 />
                 <button
                   type="button"
-                  className="h-8 w-8 flex items-center justify-center rounded bg-blue-200 hover:ring-2 hover:ring-blue-400 dark:bg-blue-700"
+                  className={cn(
+                    "h-8 w-8 flex items-center justify-center rounded bg-blue-200 hover:ring-2 hover:ring-blue-400 dark:bg-blue-700",
+                    activeFormats.has('highlight-blue') && "ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800"
+                  )}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => applyHighlight('blue')}
                   title="Blue highlight"
@@ -515,16 +600,16 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
         </div>
 
         {/* Text alignment */}
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('left')} title="Align left">
+        <button type="button" className={getButtonClass('alignleft')} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('left')} title="Align left">
           <AlignLeft className="h-4 w-4" />
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('center')} title="Align center">
+        <button type="button" className={getButtonClass('aligncenter')} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('center')} title="Align center">
           <AlignCenter className="h-4 w-4" />
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('right')} title="Align right">
+        <button type="button" className={getButtonClass('alignright')} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('right')} title="Align right">
           <AlignRight className="h-4 w-4" />
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('justify')} title="Justify">
+        <button type="button" className={getButtonClass('alignjustify')} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('justify')} title="Justify">
           <AlignJustify className="h-4 w-4" />
         </button>
 
@@ -543,7 +628,10 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
             <div className="absolute z-20 mt-2 w-32 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
               <button
                 type="button"
-                className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200"
+                className={cn(
+                  "w-full text-left px-2 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200",
+                  activeFormats.has('fontsize-sm') && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                )}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyFontSize('sm')}
               >
@@ -551,7 +639,10 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
               </button>
               <button
                 type="button"
-                className="w-full text-left px-2 py-1.5 text-base rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200"
+                className={cn(
+                  "w-full text-left px-2 py-1.5 text-base rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200",
+                  !activeFormats.has('fontsize-sm') && !activeFormats.has('fontsize-lg') && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                )}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyFontSize('base')}
               >
@@ -559,7 +650,10 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
               </button>
               <button
                 type="button"
-                className="w-full text-left px-2 py-1.5 text-lg rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200"
+                className={cn(
+                  "w-full text-left px-2 py-1.5 text-lg rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200",
+                  activeFormats.has('fontsize-lg') && "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                )}
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyFontSize('lg')}
               >
