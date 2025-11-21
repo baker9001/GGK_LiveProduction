@@ -1171,61 +1171,29 @@ export function QuestionCard({
                     </div>
                   </div>
 
-                  {/* Sub-question Answer Format and Requirement */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                        Answer Format
-                      </label>
-                      <div className="bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600">
-                        {subQuestion.type === 'descriptive' ? (
-                          <EditableField
-                            value={subQuestion.answer_format || ''}
-                            onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_format', value)}
-                            type="select"
-                            options={ANSWER_FORMAT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                            displayValue={
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {getAnswerFormatLabel(subQuestion.answer_format)}
-                              </span>
-                            }
-                            placeholder="Select format..."
-                            disabled={readOnly}
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-500 dark:text-gray-400 italic">
-                            N/A for {subQuestion.type}
-                          </span>
-                        )}
-                      </div>
+                  {/* Sub-question Answer Format and Requirement with Enhanced Validation */}
+                  {subQuestion.type === 'descriptive' ? (
+                    <div className="mt-4">
+                      <EnhancedAnswerFormatSelector
+                        answerFormat={subQuestion.answer_format || null}
+                        answerRequirement={subQuestion.answer_requirement || null}
+                        onFormatChange={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_format', value)}
+                        onRequirementChange={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_requirement', value)}
+                        questionType={subQuestion.type}
+                        correctAnswersCount={subQuestion.correct_answers?.length || 0}
+                        showValidation={true}
+                        disabled={readOnly}
+                        className="w-full"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                        Answer Requirement
-                      </label>
-                      <div className="bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600">
-                        {subQuestion.type === 'descriptive' ? (
-                          <EditableField
-                            value={subQuestion.answer_requirement || ''}
-                            onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_requirement', value)}
-                            type="select"
-                            options={ANSWER_REQUIREMENT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                            displayValue={
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {getAnswerRequirementLabel(subQuestion.answer_requirement)}
-                              </span>
-                            }
-                            placeholder="Select requirement..."
-                            disabled={readOnly}
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-500 dark:text-gray-400">
-                            Single choice
-                          </span>
-                        )}
-                      </div>
+                  ) : (
+                    <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                        Answer format and requirement not applicable for {subQuestion.type.toUpperCase()} questions
+                        {subQuestion.type === 'mcq' || subQuestion.type === 'tf' ? ' (single choice automatic)' : ''}
+                      </p>
                     </div>
-                  </div>
+                  )}
                   
                   {/* Sub-question subtopics */}
                   {subQuestion.topic_id && (

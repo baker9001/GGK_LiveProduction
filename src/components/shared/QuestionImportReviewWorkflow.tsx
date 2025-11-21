@@ -39,6 +39,7 @@ import {
   deriveAnswerFormat,
   deriveAnswerRequirement
 } from '../../lib/constants/answerOptions';
+import EnhancedAnswerFormatSelector from './EnhancedAnswerFormatSelector';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -2302,47 +2303,32 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         />
                       </FormField>
 
-                      <FormField
-                        id={`${question.id}-answer-format`}
-                        label="Answer format"
-                        className="mb-0"
-                      >
-                        <Select
-                          id={`${question.id}-answer-format`}
-                          value={answerFormatValue}
-                          onChange={(value) =>
+                      {/* Enhanced Answer Format and Requirement Selector with Validation */}
+                      <div className="mb-4 md:col-span-2 lg:col-span-3">
+                        <EnhancedAnswerFormatSelector
+                          answerFormat={question.answer_format || null}
+                          answerRequirement={question.answer_requirement || null}
+                          onFormatChange={(value) =>
                             handleQuestionFieldChange(
                               question,
                               'answer_format',
                               (value || null) as QuestionDisplayData['answer_format']
                             )
                           }
-                          options={answerFormatSelectOptions}
-                          placeholder="Select answer format"
-                          usePortal={false}
-                        />
-                      </FormField>
-
-                      <FormField
-                        id={`${question.id}-answer-requirement`}
-                        label="Answer requirement"
-                        className="mb-0"
-                      >
-                        <Select
-                          id={`${question.id}-answer-requirement`}
-                          value={answerRequirementValue}
-                          onChange={(value) =>
+                          onRequirementChange={(value) =>
                             handleQuestionFieldChange(
                               question,
                               'answer_requirement',
                               (value || null) as QuestionDisplayData['answer_requirement']
                             )
                           }
-                          options={answerRequirementSelectOptions}
-                          placeholder="Select requirement"
-                          usePortal={false}
+                          questionType={question.question_type || 'descriptive'}
+                          correctAnswersCount={question.correct_answers?.length || 0}
+                          showValidation={true}
+                          disabled={false}
+                          className="w-full"
                         />
-                      </FormField>
+                      </div>
 
                       <FormField
                         id={`${question.id}-hint`}
@@ -2577,39 +2563,23 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                               />
                               {renderInlineAttachments(part.attachments, `Part ${part.part_label || part.part || String.fromCharCode(97 + partIndex)}`)}
                             </FormField>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <FormField
-                                id={`question-${question.id}-part-${partIndex}-format`}
-                                label="Answer format"
-                                className="mb-0"
-                              >
-                                <Select
-                                  id={`question-${question.id}-part-${partIndex}-format`}
-                                  value={partAnswerFormatValue}
-                                  onChange={(value) =>
-                                    handlePartFieldChange(question, partIndex, { answer_format: value || null })
-                                  }
-                                  options={partAnswerFormatOptions}
-                                  placeholder="Select answer format"
-                                  usePortal={false}
-                                />
-                              </FormField>
-                              <FormField
-                                id={`question-${question.id}-part-${partIndex}-requirement`}
-                                label="Answer requirement"
-                                className="mb-0"
-                              >
-                                <Select
-                                  id={`question-${question.id}-part-${partIndex}-requirement`}
-                                  value={partAnswerRequirementValue}
-                                  onChange={(value) =>
-                                    handlePartFieldChange(question, partIndex, { answer_requirement: value || null })
-                                  }
-                                  options={partAnswerRequirementOptions}
-                                  placeholder="Select requirement"
-                                  usePortal={false}
-                                />
-                              </FormField>
+                            {/* Enhanced Answer Format and Requirement for Part */}
+                            <div className="mb-3">
+                              <EnhancedAnswerFormatSelector
+                                answerFormat={part.answer_format || null}
+                                answerRequirement={part.answer_requirement || null}
+                                onFormatChange={(value) =>
+                                  handlePartFieldChange(question, partIndex, { answer_format: value || null })
+                                }
+                                onRequirementChange={(value) =>
+                                  handlePartFieldChange(question, partIndex, { answer_requirement: value || null })
+                                }
+                                questionType={question.question_type || 'descriptive'}
+                                correctAnswersCount={part.correct_answers?.length || 0}
+                                showValidation={true}
+                                disabled={false}
+                                className="w-full"
+                              />
                             </div>
                             <div className="grid gap-3 md:grid-cols-2">
                               <FormField
@@ -2834,43 +2804,27 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                           return (subpart.subpart_label || romanNumerals[subIndex] || String(subIndex + 1)).toUpperCase();
                                         })()}`)}
                                       </FormField>
-                                      <div className="grid gap-3 md:grid-cols-2">
-                                        <FormField
-                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-format`}
-                                          label="Answer format"
-                                          className="mb-0"
-                                        >
-                                          <Select
-                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-format`}
-                                            value={subAnswerFormatValue}
-                                            onChange={(value) =>
-                                              handleSubpartFieldChange(question, partIndex, subIndex, {
-                                                answer_format: value || null
-                                              })
-                                            }
-                                            options={subAnswerFormatOptions}
-                                            placeholder="Select answer format"
-                                            usePortal={false}
-                                          />
-                                        </FormField>
-                                        <FormField
-                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-requirement`}
-                                          label="Answer requirement"
-                                          className="mb-0"
-                                        >
-                                          <Select
-                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-requirement`}
-                                            value={subAnswerRequirementValue}
-                                            onChange={(value) =>
-                                              handleSubpartFieldChange(question, partIndex, subIndex, {
-                                                answer_requirement: value || null
-                                              })
-                                            }
-                                            options={subAnswerRequirementOptions}
-                                            placeholder="Select requirement"
-                                            usePortal={false}
-                                          />
-                                        </FormField>
+                                      {/* Enhanced Answer Format and Requirement for Subpart */}
+                                      <div className="mb-3">
+                                        <EnhancedAnswerFormatSelector
+                                          answerFormat={subpart.answer_format || null}
+                                          answerRequirement={subpart.answer_requirement || null}
+                                          onFormatChange={(value) =>
+                                            handleSubpartFieldChange(question, partIndex, subIndex, {
+                                              answer_format: value || null
+                                            })
+                                          }
+                                          onRequirementChange={(value) =>
+                                            handleSubpartFieldChange(question, partIndex, subIndex, {
+                                              answer_requirement: value || null
+                                            })
+                                          }
+                                          questionType={question.question_type || 'descriptive'}
+                                          correctAnswersCount={subpart.correct_answers?.length || 0}
+                                          showValidation={true}
+                                          disabled={false}
+                                          className="w-full"
+                                        />
                                       </div>
                                       <div className="grid gap-3 md:grid-cols-2">
                                         <FormField
