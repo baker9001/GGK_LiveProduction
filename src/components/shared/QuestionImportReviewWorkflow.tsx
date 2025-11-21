@@ -2610,16 +2610,40 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 />
                               </FormField>
                             </div>
-                            <div className="flex flex-wrap items-center gap-3">
-                              <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                                <input
-                                  type="checkbox"
-                                  checked={partRequiresFigure}
-                                  onChange={(event) => handlePartFieldChange(question, partIndex, { figure_required: event.target.checked })}
-                                  className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                                />
-                                Figure required for this part
-                              </label>
+                            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800/40">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg ${partRequiresFigure ? 'bg-blue-500' : 'bg-gray-400'} transition-colors`}>
+                                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">Figure Requirement</p>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                      {partRequiresFigure
+                                        ? 'Students must reference a diagram or figure'
+                                        : 'No diagram or figure needed for this part'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePartFieldChange(question, partIndex, { figure_required: !partRequiresFigure })}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                    partRequiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-300 dark:bg-gray-600'
+                                  }`}
+                                  role="switch"
+                                  aria-checked={partRequiresFigure}
+                                  aria-label="Toggle figure requirement"
+                                >
+                                  <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                                      partRequiresFigure ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
                             </div>
 
                             {renderAnswerEditorList(part.correct_answers, {
