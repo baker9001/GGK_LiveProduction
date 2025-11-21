@@ -22,6 +22,7 @@ import {
 } from '../../lib/constants/answerOptions';
 import { cn } from '../../lib/utils';
 import { Tooltip } from './Tooltip';
+import { Select } from './Select';
 
 interface EnhancedAnswerFormatSelectorProps {
   answerFormat: string | null | undefined;
@@ -198,25 +199,19 @@ const EnhancedAnswerFormatSelector: React.FC<EnhancedAnswerFormatSelectorProps> 
           </Tooltip>
         </div>
 
-        <select
+        <Select
           value={answerFormat || ''}
-          onChange={(e) => onFormatChange(e.target.value)}
+          onChange={onFormatChange}
           disabled={disabled}
-          className={cn(
-            'w-full px-3 py-2 border rounded-lg',
-            'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]',
-            'bg-white dark:bg-gray-800',
-            'text-gray-900 dark:text-gray-100',
-            disabled && 'opacity-60 cursor-not-allowed'
-          )}
-        >
-          <option value="">Select answer format...</option>
-          {ANSWER_FORMAT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {getFormatIcon(option.value)} {option.label}
-            </option>
-          ))}
-        </select>
+          placeholder="Select answer format..."
+          options={ANSWER_FORMAT_OPTIONS.map(option => ({
+            value: option.value,
+            label: `${getFormatIcon(option.value)} ${option.label}`,
+            disabled: false
+          }))}
+          searchable={true}
+          className=""
+        />
 
         {answerFormat && (
           <div className="p-2 bg-gray-50 dark:bg-gray-900 rounded-md">
@@ -238,37 +233,23 @@ const EnhancedAnswerFormatSelector: React.FC<EnhancedAnswerFormatSelectorProps> 
           </Tooltip>
         </div>
 
-        <select
+        <Select
           value={answerRequirement || ''}
-          onChange={(e) => onRequirementChange(e.target.value)}
+          onChange={onRequirementChange}
           disabled={disabled}
-          className={cn(
-            'w-full px-3 py-2 border rounded-lg',
-            'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]',
-            'bg-white dark:bg-gray-800',
-            'text-gray-900 dark:text-gray-100',
-            disabled && 'opacity-60 cursor-not-allowed'
-          )}
-        >
-          <option value="">Select answer requirement...</option>
-          {enhancedRequirementOptions.map((option) => {
+          placeholder="Select answer requirement..."
+          options={enhancedRequirementOptions.map((option) => {
             const isCompatibleOption = option.isCompatible;
             const icon = getRequirementIcon(option.value);
-
-            return (
-              <option
-                key={option.value}
-                value={option.value}
-                className={cn(
-                  !isCompatibleOption && answerFormat && 'text-gray-400'
-                )}
-              >
-                {icon} {option.label}
-                {!isCompatibleOption && answerFormat && ' (⚠️ Not recommended)'}
-              </option>
-            );
+            return {
+              value: option.value,
+              label: `${icon} ${option.label}${!isCompatibleOption && answerFormat ? ' (⚠️ Not recommended)' : ''}`,
+              disabled: false
+            };
           })}
-        </select>
+          searchable={true}
+          className=""
+        />
 
         {answerRequirement && (
           <div className="p-2 bg-gray-50 dark:bg-gray-900 rounded-md">
