@@ -627,8 +627,9 @@ if (typeof window !== 'undefined') {
 /**
  * Check if we're within grace period after page load/reload
  * Grace period prevents false session expiration warnings during deliberate reloads
+ * EXPORTED: Used by supabase.ts auth listener to prevent false positives
  */
-function isWithinGracePeriod(): boolean {
+export function isWithinGracePeriod(): boolean {
   if (typeof window === 'undefined') return false;
 
   try {
