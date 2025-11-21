@@ -1006,17 +1006,17 @@ export function QuestionCard({
         )}
         
         {/* Hint and Explanation */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 md:items-start">
+          <div className="flex flex-col h-full">
             <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
               <HelpCircle className="h-5 w-5 mr-2" />
               Hint:
             </h4>
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm flex-1">
               <RichTextEditorField
                 value={question.hint || ''}
                 onSave={(value) => handleFieldUpdate('hint', value)}
-                placeholder="Add a hint to help students..."
+                placeholder="Optional hint for this part"
                 minLength={5}
                 required
                 disabled={readOnly}
@@ -1026,17 +1026,17 @@ export function QuestionCard({
               />
             </div>
           </div>
-          
-          <div>
+
+          <div className="flex flex-col h-full">
             <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
               <BookOpen className="h-5 w-5 mr-2" />
               Explanation:
             </h4>
-            <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm flex-1">
               <RichTextEditorField
                 value={question.explanation || ''}
                 onSave={(value) => handleFieldUpdate('explanation', value)}
-                placeholder="Explain the correct answer..."
+                placeholder="Explain the answer expectations for this part"
                 minLength={10}
                 required
                 disabled={readOnly}

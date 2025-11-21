@@ -479,9 +479,8 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
   );
 
   const editorClasses = cn(
-    'min-h-[120px] max-h-[420px] overflow-y-auto px-4 py-3 focus:outline-none text-base leading-relaxed text-gray-900 dark:text-gray-100 rich-text-display',
-    isEmpty && 'min-h-[120px]', // Standardize height when empty
-    className
+    'min-h-[120px] max-h-[420px] overflow-y-auto px-4 py-3 focus:outline-none text-base leading-relaxed rich-text-display',
+    'text-gray-900 dark:text-gray-100'
   );
 
   return (
