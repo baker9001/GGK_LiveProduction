@@ -126,6 +126,70 @@ interface EnhancedTestResultsViewProps {
   onExportPDF?: () => void;
 }
 
+/**
+ * Format student answer for display based on answer type and format
+ */
+function formatStudentAnswer(answer: unknown, answerFormat?: string): string {
+  // Handle no answer
+  if (answer === undefined || answer === null || answer === '') {
+    return 'No answer provided';
+  }
+
+  // Handle string answers (most common)
+  if (typeof answer === 'string') {
+    return answer;
+  }
+
+  // Handle array answers (multiple selections)
+  if (Array.isArray(answer)) {
+    if (answer.length === 0) return 'No answer provided';
+    return answer.join(', ');
+  }
+
+  // Handle object answers (complex formats)
+  if (typeof answer === 'object') {
+    const answerObj = answer as any;
+
+    // Calculation with unit
+    if (answerObj.value !== undefined && answerObj.unit !== undefined) {
+      return `${answerObj.value} ${answerObj.unit}`;
+    }
+
+    // Calculation with only value
+    if (answerObj.value !== undefined) {
+      return String(answerObj.value);
+    }
+
+    // Two-item answers
+    if (answerObj.item1 !== undefined && answerObj.item2 !== undefined) {
+      return `${answerObj.item1} and ${answerObj.item2}`;
+    }
+
+    // Main answer field
+    if (answerObj.main !== undefined) {
+      return String(answerObj.main);
+    }
+
+    // Try to find any meaningful value
+    const keys = Object.keys(answerObj);
+    if (keys.length > 0) {
+      const values = keys.map(k => `${k}: ${answerObj[k]}`);
+      return values.join(', ');
+    }
+
+    // Fallback to JSON
+    return JSON.stringify(answerObj);
+  }
+
+  // Handle boolean (for true/false questions)
+  if (typeof answer === 'boolean') {
+    return answer ? 'True' : 'False';
+  }
+
+  // Fallback to string conversion
+  return String(answer);
+}
+
 export function EnhancedTestResultsView({
   results,
   paperCode,
@@ -134,7 +198,7 @@ export function EnhancedTestResultsView({
   onRetake,
   onExportPDF
 }: EnhancedTestResultsViewProps) {
-  const [showAnswers, setShowAnswers] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(true);  // CHANGED: Default to true to show answers
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'questions' | 'analytics' | 'recommendations'>('questions');
@@ -478,7 +542,7 @@ export function EnhancedTestResultsView({
                       onClick={() => setShowAnswers(!showAnswers)}
                       leftIcon={showAnswers ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     >
-                      {showAnswers ? 'Hide' : 'Show'} Expected Answers
+                      {showAnswers ? 'Hide' : 'Show'} Answers
                     </Button>
                   </div>
 
@@ -604,19 +668,40 @@ export function EnhancedTestResultsView({
                                             {part.question_text}
                                           </p>
 
-                                          {showAnswers && part.correct_answers.length > 0 && !hasSubparts && (
-                                            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                                              <p className="text-xs font-medium text-blue-900 dark:text-blue-300 mb-1">
-                                                Expected Answer:
-                                              </p>
-                                              <div className="space-y-1">
-                                                {part.correct_answers.map((ans, idx) => (
-                                                  <div key={idx} className="text-sm text-blue-800 dark:text-blue-200">
-                                                    • {ans.answer}
-                                                    {ans.marks && <span className="text-xs ml-1">({ans.marks} mark{ans.marks !== 1 ? 's' : ''})</span>}
+                                          {showAnswers && !hasSubparts && (
+                                            <div className="mt-2 space-y-2">
+                                              {/* Student's Answer for Part */}
+                                              {part.user_answer !== undefined && (
+                                                <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded border border-gray-200 dark:border-gray-700">
+                                                  <p className="text-xs font-medium text-gray-900 dark:text-gray-300 mb-1">
+                                                    Your Answer:
+                                                  </p>
+                                                  <div className={cn(
+                                                    "text-sm text-gray-800 dark:text-gray-200",
+                                                    part.is_correct ? "font-medium" : ""
+                                                  )}>
+                                                    {formatStudentAnswer(part.user_answer, part.answer_format)}
                                                   </div>
-                                                ))}
-                                              </div>
+                                                </div>
+                                              )}
+
+                                              {/* Expected Answer for Part */}
+                                              {part.correct_answers.length > 0 && (
+                                                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                                                  <p className="text-xs font-medium text-blue-900 dark:text-blue-300 mb-1">
+                                                    Expected Answer:
+                                                  </p>
+                                                  <div className="space-y-1">
+                                                    {part.correct_answers.map((ans, idx) => (
+                                                      <div key={idx} className="text-sm text-blue-800 dark:text-blue-200">
+                                                        • {ans.answer}
+                                                        {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
+                                                        {ans.marks && <span className="text-xs ml-1">({ans.marks} mark{ans.marks !== 1 ? 's' : ''})</span>}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           )}
                                         </div>
@@ -667,16 +752,37 @@ export function EnhancedTestResultsView({
                                                         {subpart.question_text}
                                                       </p>
 
-                                                      {showAnswers && subpart.correct_answers.length > 0 && (
-                                                        <div className="mt-1 p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
-                                                          <p className="font-medium text-blue-900 dark:text-blue-300 mb-0.5">
-                                                            Expected:
-                                                          </p>
-                                                          {subpart.correct_answers.map((ans, idx) => (
-                                                            <div key={idx} className="text-blue-800 dark:text-blue-200">
-                                                              • {ans.answer}
+                                                      {showAnswers && (
+                                                        <div className="space-y-2">
+                                                          {/* Student's Answer */}
+                                                          {subpart.user_answer !== undefined && (
+                                                            <div className="p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded text-xs border border-gray-200 dark:border-gray-700">
+                                                              <p className="font-medium text-gray-900 dark:text-gray-300 mb-0.5">
+                                                                Your Answer:
+                                                              </p>
+                                                              <div className={cn(
+                                                                "text-gray-800 dark:text-gray-200",
+                                                                subpart.is_correct ? "font-medium" : ""
+                                                              )}>
+                                                                {formatStudentAnswer(subpart.user_answer, subpart.answer_format)}
+                                                              </div>
                                                             </div>
-                                                          ))}
+                                                          )}
+
+                                                          {/* Expected Answer */}
+                                                          {subpart.correct_answers.length > 0 && (
+                                                            <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded text-xs border border-blue-200 dark:border-blue-800">
+                                                              <p className="font-medium text-blue-900 dark:text-blue-300 mb-0.5">
+                                                                Expected:
+                                                              </p>
+                                                              {subpart.correct_answers.map((ans, idx) => (
+                                                                <div key={idx} className="text-blue-800 dark:text-blue-200">
+                                                                  • {ans.answer}
+                                                                  {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
+                                                                </div>
+                                                              ))}
+                                                            </div>
+                                                          )}
                                                         </div>
                                                       )}
                                                     </div>
@@ -697,21 +803,39 @@ export function EnhancedTestResultsView({
                             </div>
                           )}
 
-                          {!isComplex && showAnswers && result.correctAnswers.length > 0 && (
-                            <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                              <div className="p-3 bg-white dark:bg-gray-800 rounded border border-blue-200 dark:border-blue-800">
-                                <p className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
-                                  Expected Answer(s):
-                                </p>
-                                <ul className="space-y-1">
-                                  {result.correctAnswers.map((ans, idx) => (
-                                    <li key={idx} className="text-sm text-blue-800 dark:text-blue-200">
-                                      • {ans.answer}
-                                      {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
+                          {!isComplex && showAnswers && (
+                            <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600 space-y-3">
+                              {/* Student's Answer for Simple Questions */}
+                              {result.userAnswer !== undefined && (
+                                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded border border-gray-200 dark:border-gray-700">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-gray-300 mb-2">
+                                    Your Answer:
+                                  </p>
+                                  <div className={cn(
+                                    "text-sm text-gray-800 dark:text-gray-200",
+                                    result.isCorrect ? "font-medium" : ""
+                                  )}>
+                                    {formatStudentAnswer(result.userAnswer)}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Expected Answer for Simple Questions */}
+                              {result.correctAnswers.length > 0 && (
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                                  <p className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
+                                    Expected Answer(s):
+                                  </p>
+                                  <ul className="space-y-1">
+                                    {result.correctAnswers.map((ans, idx) => (
+                                      <li key={idx} className="text-sm text-blue-800 dark:text-blue-200">
+                                        • {ans.answer}
+                                        {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

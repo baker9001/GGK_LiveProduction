@@ -1107,20 +1107,59 @@ export function UnifiedTestSimulation({
       const question = normalizedQuestions.get(questionId);
       if (!question) return;
 
-      let questionToValidate;
+      let questionToValidate: any;
       if (subpartId && partId) {
-        questionToValidate = question.parts
-          .find(p => p.id === partId)?.subparts
-          ?.find(sp => sp.id === subpartId);
+        const part = question.parts.find(p => p.id === partId);
+        questionToValidate = part?.subparts?.find(sp => sp.id === subpartId);
+        // FIXED: Ensure type is set for subparts (fallback chain)
+        if (questionToValidate && !questionToValidate.type) {
+          questionToValidate = {
+            ...questionToValidate,
+            type: questionToValidate.type || part?.type || question.type || 'descriptive'
+          };
+        }
       } else if (partId) {
         questionToValidate = question.parts.find(p => p.id === partId);
+        // FIXED: Ensure type is set for parts (fallback to question type)
+        if (questionToValidate && !questionToValidate.type) {
+          questionToValidate = {
+            ...questionToValidate,
+            type: questionToValidate.type || question.type || 'descriptive'
+          };
+        }
       } else {
         questionToValidate = question;
       }
 
       if (!questionToValidate) return;
 
+      // Add debug logging to diagnose validation issues
+      if (process.env.NODE_ENV === 'development') {
+        console.group(`[UnifiedTest Answer Validation] ${subpartId ? 'Subpart' : partId ? 'Part' : 'Question'} ${questionId}`);
+        console.log('Question Type:', questionToValidate.type);
+        console.log('Answer Format:', questionToValidate.answer_format);
+        console.log('Answer Requirement:', questionToValidate.answer_requirement);
+        console.log('User Answer (raw):', answer);
+        console.log('Correct Answers:', questionToValidate.correct_answers);
+        console.log('Max Marks:', questionToValidate.marks);
+      }
+
       const validation = validateAnswer(questionToValidate, answer);
+
+      // FIXED: validation.score already contains the marks awarded, don't multiply again!
+      // Before: (validation.score || 0) * (questionToValidate.marks || 0)
+      // After: validation.score || 0
+      const marksAwarded = validation.score || 0;
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Validation Result:', {
+          isCorrect: validation.isCorrect,
+          score: validation.score,
+          marksAwarded,
+          feedback: validation.feedback
+        });
+        console.groupEnd();
+      }
 
       startTransition(() => {
         const now = Date.now();
@@ -1140,7 +1179,7 @@ export function UnifiedTestSimulation({
             subpartId,
             answer,
             isCorrect: validation.isCorrect,
-            marksAwarded: (validation.score || 0) * (questionToValidate.marks || 0),
+            marksAwarded,  // FIXED: Use calculated marksAwarded directly
             timeSpent,
             partialCredit: validation.partialCredit
           }
