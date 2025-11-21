@@ -14,14 +14,14 @@ import {
   getRequirementIcon,
   validateQuestionSetup,
   type CompatibilityResult
-} from '@/lib/validation/formatRequirementCompatibility';
+} from '../../lib/validation/formatRequirementCompatibility';
 import {
   ANSWER_FORMAT_OPTIONS,
   ANSWER_REQUIREMENT_OPTIONS,
   type SelectOption
-} from '@/lib/constants/answerOptions';
-import { cn } from '@/lib/utils';
-import Tooltip from './Tooltip';
+} from '../../lib/constants/answerOptions';
+import { cn } from '../../lib/utils';
+import { Tooltip } from './Tooltip';
 
 interface EnhancedAnswerFormatSelectorProps {
   answerFormat: string | null | undefined;

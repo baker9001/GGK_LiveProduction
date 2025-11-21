@@ -43,6 +43,7 @@ import {
 import { detectAnswerExpectation } from '../../../../../../lib/extraction/answerExpectationDetector';
 import { EnhancedQuestionDisplay } from '../../../../../../components/shared/EnhancedQuestionDisplay';
 import { mapQuestionToDisplayData } from '../utils/questionMappers';
+import EnhancedAnswerFormatSelector from '../../../../../../components/shared/EnhancedAnswerFormatSelector';
 
 interface QuestionCardProps {
   question: Question;
@@ -756,109 +757,19 @@ export function QuestionCard({
           </div>
         </div>
 
-        {/* Answer Format and Requirement Section */}
+        {/* Answer Format and Requirement Section with Enhanced Validation */}
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Answer Format */}
-            <div className="bg-white dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600 shadow-sm">
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                Answer Format
-              </label>
-              {question.type === 'descriptive' ? (
-                <>
-                  <EditableField
-                    value={question.answer_format || ''}
-                    onSave={(value) => handleFieldUpdate('answer_format', value)}
-                    type="select"
-                    options={ANSWER_FORMAT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                    displayValue={
-                      <span className="text-base font-medium text-gray-900 dark:text-white">
-                        {getAnswerFormatLabel(question.answer_format)}
-                      </span>
-                    }
-                    placeholder="Select answer format..."
-                    disabled={readOnly}
-                    className="text-base text-gray-900 dark:text-white"
-                  />
-                  {!question.answer_format && suggestedAnswerFields.answerFormat && !readOnly && (
-                    <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
-                            💡 Suggested: {getAnswerFormatLabel(suggestedAnswerFields.answerFormat)}
-                          </p>
-                          <p className="text-xs text-blue-600 dark:text-blue-300">
-                            {suggestedAnswerFields.reason}
-                          </p>
-                        </div>
-                        <Button
-                          size="xs"
-                          variant="primary"
-                          onClick={() => handleApplySuggestion('answer_format')}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <span className="block text-base font-medium text-gray-500 dark:text-gray-400 italic">
-                  Not applicable for {question.type.toUpperCase()} questions
-                </span>
-              )}
-            </div>
-
-            {/* Answer Requirement */}
-            <div className="bg-white dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600 shadow-sm">
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                Answer Requirement
-              </label>
-              {question.type === 'descriptive' || (question.correct_answers && question.correct_answers.length > 1) ? (
-                <>
-                  <EditableField
-                    value={question.answer_requirement || ''}
-                    onSave={(value) => handleFieldUpdate('answer_requirement', value)}
-                    type="select"
-                    options={ANSWER_REQUIREMENT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                    displayValue={
-                      <span className="text-base font-medium text-gray-900 dark:text-white">
-                        {getAnswerRequirementLabel(question.answer_requirement)}
-                      </span>
-                    }
-                    placeholder="Select answer requirement..."
-                    disabled={readOnly}
-                    className="text-base text-gray-900 dark:text-white"
-                  />
-                  {!question.answer_requirement && suggestedAnswerFields.answerRequirement && !readOnly && (
-                    <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
-                            💡 Suggested: {getAnswerRequirementLabel(suggestedAnswerFields.answerRequirement)}
-                          </p>
-                          <p className="text-xs text-blue-600 dark:text-blue-300">
-                            Based on {question.correct_answers?.length || 0} correct answer(s)
-                          </p>
-                        </div>
-                        <Button
-                          size="xs"
-                          variant="primary"
-                          onClick={() => handleApplySuggestion('answer_requirement')}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <span className="block text-base font-medium text-gray-500 dark:text-gray-400">
-                  {question.type === 'mcq' || question.type === 'tf' ? 'Single choice (automatic)' : 'Not set'}
-                </span>
-              )}
-            </div>
-          </div>
+          <EnhancedAnswerFormatSelector
+            answerFormat={question.answer_format || null}
+            answerRequirement={question.answer_requirement || null}
+            onFormatChange={(value) => handleFieldUpdate('answer_format', value)}
+            onRequirementChange={(value) => handleFieldUpdate('answer_requirement', value)}
+            questionType={question.type}
+            correctAnswersCount={question.correct_answers?.length || 0}
+            showValidation={true}
+            disabled={readOnly}
+            className="w-full"
+          />
         </div>
         
         {/* Subtopics Section */}
