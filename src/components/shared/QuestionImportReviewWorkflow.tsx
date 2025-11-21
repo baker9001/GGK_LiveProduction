@@ -2610,10 +2610,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 />
                               </FormField>
                             </div>
-                            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800/40">
+                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800/40">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                  <div className={`p-2 rounded-lg ${partRequiresFigure ? 'bg-blue-500' : 'bg-gray-400'} transition-colors`}>
+                                  <div className={`p-2 rounded-lg ${partRequiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-400'} transition-colors`}>
                                     <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
@@ -2630,7 +2630,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 <button
                                   type="button"
                                   onClick={() => handlePartFieldChange(question, partIndex, { figure_required: !partRequiresFigure })}
-                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-2 ${
                                     partRequiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-300 dark:bg-gray-600'
                                   }`}
                                   role="switch"
