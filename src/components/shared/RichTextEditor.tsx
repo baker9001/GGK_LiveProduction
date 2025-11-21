@@ -479,7 +479,8 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
   );
 
   const editorClasses = cn(
-    'min-h-[180px] max-h-[420px] overflow-y-auto px-4 py-3 focus:outline-none text-base leading-relaxed text-gray-900 dark:text-gray-100 rich-text-display',
+    'min-h-[120px] max-h-[420px] overflow-y-auto px-4 py-3 focus:outline-none text-base leading-relaxed text-gray-900 dark:text-gray-100 rich-text-display',
+    isEmpty && 'min-h-[120px]', // Standardize height when empty
     className
   );
 
@@ -739,8 +740,8 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
           onInput={handleInput}
           onKeyDown={handleKeyDown}
         />
-        {isEmpty && !isFocused && (
-          <div className={cn('pointer-events-none absolute inset-0 px-4 py-3 text-gray-400', className)}>
+        {isEmpty && !isFocused && placeholder && (
+          <div className="pointer-events-none absolute left-4 top-3 text-base text-gray-400 dark:text-gray-500 select-none">
             {placeholder}
           </div>
         )}
