@@ -204,7 +204,7 @@ const EnhancedAnswerFormatSelector: React.FC<EnhancedAnswerFormatSelectorProps> 
           disabled={disabled}
           className={cn(
             'w-full px-3 py-2 border rounded-lg',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500',
+            'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]',
             'bg-white dark:bg-gray-800',
             'text-gray-900 dark:text-gray-100',
             disabled && 'opacity-60 cursor-not-allowed'
@@ -244,7 +244,7 @@ const EnhancedAnswerFormatSelector: React.FC<EnhancedAnswerFormatSelectorProps> 
           disabled={disabled}
           className={cn(
             'w-full px-3 py-2 border rounded-lg',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500',
+            'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]',
             'bg-white dark:bg-gray-800',
             'text-gray-900 dark:text-gray-100',
             disabled && 'opacity-60 cursor-not-allowed'
@@ -287,10 +287,10 @@ const EnhancedAnswerFormatSelector: React.FC<EnhancedAnswerFormatSelectorProps> 
 
       {/* Help Text */}
       {!answerFormat && !answerRequirement && (
-        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <div className="p-3 bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 border border-[#8CC63F]/30 dark:border-[#8CC63F]/40 rounded-lg">
           <div className="flex items-start gap-2">
-            <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-blue-700 dark:text-blue-300">
+            <Info className="w-4 h-4 text-[#356B1B] dark:text-[#8CC63F] flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-[#356B1B] dark:text-[#8CC63F]">
               <p className="font-medium mb-1">Quick Guide:</p>
               <ul className="list-disc list-inside space-y-0.5">
                 <li>Select how students should format their answer (e.g., single word, calculation)</li>

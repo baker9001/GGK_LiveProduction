@@ -458,7 +458,7 @@ export function ValidatedInput({
         onBlur={onBlur}
         className={cn(
           "w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+          "focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]",
           "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
           hasError 
             ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" 
@@ -602,7 +602,7 @@ export function ValidatedTextarea({
         onBlur={onBlur}
         className={cn(
           "w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+          "focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]",
           "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
           hasError 
             ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" 
@@ -748,7 +748,7 @@ export function ValidatedSelect({
         onBlur={onBlur}
         className={cn(
           "w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+          "focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]",
           "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
           hasError 
             ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" 
@@ -920,7 +920,7 @@ export function SubmitButton({ loadingText = "Submitting...", children, ...props
       disabled={isSubmitting}
       className={cn(
         "inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm",
-        "text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+        "text-white bg-[#8CC63F] hover:bg-[#356B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#8CC63F]",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         props.className
       )}
