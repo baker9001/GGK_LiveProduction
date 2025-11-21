@@ -136,20 +136,42 @@ export function initializeSessionManager(): void {
       if (event.key !== 'supabase.auth.token') return;
       if (!isSupabaseSessionRequired()) return;
 
+      // Skip if critical operation in progress
+      try {
+        const criticalOp = sessionStorage.getItem('ggk_critical_operation');
+        if (criticalOp) {
+          console.log(`[SessionManager] Skipping Supabase check - critical operation in progress: ${criticalOp}`);
+          return;
+        }
+      } catch (error) {
+        // Ignore and continue
+      }
+
       // CRITICAL FIX: Don't check Supabase session immediately after page load
-      // Extended to 120 seconds if this was a deliberate reload
+      // Extended to 120 or 180 seconds based on reload reason
       const timeSincePageLoad = Date.now() - pageLoadTime;
       let gracePerioddMs = 60000; // Default 60 seconds
 
-      // Check if we should use extended grace period
+      // Check if we should use extended grace period based on reload reason
       try {
         const extendedGracePeriod = localStorage.getItem('ggk_extended_grace_period');
+        const reloadReason = localStorage.getItem('ggk_reload_reason');
+
         if (extendedGracePeriod) {
           const extendedGraceTime = parseInt(extendedGracePeriod, 10);
           const timeSinceExtendedGrace = Date.now() - extendedGraceTime;
 
-          if (timeSinceExtendedGrace < 120000) {
-            gracePerioddMs = 120000; // Extended to 120 seconds
+          // Different grace periods for different operations
+          let extendedGraceDuration = 120000; // Default 120 seconds
+
+          if (reloadReason === 'start_new_import') {
+            extendedGraceDuration = 180000; // 180 seconds for delete operations
+          } else if (reloadReason === 'refresh_session') {
+            extendedGraceDuration = 120000; // 120 seconds for refreshes
+          }
+
+          if (timeSinceExtendedGrace < extendedGraceDuration) {
+            gracePerioddMs = extendedGraceDuration;
           } else {
             // Clean up expired extended grace period marker
             localStorage.removeItem('ggk_extended_grace_period');
@@ -381,21 +403,43 @@ function checkSessionStatus(): void {
   const currentPath = window.location.pathname;
   if (isPublicPage(currentPath)) return;
 
+  // NEW: Skip checks if critical operation in progress
+  try {
+    const criticalOp = sessionStorage.getItem('ggk_critical_operation');
+    if (criticalOp) {
+      console.log(`[SessionManager] Skipping check - critical operation in progress: ${criticalOp}`);
+      return;
+    }
+  } catch (error) {
+    // Ignore sessionStorage errors and continue with checks
+  }
+
   // CRITICAL FIX: Don't check session immediately after page load (60 second grace period)
-  // Extended to 120 seconds if this was a deliberate reload
+  // Extended to 120 or 180 seconds depending on the reload reason
   const timeSincePageLoad = Date.now() - pageLoadTime;
   let gracePerioddMs = 60000; // Default 60 seconds
 
-  // Check if we should use extended grace period
+  // Check if we should use extended grace period based on reload reason
   try {
     const extendedGracePeriod = localStorage.getItem('ggk_extended_grace_period');
+    const reloadReason = localStorage.getItem('ggk_reload_reason');
+
     if (extendedGracePeriod) {
       const extendedGraceTime = parseInt(extendedGracePeriod, 10);
       const timeSinceExtendedGrace = Date.now() - extendedGraceTime;
 
-      if (timeSinceExtendedGrace < 120000) {
-        gracePerioddMs = 120000; // Extended to 120 seconds
-        console.log('[SessionManager] Using extended grace period for deliberate reload');
+      // Different grace periods for different operations
+      let extendedGraceDuration = 120000; // Default 120 seconds
+
+      if (reloadReason === 'start_new_import') {
+        extendedGraceDuration = 180000; // 180 seconds (3 minutes) for delete operations
+      } else if (reloadReason === 'refresh_session') {
+        extendedGraceDuration = 120000; // 120 seconds (2 minutes) for refreshes
+      }
+
+      if (timeSinceExtendedGrace < extendedGraceDuration) {
+        gracePerioddMs = extendedGraceDuration;
+        console.log(`[SessionManager] Using extended grace period (${Math.round(gracePerioddMs/1000)}s) for: ${reloadReason || 'deliberate reload'}`);
       } else {
         // Clean up expired extended grace period marker
         localStorage.removeItem('ggk_extended_grace_period');
