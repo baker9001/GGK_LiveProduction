@@ -12,6 +12,7 @@ import {
 } from '../../utils/richText';
 import { Button } from './Button';
 import { cn } from '../../lib/utils';
+import { Highlighter, Quote, Code, AlignLeft, AlignCenter, AlignRight, AlignJustify, Type } from 'lucide-react';
 
 interface RichTextEditorProps {
   value: string;
@@ -58,7 +59,11 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
   const [equationInput, setEquationInput] = useState('');
   const [isBlockEquation, setIsBlockEquation] = useState(false);
   const [savedRange, setSavedRange] = useState<Range | null>(null);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [showFontSizePicker, setShowFontSizePicker] = useState(false);
   const symbolPopoverRef = useRef<HTMLDivElement>(null);
+  const highlightPickerRef = useRef<HTMLDivElement>(null);
+  const fontSizePickerRef = useRef<HTMLDivElement>(null);
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef<number | null>(null);
 
@@ -141,6 +146,119 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
     handleInput();
   }, [savedRange, updateSelection]);
 
+  const applyHighlight = useCallback((color: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection(savedRange);
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const selectedText = range.toString();
+
+    if (selectedText) {
+      const mark = document.createElement('mark');
+      mark.className = `rt-highlight-${color}`;
+      mark.textContent = selectedText;
+      range.deleteContents();
+      range.insertNode(mark);
+      range.setStartAfter(mark);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    setShowHighlightPicker(false);
+    updateSelection();
+    handleInput();
+  }, [savedRange, updateSelection, handleInput]);
+
+  const applyAlignment = useCallback((alignment: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection(savedRange);
+    document.execCommand('justify' + alignment.charAt(0).toUpperCase() + alignment.slice(1), false);
+    updateSelection();
+    handleInput();
+  }, [savedRange, updateSelection, handleInput]);
+
+  const applyFontSize = useCallback((size: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection(savedRange);
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const selectedText = range.toString();
+
+    if (selectedText) {
+      const span = document.createElement('span');
+      span.className = `text-${size}`;
+      span.textContent = selectedText;
+      range.deleteContents();
+      range.insertNode(span);
+      range.setStartAfter(span);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    setShowFontSizePicker(false);
+    updateSelection();
+    handleInput();
+  }, [savedRange, updateSelection, handleInput]);
+
+  const insertBlockquote = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection(savedRange);
+    document.execCommand('formatBlock', false, 'blockquote');
+    updateSelection();
+    handleInput();
+  }, [savedRange, updateSelection, handleInput]);
+
+  const insertCodeBlock = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection(savedRange);
+    document.execCommand('formatBlock', false, 'pre');
+    updateSelection();
+    handleInput();
+  }, [savedRange, updateSelection, handleInput]);
+
+  const insertHorizontalRule = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection(savedRange);
+    document.execCommand('insertHorizontalRule', false);
+    updateSelection();
+    handleInput();
+  }, [savedRange, updateSelection, handleInput]);
+
+  const clearFormatting = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection(savedRange);
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const selectedText = range.toString();
+
+    if (selectedText) {
+      // Remove all formatting by replacing with plain text
+      document.execCommand('removeFormat', false);
+      document.execCommand('unlink', false);
+    }
+
+    updateSelection();
+    handleInput();
+  }, [savedRange, updateSelection, handleInput]);
+
   const handleInput = useCallback(() => {
     if (!editorRef.current) return;
 
@@ -186,6 +304,43 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
     handleInput();
   }, [handleInput, savedRange]);
 
+  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modifier = isMac ? event.metaKey : event.ctrlKey;
+
+    if (modifier) {
+      switch (event.key.toLowerCase()) {
+        case 'b':
+          event.preventDefault();
+          applyCommand('bold');
+          break;
+        case 'i':
+          event.preventDefault();
+          applyCommand('italic');
+          break;
+        case 'u':
+          event.preventDefault();
+          applyCommand('underline');
+          break;
+        case 'z':
+          if (event.shiftKey) {
+            event.preventDefault();
+            applyCommand('redo');
+          } else {
+            event.preventDefault();
+            applyCommand('undo');
+          }
+          break;
+        case 'y':
+          event.preventDefault();
+          applyCommand('redo');
+          break;
+        default:
+          break;
+      }
+    }
+  }, [applyCommand]);
+
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -209,6 +364,12 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
       if (symbolPopoverRef.current && !symbolPopoverRef.current.contains(event.target as Node)) {
         setShowSymbols(false);
       }
+      if (highlightPickerRef.current && !highlightPickerRef.current.contains(event.target as Node)) {
+        setShowHighlightPicker(false);
+      }
+      if (fontSizePickerRef.current && !fontSizePickerRef.current.contains(event.target as Node)) {
+        setShowFontSizePicker(false);
+      }
     };
 
     document.addEventListener('mousedown', handleOutsideClick);
@@ -229,6 +390,13 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
 
   const isEmpty = useMemo(() => {
     return getPlainTextFromRichText(value || '').trim().length === 0;
+  }, [value]);
+
+  const { charCount, wordCount } = useMemo(() => {
+    const plainText = getPlainTextFromRichText(value || '');
+    const chars = plainText.length;
+    const words = plainText.trim() === '' ? 0 : plainText.trim().split(/\s+/).length;
+    return { charCount: chars, wordCount: words };
   }, [value]);
 
   const containerClasses = cn(
@@ -281,9 +449,126 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
         <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('paragraph')} title="Paragraph">
           ¶
         </button>
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('heading2')} title="Heading">
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('heading2')} title="Heading 2">
           H2
         </button>
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => handleBlockFormat('heading3')} title="Heading 3">
+          H3
+        </button>
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={insertBlockquote} title="Blockquote">
+          <Quote className="h-4 w-4" />
+        </button>
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={insertCodeBlock} title="Code block">
+          <Code className="h-4 w-4" />
+        </button>
+        <div className="mx-1 h-6 w-px bg-gray-300" />
+
+        {/* Highlight color picker */}
+        <div className="relative" ref={highlightPickerRef}>
+          <button
+            type="button"
+            className={TOOLBAR_BUTTON_CLASS}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => setShowHighlightPicker(prev => !prev)}
+            title="Highlight text"
+          >
+            <Highlighter className="h-4 w-4" />
+          </button>
+          {showHighlightPicker && (
+            <div className="absolute z-20 mt-2 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Highlight</span>
+                <button className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400" onClick={() => setShowHighlightPicker(false)}>Close</button>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  className="h-8 w-8 flex items-center justify-center rounded bg-yellow-200 hover:ring-2 hover:ring-yellow-400 dark:bg-yellow-700"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => applyHighlight('yellow')}
+                  title="Yellow highlight"
+                />
+                <button
+                  type="button"
+                  className="h-8 w-8 flex items-center justify-center rounded bg-green-200 hover:ring-2 hover:ring-green-400 dark:bg-green-700"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => applyHighlight('green')}
+                  title="Green highlight"
+                />
+                <button
+                  type="button"
+                  className="h-8 w-8 flex items-center justify-center rounded bg-pink-200 hover:ring-2 hover:ring-pink-400 dark:bg-pink-700"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => applyHighlight('pink')}
+                  title="Pink highlight"
+                />
+                <button
+                  type="button"
+                  className="h-8 w-8 flex items-center justify-center rounded bg-blue-200 hover:ring-2 hover:ring-blue-400 dark:bg-blue-700"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => applyHighlight('blue')}
+                  title="Blue highlight"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Text alignment */}
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('left')} title="Align left">
+          <AlignLeft className="h-4 w-4" />
+        </button>
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('center')} title="Align center">
+          <AlignCenter className="h-4 w-4" />
+        </button>
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('right')} title="Align right">
+          <AlignRight className="h-4 w-4" />
+        </button>
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyAlignment('justify')} title="Justify">
+          <AlignJustify className="h-4 w-4" />
+        </button>
+
+        {/* Font size picker */}
+        <div className="relative" ref={fontSizePickerRef}>
+          <button
+            type="button"
+            className={TOOLBAR_BUTTON_CLASS}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => setShowFontSizePicker(prev => !prev)}
+            title="Font size"
+          >
+            <Type className="h-4 w-4" />
+          </button>
+          {showFontSizePicker && (
+            <div className="absolute z-20 mt-2 w-32 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+              <button
+                type="button"
+                className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200"
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => applyFontSize('sm')}
+              >
+                Small
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-2 py-1.5 text-base rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200"
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => applyFontSize('base')}
+              >
+                Normal
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-2 py-1.5 text-lg rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200"
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => applyFontSize('lg')}
+              >
+                Large
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="mx-1 h-6 w-px bg-gray-300" />
         <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => setShowEquationModal(true)} title="Insert equation">
           ∑
@@ -335,7 +620,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
           ↻
         </button>
         <div className="mx-1 h-6 w-px bg-gray-300" />
-        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={() => applyCommand('removeFormat')} title="Clear formatting">
+        <button type="button" className={TOOLBAR_BUTTON_CLASS} onMouseDown={e => e.preventDefault()} onClick={clearFormatting} title="Clear formatting (Ctrl+\)">
           ⌫
         </button>
       </div>
@@ -357,6 +642,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
             }
           }}
           onInput={handleInput}
+          onKeyDown={handleKeyDown}
         />
         {isEmpty && !isFocused && (
           <div className={cn('pointer-events-none absolute inset-0 px-4 py-3 text-gray-400', className)}>
@@ -365,6 +651,15 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
         )}
       </div>
 
+      {/* Character and Word Counter */}
+      <div className="flex items-center justify-end gap-4 px-3 py-1.5 border-t border-gray-200 bg-gray-50/50 dark:border-gray-700 dark:bg-gray-800/50">
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {wordCount} {wordCount === 1 ? 'word' : 'words'}
+        </span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {charCount} {charCount === 1 ? 'character' : 'characters'}
+        </span>
+      </div>
 
       {showEquationModal && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">

@@ -361,3 +361,176 @@ body.font-dyslexic {
 .rt-equation sub {
   font-size: 0.8em;
 }
+
+/* Heading styles */
+.rich-text-display h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 2.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: rgb(17 24 39 / 1);
+}
+
+.dark .rich-text-display h1 {
+  color: rgb(243 244 246 / 1);
+}
+
+.rich-text-display h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 2rem;
+  margin-top: 1rem;
+  margin-bottom: 0.625rem;
+  color: rgb(31 41 55 / 1);
+}
+
+.dark .rich-text-display h2 {
+  color: rgb(229 231 235 / 1);
+}
+
+.rich-text-display h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+  margin-top: 0.875rem;
+  margin-bottom: 0.5rem;
+  color: rgb(55 65 81 / 1);
+}
+
+.dark .rich-text-display h3 {
+  color: rgb(209 213 219 / 1);
+}
+
+.rich-text-display h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+  color: rgb(75 85 99 / 1);
+}
+
+.dark .rich-text-display h4 {
+  color: rgb(209 213 219 / 1);
+}
+
+/* Strikethrough styles */
+.rich-text-display s,
+.rich-text-display strike,
+.rich-text-display del {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* Highlight styles */
+.rt-highlight-yellow,
+.rich-text-display .rt-highlight-yellow {
+  background-color: rgb(254 240 138 / 0.5);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.dark .rt-highlight-yellow,
+.dark .rich-text-display .rt-highlight-yellow {
+  background-color: rgb(202 138 4 / 0.3);
+}
+
+.rt-highlight-green,
+.rich-text-display .rt-highlight-green {
+  background-color: rgb(187 247 208 / 0.5);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.dark .rt-highlight-green,
+.dark .rich-text-display .rt-highlight-green {
+  background-color: rgb(21 128 61 / 0.3);
+}
+
+.rt-highlight-pink,
+.rich-text-display .rt-highlight-pink {
+  background-color: rgb(252 231 243 / 0.7);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.dark .rt-highlight-pink,
+.dark .rich-text-display .rt-highlight-pink {
+  background-color: rgb(157 23 77 / 0.3);
+}
+
+.rt-highlight-blue,
+.rich-text-display .rt-highlight-blue {
+  background-color: rgb(191 219 254 / 0.6);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.dark .rt-highlight-blue,
+.dark .rich-text-display .rt-highlight-blue {
+  background-color: rgb(29 78 216 / 0.3);
+}
+
+/* Horizontal rule */
+.rich-text-display hr {
+  border: 0;
+  border-top: 2px solid rgb(229 231 235 / 1);
+  margin: 1rem 0;
+}
+
+.dark .rich-text-display hr {
+  border-top-color: rgb(55 65 81 / 1);
+}
+
+/* Link styles */
+.rich-text-display a {
+  color: rgb(37 99 235 / 1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text-display a:hover {
+  color: rgb(29 78 216 / 1);
+}
+
+.dark .rich-text-display a {
+  color: rgb(96 165 250 / 1);
+}
+
+.dark .rich-text-display a:hover {
+  color: rgb(147 197 253 / 1);
+}
+
+/* Text alignment */
+.rich-text-display .text-left {
+  text-align: left;
+}
+
+.rich-text-display .text-center {
+  text-align: center;
+}
+
+.rich-text-display .text-right {
+  text-align: right;
+}
+
+.rich-text-display .text-justify {
+  text-align: justify;
+}
+
+/* Font sizes */
+.rich-text-display .text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.rich-text-display .text-base {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.rich-text-display .text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}

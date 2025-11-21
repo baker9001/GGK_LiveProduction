@@ -9,6 +9,8 @@ const ALLOWED_TAGS = new Set([
   'i',
   'u',
   's',
+  'strike',
+  'del',
   'sup',
   'sub',
   'ul',
@@ -16,7 +18,14 @@ const ALLOWED_TAGS = new Set([
   'li',
   'blockquote',
   'pre',
-  'code'
+  'code',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'mark',
+  'hr',
+  'a'
 ]);
 
 const ALLOWED_CLASSES = new Set([
@@ -27,12 +36,26 @@ const ALLOWED_CLASSES = new Set([
   'rt-equation-frac-num',
   'rt-equation-frac-den',
   'rt-equation-sqrt',
-  'rt-equation-sqrt-radicand'
+  'rt-equation-sqrt-radicand',
+  'rt-highlight-yellow',
+  'rt-highlight-green',
+  'rt-highlight-pink',
+  'rt-highlight-blue',
+  'text-left',
+  'text-center',
+  'text-right',
+  'text-justify',
+  'text-sm',
+  'text-base',
+  'text-lg'
 ]);
 
 const ALLOWED_ATTRIBUTES: Record<string, Set<string>> = {
-  span: new Set(['class', 'data-equation']),
-  div: new Set(['class', 'data-equation'])
+  span: new Set(['class', 'data-equation', 'style']),
+  div: new Set(['class', 'data-equation', 'style']),
+  mark: new Set(['class']),
+  a: new Set(['href', 'target', 'rel']),
+  p: new Set(['class', 'style'])
 };
 
 function escapeHtml(str: string): string {
