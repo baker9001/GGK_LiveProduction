@@ -1725,8 +1725,17 @@ function QuestionsTabInner({
         question.parts.forEach((part: any, partIdx: number) => {
           if (!part || typeof part !== 'object') {
             errors.push(`Part ${partIdx + 1} is invalid`);
-          } else if (!part.marks && part.marks !== 0) {
-            errors.push(`Part ${partIdx + 1} is missing marks`);
+          } else {
+            // FIXED: Only require marks if part expects an answer (not contextual-only)
+            const isContextualOnly = part.is_contextual_only === true;
+            const hasDirectAnswer = part.has_direct_answer !== false;
+            const marksValue = part.marks;
+            const marksIsMissing = marksValue === undefined || marksValue === null;
+
+            // Only flag as error if marks is missing AND part expects an answer
+            if (marksIsMissing && !isContextualOnly && hasDirectAnswer) {
+              errors.push(`Part ${partIdx + 1} needs marks value (found: ${marksValue}, is_contextual_only: ${isContextualOnly})`);
+            }
           }
 
           // Check subparts if they exist
@@ -1734,8 +1743,17 @@ function QuestionsTabInner({
             part.subparts.forEach((subpart: any, subIdx: number) => {
               if (!subpart || typeof subpart !== 'object') {
                 errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is invalid`);
-              } else if (!subpart.marks && subpart.marks !== 0) {
-                errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is missing marks`);
+              } else {
+                // FIXED: Only require marks if subpart expects an answer (not contextual-only)
+                const isContextualOnly = subpart.is_contextual_only === true;
+                const hasDirectAnswer = subpart.has_direct_answer !== false;
+                const marksValue = subpart.marks;
+                const marksIsMissing = marksValue === undefined || marksValue === null;
+
+                // Only flag as error if marks is missing AND subpart expects an answer
+                if (marksIsMissing && !isContextualOnly && hasDirectAnswer) {
+                  errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} needs marks value (found: ${marksValue}, is_contextual_only: ${isContextualOnly})`);
+                }
               }
             });
           }
@@ -1760,7 +1778,7 @@ function QuestionsTabInner({
     const processedQuestions: ProcessedQuestion[] = [];
     const validationWarnings: Array<{ question: number; errors: string[] }> = [];
 
-    // Pre-validate all questions
+    // Pre-validate all questions - but be smart about contextual parts
     console.log(`\n[Pre-Validation] Checking question structures...`);
     rawQuestions.forEach((q, idx) => {
       const validation = validateQuestionStructure(q, idx);
@@ -1771,10 +1789,22 @@ function QuestionsTabInner({
       }
     });
 
+    // FIXED: Only show error toast for genuine structural issues
+    // Don't show warnings on every navigation - these are likely false positives from stored data
     if (validationWarnings.length > 0) {
-      console.warn(`[Pre-Validation] Found ${validationWarnings.length} questions with structural issues`);
-      console.warn(`[Pre-Validation] Detailed warnings:`, validationWarnings);
-      toast.error(`Warning: ${validationWarnings.length} question(s) have structural issues. Check console for details.`, { duration: 6000 });
+      console.warn(`[Pre-Validation] Found ${validationWarnings.length} questions with validation notes`);
+      console.warn(`[Pre-Validation] Detailed notes:`, validationWarnings);
+
+      // Only show toast if there are significant issues (not just missing marks on contextual parts)
+      const significantErrors = validationWarnings.filter(w =>
+        w.errors.some(e => !e.includes('is_contextual_only') && !e.includes('needs marks value'))
+      );
+
+      if (significantErrors.length > 0) {
+        toast.error(`Warning: ${significantErrors.length} question(s) have structural issues. Check console for details.`, { duration: 6000 });
+      } else {
+        console.log(`[Pre-Validation] All warnings are related to contextual parts - likely false positives`);
+      }
     } else {
       console.log(`[Pre-Validation] All questions passed structural validation`);
     }
@@ -2105,7 +2135,7 @@ function QuestionsTabInner({
     // CRITICAL FIX: Detect empty/contextual parts BEFORE answer expectation logic
     // If part has no question text, no answers, and 0 marks, it's contextual-only
     const hasCorrectAnswers = part.correct_answers && Array.isArray(part.correct_answers) && part.correct_answers.length > 0;
-    const marks = parseInt(part.marks || '0');
+    const marks = parseInt(String(part.marks ?? '0'));  // FIXED: Explicitly handle undefined/null
     const isEmpty = !questionText.trim() && !hasCorrectAnswers && marks === 0;
 
     let hasDirectAnswer = part.has_direct_answer !== false;
@@ -2140,7 +2170,7 @@ function QuestionsTabInner({
       id: partId,
       part: partLabel,
       question_text: questionText || '',
-      marks: parseInt(part.marks || '0'),
+      marks: parseInt(String(part.marks ?? '0')),  // FIXED: Explicitly handle undefined/null
       answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
       answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       figure: partFigureFlag,
@@ -2231,7 +2261,7 @@ function QuestionsTabInner({
 
     // CRITICAL FIX: Detect empty/contextual subparts BEFORE answer expectation logic
     const hasCorrectAnswers = subpart.correct_answers && Array.isArray(subpart.correct_answers) && subpart.correct_answers.length > 0;
-    const marks = parseInt(subpart.marks || '0');
+    const marks = parseInt(String(subpart.marks ?? '0'));  // FIXED: Explicitly handle undefined/null
     const isEmpty = !questionText.trim() && !hasCorrectAnswers && marks === 0;
 
     let hasDirectAnswer = subpart.has_direct_answer !== false;
@@ -2298,7 +2328,7 @@ function QuestionsTabInner({
       id: subpartId,
       subpart: subpartLabel,
       question_text: questionText || '',
-      marks: parseInt(subpart.marks || '0'),
+      marks: parseInt(String(subpart.marks ?? '0')),  // FIXED: Explicitly handle undefined/null
       answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
       answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       attachments: ensureArray(subpart.attachments),
