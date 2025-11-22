@@ -157,7 +157,7 @@ interface SubjectSpecificConfig {
 interface AnswerFieldProps {
   question: {
     id: string;
-    type: 'mcq' | 'tf' | 'descriptive';
+    type: 'mcq' | 'tf' | 'descriptive' | 'complex';
     subject?: string;
     answer_format?: string;
     options?: { label: string; text: string; is_correct?: boolean }[];
@@ -398,7 +398,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
         setSelectedOptions([]);
         setHasAnswered(false);
       }
-    } else if (question.type === 'descriptive' && value !== undefined) {
+    } else if ((question.type === 'descriptive' || question.type === 'complex') && value !== undefined) {
       const structuredValue = getCurrentStructuredValue();
       const { main, components, context, units, ...rest } = structuredValue;
 
@@ -2208,7 +2208,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       {/* Answer input based on type */}
       {question.type === 'mcq' && renderMCQ()}
       {question.type === 'tf' && renderTrueFalse()}
-      {question.type === 'descriptive' && renderDescriptive()}
+      {(question.type === 'descriptive' || question.type === 'complex') && renderDescriptive()}
 
       {/* Validation messages */}
       {renderValidation()}
