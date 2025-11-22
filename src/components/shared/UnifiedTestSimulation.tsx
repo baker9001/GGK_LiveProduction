@@ -48,6 +48,56 @@ const MemoizedAnswerField = React.memo(DynamicAnswerField, (prev, next) => {
     prev.mode === next.mode
   );
 });
+
+// Simple inline snippet attachment component - displays images centered without heavy card styling
+const SnippetAttachmentDisplay: React.FC<{
+  attachments: AttachmentAsset[];
+  label?: string;
+}> = ({ attachments, label }) => {
+  if (!attachments || attachments.length === 0) return null;
+
+  // Filter to only show valid image attachments
+  const validAttachments = attachments.filter(att => {
+    const hasValidUrl = att.file_url && att.file_url.trim() !== '';
+    const isImage = att.file_type?.startsWith('image/');
+    return hasValidUrl && isImage;
+  });
+
+  if (validAttachments.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      {label && (
+        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          {label}
+        </h4>
+      )}
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        <div className="flex flex-col items-center gap-4">
+          {validAttachments.map((attachment, index) => (
+            <div key={attachment.id || index} className="w-full flex flex-col items-center">
+              <img
+                src={attachment.file_url}
+                alt={attachment.file_name || `Attachment ${index + 1}`}
+                className="max-w-full h-auto object-contain rounded"
+                style={{ maxHeight: '500px' }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
+              />
+              {attachment.file_name && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  {attachment.file_name}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 import { EnhancedTestResultsView } from './EnhancedTestResultsView';
 import toast from 'react-hot-toast';
 
@@ -1979,7 +2029,13 @@ export function UnifiedTestSimulation({
                         </p>
                       </div>
 
-                      {/* Main question attachments removed - snippet attachments handled inline */}
+                      {/* Display snippet attachments inline */}
+                      {currentQuestion.attachments && currentQuestion.attachments.length > 0 && (
+                        <SnippetAttachmentDisplay
+                          attachments={currentQuestion.attachments}
+                          label={`Attached Figure${currentQuestion.attachments.length > 1 ? 's' : ''} for Question ${currentQuestion.question_number || currentQuestionIndex + 1}`}
+                        />
+                      )}
 
                       {currentQuestion.parts.length === 0 && (
                         requiresAnswer(currentQuestion) ? (
@@ -2066,7 +2122,13 @@ export function UnifiedTestSimulation({
                                     </p>
                                   </div>
 
-                                  {/* Part attachments removed - snippet attachments handled inline */}
+                                  {/* Display part snippet attachments inline */}
+                                  {part.attachments && part.attachments.length > 0 && (
+                                    <SnippetAttachmentDisplay
+                                      attachments={part.attachments}
+                                      label={`Attached Figure${part.attachments.length > 1 ? 's' : ''} for ${part.part_label || `Part ${String.fromCharCode(97 + partIndex)}`}`}
+                                    />
+                                  )}
 
                                   {requiresAnswer(part) ? (
                                     <MemoizedAnswerField
@@ -2134,7 +2196,15 @@ export function UnifiedTestSimulation({
                                                 {subpart.question_description}
                                               </p>
 
-                                              {/* Subpart attachments removed - snippet attachments handled inline */}
+                                              {/* Display subpart snippet attachments inline */}
+                                              {subpart.attachments && subpart.attachments.length > 0 && (
+                                                <div className="mb-4">
+                                                  <SnippetAttachmentDisplay
+                                                    attachments={subpart.attachments}
+                                                    label={`Attached Figure${subpart.attachments.length > 1 ? 's' : ''} for ${subpart.subpart_label || `Subpart ${['i', 'ii', 'iii', 'iv', 'v'][subIndex] || (subIndex + 1)}`}`}
+                                                  />
+                                                </div>
+                                              )}
 
                                               {requiresAnswer(subpart) ? (
                                                 <MemoizedAnswerField
