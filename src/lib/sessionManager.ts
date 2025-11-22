@@ -544,6 +544,36 @@ function showSessionWarning(remainingMinutes: number): void {
 function handleSessionExpired(message: string): void {
   if (isRedirecting) return;
 
+  // CRITICAL FIX: Don't expire session during deliberate reload
+  // This prevents false "session expired" during user-initiated refreshes
+  try {
+    const deliberateReload = localStorage.getItem('ggk_deliberate_reload');
+    if (deliberateReload) {
+      const reloadTime = parseInt(deliberateReload, 10);
+      const timeSinceReload = Date.now() - reloadTime;
+
+      if (!isNaN(reloadTime) && timeSinceReload < 5000) {
+        console.log('[SessionManager] Skipping expiration - deliberate reload in progress');
+        return;
+      }
+    }
+
+    // Also check for extended grace period
+    const extendedGrace = localStorage.getItem('ggk_extended_grace_period');
+    if (extendedGrace) {
+      const graceTime = parseInt(extendedGrace, 10);
+      const timeSinceGrace = Date.now() - graceTime;
+
+      if (!isNaN(graceTime) && timeSinceGrace < 10000) {
+        console.log('[SessionManager] Skipping expiration - extended grace period active');
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn('[SessionManager] Error checking reload status:', error);
+    // Continue with normal flow if check fails
+  }
+
   console.log('[SessionManager] Session expired, initiating logout');
   console.log('[SessionManager] Expiration message:', message);
 

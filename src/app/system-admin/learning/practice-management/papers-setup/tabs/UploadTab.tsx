@@ -146,12 +146,14 @@ export function UploadTab({
       console.log('[UploadTab] Waiting for persistence before reload');
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // STEP 7.5: Clear any stale session expired flags before reload
+      // STEP 7.5: Clear any stale session expired flags from ALL storages before reload
+      // CRITICAL: Clear both localStorage AND sessionStorage to prevent false positives
       try {
         localStorage.removeItem('ggk_session_expired_notice');
-        console.log('[UploadTab] Cleared session expired flag before reload');
+        sessionStorage.removeItem('ggk_session_expired_notice');
+        console.log('[UploadTab] Cleared session expired flags from all storages before reload');
       } catch (e) {
-        console.warn('[UploadTab] Could not clear session flag:', e);
+        console.warn('[UploadTab] Could not clear session flags:', e);
       }
 
       // STEP 8: Reload page
@@ -277,12 +279,14 @@ export function UploadTab({
       // STEP 5: Wait for persistence
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // STEP 5.5: Clear any stale session expired flags before reload
+      // STEP 5.5: Clear any stale session expired flags from ALL storages before reload
+      // CRITICAL: Clear both localStorage AND sessionStorage to prevent false positives
       try {
         localStorage.removeItem('ggk_session_expired_notice');
-        console.log('[UploadTab] Cleared session expired flag before reload');
+        sessionStorage.removeItem('ggk_session_expired_notice');
+        console.log('[UploadTab] Cleared session expired flags from all storages before reload');
       } catch (e) {
-        console.warn('[UploadTab] Could not clear session flag:', e);
+        console.warn('[UploadTab] Could not clear session flags:', e);
       }
 
       // STEP 6: Reload

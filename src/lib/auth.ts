@@ -224,6 +224,38 @@ export function markUserLogout(): void {
 
 // Mark that the session expired so the UI can show a friendly inline notice
 export function markSessionExpired(message: string = 'Your session has expired. Please sign in again to continue.'): void {
+  // CRITICAL FIX: Don't mark session as expired during deliberate reloads
+  // Check if deliberate reload is in progress
+  try {
+    const deliberateReload = localStorage.getItem('ggk_deliberate_reload');
+    if (deliberateReload) {
+      const reloadTime = parseInt(deliberateReload, 10);
+      const timeSinceReload = Date.now() - reloadTime;
+
+      // If deliberate reload marker is fresh (< 5 seconds), skip marking expired
+      if (!isNaN(reloadTime) && timeSinceReload < 5000) {
+        console.log('[Auth] Skipping session expired mark - deliberate reload in progress');
+        return;
+      }
+    }
+
+    // Also check for extended grace period (indicates deliberate reload happened)
+    const extendedGrace = localStorage.getItem('ggk_extended_grace_period');
+    if (extendedGrace) {
+      const graceTime = parseInt(extendedGrace, 10);
+      const timeSinceGrace = Date.now() - graceTime;
+
+      // If extended grace was recently activated (< 10 seconds), skip
+      if (!isNaN(graceTime) && timeSinceGrace < 10000) {
+        console.log('[Auth] Skipping session expired mark - extended grace period active');
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn('[Auth] Error checking deliberate reload status:', error);
+    // Continue with normal flow if check fails
+  }
+
   console.log('[Auth] Marking session as expired:', message);
 
   try {
@@ -365,6 +397,42 @@ export function isSupabaseSessionActive(gracePeriodMs = 0): boolean {
 // Consume (read and clear) the stored session expiration notice
 export function consumeSessionExpiredNotice(): string | null {
   console.log('[Auth] Checking for session expired notice...');
+
+  // CRITICAL FIX: Don't consume message if deliberate reload just happened
+  // This prevents showing "session expired" on legitimate user-initiated reloads
+  try {
+    const extendedGrace = localStorage.getItem('ggk_extended_grace_period');
+    if (extendedGrace) {
+      const graceTime = parseInt(extendedGrace, 10);
+      const timeSinceGrace = Date.now() - graceTime;
+
+      // If extended grace was just activated (< 5 seconds), this is likely a deliberate reload
+      if (!isNaN(graceTime) && timeSinceGrace < 5000) {
+        console.log('[Auth] Skipping session expired notice - extended grace period just activated (deliberate reload)');
+        // Clear the messages to prevent them from appearing later
+        localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        return null;
+      }
+    }
+
+    // Also check for deliberate reload marker directly
+    const deliberateReload = localStorage.getItem('ggk_deliberate_reload');
+    if (deliberateReload) {
+      const reloadTime = parseInt(deliberateReload, 10);
+      const timeSinceReload = Date.now() - reloadTime;
+
+      if (!isNaN(reloadTime) && timeSinceReload < 5000) {
+        console.log('[Auth] Skipping session expired notice - deliberate reload marker found');
+        localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        return null;
+      }
+    }
+  } catch (error) {
+    console.warn('[Auth] Error checking grace period/reload status:', error);
+    // Continue with normal flow if check fails
+  }
 
   try {
     // CRITICAL FIX: Check BOTH localStorage AND sessionStorage for redundancy
