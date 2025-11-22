@@ -185,7 +185,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
         <div className="flex items-center gap-3">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {value.completedCells} / {value.requiredCells} cells
+            {value?.completedCells ?? 0} / {value?.requiredCells ?? 0} cells
             <span className="ml-2 font-medium text-[#8CC63F]">
               ({completionPercentage}%)
             </span>
