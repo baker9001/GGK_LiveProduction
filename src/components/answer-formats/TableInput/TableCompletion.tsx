@@ -31,17 +31,29 @@ export interface TableCompletionData {
 
 interface TableCompletionProps {
   questionId: string;
-  template: TableTemplate;
-  value: TableCompletionData;
+  template?: TableTemplate;
+  value: TableCompletionData | null;
   onChange: (data: TableCompletionData) => void;
   disabled?: boolean;
   showCorrectAnswers?: boolean;
   autoGrade?: boolean;
 }
 
+// Default template for simple table completion (5x5 grid, all cells editable)
+const DEFAULT_TEMPLATE: TableTemplate = {
+  rows: 5,
+  columns: 5,
+  headers: ['Column 1', 'Column 2', 'Column 3', 'Column 4', 'Column 5'],
+  lockedCells: [],
+  editableCells: Array.from({ length: 5 }, (_, row) =>
+    Array.from({ length: 5 }, (_, col) => ({ row, col }))
+  ).flat(),
+  correctAnswers: []
+};
+
 const TableCompletion: React.FC<TableCompletionProps> = ({
   questionId,
-  template,
+  template = DEFAULT_TEMPLATE,
   value,
   onChange,
   disabled = false,
@@ -65,13 +77,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
     });
 
-    // Fill student answers
-    Object.entries(value.studentAnswers).forEach(([key, val]) => {
-      const [row, col] = key.split('-').map(Number);
-      if (data[row] && data[row][col] !== undefined) {
-        data[row][col] = val;
-      }
-    });
+    // Fill student answers (only if value exists)
+    if (value && value.studentAnswers) {
+      Object.entries(value.studentAnswers).forEach(([key, val]) => {
+        const [row, col] = key.split('-').map(Number);
+        if (data[row] && data[row][col] !== undefined) {
+          data[row][col] = val;
+        }
+      });
+    }
 
     setTableData(data);
   }, [template, value]);
@@ -119,7 +133,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const handleAfterChange = useCallback((changes: any, source: string) => {
     if (!changes || source === 'loadData') return;
 
-    const studentAnswers = { ...value.studentAnswers };
+    const studentAnswers = { ...(value?.studentAnswers || {}) };
     let completedCells = 0;
 
     changes.forEach(([row, col, oldValue, newValue]: any) => {
@@ -154,9 +168,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     });
   };
 
-  const completionPercentage = Math.round(
-    (value.completedCells / value.requiredCells) * 100
-  );
+  const completionPercentage = value && value.requiredCells > 0
+    ? Math.round((value.completedCells / value.requiredCells) * 100)
+    : 0;
 
   return (
     <div className="space-y-4">
