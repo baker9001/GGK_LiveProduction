@@ -33,11 +33,17 @@ import {
   TableCompletion,
   DiagramCanvas,
   GraphPlotter,
+  StructuralDiagram,
+  TableCreator,
+  ChemicalStructureEditor,
   type UploadedFile,
   type AudioRecording,
   type TableCompletionData,
   type DiagramData,
-  type GraphData
+  type GraphData,
+  type StructuralDiagramData,
+  type TableCreatorData,
+  type ChemicalStructureData
 } from '@/components/answer-formats';
 
 // Type definitions
@@ -219,6 +225,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   const [tableData, setTableData] = useState<TableCompletionData | null>(null);
   const [diagramData, setDiagramData] = useState<DiagramData | null>(null);
   const [graphData, setGraphData] = useState<GraphData | null>(null);
+  const [structuralDiagramData, setStructuralDiagramData] = useState<StructuralDiagramData | null>(null);
+  const [tableCreatorData, setTableCreatorData] = useState<TableCreatorData | null>(null);
+  const [chemicalStructureData, setChemicalStructureData] = useState<ChemicalStructureData | null>(null);
 
   // Admin mode states
   const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>(() => question.correct_answers || []);
@@ -1791,7 +1800,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
 
     // Diagram Canvas format
-    if (format === 'diagram' || format === 'structural_diagram') {
+    if (format === 'diagram') {
       return (
         <div>
           <DiagramCanvas
@@ -1823,6 +1832,70 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               setGraphData(data);
               onChange(data);
               setHasAnswered(data !== null && data.dataPoints.length > 0);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Structural Diagram format (labeled diagrams)
+    if (format === 'structural_diagram') {
+      return (
+        <div>
+          <StructuralDiagram
+            questionId={question.id}
+            value={structuralDiagramData}
+            onChange={(data) => {
+              setStructuralDiagramData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            backgroundImage={question.attachments?.[0]}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Table Creator format
+    if (format === 'table_creator') {
+      return (
+        <div>
+          <TableCreator
+            questionId={question.id}
+            value={tableCreatorData}
+            onChange={(data) => {
+              setTableCreatorData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Chemical Structure format
+    if (format === 'chemical_structure') {
+      return (
+        <div>
+          <ChemicalStructureEditor
+            questionId={question.id}
+            value={chemicalStructureData}
+            onChange={(data) => {
+              setChemicalStructureData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
               performValidation(data);
             }}
             disabled={disabled}
