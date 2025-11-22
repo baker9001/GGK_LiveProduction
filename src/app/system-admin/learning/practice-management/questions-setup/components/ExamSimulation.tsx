@@ -1558,15 +1558,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                       </p>
                     </div>
                     
-                    {/* Attachments */}
-                    {currentQuestion.attachments && currentQuestion.attachments.length > 0 && (
-                      <div className="mb-6">
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                          Reference Materials:
-                        </h4>
-                        <AttachmentGallery attachments={currentQuestion.attachments} />
-                      </div>
-                    )}
+                    {/* Attachments removed per user request - snippet attachments handled inline */}
                     
                     {/* Hint */}
                     {features.showHints && currentQuestion.hint && (
@@ -1647,14 +1639,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 </p>
                               </div>
 
-                              {part.attachments && part.attachments.length > 0 && (
-                                <div className="mb-4">
-                                  <h5 className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">
-                                    Supporting resources
-                                  </h5>
-                                  <AttachmentGallery attachments={part.attachments} />
-                                </div>
-                              )}
+                              {/* Part attachments removed - snippet attachments handled inline */}
 
                               {/* Part Hint */}
                               {features.showHints && part.hint && (
@@ -1714,9 +1699,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                             {subpart.question_description}
                                           </p>
 
-                                          {subpart.attachments && subpart.attachments.length > 0 && (
-                                            <AttachmentGallery attachments={subpart.attachments} />
-                                          )}
+                                          {/* Subpart attachments removed - snippet attachments handled inline */}
 
                                           {features.showHints && subpart.hint && (
                                             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
