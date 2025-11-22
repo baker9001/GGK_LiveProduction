@@ -545,6 +545,7 @@ function handleSessionExpired(message: string): void {
   if (isRedirecting) return;
 
   console.log('[SessionManager] Session expired, initiating logout');
+  console.log('[SessionManager] Expiration message:', message);
 
   isRedirecting = true;
   stopSessionMonitoring();
@@ -553,19 +554,40 @@ function handleSessionExpired(message: string): void {
   // Clear all auth data
   clearAuthenticatedUser();
 
-  // Mark session as expired
+  // Mark session as expired (stores message for user to see on sign-in page)
   markSessionExpired(message);
 
-  // Broadcast expiration to other tabs
-  broadcastMessage({ type: 'expired' });
+  // CRITICAL FIX: Add delay to ensure storage write completes before redirect
+  // This prevents race condition where message isn't persisted before page reload
+  setTimeout(() => {
+    // Verify message was stored successfully
+    try {
+      const storedMessage = localStorage.getItem('ggk_session_expired_notice') ||
+                           sessionStorage.getItem('ggk_session_expired_notice');
 
-  // Redirect to login (always go to dashboard after re-auth)
-  if (
-    !window.location.pathname.startsWith('/signin') &&
-    !window.location.pathname.startsWith('/login')
-  ) {
-    window.location.replace('/signin');
-  }
+      if (storedMessage) {
+        console.log('[SessionManager] Session expired message verified in storage');
+      } else {
+        console.warn('[SessionManager] WARNING: Session expired message NOT found in storage!');
+        // Try storing again as fallback
+        markSessionExpired(message);
+      }
+    } catch (error) {
+      console.error('[SessionManager] Error verifying storage:', error);
+    }
+
+    // Broadcast expiration to other tabs
+    broadcastMessage({ type: 'expired' });
+
+    // Now safe to redirect to login
+    if (
+      !window.location.pathname.startsWith('/signin') &&
+      !window.location.pathname.startsWith('/login')
+    ) {
+      console.log('[SessionManager] Redirecting to sign-in page');
+      window.location.replace('/signin');
+    }
+  }, 200); // 200ms delay to ensure storage operations complete
 }
 
 /**
