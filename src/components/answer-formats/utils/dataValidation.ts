@@ -314,6 +314,114 @@ export function validateStructuralDiagramLabels(
 }
 
 /**
+ * Validate chemical structure data
+ */
+export function validateChemicalStructure(
+  data: {
+    formula?: string;
+    structuralFormula?: string;
+    name?: string;
+    bondingInfo?: string[];
+    functionalGroups?: string[];
+  } | null
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!data) {
+    errors.push('No chemical structure data found');
+    return { isValid: false, errors, warnings };
+  }
+
+  if (!data.formula || data.formula.trim().length === 0) {
+    errors.push('Molecular formula is required');
+  }
+
+  if (!data.structuralFormula || data.structuralFormula.trim().length === 0) {
+    warnings.push('Structural formula is recommended');
+  }
+
+  if (!data.name || data.name.trim().length === 0) {
+    warnings.push('Compound name is recommended');
+  }
+
+  // Validate formula format (basic check for valid characters)
+  if (data.formula) {
+    const validFormulaPattern = /^[A-Z][a-z]?\d*(\([A-Z][a-z]?\d*\)\d*)*$/;
+    if (!validFormulaPattern.test(data.formula.replace(/\s/g, ''))) {
+      warnings.push('Molecular formula may have invalid format');
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings
+  };
+}
+
+/**
+ * Validate table creator data
+ */
+export function validateTableCreatorData(
+  data: {
+    data?: any[][];
+    headers?: string[];
+    rowCount?: number;
+    colCount?: number;
+  } | null,
+  minRows?: number,
+  minColumns?: number
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!data) {
+    errors.push('No table data found');
+    return { isValid: false, errors, warnings };
+  }
+
+  if (!data.data || data.data.length === 0) {
+    errors.push('Table must have at least one row');
+  }
+
+  if (minRows && data.rowCount && data.rowCount < minRows) {
+    errors.push(`Table must have at least ${minRows} rows`);
+  }
+
+  if (minColumns && data.colCount && data.colCount < minColumns) {
+    errors.push(`Table must have at least ${minColumns} columns`);
+  }
+
+  // Check for missing headers
+  if (!data.headers || data.headers.length === 0) {
+    warnings.push('Table headers are recommended');
+  }
+
+  // Check for empty cells
+  if (data.data) {
+    let emptyCellCount = 0;
+    data.data.forEach((row) => {
+      row.forEach((cell) => {
+        if (cell === null || cell === undefined || cell === '') {
+          emptyCellCount++;
+        }
+      });
+    });
+
+    if (emptyCellCount > 0) {
+      warnings.push(`Table has ${emptyCellCount} empty cell(s)`);
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings
+  };
+}
+
+/**
  * Calculate completion percentage
  */
 export function calculateCompletionPercentage(
