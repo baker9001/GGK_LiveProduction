@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Calculator, FileText, Table as TableIcon, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ScientificEditor from './ScientificEditor';
@@ -28,34 +28,94 @@ const ComplexAnswerInput: React.FC<ComplexAnswerInputProps> = ({
   const [localValue, setLocalValue] = useState<string | string[] | Record<string, any>>(value || '');
   const [wordCount, setWordCount] = useState(0);
   const [characterCount, setCharacterCount] = useState(0);
+  const [debouncedValidation, setDebouncedValidation] = useState({ isValid: true, message: '' });
 
+  // Refs for cursor position management
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cursorPositionRef = useRef<number>(0);
+  const isUserInputRef = useRef(false);
+  const validationTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Sync from parent value only when not from user input
   useEffect(() => {
-    setLocalValue(value || '');
+    if (!isUserInputRef.current) {
+      setLocalValue(value || '');
 
-    if (typeof value === 'string') {
-      setCharacterCount(value.length);
-      setWordCount(value.trim().split(/\s+/).filter(Boolean).length);
+      if (typeof value === 'string') {
+        setCharacterCount(value.length);
+        setWordCount(value.trim().split(/\s+/).filter(Boolean).length);
+      }
     }
+    isUserInputRef.current = false;
   }, [value]);
 
-  const handleChange = (newValue: string | string[] | Record<string, any>) => {
+  // Debounced validation update
+  const updateValidation = useCallback((newValue: string) => {
+    if (validationTimeoutRef.current) {
+      clearTimeout(validationTimeoutRef.current);
+    }
+
+    validationTimeoutRef.current = setTimeout(() => {
+      const words = newValue.trim().split(/\s+/).filter(Boolean);
+      const isValid = words.length <= 1;
+      setDebouncedValidation({
+        isValid,
+        message: !isValid && words.length > 1
+          ? `Please enter only one word (${words.length} words detected)`
+          : ''
+      });
+    }, 300);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleChange = useCallback((newValue: string | string[] | Record<string, any>) => {
+    // Mark as user input to prevent sync loop
+    isUserInputRef.current = true;
+
+    // Save cursor position before update
+    if (inputRef.current && typeof newValue === 'string') {
+      cursorPositionRef.current = inputRef.current.selectionStart || 0;
+    }
+
     setLocalValue(newValue);
     onChange(newValue);
 
     if (typeof newValue === 'string') {
       setCharacterCount(newValue.length);
       setWordCount(newValue.trim().split(/\s+/).filter(Boolean).length);
+
+      // Update validation for single_word format
+      if (answerFormat === 'single_word') {
+        updateValidation(newValue);
+      }
     }
-  };
+
+    // Restore cursor position after React updates the DOM
+    requestAnimationFrame(() => {
+      if (inputRef.current && typeof newValue === 'string') {
+        const pos = cursorPositionRef.current;
+        inputRef.current.setSelectionRange(pos, pos);
+      }
+    });
+  }, [onChange, answerFormat, updateValidation]);
 
   const renderSingleWordInput = () => {
     const valueStr = typeof localValue === 'string' ? localValue : '';
-    const words = valueStr.trim().split(/\s+/).filter(Boolean);
+    const words = useMemo(() => valueStr.trim().split(/\s+/).filter(Boolean), [valueStr]);
     const isValid = words.length <= 1;
 
     return (
       <div className="space-y-2">
         <input
+          ref={inputRef}
           type="text"
           value={valueStr}
           onChange={(e) => handleChange(e.target.value)}
@@ -64,22 +124,28 @@ const ComplexAnswerInput: React.FC<ComplexAnswerInputProps> = ({
           className={cn(
             "w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
             disabled ? 'bg-gray-100 dark:bg-gray-900' : 'bg-white dark:bg-gray-800',
-            !isValid && showValidation && 'border-red-500',
-            "dark:text-white"
+            !debouncedValidation.isValid && showValidation && 'border-red-500',
+            "dark:text-white transition-colors duration-200"
           )}
         />
-        {showValidation && !isValid && words.length > 1 && (
-          <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-            <X className="w-3 h-3" />
-            <span>Please enter only one word ({words.length} words detected)</span>
-          </div>
-        )}
-        {showValidation && isValid && valueStr.length > 0 && (
-          <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-            <Check className="w-3 h-3" />
-            <span>Valid single word</span>
-          </div>
-        )}
+        {/* Reserved space for validation messages to prevent layout shift */}
+        <div
+          className="min-h-5 transition-opacity duration-200"
+          style={{ opacity: showValidation && debouncedValidation.message ? 1 : 0 }}
+        >
+          {showValidation && !debouncedValidation.isValid && debouncedValidation.message && (
+            <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+              <X className="w-3 h-3" />
+              <span>{debouncedValidation.message}</span>
+            </div>
+          )}
+          {showValidation && debouncedValidation.isValid && valueStr.length > 0 && (
+            <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+              <Check className="w-3 h-3" />
+              <span>Valid single word</span>
+            </div>
+          )}
+        </div>
       </div>
     );
   };

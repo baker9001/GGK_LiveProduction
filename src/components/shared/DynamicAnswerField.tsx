@@ -203,6 +203,10 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>(() => question.correct_answers || []);
   const [editingAnswerIndex, setEditingAnswerIndex] = useState<number | null>(null);
 
+  // Refs for cursor position management in text inputs
+  const singleWordInputRef = useRef<HTMLInputElement>(null);
+  const cursorPositionRef = useRef<number>(0);
+
   const getCurrentStructuredValue = useCallback((): StructuredAnswerValue => {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       return value as StructuredAnswerValue;
@@ -1542,21 +1546,37 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       return (
         <div>
           <input
+            ref={format === 'single_word' ? singleWordInputRef : null}
             type="text"
             value={textAnswers.main || ''}
             onChange={(e) => {
+              // Save cursor position for single_word format
+              if (format === 'single_word' && singleWordInputRef.current) {
+                cursorPositionRef.current = singleWordInputRef.current.selectionStart || 0;
+              }
+
               const newAnswers = { ...textAnswers, main: e.target.value };
               setTextAnswers(newAnswers);
               onChange(e.target.value);
               setHasAnswered(true);
               performValidation(e.target.value);
+
+              // Restore cursor position after React updates
+              if (format === 'single_word') {
+                requestAnimationFrame(() => {
+                  if (singleWordInputRef.current) {
+                    const pos = cursorPositionRef.current;
+                    singleWordInputRef.current.setSelectionRange(pos, pos);
+                  }
+                });
+              }
             }}
             disabled={disabled}
             placeholder={format === 'single_word' ? 'Enter one word' : 'Enter your answer'}
             className={cn(
               "w-full px-3 py-2 border rounded-lg",
               disabled ? 'bg-gray-100 dark:bg-gray-900' : 'bg-white dark:bg-gray-800',
-              "focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+              "focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-colors duration-200"
             )}
           />
           {renderCorrectAnswers()}
