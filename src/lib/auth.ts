@@ -224,9 +224,23 @@ export function markUserLogout(): void {
 
 // Mark that the session expired so the UI can show a friendly inline notice
 export function markSessionExpired(message: string = 'Your session has expired. Please sign in again to continue.'): void {
-  try {
-    localStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+  console.log('[Auth] Marking session as expired:', message);
 
+  try {
+    // CRITICAL FIX: Store in BOTH localStorage AND sessionStorage for redundancy
+    // This ensures message persists even if one storage mechanism fails
+    localStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+    sessionStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+
+    // Verify storage write succeeded
+    const verified = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+    if (verified) {
+      console.log('[Auth] Session expired message stored successfully');
+    } else {
+      console.warn('[Auth] WARNING: localStorage write may have failed');
+    }
+
+    // Dispatch event for same-page listeners (though redirect will likely prevent this from being useful)
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       const sessionExpiredEvent = new CustomEvent<{ message: string }>(SESSION_EXPIRED_EVENT, {
         detail: { message }
@@ -234,7 +248,14 @@ export function markSessionExpired(message: string = 'Your session has expired. 
       window.dispatchEvent(sessionExpiredEvent);
     }
   } catch (error) {
-    console.warn('[Auth] Unable to persist session expiration notice:', error);
+    console.error('[Auth] Failed to persist session expiration notice:', error);
+    // Try sessionStorage only as absolute fallback
+    try {
+      sessionStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+      console.log('[Auth] Fallback: Message stored in sessionStorage only');
+    } catch (fallbackError) {
+      console.error('[Auth] CRITICAL: Both storage mechanisms failed:', fallbackError);
+    }
   }
 }
 
@@ -343,14 +364,33 @@ export function isSupabaseSessionActive(gracePeriodMs = 0): boolean {
 
 // Consume (read and clear) the stored session expiration notice
 export function consumeSessionExpiredNotice(): string | null {
+  console.log('[Auth] Checking for session expired notice...');
+
   try {
-    const message = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+    // CRITICAL FIX: Check BOTH localStorage AND sessionStorage for redundancy
+    let message = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+
+    // Fallback to sessionStorage if localStorage doesn't have it
+    if (!message) {
+      message = sessionStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+      if (message) {
+        console.log('[Auth] Session expired notice found in sessionStorage (fallback)');
+      }
+    } else {
+      console.log('[Auth] Session expired notice found in localStorage');
+    }
+
     if (message) {
+      // Clear from both storage locations
       localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+      sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+      console.log('[Auth] Session expired notice consumed:', message);
       return message;
     }
+
+    console.log('[Auth] No session expired notice found');
   } catch (error) {
-    console.warn('[Auth] Unable to read session expiration notice:', error);
+    console.error('[Auth] Error reading session expiration notice:', error);
   }
   return null;
 }
@@ -358,7 +398,10 @@ export function consumeSessionExpiredNotice(): string | null {
 // Explicitly clear any stored session expiration notice (used on manual logout)
 export function clearSessionExpiredNotice(): void {
   try {
+    // Clear from both storage locations
     localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+    console.log('[Auth] Session expired notice cleared');
   } catch (error) {
     console.warn('[Auth] Unable to clear session expiration notice:', error);
   }

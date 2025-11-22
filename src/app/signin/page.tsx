@@ -44,39 +44,56 @@ export default function SignInPage() {
   const [verificationNeeded, setVerificationNeeded] = useState(false);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
   
-  // Clear session on mount
+  // CRITICAL FIX: Check for session expired message FIRST before any cleanup
+  // This ensures the message persists and gets displayed to the user
   useEffect(() => {
-    console.log('[Auth] Clearing session on sign-in page load');
-    
-    // Sign out from Supabase Auth
-    supabase.auth.signOut();
-    
-    // Clear local storage
-    const authKeys = [
-      'ggk_authenticated_user',
-      'test_mode_user', 
-      'ggk_auth_token',
-      'ggk_remember_session',
-      'user_scope_cache',
-      'last_user_id'
-    ];
-    
-    authKeys.forEach(key => localStorage.removeItem(key));
-    sessionStorage.clear();
-    clearAuthenticatedUser();
+    console.log('[SignIn] Sign-in page mounted');
 
-    // Load remembered email
+    // STEP 1: Check for session expired message BEFORE any cleanup
+    // This is critical - we need to read this BEFORE clearing any storage
+    const expirationNotice = consumeSessionExpiredNotice();
+    if (expirationNotice) {
+      console.log('[SignIn] Session expired message found, will display to user');
+      setSessionExpiredMessage(expirationNotice);
+    } else {
+      console.log('[SignIn] No session expired message found');
+    }
+
+    // STEP 2: Load remembered email (before clearing storage)
     const savedEmail = localStorage.getItem('ggk_remembered_email');
     if (savedEmail) {
       setEmail(savedEmail);
       setRememberMe(true);
     }
 
-    // Check if the previous session expired and surface the inline notice if present
-    const expirationNotice = consumeSessionExpiredNotice();
-    if (expirationNotice) {
-      setSessionExpiredMessage(expirationNotice);
+    // STEP 3: Now safe to clear session data (after reading what we need)
+    console.log('[SignIn] Clearing session data');
+
+    // Sign out from Supabase Auth
+    supabase.auth.signOut();
+
+    // Clear local storage (except session expired notice which is already consumed)
+    const authKeys = [
+      'ggk_authenticated_user',
+      'test_mode_user',
+      'ggk_auth_token',
+      'ggk_remember_session',
+      'user_scope_cache',
+      'last_user_id'
+    ];
+
+    authKeys.forEach(key => localStorage.removeItem(key));
+
+    // Clear sessionStorage except for session expired notice (in case it's there)
+    // Note: consumeSessionExpiredNotice already cleared it, but being defensive
+    const sessionExpiredBackup = sessionStorage.getItem('ggk_session_expired_notice');
+    sessionStorage.clear();
+    if (sessionExpiredBackup && !expirationNotice) {
+      // Restore if we somehow missed it in step 1
+      setSessionExpiredMessage(sessionExpiredBackup);
     }
+
+    clearAuthenticatedUser();
   }, []);
   
   const handleSubmit = async (e: React.FormEvent) => {
