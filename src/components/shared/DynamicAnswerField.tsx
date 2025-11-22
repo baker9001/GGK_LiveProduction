@@ -26,6 +26,19 @@ import {
 import { RichTextEditor } from './RichTextEditor';
 import Button from './Button';
 import { cn } from '@/lib/utils';
+import {
+  CodeEditor,
+  FileUploader,
+  AudioRecorder,
+  TableCompletion,
+  DiagramCanvas,
+  GraphPlotter,
+  type UploadedFile,
+  type AudioRecording,
+  type TableCompletionData,
+  type DiagramData,
+  type GraphData
+} from '@/components/answer-formats';
 
 // Type definitions
 interface CorrectAnswer {
@@ -198,6 +211,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showAllCorrectAnswers, setShowAllCorrectAnswers] = useState(false);
   const [measurementUnits, setMeasurementUnits] = useState<{ [key: string]: string }>({});
+
+  // Answer format component states
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [audioRecording, setAudioRecording] = useState<AudioRecording | null>(null);
+  const [codeValue, setCodeValue] = useState<string>('');
+  const [tableData, setTableData] = useState<TableCompletionData | null>(null);
+  const [diagramData, setDiagramData] = useState<DiagramData | null>(null);
+  const [graphData, setGraphData] = useState<GraphData | null>(null);
 
   // Admin mode states
   const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>(() => question.correct_answers || []);
@@ -1673,6 +1694,139 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             }}
             placeholder="Enter your answer"
             className={disabled ? 'opacity-60 pointer-events-none' : ''}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Code Editor format
+    if (format === 'code') {
+      return (
+        <div>
+          <CodeEditor
+            questionId={question.id}
+            language={question.subject?.toLowerCase().includes('python') ? 'python' : 'javascript'}
+            value={codeValue || textAnswers.main || ''}
+            onChange={(code) => {
+              setCodeValue(code);
+              const newAnswers = { ...textAnswers, main: code };
+              setTextAnswers(newAnswers);
+              onChange(code);
+              setHasAnswered(true);
+              performValidation(code);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
+            correctAnswer={question.correct_answer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // File Upload format
+    if (format === 'file_upload') {
+      return (
+        <div>
+          <FileUploader
+            questionId={question.id}
+            value={uploadedFiles}
+            onChange={(files) => {
+              setUploadedFiles(files);
+              onChange(files);
+              setHasAnswered(files.length > 0);
+              performValidation(files);
+            }}
+            disabled={disabled}
+            maxFiles={3}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Audio Recording format
+    if (format === 'audio') {
+      return (
+        <div>
+          <AudioRecorder
+            questionId={question.id}
+            value={audioRecording}
+            onChange={(recording) => {
+              setAudioRecording(recording);
+              onChange(recording);
+              setHasAnswered(recording !== null);
+              performValidation(recording);
+            }}
+            disabled={disabled}
+            maxDuration={300}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Table Completion format
+    if (format === 'table_completion') {
+      return (
+        <div>
+          <TableCompletion
+            questionId={question.id}
+            value={tableData}
+            onChange={(data) => {
+              setTableData(data);
+              onChange(data);
+              setHasAnswered(true);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Diagram Canvas format
+    if (format === 'diagram' || format === 'structural_diagram') {
+      return (
+        <div>
+          <DiagramCanvas
+            questionId={question.id}
+            value={diagramData}
+            onChange={(data) => {
+              setDiagramData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            backgroundImage={question.attachments?.[0]}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Graph Plotter format
+    if (format === 'graph') {
+      return (
+        <div>
+          <GraphPlotter
+            questionId={question.id}
+            value={graphData}
+            onChange={(data) => {
+              setGraphData(data);
+              onChange(data);
+              setHasAnswered(data !== null && data.dataPoints.length > 0);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
           />
           {renderCorrectAnswers()}
         </div>
