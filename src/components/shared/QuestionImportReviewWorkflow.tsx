@@ -40,6 +40,7 @@ import {
   deriveAnswerRequirement
 } from '../../lib/constants/answerOptions';
 import EnhancedAnswerFormatSelector from './EnhancedAnswerFormatSelector';
+import DynamicAnswerField from './DynamicAnswerField';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -885,10 +886,72 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       title: string;
       emptyLabel: string;
       keyPrefix: string;
+    },
+    questionContext?: {
+      id: string;
+      question_type?: string;
+      answer_format?: string | null;
+      answer_requirement?: string | null;
+      marks?: number;
+      subject?: string;
     }
   ) => {
     const list = Array.isArray(answers) ? answers : [];
 
+    // Formats that require specialized components (should use DynamicAnswerField)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const useComplexInput = questionContext?.answer_format &&
+      complexFormats.includes(questionContext.answer_format);
+
+    // If format requires specialized component, use DynamicAnswerField
+    if (useComplexInput && questionContext) {
+      return (
+        <div className="space-y-3">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-sm text-blue-800 dark:text-blue-200">
+                <p className="font-medium mb-1">Using specialized input for "{questionContext.answer_format}" format</p>
+                <p className="text-blue-700 dark:text-blue-300">
+                  The answer field below uses the same component students will see, allowing you to preview and test the question format.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DynamicAnswerField
+            question={{
+              id: questionContext.id,
+              type: questionContext.question_type || 'descriptive',
+              subject: questionContext.subject || subjectId,
+              answer_format: questionContext.answer_format,
+              answer_requirement: questionContext.answer_requirement,
+              marks: questionContext.marks,
+              correct_answers: list
+            }}
+            mode="admin"
+            onChange={(newAnswers) => {
+              // DynamicAnswerField returns the full answers array
+              // We need to sync this back to our state
+              if (Array.isArray(newAnswers) && newAnswers.length > 0) {
+                // Update each answer
+                newAnswers.forEach((newAnswer, index) => {
+                  if (index < list.length) {
+                    config.onChange(index, newAnswer);
+                  }
+                });
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    // For simple formats, use the existing RichTextEditor approach
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -2431,6 +2494,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                       title: 'Correct answers & mark scheme',
                       emptyLabel: 'No correct answers defined. Add mark scheme entries so the system can validate responses.',
                       keyPrefix: `question-${question.id}`
+                    }, {
+                      id: question.id,
+                      question_type: question.question_type,
+                      answer_format: question.answer_format,
+                      answer_requirement: question.answer_requirement,
+                      marks: question.marks,
+                      subject: subjectId
                     })}
                   </section>
 
@@ -2676,6 +2746,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                               title: 'Correct answers',
                               emptyLabel: 'Provide the expected answer for this part.',
                               keyPrefix: `question-${question.id}-part-${partIndex}`
+                            }, {
+                              id: `${question.id}-part-${partIndex}`,
+                              question_type: question.question_type,
+                              answer_format: part.answer_format,
+                              answer_requirement: part.answer_requirement,
+                              marks: part.marks,
+                              subject: subjectId
                             })}
 
                             {Array.isArray(part.options) && part.options.length > 0 && (
@@ -2948,6 +3025,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         title: 'Correct answers',
                                         emptyLabel: 'Define the expected responses for this subpart.',
                                         keyPrefix: `question-${question.id}-part-${partIndex}-sub-${subIndex}`
+                                      }, {
+                                        id: `${question.id}-part-${partIndex}-sub-${subIndex}`,
+                                        question_type: question.question_type,
+                                        answer_format: subpart.answer_format,
+                                        answer_requirement: subpart.answer_requirement,
+                                        marks: subpart.marks,
+                                        subject: subjectId
                                       })}
 
                                       {Array.isArray(subpart.options) && subpart.options.length > 0 && (
