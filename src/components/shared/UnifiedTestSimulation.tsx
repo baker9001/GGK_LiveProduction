@@ -1979,19 +1979,7 @@ export function UnifiedTestSimulation({
                         </p>
                       </div>
 
-                      {currentQuestion.attachments && currentQuestion.attachments.length > 0 && (
-                        <div className="mb-6">
-                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            Reference Materials:
-                          </h4>
-                          <AttachmentGallery
-                            attachments={currentQuestion.attachments}
-                            onAttachmentRemove={onAttachmentRemove}
-                            attachmentKey={currentQuestion.id}
-                            isQAMode={isQAMode}
-                          />
-                        </div>
-                      )}
+                      {/* Main question attachments removed - snippet attachments handled inline */}
 
                       {currentQuestion.parts.length === 0 && (
                         requiresAnswer(currentQuestion) ? (
@@ -2078,19 +2066,7 @@ export function UnifiedTestSimulation({
                                     </p>
                                   </div>
 
-                                  {part.attachments && part.attachments.length > 0 && (
-                                    <div className="mb-4">
-                                      <h5 className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">
-                                        Supporting resources
-                                      </h5>
-                                      <AttachmentGallery
-                                        attachments={part.attachments}
-                                        onAttachmentRemove={onAttachmentRemove}
-                                        attachmentKey={`${currentQuestion.id}_p${partIndex}`}
-                                        isQAMode={isQAMode}
-                                      />
-                                    </div>
-                                  )}
+                                  {/* Part attachments removed - snippet attachments handled inline */}
 
                                   {requiresAnswer(part) ? (
                                     <MemoizedAnswerField
@@ -2158,14 +2134,7 @@ export function UnifiedTestSimulation({
                                                 {subpart.question_description}
                                               </p>
 
-                                              {subpart.attachments && subpart.attachments.length > 0 && (
-                                                <AttachmentGallery
-                                                  attachments={subpart.attachments}
-                                                  onAttachmentRemove={onAttachmentRemove}
-                                                  attachmentKey={`${currentQuestion.id}_p${partIndex}_s${subIndex}`}
-                                                  isQAMode={isQAMode}
-                                                />
-                                              )}
+                                              {/* Subpart attachments removed - snippet attachments handled inline */}
 
                                               {requiresAnswer(subpart) ? (
                                                 <MemoizedAnswerField
