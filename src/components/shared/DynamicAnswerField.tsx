@@ -693,7 +693,135 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     format?: string,
     isEditing: boolean = false
   ) => {
-    const needsScientificEditor = ['equation', 'calculation', 'structural_diagram', 'chemical_structure'].includes(format || '') ||
+    // Helper to safely parse JSON values
+    const parseJsonValue = <T,>(val: string, defaultValue: T): T => {
+      if (!val || val.trim() === '') return defaultValue;
+      try {
+        return JSON.parse(val) as T;
+      } catch {
+        return defaultValue;
+      }
+    };
+
+    // Code Editor format
+    if (format === 'code') {
+      return (
+        <CodeEditor
+          questionId={question.id}
+          language={question.subject?.toLowerCase().includes('python') ? 'python' : 'javascript'}
+          value={value || ''}
+          onChange={(code) => onChange(code)}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // File Upload format
+    if (format === 'file_upload') {
+      const parsedFiles = parseJsonValue<UploadedFile[]>(value, []);
+      return (
+        <FileUploader
+          questionId={question.id}
+          value={parsedFiles}
+          onChange={(files) => onChange(JSON.stringify(files))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Audio Recording format
+    if (format === 'audio') {
+      const parsedAudio = parseJsonValue<AudioRecording | null>(value, null);
+      return (
+        <AudioRecorder
+          questionId={question.id}
+          value={parsedAudio}
+          onChange={(recording) => onChange(JSON.stringify(recording))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Table Creator format
+    if (format === 'table' || format === 'table_creator') {
+      const parsedTable = parseJsonValue<TableCreatorData | null>(value, null);
+      return (
+        <TableCreator
+          questionId={question.id}
+          value={parsedTable}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Table Completion format
+    if (format === 'table_completion') {
+      const parsedTableCompletion = parseJsonValue<TableCompletionData | null>(value, null);
+      return (
+        <TableCompletion
+          questionId={question.id}
+          value={parsedTableCompletion}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Diagram Canvas format
+    if (format === 'diagram') {
+      const parsedDiagram = parseJsonValue<DiagramData | null>(value, null);
+      return (
+        <DiagramCanvas
+          questionId={question.id}
+          value={parsedDiagram}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Graph Plotter format
+    if (format === 'graph') {
+      const parsedGraph = parseJsonValue<GraphData | null>(value, null);
+      return (
+        <GraphPlotter
+          questionId={question.id}
+          value={parsedGraph}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Structural Diagram format
+    if (format === 'structural_diagram') {
+      const parsedStructural = parseJsonValue<StructuralDiagramData | null>(value, null);
+      return (
+        <StructuralDiagram
+          questionId={question.id}
+          value={parsedStructural}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Chemical Structure format
+    if (format === 'chemical_structure') {
+      const parsedChemical = parseJsonValue<ChemicalStructureData | null>(value, null);
+      return (
+        <ChemicalStructureEditor
+          questionId={question.id}
+          value={parsedChemical}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Scientific/Mathematical formats (equation, calculation)
+    const needsScientificEditor = ['equation', 'calculation'].includes(format || '') ||
       ['math', 'physics', 'chemistry'].some(s => question.subject?.toLowerCase().includes(s));
 
     if (needsScientificEditor) {
@@ -707,6 +835,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       );
     }
 
+    // Multi-line formats
     if (format === 'multi_line' || format === 'multi_line_labeled') {
       return (
         <textarea
@@ -720,6 +849,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       );
     }
 
+    // Default: Simple text input for single_word, single_line, etc.
     return (
       <input
         type="text"
