@@ -1865,7 +1865,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
 
     // Table Creator format
-    if (format === 'table_creator') {
+    if (format === 'table' || format === 'table_creator') {
       return (
         <div>
           <TableCreator
