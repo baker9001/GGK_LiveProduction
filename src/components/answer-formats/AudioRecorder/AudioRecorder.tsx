@@ -2,7 +2,7 @@
  * Audio Recorder Component for Spoken Responses
  *
  * Uses HTML5 MediaRecorder API for audio recording.
- * Supports recording, playback, time limits, and re-recording.
+ * Supports recording, file upload, playback, time limits, and re-recording.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -15,7 +15,8 @@ import {
   Download,
   AlertCircle,
   Check,
-  Volume2
+  Volume2,
+  Upload
 } from 'lucide-react';
 import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ export interface AudioRecording {
   fileSize: number; // bytes
   recordedAt: string;
   waveformData?: number[]; // For visualization
+  uploadMethod?: 'record' | 'upload'; // Source of audio
 }
 
 interface AudioRecorderProps {
@@ -43,6 +45,8 @@ interface AudioRecorderProps {
   studentId?: string;
   showCorrectAnswer?: boolean;
   correctAnswerUrl?: string;
+  allowUpload?: boolean; // Enable file upload, default: true
+  maxFileSize?: number; // Max upload size in bytes, default: 52428800 (50MB)
 }
 
 const AudioRecorder: React.FC<AudioRecorderProps> = ({
@@ -55,8 +59,11 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
   audioFormat = 'audio/webm',
   studentId = 'temp-user',
   showCorrectAnswer = false,
-  correctAnswerUrl
+  correctAnswerUrl,
+  allowUpload = true,
+  maxFileSize = 52428800 // 50MB
 }) => {
+  const [inputMode, setInputMode] = useState<'record' | 'upload'>('record');
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -65,6 +72,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [micPermission, setMicPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
+  const [isDragging, setIsDragging] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -72,6 +80,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const playbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check microphone permission on mount
   useEffect(() => {
@@ -226,7 +235,8 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
         path: result.path!,
         duration: recordingTime,
         fileSize: audioBlob.size,
-        recordedAt: new Date().toISOString()
+        recordedAt: new Date().toISOString(),
+        uploadMethod: 'record'
       };
 
       onChange(recording);
@@ -269,11 +279,141 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
     }
   };
 
-  const handleReRecord = () => {
+  const handleReplace = () => {
     onChange(null);
     setRecordingTime(0);
     setPlaybackTime(0);
     setError(null);
+  };
+
+  // Audio file upload helpers
+  const VALID_AUDIO_TYPES = [
+    'audio/mpeg',      // .mp3
+    'audio/wav',       // .wav
+    'audio/x-wav',     // .wav (alternative)
+    'audio/mp4',       // .m4a
+    'audio/x-m4a',     // .m4a (alternative)
+    'audio/ogg',       // .ogg
+    'audio/webm',      // .webm
+    'audio/aac',       // .aac
+    'audio/flac'       // .flac
+  ];
+
+  const VALID_AUDIO_EXTENSIONS = [
+    '.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac', '.flac'
+  ];
+
+  const isValidAudioFile = (file: File): boolean => {
+    if (VALID_AUDIO_TYPES.includes(file.type)) {
+      return true;
+    }
+    const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+    return extension ? VALID_AUDIO_EXTENSIONS.includes(extension) : false;
+  };
+
+  const getAudioDuration = (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const audio = document.createElement('audio');
+      const objectUrl = URL.createObjectURL(file);
+
+      audio.addEventListener('loadedmetadata', () => {
+        const duration = audio.duration;
+        URL.revokeObjectURL(objectUrl);
+
+        if (isNaN(duration) || duration === 0) {
+          reject(new Error('Could not determine audio duration'));
+        } else {
+          resolve(duration);
+        }
+      });
+
+      audio.addEventListener('error', () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Failed to load audio file'));
+      });
+
+      audio.src = objectUrl;
+    });
+  };
+
+  const processAudioFile = async (file: File) => {
+    setError(null);
+    setUploading(true);
+
+    try {
+      // Validate file type
+      if (!isValidAudioFile(file)) {
+        throw new Error('Invalid audio format. Please upload MP3, WAV, M4A, OGG, or AAC files.');
+      }
+
+      // Validate file size
+      if (file.size > maxFileSize) {
+        throw new Error(`File too large (${formatFileSize(file.size)}). Maximum size: ${formatFileSize(maxFileSize)}`);
+      }
+
+      // Extract duration
+      const duration = await getAudioDuration(file);
+
+      // Validate duration
+      if (duration < minDuration) {
+        throw new Error(`Audio too short (${Math.floor(duration)}s). Minimum duration: ${minDuration}s`);
+      }
+      if (duration > maxDuration) {
+        throw new Error(`Audio too long (${formatTime(Math.floor(duration))}). Maximum duration: ${formatTime(maxDuration)}`);
+      }
+
+      // Upload to Supabase
+      const fileName = `audio_${questionId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const result = await uploadAnswerAsset(file, fileName, studentId, 'audio');
+
+      if (!result.success) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      // Create recording object
+      const recording: AudioRecording = {
+        id: crypto.randomUUID(),
+        url: result.url!,
+        path: result.path!,
+        duration: Math.floor(duration),
+        fileSize: file.size,
+        recordedAt: new Date().toISOString(),
+        uploadMethod: 'upload'
+      };
+
+      onChange(recording);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload audio file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await processAudioFile(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileDrop = async (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (!file) return;
+    await processAudioFile(file);
+  };
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
   };
 
   const handleDownload = () => {
@@ -293,8 +433,42 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Mode Toggle Tabs */}
+      {!value && !uploading && allowUpload && (
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
+          <button
+            type="button"
+            className={cn(
+              "px-4 py-2 font-medium text-sm transition-colors relative",
+              inputMode === 'record'
+                ? "text-[#8CC63F] border-b-2 border-[#8CC63F]"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            )}
+            onClick={() => setInputMode('record')}
+            disabled={disabled}
+          >
+            <Mic className="w-4 h-4 inline mr-2" />
+            Record Audio
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "px-4 py-2 font-medium text-sm transition-colors relative",
+              inputMode === 'upload'
+                ? "text-[#8CC63F] border-b-2 border-[#8CC63F]"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            )}
+            onClick={() => setInputMode('upload')}
+            disabled={disabled}
+          >
+            <Upload className="w-4 h-4 inline mr-2" />
+            Upload Audio File
+          </button>
+        </div>
+      )}
+
       {/* Microphone Permission Warning */}
-      {micPermission === 'denied' && (
+      {inputMode === 'record' && micPermission === 'denied' && (
         <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
@@ -309,7 +483,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
       )}
 
       {/* Recording Controls */}
-      {!value && !uploading && (
+      {inputMode === 'record' && !value && !uploading && (
         <div className="p-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
           <div className="flex flex-col items-center space-y-4">
             {/* Recording Status */}
@@ -387,13 +561,59 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
         </div>
       )}
 
+      {/* Upload Controls */}
+      {inputMode === 'upload' && !value && !uploading && (
+        <div
+          className={cn(
+            "p-8 border-2 border-dashed rounded-lg transition-colors",
+            isDragging
+              ? "border-[#8CC63F] bg-green-50 dark:bg-green-900/10"
+              : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
+          )}
+          onDrop={handleFileDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          <div className="text-center">
+            <Upload className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+            <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Drop audio file here or click to browse
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+              Supported: MP3, WAV, M4A, OGG, AAC, FLAC
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              Max: {formatFileSize(maxFileSize)} • Duration: {minDuration}s - {formatTime(maxDuration)}
+            </p>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              accept=".mp3,.wav,.m4a,.ogg,.webm,.aac,.flac,audio/*"
+              className="hidden"
+              disabled={disabled}
+            />
+
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              className="px-6 py-2 bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Choose Audio File
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Uploading State */}
       {uploading && (
         <div className="p-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-center">
           <div className="animate-pulse">
             <Volume2 className="w-12 h-12 mx-auto mb-3 text-[#8CC63F]" />
             <p className="text-lg font-medium text-gray-700 dark:text-gray-300">
-              Uploading recording...
+              {inputMode === 'record' ? 'Uploading recording...' : 'Uploading audio file...'}
             </p>
           </div>
         </div>
@@ -405,9 +625,16 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
           <div className="flex items-start gap-3">
             <Check className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-2">
-                Recording Complete
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                  Audio Ready
+                </p>
+                {value.uploadMethod && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {value.uploadMethod === 'record' ? '🎤 Recorded' : '📁 Uploaded'}
+                  </span>
+                )}
+              </div>
 
               {/* Audio Player */}
               <audio
@@ -467,11 +694,11 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={handleReRecord}
+                    onClick={handleReplace}
                     className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                   >
                     <RotateCcw className="w-4 h-4 mr-1" />
-                    Re-record
+                    Replace
                   </Button>
                 )}
               </div>
