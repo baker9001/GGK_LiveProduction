@@ -221,6 +221,22 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
   }, [template, value, isAdminMode]);
 
+  // Cell selection and configuration handlers
+  const handleCellClick = useCallback((row: number, col: number) => {
+    if (!isEditingTemplate) return;
+
+    const cellKey = `${row}-${col}`;
+    const newSelection = new Set(selectedCells);
+
+    if (newSelection.has(cellKey)) {
+      newSelection.delete(cellKey);
+    } else {
+      newSelection.add(cellKey);
+    }
+
+    setSelectedCells(newSelection);
+  }, [isEditingTemplate, selectedCells]);
+
   // Configure cell meta (locked/editable styling)
   const cellRenderer = useCallback((
     instance: any,
@@ -450,22 +466,6 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       hot.updateSettings({ colHeaders: newHeaders });
     }
   }, [headers]);
-
-  // Cell selection and configuration handlers
-  const handleCellClick = useCallback((row: number, col: number) => {
-    if (!isEditingTemplate) return;
-
-    const cellKey = `${row}-${col}`;
-    const newSelection = new Set(selectedCells);
-
-    if (newSelection.has(cellKey)) {
-      newSelection.delete(cellKey);
-    } else {
-      newSelection.add(cellKey);
-    }
-
-    setSelectedCells(newSelection);
-  }, [isEditingTemplate, selectedCells]);
 
   const handleApplyCellType = useCallback(() => {
     if (selectedCells.size === 0 || !tempCellValue.trim()) return;
