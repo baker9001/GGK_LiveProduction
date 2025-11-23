@@ -1,18 +1,34 @@
 /**
  * Table Completion Component for Fill-in-the-Table Questions
  *
- * Uses Handsontable for spreadsheet-like table functionality.
- * Teacher provides template with locked cells, students fill editable cells.
+ * Enhanced with dynamic table building capabilities:
+ * - Add/remove rows and columns
+ * - Edit column headers
+ * - Select cells and mark as locked/editable
+ * - Set expected answers for grading
+ * - Load/save templates from database
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { HotTable } from '@handsontable/react';
 import Handsontable from 'handsontable';
 import 'handsontable/dist/handsontable.full.css';
-import { Check, AlertCircle, RotateCcw, Table as TableIcon } from 'lucide-react';
+import {
+  Check,
+  AlertCircle,
+  RotateCcw,
+  Table as TableIcon,
+  Plus,
+  Minus,
+  Save,
+  Edit3,
+  X
+} from 'lucide-react';
 import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
 import { validateTableData } from '../utils/dataValidation';
+import { TableTemplateService, type TableTemplateDTO, type TableCellDTO } from '@/services/TableTemplateService';
+import toast from 'react-hot-toast';
 
 export interface TableTemplate {
   rows: number;
@@ -31,12 +47,25 @@ export interface TableCompletionData {
 
 interface TableCompletionProps {
   questionId: string;
+  subQuestionId?: string;
   template?: TableTemplate;
   value: TableCompletionData | null;
   onChange: (data: TableCompletionData) => void;
   disabled?: boolean;
   showCorrectAnswers?: boolean;
   autoGrade?: boolean;
+
+  // Admin/Template Editing Props
+  isAdminMode?: boolean;
+  onTemplateSave?: (template: TableTemplateDTO) => void;
+
+  // Dimension Constraints
+  minRows?: number;
+  maxRows?: number;
+  minCols?: number;
+  maxCols?: number;
+  defaultRows?: number;
+  defaultCols?: number;
 }
 
 // Default template for simple table completion (5x5 grid, all cells editable)
@@ -53,42 +82,144 @@ const DEFAULT_TEMPLATE: TableTemplate = {
 
 const TableCompletion: React.FC<TableCompletionProps> = ({
   questionId,
+  subQuestionId,
   template = DEFAULT_TEMPLATE,
   value,
   onChange,
   disabled = false,
   showCorrectAnswers = false,
-  autoGrade = false
+  autoGrade = false,
+  isAdminMode = false,
+  onTemplateSave,
+  minRows = 2,
+  maxRows = 50,
+  minCols = 2,
+  maxCols = 20,
+  defaultRows = 5,
+  defaultCols = 5
 }) => {
   const hotRef = useRef<HotTable>(null);
   const [tableData, setTableData] = useState<any[][]>([]);
   const [validation, setValidation] = useState<any>(null);
 
+  // Template editing state
+  const [isEditingTemplate, setIsEditingTemplate] = useState(false);
+  const [rows, setRows] = useState(defaultRows);
+  const [columns, setColumns] = useState(defaultCols);
+  const [headers, setHeaders] = useState<string[]>(
+    Array.from({ length: defaultCols }, (_, i) => `Column ${i + 1}`)
+  );
+
+  // Cell configuration state
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+  const [cellTypes, setCellTypes] = useState<Record<string, 'locked' | 'editable'>>({});
+  const [cellValues, setCellValues] = useState<Record<string, string>>({});
+  const [expectedAnswers, setExpectedAnswers] = useState<Record<string, string>>({});
+  const [currentCellType, setCurrentCellType] = useState<'locked' | 'editable'>('locked');
+  const [tempCellValue, setTempCellValue] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Load template from database when in admin mode
+  useEffect(() => {
+    if (isAdminMode) {
+      loadExistingTemplate();
+    }
+  }, [questionId, subQuestionId, isAdminMode]);
+
+  const loadExistingTemplate = async () => {
+    setLoading(true);
+    try {
+      const result = await TableTemplateService.loadTemplate(questionId, subQuestionId);
+
+      if (result.success && result.template) {
+        const tmpl = result.template;
+        setRows(tmpl.rows);
+        setColumns(tmpl.columns);
+        setHeaders(tmpl.headers || Array.from({ length: tmpl.columns }, (_, i) => `Column ${i + 1}`));
+
+        // Build cell types and values from template cells
+        const types: Record<string, 'locked' | 'editable'> = {};
+        const values: Record<string, string> = {};
+        const answers: Record<string, string> = {};
+
+        tmpl.cells.forEach(cell => {
+          const key = `${cell.rowIndex}-${cell.colIndex}`;
+          types[key] = cell.cellType;
+          if (cell.cellType === 'locked' && cell.lockedValue) {
+            values[key] = cell.lockedValue;
+          } else if (cell.cellType === 'editable' && cell.expectedAnswer) {
+            answers[key] = cell.expectedAnswer;
+          }
+        });
+
+        setCellTypes(types);
+        setCellValues(values);
+        setExpectedAnswers(answers);
+
+        // Initialize table data
+        const data: any[][] = Array(tmpl.rows).fill(null).map(() =>
+          Array(tmpl.columns).fill('')
+        );
+
+        // Fill locked cell values
+        Object.entries(values).forEach(([key, val]) => {
+          const [row, col] = key.split('-').map(Number);
+          if (data[row] && data[row][col] !== undefined) {
+            data[row][col] = val;
+          }
+        });
+
+        setTableData(data);
+      } else {
+        // Initialize with default dimensions
+        initializeDefaultTable();
+      }
+    } catch (error) {
+      console.error('Error loading template:', error);
+      toast.error('Failed to load template');
+      initializeDefaultTable();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initializeDefaultTable = () => {
+    setRows(defaultRows);
+    setColumns(defaultCols);
+    setHeaders(Array.from({ length: defaultCols }, (_, i) => `Column ${i + 1}`));
+    const data: any[][] = Array(defaultRows).fill(null).map(() =>
+      Array(defaultCols).fill('')
+    );
+    setTableData(data);
+  };
+
   // Initialize table data from template
   useEffect(() => {
-    const data: any[][] = Array(template.rows).fill(null).map(() =>
-      Array(template.columns).fill('')
-    );
+    if (!isAdminMode) {
+      const data: any[][] = Array(template.rows).fill(null).map(() =>
+        Array(template.columns).fill('')
+      );
 
-    // Fill locked cells
-    template.lockedCells.forEach(cell => {
-      if (data[cell.row] && data[cell.row][cell.col] !== undefined) {
-        data[cell.row][cell.col] = cell.value;
-      }
-    });
-
-    // Fill student answers (only if value exists)
-    if (value && value.studentAnswers) {
-      Object.entries(value.studentAnswers).forEach(([key, val]) => {
-        const [row, col] = key.split('-').map(Number);
-        if (data[row] && data[row][col] !== undefined) {
-          data[row][col] = val;
+      // Fill locked cells
+      template.lockedCells.forEach(cell => {
+        if (data[cell.row] && data[cell.row][cell.col] !== undefined) {
+          data[cell.row][cell.col] = cell.value;
         }
       });
-    }
 
-    setTableData(data);
-  }, [template, value]);
+      // Fill student answers (only if value exists)
+      if (value && value.studentAnswers) {
+        Object.entries(value.studentAnswers).forEach(([key, val]) => {
+          const [row, col] = key.split('-').map(Number);
+          if (data[row] && data[row][col] !== undefined) {
+            data[row][col] = val;
+          }
+        });
+      }
+
+      setTableData(data);
+    }
+  }, [template, value, isAdminMode]);
 
   // Configure cell meta (locked/editable styling)
   const cellRenderer = useCallback((
@@ -102,23 +233,53 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   ) => {
     Handsontable.renderers.TextRenderer.apply(this, [instance, td, row, col, prop, value, cellProperties] as any);
 
-    const isLocked = template.lockedCells.some(c => c.row === row && c.col === col);
-    const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
+    const cellKey = `${row}-${col}`;
+    const isSelected = isEditingTemplate && selectedCells.has(cellKey);
+    const cellType = cellTypes[cellKey];
 
-    if (isLocked) {
+    // Selection styling (blue border in edit mode)
+    if (isSelected) {
+      td.style.border = '2px solid #3B82F6';
+      td.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.2)';
+    }
+
+    // Cell type styling
+    if (cellType === 'locked') {
       td.style.backgroundColor = '#f3f4f6';
       td.style.color = '#6b7280';
       td.style.fontWeight = '500';
       td.classList.add('locked-cell');
-    } else if (isEditable) {
+    } else if (cellType === 'editable') {
       td.style.backgroundColor = showCorrectAnswers ?
         (checkAnswer(row, col, value) ? '#dcfce7' : '#fee2e2') :
         '#ffffff';
       td.classList.add('editable-cell');
+    } else {
+      // Legacy template support
+      const isLocked = template.lockedCells?.some(c => c.row === row && c.col === col);
+      const isEditable = template.editableCells?.some(c => c.row === row && c.col === col);
+
+      if (isLocked) {
+        td.style.backgroundColor = '#f3f4f6';
+        td.style.color = '#6b7280';
+        td.style.fontWeight = '500';
+        td.classList.add('locked-cell');
+      } else if (isEditable) {
+        td.style.backgroundColor = showCorrectAnswers ?
+          (checkAnswer(row, col, value) ? '#dcfce7' : '#fee2e2') :
+          '#ffffff';
+        td.classList.add('editable-cell');
+      }
+    }
+
+    // Add click handler for cell selection in edit mode
+    if (isEditingTemplate) {
+      td.style.cursor = 'pointer';
+      td.onclick = () => handleCellClick(row, col);
     }
 
     return td;
-  }, [template, showCorrectAnswers]);
+  }, [template, showCorrectAnswers, isEditingTemplate, selectedCells, cellTypes, handleCellClick]);
 
   const checkAnswer = (row: number, col: number, studentValue: any): boolean => {
     if (!template.correctAnswers || !autoGrade) return true;
@@ -168,62 +329,569 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     });
   };
 
+  // Dimension control handlers
+  const handleAddRow = useCallback(() => {
+    if (rows >= maxRows) {
+      toast.warning(`Maximum ${maxRows} rows allowed`);
+      return;
+    }
+
+    const newRows = rows + 1;
+    const newData = [...tableData, Array(columns).fill('')];
+
+    setRows(newRows);
+    setTableData(newData);
+
+    const hot = hotRef.current?.hotInstance;
+    if (hot) {
+      hot.loadData(newData);
+    }
+  }, [rows, maxRows, tableData, columns]);
+
+  const handleRemoveRow = useCallback(() => {
+    if (rows <= minRows) {
+      toast.warning(`Minimum ${minRows} rows required`);
+      return;
+    }
+
+    const newRows = rows - 1;
+    const newData = tableData.slice(0, -1);
+
+    // Remove cell types and values for deleted row
+    const lastRowIndex = rows - 1;
+    const updatedCellTypes = { ...cellTypes };
+    const updatedCellValues = { ...cellValues };
+    const updatedExpectedAnswers = { ...expectedAnswers };
+
+    for (let col = 0; col < columns; col++) {
+      const cellKey = `${lastRowIndex}-${col}`;
+      delete updatedCellTypes[cellKey];
+      delete updatedCellValues[cellKey];
+      delete updatedExpectedAnswers[cellKey];
+    }
+
+    setRows(newRows);
+    setTableData(newData);
+    setCellTypes(updatedCellTypes);
+    setCellValues(updatedCellValues);
+    setExpectedAnswers(updatedExpectedAnswers);
+
+    const hot = hotRef.current?.hotInstance;
+    if (hot) {
+      hot.loadData(newData);
+    }
+  }, [rows, minRows, tableData, columns, cellTypes, cellValues, expectedAnswers]);
+
+  const handleAddColumn = useCallback(() => {
+    if (columns >= maxCols) {
+      toast.warning(`Maximum ${maxCols} columns allowed`);
+      return;
+    }
+
+    const newColumns = columns + 1;
+    const newHeaders = [...headers, `Column ${newColumns}`];
+    const newData = tableData.map(row => [...row, '']);
+
+    setColumns(newColumns);
+    setHeaders(newHeaders);
+    setTableData(newData);
+
+    const hot = hotRef.current?.hotInstance;
+    if (hot) {
+      hot.updateSettings({ colHeaders: newHeaders });
+      hot.loadData(newData);
+    }
+  }, [columns, maxCols, headers, tableData]);
+
+  const handleRemoveColumn = useCallback(() => {
+    if (columns <= minCols) {
+      toast.warning(`Minimum ${minCols} columns required`);
+      return;
+    }
+
+    const newColumns = columns - 1;
+    const newHeaders = headers.slice(0, -1);
+    const newData = tableData.map(row => row.slice(0, -1));
+
+    // Remove cell types and values for deleted column
+    const lastColIndex = columns - 1;
+    const updatedCellTypes = { ...cellTypes };
+    const updatedCellValues = { ...cellValues };
+    const updatedExpectedAnswers = { ...expectedAnswers };
+
+    for (let row = 0; row < rows; row++) {
+      const cellKey = `${row}-${lastColIndex}`;
+      delete updatedCellTypes[cellKey];
+      delete updatedCellValues[cellKey];
+      delete updatedExpectedAnswers[cellKey];
+    }
+
+    setColumns(newColumns);
+    setHeaders(newHeaders);
+    setTableData(newData);
+    setCellTypes(updatedCellTypes);
+    setCellValues(updatedCellValues);
+    setExpectedAnswers(updatedExpectedAnswers);
+
+    const hot = hotRef.current?.hotInstance;
+    if (hot) {
+      hot.updateSettings({ colHeaders: newHeaders });
+      hot.loadData(newData);
+    }
+  }, [columns, minCols, headers, tableData, rows, cellTypes, cellValues, expectedAnswers]);
+
+  const handleHeaderChange = useCallback((index: number, value: string) => {
+    const newHeaders = [...headers];
+    newHeaders[index] = value;
+    setHeaders(newHeaders);
+
+    const hot = hotRef.current?.hotInstance;
+    if (hot) {
+      hot.updateSettings({ colHeaders: newHeaders });
+    }
+  }, [headers]);
+
+  // Cell selection and configuration handlers
+  const handleCellClick = useCallback((row: number, col: number) => {
+    if (!isEditingTemplate) return;
+
+    const cellKey = `${row}-${col}`;
+    const newSelection = new Set(selectedCells);
+
+    if (newSelection.has(cellKey)) {
+      newSelection.delete(cellKey);
+    } else {
+      newSelection.add(cellKey);
+    }
+
+    setSelectedCells(newSelection);
+  }, [isEditingTemplate, selectedCells]);
+
+  const handleApplyCellType = useCallback(() => {
+    if (selectedCells.size === 0 || !tempCellValue.trim()) return;
+
+    const updatedTypes = { ...cellTypes };
+    const updatedValues = { ...cellValues };
+    const updatedAnswers = { ...expectedAnswers };
+    const newTableData = [...tableData];
+
+    selectedCells.forEach(cellKey => {
+      const [row, col] = cellKey.split('-').map(Number);
+      updatedTypes[cellKey] = currentCellType;
+
+      if (currentCellType === 'locked') {
+        updatedValues[cellKey] = tempCellValue;
+        if (newTableData[row] && newTableData[row][col] !== undefined) {
+          newTableData[row][col] = tempCellValue;
+        }
+      } else {
+        updatedAnswers[cellKey] = tempCellValue;
+      }
+    });
+
+    setCellTypes(updatedTypes);
+    setCellValues(updatedValues);
+    setExpectedAnswers(updatedAnswers);
+    setTableData(newTableData);
+    setSelectedCells(new Set());
+    setTempCellValue('');
+
+    // Update Handsontable
+    const hot = hotRef.current?.hotInstance;
+    if (hot) {
+      hot.loadData(newTableData);
+    }
+
+    toast.success(`Applied ${currentCellType} type to ${selectedCells.size} cell(s)`);
+  }, [selectedCells, currentCellType, tempCellValue, cellTypes, cellValues, expectedAnswers, tableData]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedCells(new Set());
+    setTempCellValue('');
+  }, []);
+
+  // Template save handler
+  const handleSaveTemplate = async () => {
+    setLoading(true);
+    try {
+      // Build cells array
+      const cells: TableCellDTO[] = [];
+
+      Object.entries(cellTypes).forEach(([key, type]) => {
+        const [row, col] = key.split('-').map(Number);
+        cells.push({
+          rowIndex: row,
+          colIndex: col,
+          cellType: type,
+          lockedValue: type === 'locked' ? cellValues[key] : undefined,
+          expectedAnswer: type === 'editable' ? expectedAnswers[key] : undefined,
+          marks: 1,
+          caseSensitive: false
+        });
+      });
+
+      const template: TableTemplateDTO = {
+        questionId,
+        subQuestionId,
+        rows,
+        columns,
+        headers,
+        cells
+      };
+
+      const result = await TableTemplateService.saveTemplate(template);
+
+      if (result.success) {
+        toast.success('Template saved successfully!');
+        onTemplateSave?.(template);
+        setIsEditingTemplate(false);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error saving template:', error);
+      toast.error('Failed to save template');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const completionPercentage = value && value.requiredCells > 0
     ? Math.round((value.completedCells / value.requiredCells) * 100)
     : 0;
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-[#8CC63F] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Loading template...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate statistics for admin mode
+  const lockedCount = Object.values(cellTypes).filter(t => t === 'locked').length;
+  const editableCount = Object.values(cellTypes).filter(t => t === 'editable').length;
+  const totalCells = rows * columns;
+  const undefinedCount = totalCells - lockedCount - editableCount;
+
   return (
     <div className="space-y-4">
+      {/* Admin Mode Controls */}
+      {isAdminMode && (
+        <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              Template Builder Mode
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {!isEditingTemplate ? (
+              <Button
+                size="sm"
+                onClick={() => setIsEditingTemplate(true)}
+                className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
+              >
+                <Edit3 className="w-4 h-4 mr-1" />
+                Edit Template
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsEditingTemplate(false)}
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveTemplate}
+                  disabled={loading}
+                  className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
+                >
+                  <Save className="w-4 h-4 mr-1" />
+                  Save Template
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Dimension Controls */}
+      {isEditingTemplate && (
+        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Table Dimensions
+          </h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[60px]">
+                Rows: {rows}
+              </label>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveRow}
+                  disabled={rows <= minRows}
+                  title="Remove row"
+                  className="h-8 w-8 p-0"
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddRow}
+                  disabled={rows >= maxRows}
+                  title="Add row"
+                  className="h-8 w-8 p-0"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <span className="text-xs text-gray-500">
+                ({minRows}-{maxRows})
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">
+                Columns: {columns}
+              </label>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveColumn}
+                  disabled={columns <= minCols}
+                  title="Remove column"
+                  className="h-8 w-8 p-0"
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddColumn}
+                  disabled={columns >= maxCols}
+                  title="Add column"
+                  className="h-8 w-8 p-0"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <span className="text-xs text-gray-500">
+                ({minCols}-{maxCols})
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header Editor */}
+      {isEditingTemplate && (
+        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Column Headers
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {headers.map((header, index) => (
+              <div key={index} className="flex flex-col">
+                <label className="text-xs text-gray-500 mb-1">
+                  Column {index + 1}
+                </label>
+                <input
+                  type="text"
+                  value={header}
+                  onChange={(e) => handleHeaderChange(index, e.target.value)}
+                  placeholder={`Column ${index + 1}`}
+                  className="px-2 py-1 text-sm border rounded dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            💡 Use descriptive headers to help students understand each column
+          </p>
+        </div>
+      )}
+
+      {/* Cell Configuration Panel */}
+      {isEditingTemplate && (
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
+          <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
+            Cell Type Configuration
+          </h4>
+          <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+            Click on table cells below to select them, then choose their type:
+          </p>
+          <div className="flex items-center gap-4 mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="cellType"
+                value="locked"
+                checked={currentCellType === 'locked'}
+                onChange={() => setCurrentCellType('locked')}
+                className="w-4 h-4"
+              />
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded" />
+                <span className="text-sm font-medium">Locked (pre-filled)</span>
+              </div>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="cellType"
+                value="editable"
+                checked={currentCellType === 'editable'}
+                onChange={() => setCurrentCellType('editable')}
+                className="w-4 h-4"
+              />
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-white border border-gray-300 rounded" />
+                <span className="text-sm font-medium">Editable (answer)</span>
+              </div>
+            </label>
+          </div>
+          {selectedCells.size > 0 && (
+            <div className="p-3 bg-white dark:bg-gray-800 rounded border mb-3">
+              <p className="text-sm font-medium mb-2">
+                Selected: {selectedCells.size} cell(s)
+              </p>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  {currentCellType === 'locked' ? 'Pre-filled Value:' : 'Expected Answer:'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={currentCellType === 'locked' ? 'Enter value for locked cells' : 'Enter correct answer'}
+                  className="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-[#8CC63F]"
+                  value={tempCellValue}
+                  onChange={(e) => setTempCellValue(e.target.value)}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {currentCellType === 'locked'
+                    ? 'This value will be shown to students and cannot be changed'
+                    : 'Students will need to enter this value (case-insensitive)'}
+                </p>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleApplyCellType}
+              disabled={selectedCells.size === 0 || !tempCellValue.trim()}
+              className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
+            >
+              <Check className="w-4 h-4 mr-1" />
+              Apply to Selected
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleClearSelection}
+              disabled={selectedCells.size === 0}
+            >
+              Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Template Statistics */}
+      {isEditingTemplate && (
+        <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-4">
+              <span className="font-medium text-gray-700 dark:text-gray-300">
+                Statistics:
+              </span>
+              <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400">
+                <span>Total: {totalCells}</span>
+                <span>Locked: {lockedCount}</span>
+                <span>Editable: {editableCount}</span>
+                <span>Undefined: {undefinedCount}</span>
+              </div>
+            </div>
+            {undefinedCount > 0 && (
+              <span className="text-xs text-orange-600 dark:text-orange-400">
+                ⚠️ {undefinedCount} cell(s) not configured
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Table Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TableIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-            Complete the Table
+            {isEditingTemplate ? 'Table Preview' : 'Complete the Table'}
           </h3>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {value?.completedCells ?? 0} / {value?.requiredCells ?? 0} cells
-            <span className="ml-2 font-medium text-[#8CC63F]">
-              ({completionPercentage}%)
-            </span>
-          </div>
+        {!isEditingTemplate && (
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {value?.completedCells ?? 0} / {value?.requiredCells ?? 0} cells
+              <span className="ml-2 font-medium text-[#8CC63F]">
+                ({completionPercentage}%)
+              </span>
+            </div>
 
-          {!disabled && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleReset}
-              title="Reset table"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
+            {!disabled && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReset}
+                title="Reset table"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Table */}
       <div className={cn(
         "border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden",
-        disabled && "opacity-60 pointer-events-none"
+        disabled && !isEditingTemplate && "opacity-60 pointer-events-none"
       )}>
         <HotTable
           ref={hotRef}
           data={tableData}
-          colHeaders={template.headers}
+          colHeaders={isAdminMode ? headers : template.headers}
           rowHeaders={true}
           width="100%"
           height="auto"
           licenseKey="non-commercial-and-evaluation"
-          readOnly={disabled}
+          readOnly={disabled && !isEditingTemplate}
           cells={(row, col) => {
-            const isLocked = template.lockedCells.some(c => c.row === row && c.col === col);
-            return {
-              readOnly: isLocked || disabled,
-              renderer: cellRenderer
-            };
+            if (isAdminMode) {
+              const cellKey = `${row}-${col}`;
+              const cellType = cellTypes[cellKey];
+              return {
+                readOnly: cellType === 'locked' || (disabled && !isEditingTemplate),
+                renderer: cellRenderer
+              };
+            } else {
+              const isLocked = template.lockedCells?.some(c => c.row === row && c.col === col);
+              return {
+                readOnly: isLocked || disabled,
+                renderer: cellRenderer
+              };
+            }
           }}
           afterChange={handleAfterChange}
           stretchH="all"
