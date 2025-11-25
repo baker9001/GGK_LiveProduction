@@ -409,7 +409,7 @@ export default function SubjectsTable() {
       />
 
       <SlideInForm
-        key={editingSubject?.id || 'new'}
+        key={editingSubject?.id || `new-${Date.now()}`}
         title={editingSubject ? 'Edit Subject' : 'Create Subject'}
         isOpen={isFormOpen}
         onClose={() => {
@@ -443,6 +443,7 @@ export default function SubjectsTable() {
               name="name"
               placeholder="Enter subject name"
               defaultValue={editingSubject ? extractSubjectName(editingSubject.name) : ''}
+              key={editingSubject?.id || `name-${Date.now()}`}
             />
           </FormField>
 
@@ -458,6 +459,7 @@ export default function SubjectsTable() {
               name="code"
               placeholder="Enter subject code"
               defaultValue={editingSubject ? (editingSubject.code || extractSubjectCode(editingSubject.name)) : ''}
+              key={editingSubject?.id || `code-${Date.now()}`}
             />
           </FormField>
 
@@ -493,6 +495,7 @@ export default function SubjectsTable() {
                 { value: 'inactive', label: 'Inactive' }
               ]}
               defaultValue={editingSubject?.status || 'active'}
+              key={editingSubject?.id || `status-${Date.now()}`}
             />
           </FormField>
         </form>

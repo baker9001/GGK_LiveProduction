@@ -797,7 +797,7 @@ export default function ObjectivesTable() {
       />
 
       <SlideInForm
-        key={editingObjective?.id || 'new'}
+        key={editingObjective?.id || `new-${Date.now()}`}
         title={editingObjective ? 'Edit Objective' : 'Create Objective'}
         isOpen={isFormOpen}
         onClose={() => {

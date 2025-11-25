@@ -668,7 +668,7 @@ export default function SubtopicsTable() {
       />
 
       <SlideInForm
-        key={editingSubtopic?.id || 'new'}
+        key={editingSubtopic?.id || `new-${Date.now()}`}
         title={editingSubtopic ? 'Edit Subtopic' : 'Create Subtopic'}
         isOpen={isFormOpen}
         onClose={() => {

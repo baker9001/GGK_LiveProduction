@@ -946,7 +946,7 @@ export default function ConceptsTable() {
       />
 
       <SlideInForm
-        key={editingConcept?.id || 'new'}
+        key={editingConcept?.id || `new-${Date.now()}`}
         title={editingConcept ? 'Edit Concept' : 'Create Concept'}
         isOpen={isFormOpen}
         onClose={() => {
