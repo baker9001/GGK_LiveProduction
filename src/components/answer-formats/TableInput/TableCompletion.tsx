@@ -119,28 +119,6 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [tempCellValue, setTempCellValue] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Keyboard shortcuts for better UX
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isEditingTemplate) return;
-
-      // Escape key - clear selection
-      if (e.key === 'Escape' && selectedCells.size > 0) {
-        handleClearSelection();
-        e.preventDefault();
-      }
-
-      // Enter key in edit mode - apply if value entered
-      if (e.key === 'Enter' && selectedCells.size > 0 && tempCellValue.trim() && document.activeElement?.tagName !== 'INPUT') {
-        handleApplyCellType();
-        e.preventDefault();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditingTemplate, selectedCells, tempCellValue, handleClearSelection, handleApplyCellType]);
-
   // Load template from database when in admin mode
   useEffect(() => {
     if (isAdminMode) {
@@ -567,6 +545,28 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     setSelectedCells(new Set());
     setTempCellValue('');
   }, []);
+
+  // Keyboard shortcuts for better UX
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isEditingTemplate) return;
+
+      // Escape key - clear selection
+      if (e.key === 'Escape' && selectedCells.size > 0) {
+        handleClearSelection();
+        e.preventDefault();
+      }
+
+      // Enter key in edit mode - apply if value entered
+      if (e.key === 'Enter' && selectedCells.size > 0 && tempCellValue.trim() && document.activeElement?.tagName !== 'INPUT') {
+        handleApplyCellType();
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditingTemplate, selectedCells, tempCellValue, handleClearSelection, handleApplyCellType]);
 
   // Template save handler
   const handleSaveTemplate = async () => {
