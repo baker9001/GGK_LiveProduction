@@ -119,6 +119,28 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [tempCellValue, setTempCellValue] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Keyboard shortcuts for better UX
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isEditingTemplate) return;
+
+      // Escape key - clear selection
+      if (e.key === 'Escape' && selectedCells.size > 0) {
+        handleClearSelection();
+        e.preventDefault();
+      }
+
+      // Enter key in edit mode - apply if value entered
+      if (e.key === 'Enter' && selectedCells.size > 0 && tempCellValue.trim() && document.activeElement?.tagName !== 'INPUT') {
+        handleApplyCellType();
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditingTemplate, selectedCells, tempCellValue, handleClearSelection, handleApplyCellType]);
+
   // Load template from database when in admin mode
   useEffect(() => {
     if (isAdminMode) {
@@ -259,17 +281,53 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       td.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.2)';
     }
 
-    // Cell type styling
+    // Cell type styling with visual badges
     if (cellType === 'locked') {
       td.style.backgroundColor = '#f3f4f6';
       td.style.color = '#6b7280';
       td.style.fontWeight = '500';
+      td.style.position = 'relative';
       td.classList.add('locked-cell');
+
+      // Add visual badge for locked cells in admin mode
+      if (isEditingTemplate && !td.querySelector('.cell-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'cell-badge';
+        badge.innerHTML = '🔒';
+        badge.style.cssText = `
+          position: absolute;
+          top: 2px;
+          right: 2px;
+          font-size: 10px;
+          opacity: 0.6;
+          pointer-events: none;
+          z-index: 10;
+        `;
+        td.appendChild(badge);
+      }
     } else if (cellType === 'editable') {
       td.style.backgroundColor = showCorrectAnswers ?
         (checkAnswer(row, col, value) ? '#dcfce7' : '#fee2e2') :
         '#ffffff';
+      td.style.position = 'relative';
       td.classList.add('editable-cell');
+
+      // Add visual badge for editable cells in admin mode
+      if (isEditingTemplate && !td.querySelector('.cell-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'cell-badge';
+        badge.innerHTML = '✏️';
+        badge.style.cssText = `
+          position: absolute;
+          top: 2px;
+          right: 2px;
+          font-size: 10px;
+          opacity: 0.6;
+          pointer-events: none;
+          z-index: 10;
+        `;
+        td.appendChild(badge);
+      }
     } else {
       // Legacy template support
       const isLocked = template.lockedCells?.some(c => c.row === row && c.col === col);
@@ -725,39 +783,43 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       {/* Cell Configuration Panel */}
       {isEditingTemplate && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
-          <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
-            Cell Type Configuration
-          </h4>
-          <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-            Click on table cells below to select them, then choose their type:
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              Cell Type Configuration
+            </h4>
+            <span className="text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 px-2 py-1 rounded-full">
+              {selectedCells.size} cell(s) selected
+            </span>
+          </div>
+          <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
+            💡 <strong>Tip:</strong> Click cells below to select them, toggle the switch to choose type, enter a value, then click "Apply"
           </p>
-          <div className="flex items-center gap-4 mb-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="cellType"
-                value="locked"
-                checked={currentCellType === 'locked'}
-                onChange={() => setCurrentCellType('locked')}
-                className="w-4 h-4"
-              />
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded" />
-                <span className="text-sm font-medium">Locked (pre-filled)</span>
+          <div className="flex items-center gap-6 mb-4">
+            <label className="flex items-center gap-3 cursor-pointer group" role="switch" aria-checked={currentCellType === 'editable'}>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Cell Type:</span>
+              <div className="relative inline-flex items-center">
+                <input
+                  type="checkbox"
+                  checked={currentCellType === 'editable'}
+                  onChange={(e) => setCurrentCellType(e.target.checked ? 'editable' : 'locked')}
+                  className="sr-only peer"
+                  aria-label="Toggle between locked and editable cell type"
+                />
+                <div className="w-14 h-7 bg-gray-300 peer-focus:ring-4 peer-focus:ring-[#8CC63F]/30 dark:peer-focus:ring-[#8CC63F]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-[#8CC63F] shadow-inner">
+                </div>
               </div>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="cellType"
-                value="editable"
-                checked={currentCellType === 'editable'}
-                onChange={() => setCurrentCellType('editable')}
-                className="w-4 h-4"
-              />
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-white border border-gray-300 rounded" />
-                <span className="text-sm font-medium">Editable (answer)</span>
+                <div className={cn(
+                  "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                  currentCellType === 'locked'
+                    ? "bg-gray-100 border-gray-400 dark:bg-gray-700 dark:border-gray-500"
+                    : "bg-white border-[#8CC63F] dark:bg-gray-800"
+                )}>
+                  {currentCellType === 'locked' ? '🔒' : '✏️'}
+                </div>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {currentCellType === 'locked' ? 'Locked (pre-filled)' : 'Editable (fill in)'}
+                </span>
               </div>
             </label>
           </div>
@@ -807,6 +869,79 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
+      {/* Persistent Quick Actions Toolbar */}
+      {isEditingTemplate && selectedCells.size > 0 && (
+        <div className="sticky top-0 z-10 p-3 bg-[#8CC63F] text-white rounded-lg shadow-lg border-2 border-[#7AB62F]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-bold">
+                {selectedCells.size} cell{selectedCells.size !== 1 ? 's' : ''} selected
+              </span>
+              <div className="h-4 w-px bg-white/30"></div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium">Type:</span>
+                <button
+                  onClick={() => setCurrentCellType('locked')}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded transition-all",
+                    currentCellType === 'locked'
+                      ? "bg-white text-[#8CC63F] shadow-md"
+                      : "bg-[#7AB62F] text-white hover:bg-[#6AA51F]"
+                  )}
+                  title="Set as locked (pre-filled)"
+                >
+                  🔒 Locked
+                </button>
+                <button
+                  onClick={() => setCurrentCellType('editable')}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded transition-all",
+                    currentCellType === 'editable'
+                      ? "bg-white text-[#8CC63F] shadow-md"
+                      : "bg-[#7AB62F] text-white hover:bg-[#6AA51F]"
+                  )}
+                  title="Set as editable (student fills)"
+                >
+                  ✏️ Editable
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder={currentCellType === 'locked' ? 'Enter value...' : 'Enter answer...'}
+                className="px-3 py-1.5 text-sm text-gray-900 bg-white border-0 rounded focus:ring-2 focus:ring-white/50 min-w-[200px]"
+                value={tempCellValue}
+                onChange={(e) => setTempCellValue(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && tempCellValue.trim()) {
+                    handleApplyCellType();
+                  }
+                }}
+              />
+              <Button
+                size="sm"
+                onClick={handleApplyCellType}
+                disabled={!tempCellValue.trim()}
+                className="bg-white text-[#8CC63F] hover:bg-gray-100 font-medium shadow-md"
+              >
+                <Check className="w-4 h-4 mr-1" />
+                Apply
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleClearSelection}
+                className="text-white hover:bg-white/20"
+                title="Clear selection (Esc)"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Template Statistics */}
       {isEditingTemplate && (
         <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
@@ -817,14 +952,22 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               </span>
               <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400">
                 <span>Total: {totalCells}</span>
-                <span>Locked: {lockedCount}</span>
-                <span>Editable: {editableCount}</span>
-                <span>Undefined: {undefinedCount}</span>
+                <span className="flex items-center gap-1">
+                  🔒 Locked: <strong>{lockedCount}</strong>
+                </span>
+                <span className="flex items-center gap-1">
+                  ✏️ Editable: <strong>{editableCount}</strong>
+                </span>
+                {undefinedCount > 0 && (
+                  <span className="text-orange-600 dark:text-orange-400">
+                    ⚠️ Undefined: <strong>{undefinedCount}</strong>
+                  </span>
+                )}
               </div>
             </div>
             {undefinedCount > 0 && (
-              <span className="text-xs text-orange-600 dark:text-orange-400">
-                ⚠️ {undefinedCount} cell(s) not configured
+              <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-full">
+                {undefinedCount} cell(s) need configuration
               </span>
             )}
           </div>
@@ -898,15 +1041,20 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         />
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-sm">
+      {/* Legend - Non-interactive documentation */}
+      <div className="flex items-center gap-4 text-sm opacity-75">
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Legend:</span>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded" />
-          <span className="text-gray-600 dark:text-gray-400">Locked (pre-filled)</span>
+          <div className="w-6 h-6 bg-gray-100 border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
+            🔒
+          </div>
+          <span className="text-xs text-gray-600 dark:text-gray-400">= Locked cell (pre-filled by teacher)</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-white border border-gray-300 rounded" />
-          <span className="text-gray-600 dark:text-gray-400">Editable (fill in)</span>
+          <div className="w-6 h-6 bg-white border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
+            ✏️
+          </div>
+          <span className="text-xs text-gray-600 dark:text-gray-400">= Editable cell (student fills in)</span>
         </div>
         {showCorrectAnswers && (
           <>

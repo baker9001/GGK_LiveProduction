@@ -1922,7 +1922,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               performValidation(data);
             }}
             disabled={disabled}
-            showCorrectAnswer={showCorrectAnswer}
+            showCorrectAnswers={showCorrectAnswer}
+            isAdminMode={mode === 'admin'}
           />
           {renderCorrectAnswers()}
         </div>
