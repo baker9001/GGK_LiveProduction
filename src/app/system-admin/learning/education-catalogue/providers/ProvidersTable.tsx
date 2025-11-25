@@ -332,7 +332,7 @@ export default function ProvidersTable() {
       />
 
       <SlideInForm
-        key={editingProvider?.id || 'new'}
+        key={editingProvider?.id || `new-${Date.now()}`}
         title={editingProvider ? 'Edit Provider' : 'Create Provider'}
         isOpen={isFormOpen}
         onClose={() => {
@@ -362,7 +362,8 @@ export default function ProvidersTable() {
               id="name"
               name="name"
               placeholder="Enter provider name"
-              defaultValue={editingProvider?.name}
+              defaultValue={editingProvider?.name || ''}
+              key={editingProvider?.id || `name-${Date.now()}`}
             />
           </FormField>
 
@@ -377,6 +378,7 @@ export default function ProvidersTable() {
               name="code"
               placeholder="Enter provider code"
               defaultValue={editingProvider?.code || ''}
+              key={editingProvider?.id || `code-${Date.now()}`}
             />
           </FormField>
 
@@ -394,6 +396,7 @@ export default function ProvidersTable() {
                 { value: 'inactive', label: 'Inactive' }
               ]}
               defaultValue={editingProvider?.status || 'active'}
+              key={editingProvider?.id || `status-${Date.now()}`}
             />
           </FormField>
         </form>

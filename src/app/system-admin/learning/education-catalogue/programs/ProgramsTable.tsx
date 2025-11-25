@@ -295,7 +295,7 @@ export default function ProgramsTable() {
       />
 
       <SlideInForm
-        key={editingProgram?.id || 'new'}
+        key={editingProgram?.id || `new-${Date.now()}`}
         title={editingProgram ? 'Edit Program' : 'Create Program'}
         isOpen={isFormOpen}
         onClose={() => {
@@ -325,7 +325,8 @@ export default function ProgramsTable() {
               id="name"
               name="name"
               placeholder="Enter program name"
-              defaultValue={editingProgram?.name}
+              defaultValue={editingProgram?.name || ''}
+              key={editingProgram?.id || `name-${Date.now()}`}
             />
           </FormField>
 
@@ -340,6 +341,7 @@ export default function ProgramsTable() {
               name="code"
               placeholder="Enter program code"
               defaultValue={editingProgram?.code || ''}
+              key={editingProgram?.id || `code-${Date.now()}`}
             />
           </FormField>
 
@@ -354,6 +356,7 @@ export default function ProgramsTable() {
               placeholder="Enter program description"
               defaultValue={editingProgram?.description || ''}
               rows={4}
+              key={editingProgram?.id || `description-${Date.now()}`}
             />
           </FormField>
 
@@ -371,6 +374,7 @@ export default function ProgramsTable() {
                 { value: 'inactive', label: 'Inactive' }
               ]}
               defaultValue={editingProgram?.status || 'active'}
+              key={editingProgram?.id || `status-${Date.now()}`}
             />
           </FormField>
         </form>
