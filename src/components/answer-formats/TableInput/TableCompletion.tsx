@@ -68,15 +68,15 @@ interface TableCompletionProps {
   defaultCols?: number;
 }
 
-// Default template for simple table completion (5x5 grid, all cells editable)
+// Default template for simple table completion (5x5 grid, all cells locked by default)
 const DEFAULT_TEMPLATE: TableTemplate = {
   rows: 5,
   columns: 5,
   headers: ['Column 1', 'Column 2', 'Column 3', 'Column 4', 'Column 5'],
-  lockedCells: [],
-  editableCells: Array.from({ length: 5 }, (_, row) =>
-    Array.from({ length: 5 }, (_, col) => ({ row, col }))
+  lockedCells: Array.from({ length: 5 }, (_, row) =>
+    Array.from({ length: 5 }, (_, col) => ({ row, col, value: '' }))
   ).flat(),
+  editableCells: [],
   correctAnswers: []
 };
 
@@ -307,20 +307,52 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         td.appendChild(badge);
       }
     } else {
-      // Legacy template support
-      const isLocked = template.lockedCells?.some(c => c.row === row && c.col === col);
+      // Undefined cells or legacy template support
       const isEditable = template.editableCells?.some(c => c.row === row && c.col === col);
+      const isLocked = template.lockedCells?.some(c => c.row === row && c.col === col);
 
-      if (isLocked) {
-        td.style.backgroundColor = '#f3f4f6';
-        td.style.color = '#6b7280';
-        td.style.fontWeight = '500';
-        td.classList.add('locked-cell');
-      } else if (isEditable) {
+      if (isEditable) {
         td.style.backgroundColor = showCorrectAnswers ?
           (checkAnswer(row, col, value) ? '#dcfce7' : '#fee2e2') :
           '#ffffff';
         td.classList.add('editable-cell');
+      } else {
+        // Default to locked styling (includes both explicitly locked and undefined cells)
+        td.style.backgroundColor = '#f3f4f6';
+        td.style.color = '#6b7280';
+        td.style.fontWeight = '500';
+        td.classList.add('locked-cell');
+
+        // Add visual badge for undefined cells in admin mode
+        if (isEditingTemplate && !isLocked && !td.querySelector('.cell-badge')) {
+          const badge = document.createElement('span');
+          badge.className = 'cell-badge';
+          badge.innerHTML = '🔒';
+          badge.style.cssText = `
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 10px;
+            opacity: 0.4;
+            pointer-events: none;
+            z-index: 10;
+          `;
+          td.appendChild(badge);
+        } else if (isEditingTemplate && isLocked && !td.querySelector('.cell-badge')) {
+          const badge = document.createElement('span');
+          badge.className = 'cell-badge';
+          badge.innerHTML = '🔒';
+          badge.style.cssText = `
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 10px;
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: 10;
+          `;
+          td.appendChild(badge);
+        }
       }
     }
 
@@ -572,21 +604,29 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const handleSaveTemplate = async () => {
     setLoading(true);
     try {
-      // Build cells array
+      // Build cells array - include ALL cells, defaulting undefined to locked
       const cells: TableCellDTO[] = [];
 
-      Object.entries(cellTypes).forEach(([key, type]) => {
-        const [row, col] = key.split('-').map(Number);
-        cells.push({
-          rowIndex: row,
-          colIndex: col,
-          cellType: type,
-          lockedValue: type === 'locked' ? cellValues[key] : undefined,
-          expectedAnswer: type === 'editable' ? expectedAnswers[key] : undefined,
-          marks: 1,
-          caseSensitive: false
-        });
-      });
+      // Iterate through all cells in the table
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < columns; col++) {
+          const key = `${row}-${col}`;
+          const type = cellTypes[key];
+
+          // Default undefined cells to locked with empty value
+          const cellType = type || 'locked';
+
+          cells.push({
+            rowIndex: row,
+            colIndex: col,
+            cellType: cellType,
+            lockedValue: cellType === 'locked' ? (cellValues[key] || '') : undefined,
+            expectedAnswer: cellType === 'editable' ? (expectedAnswers[key] || '') : undefined,
+            marks: 1,
+            caseSensitive: false
+          });
+        }
+      }
 
       const template: TableTemplateDTO = {
         questionId,
@@ -792,7 +832,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             </span>
           </div>
           <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
-            💡 <strong>Tip:</strong> Click cells below to select them, toggle the switch to choose type, enter a value, then click "Apply"
+            💡 <strong>Tip:</strong> Cells are locked by default. Select cells, mark as editable, enter expected answer, then click "Apply"
           </p>
           <div className="flex items-center gap-6 mb-4">
             <label className="flex items-center gap-3 cursor-pointer group" role="switch" aria-checked={currentCellType === 'editable'}>
@@ -818,7 +858,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                   {currentCellType === 'locked' ? '🔒' : '✏️'}
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {currentCellType === 'locked' ? 'Locked (pre-filled)' : 'Editable (fill in)'}
+                  {currentCellType === 'locked' ? 'Locked (default - not fillable)' : 'Editable (student must fill)'}
                 </span>
               </div>
             </label>
@@ -959,15 +999,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                   ✏️ Editable: <strong>{editableCount}</strong>
                 </span>
                 {undefinedCount > 0 && (
-                  <span className="text-orange-600 dark:text-orange-400">
-                    ⚠️ Undefined: <strong>{undefinedCount}</strong>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    🔒 Default Locked: <strong>{undefinedCount}</strong>
                   </span>
                 )}
               </div>
             </div>
-            {undefinedCount > 0 && (
-              <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-full">
-                {undefinedCount} cell(s) need configuration
+            {editableCount === 0 && (
+              <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-full">
+                ⚠️ No editable cells - students cannot answer
               </span>
             )}
           </div>
@@ -1025,13 +1065,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               const cellKey = `${row}-${col}`;
               const cellType = cellTypes[cellKey];
               return {
-                readOnly: cellType === 'locked' || (disabled && !isEditingTemplate),
+                readOnly: cellType !== 'editable' || (disabled && !isEditingTemplate),
                 renderer: cellRenderer
               };
             } else {
-              const isLocked = template.lockedCells?.some(c => c.row === row && c.col === col);
+              const isEditable = template.editableCells?.some(c => c.row === row && c.col === col);
               return {
-                readOnly: isLocked || disabled,
+                readOnly: !isEditable || disabled,
                 renderer: cellRenderer
               };
             }
@@ -1048,7 +1088,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           <div className="w-6 h-6 bg-gray-100 border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
             🔒
           </div>
-          <span className="text-xs text-gray-600 dark:text-gray-400">= Locked cell (pre-filled by teacher)</span>
+          <span className="text-xs text-gray-600 dark:text-gray-400">= Locked cell (default - not fillable)</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 bg-white border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
