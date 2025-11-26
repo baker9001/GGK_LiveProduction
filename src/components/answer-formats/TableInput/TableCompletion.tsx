@@ -261,7 +261,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
     // Cell type styling with visual badges
     if (cellType === 'locked') {
-      td.style.backgroundColor = '#f3f4f6';
+      td.style.backgroundColor = isEditingTemplate ? '#f9fafb' : '#f3f4f6';
       td.style.color = '#6b7280';
       td.style.fontWeight = '500';
       td.style.position = 'relative';
@@ -272,21 +272,30 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         const badge = document.createElement('span');
         badge.className = 'cell-badge';
         badge.innerHTML = '🔒';
+        badge.title = 'Locked cell - students cannot edit';
         badge.style.cssText = `
           position: absolute;
           top: 2px;
           right: 2px;
-          font-size: 10px;
-          opacity: 0.6;
+          font-size: 11px;
+          opacity: 0.7;
           pointer-events: none;
           z-index: 10;
+          background: rgba(107, 114, 128, 0.1);
+          padding: 2px 4px;
+          border-radius: 3px;
         `;
         td.appendChild(badge);
+      }
+
+      // Add subtle border in edit mode for clarity
+      if (isEditingTemplate) {
+        td.style.border = '1px solid #e5e7eb';
       }
     } else if (cellType === 'editable') {
       td.style.backgroundColor = showCorrectAnswers ?
         (checkAnswer(row, col, value) ? '#dcfce7' : '#fee2e2') :
-        '#ffffff';
+        (isEditingTemplate ? '#fefce8' : '#ffffff');
       td.style.position = 'relative';
       td.classList.add('editable-cell');
 
@@ -295,16 +304,25 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         const badge = document.createElement('span');
         badge.className = 'cell-badge';
         badge.innerHTML = '✏️';
+        badge.title = 'Editable cell - students must fill this';
         badge.style.cssText = `
           position: absolute;
           top: 2px;
           right: 2px;
-          font-size: 10px;
-          opacity: 0.6;
+          font-size: 11px;
+          opacity: 0.8;
           pointer-events: none;
           z-index: 10;
+          background: rgba(250, 204, 21, 0.2);
+          padding: 2px 4px;
+          border-radius: 3px;
         `;
         td.appendChild(badge);
+      }
+
+      // Add distinctive border in edit mode
+      if (isEditingTemplate) {
+        td.style.border = '2px solid #fde047';
       }
     } else {
       // Undefined cells or legacy template support
@@ -378,6 +396,39 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const handleAfterChange = useCallback((changes: any, source: string) => {
     if (!changes || source === 'loadData') return;
 
+    // Admin mode: Track direct cell edits during template creation
+    if (isAdminMode && isEditingTemplate) {
+      const updatedValues = { ...cellValues };
+      const updatedAnswers = { ...expectedAnswers };
+      const updatedTypes = { ...cellTypes };
+
+      changes.forEach(([row, col, oldValue, newValue]: any) => {
+        const cellKey = `${row}-${col}`;
+        const cellType = cellTypes[cellKey];
+
+        // Update the appropriate storage based on cell type
+        if (cellType === 'locked') {
+          // Store as locked value
+          updatedValues[cellKey] = newValue || '';
+        } else if (cellType === 'editable') {
+          // Store as expected answer
+          updatedAnswers[cellKey] = newValue || '';
+        } else {
+          // Undefined cell - default to locked with value
+          if (newValue && String(newValue).trim().length > 0) {
+            updatedTypes[cellKey] = 'locked';
+            updatedValues[cellKey] = newValue;
+          }
+        }
+      });
+
+      setCellValues(updatedValues);
+      setExpectedAnswers(updatedAnswers);
+      setCellTypes(updatedTypes);
+      return;
+    }
+
+    // Student mode: Track answers to editable cells
     const studentAnswers = { ...(value?.studentAnswers || {}) };
     let completedCells = 0;
 
@@ -403,7 +454,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       completedCells,
       requiredCells: template.editableCells.length
     });
-  }, [template, value, onChange]);
+  }, [template, value, onChange, isAdminMode, isEditingTemplate, cellValues, expectedAnswers, cellTypes]);
 
   const handleReset = () => {
     onChange({
@@ -594,11 +645,67 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         handleApplyCellType();
         e.preventDefault();
       }
+
+      // Keyboard shortcuts for cell type assignment
+      if (selectedCells.size > 0 && document.activeElement?.tagName !== 'INPUT') {
+        // Ctrl/Cmd + L = Mark as Locked
+        if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+          const updatedTypes = { ...cellTypes };
+          selectedCells.forEach(cellKey => {
+            updatedTypes[cellKey] = 'locked';
+          });
+          setCellTypes(updatedTypes);
+          toast.success(`Marked ${selectedCells.size} cell(s) as locked (Ctrl+L)`);
+          e.preventDefault();
+        }
+
+        // Ctrl/Cmd + E = Mark as Editable
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+          const updatedTypes = { ...cellTypes };
+          selectedCells.forEach(cellKey => {
+            updatedTypes[cellKey] = 'editable';
+          });
+          setCellTypes(updatedTypes);
+          toast.success(`Marked ${selectedCells.size} cell(s) as editable (Ctrl+E)`);
+          e.preventDefault();
+        }
+
+        // Delete key = Clear selected cells
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          const updatedTypes = { ...cellTypes };
+          const updatedValues = { ...cellValues };
+          const updatedAnswers = { ...expectedAnswers };
+          const newTableData = [...tableData];
+
+          selectedCells.forEach(cellKey => {
+            const [row, col] = cellKey.split('-').map(Number);
+            delete updatedTypes[cellKey];
+            delete updatedValues[cellKey];
+            delete updatedAnswers[cellKey];
+            if (newTableData[row] && newTableData[row][col] !== undefined) {
+              newTableData[row][col] = '';
+            }
+          });
+
+          setCellTypes(updatedTypes);
+          setCellValues(updatedValues);
+          setExpectedAnswers(updatedAnswers);
+          setTableData(newTableData);
+
+          const hot = hotRef.current?.hotInstance;
+          if (hot) {
+            hot.loadData(newTableData);
+          }
+
+          toast.success(`Cleared ${selectedCells.size} cell(s) (Delete)`);
+          e.preventDefault();
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditingTemplate, selectedCells, tempCellValue, handleClearSelection, handleApplyCellType]);
+  }, [isEditingTemplate, selectedCells, tempCellValue, handleClearSelection, handleApplyCellType, cellTypes, cellValues, expectedAnswers, tableData, hotRef]);
 
   // Template save handler
   const handleSaveTemplate = async () => {
@@ -831,9 +938,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               {selectedCells.size} cell(s) selected
             </span>
           </div>
-          <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
-            💡 <strong>Tip:</strong> Cells are locked by default. Select cells, mark as editable, enter expected answer, then click "Apply"
-          </p>
+          <div className="space-y-2 mb-4">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              💡 <strong>Tip:</strong> You can now type directly into any cell! Cells are locked by default (students cannot edit).
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              <strong>Keyboard Shortcuts:</strong> Ctrl+L (Lock) | Ctrl+E (Editable) | Delete (Clear) | Esc (Deselect)
+            </p>
+          </div>
           <div className="flex items-center gap-6 mb-4">
             <label className="flex items-center gap-3 cursor-pointer group" role="switch" aria-checked={currentCellType === 'editable'}>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Cell Type:</span>
@@ -863,6 +975,81 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               </div>
             </label>
           </div>
+
+          {/* Bulk Action Buttons */}
+          {selectedCells.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-white dark:bg-gray-800 rounded border">
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400 mr-2">
+                Quick Actions:
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const updatedTypes = { ...cellTypes };
+                  selectedCells.forEach(cellKey => {
+                    updatedTypes[cellKey] = 'locked';
+                  });
+                  setCellTypes(updatedTypes);
+                  toast.success(`Marked ${selectedCells.size} cell(s) as locked`);
+                }}
+                className="text-xs"
+              >
+                🔒 Mark as Locked
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const updatedTypes = { ...cellTypes };
+                  selectedCells.forEach(cellKey => {
+                    updatedTypes[cellKey] = 'editable';
+                  });
+                  setCellTypes(updatedTypes);
+                  toast.success(`Marked ${selectedCells.size} cell(s) as editable`);
+                }}
+                className="text-xs"
+              >
+                ✏️ Mark as Editable
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const updatedTypes = { ...cellTypes };
+                  const updatedValues = { ...cellValues };
+                  const updatedAnswers = { ...expectedAnswers };
+                  const newTableData = [...tableData];
+
+                  selectedCells.forEach(cellKey => {
+                    const [row, col] = cellKey.split('-').map(Number);
+                    delete updatedTypes[cellKey];
+                    delete updatedValues[cellKey];
+                    delete updatedAnswers[cellKey];
+                    if (newTableData[row] && newTableData[row][col] !== undefined) {
+                      newTableData[row][col] = '';
+                    }
+                  });
+
+                  setCellTypes(updatedTypes);
+                  setCellValues(updatedValues);
+                  setExpectedAnswers(updatedAnswers);
+                  setTableData(newTableData);
+
+                  const hot = hotRef.current?.hotInstance;
+                  if (hot) {
+                    hot.loadData(newTableData);
+                  }
+
+                  toast.success(`Cleared ${selectedCells.size} cell(s)`);
+                }}
+                className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                ✕ Clear Selected
+              </Button>
+            </div>
+          )}
+
           {selectedCells.size > 0 && (
             <div className="p-3 bg-white dark:bg-gray-800 rounded border mb-3">
               <p className="text-sm font-medium mb-2">
@@ -982,35 +1169,65 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Template Statistics */}
+      {/* Template Statistics and Validation */}
       {isEditingTemplate && (
-        <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-4">
-              <span className="font-medium text-gray-700 dark:text-gray-300">
-                Statistics:
-              </span>
-              <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400">
-                <span>Total: {totalCells}</span>
-                <span className="flex items-center gap-1">
-                  🔒 Locked: <strong>{lockedCount}</strong>
+        <div className="space-y-2">
+          <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-4">
+                <span className="font-medium text-gray-700 dark:text-gray-300">
+                  Statistics:
                 </span>
-                <span className="flex items-center gap-1">
-                  ✏️ Editable: <strong>{editableCount}</strong>
-                </span>
-                {undefinedCount > 0 && (
-                  <span className="text-gray-600 dark:text-gray-400">
-                    🔒 Default Locked: <strong>{undefinedCount}</strong>
+                <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400">
+                  <span>Total: {totalCells}</span>
+                  <span className="flex items-center gap-1">
+                    🔒 Locked: <strong>{lockedCount}</strong>
                   </span>
-                )}
+                  <span className="flex items-center gap-1">
+                    ✏️ Editable: <strong>{editableCount}</strong>
+                  </span>
+                  {undefinedCount > 0 && (
+                    <span className="text-gray-600 dark:text-gray-400">
+                      🔒 Default Locked: <strong>{undefinedCount}</strong>
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            {editableCount === 0 && (
-              <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-full">
-                ⚠️ No editable cells - students cannot answer
-              </span>
-            )}
           </div>
+
+          {/* Validation Warnings */}
+          {editableCount === 0 && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    No Editable Cells Defined
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    Students won't be able to answer this question. Mark some cells as editable and set expected answers.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {editableCount > 0 && Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length < editableCount && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    Some Editable Cells Missing Expected Answers
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    {editableCount - Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length} editable cell(s) don't have expected answers defined. This may affect auto-grading.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1065,7 +1282,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               const cellKey = `${row}-${col}`;
               const cellType = cellTypes[cellKey];
               return {
-                readOnly: cellType !== 'editable' || (disabled && !isEditingTemplate),
+                // During template editing, allow direct editing of ALL cells
+                // Cell type only matters for student view
+                readOnly: isEditingTemplate ? false : (cellType !== 'editable' || disabled),
                 renderer: cellRenderer
               };
             } else {
