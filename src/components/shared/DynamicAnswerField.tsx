@@ -764,6 +764,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           value={parsedTableCompletion}
           onChange={(data) => onChange(JSON.stringify(data))}
           disabled={disabled && !isEditing}
+          isAdminMode={isEditing || mode === 'admin' || mode === 'qa_preview'}
         />
       );
     }
@@ -1923,7 +1924,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             }}
             disabled={disabled}
             showCorrectAnswers={showCorrectAnswer}
-            isAdminMode={mode === 'admin'}
+            isAdminMode={mode === 'admin' || mode === 'qa_preview'}
           />
           {renderCorrectAnswers()}
         </div>

@@ -173,11 +173,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       } else {
         // Initialize with default dimensions
         initializeDefaultTable();
+        // Auto-enable edit mode when no template exists (first-time setup)
+        setIsEditingTemplate(true);
       }
     } catch (error) {
       console.error('Error loading template:', error);
       toast.error('Failed to load template');
       initializeDefaultTable();
+      // Auto-enable edit mode on error (likely means no template exists)
+      setIsEditingTemplate(true);
     } finally {
       setLoading(false);
     }
