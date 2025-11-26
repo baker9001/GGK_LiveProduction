@@ -22,7 +22,8 @@ import {
   Minus,
   Save,
   Edit3,
-  X
+  X,
+  HelpCircle
 } from 'lucide-react';
 import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
@@ -135,6 +136,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   // Preview mode state
   const [previewMode, setPreviewMode] = useState(false);
+
+  // Undo/redo state
+  const [history, setHistory] = useState<Array<{cellTypes: typeof cellTypes; cellValues: typeof cellValues; expectedAnswers: typeof expectedAnswers}>>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Help panel state
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   // Load template from database when in admin mode
   useEffect(() => {
@@ -287,6 +295,32 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     setInlineEditType(cellType);
     setInlineEditValue(cellValue || '');
   }, [isEditingTemplate, cellTypes, cellValues, expectedAnswers]);
+
+  // Select entire row
+  const handleSelectRow = useCallback((rowIndex: number) => {
+    if (!isEditingTemplate || previewMode) return;
+
+    const newSelection = new Set(selectedCells);
+    for (let col = 0; col < columns; col++) {
+      const cellKey = `${rowIndex}-${col}`;
+      newSelection.add(cellKey);
+    }
+    setSelectedCells(newSelection);
+    toast.success(`Selected row ${rowIndex + 1} (${columns} cells)`);
+  }, [isEditingTemplate, previewMode, selectedCells, columns]);
+
+  // Select entire column
+  const handleSelectColumn = useCallback((colIndex: number) => {
+    if (!isEditingTemplate || previewMode) return;
+
+    const newSelection = new Set(selectedCells);
+    for (let row = 0; row < rows; row++) {
+      const cellKey = `${row}-${colIndex}`;
+      newSelection.add(cellKey);
+    }
+    setSelectedCells(newSelection);
+    toast.success(`Selected column ${colIndex + 1} (${rows} cells)`);
+  }, [isEditingTemplate, previewMode, selectedCells, rows]);
 
   // Configure cell meta (locked/editable styling)
   const cellRenderer = useCallback((
@@ -977,6 +1011,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                 </div>
                 <Button
                   size="sm"
+                  variant="ghost"
+                  onClick={() => setShowKeyboardHelp(true)}
+                  title="Show keyboard shortcuts"
+                  className="text-gray-600 dark:text-gray-400"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="sm"
                   variant={previewMode ? 'default' : 'outline'}
                   onClick={() => setPreviewMode(!previewMode)}
                   className={cn(
@@ -1025,9 +1068,42 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       {/* Dimension Controls */}
       {isEditingTemplate && !previewMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Table Dimensions
-          </h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Table Dimensions
+            </h4>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Quick sizes:</span>
+              {[
+                { label: '3×3', rows: 3, cols: 3 },
+                { label: '5×5', rows: 5, cols: 5 },
+                { label: '10×5', rows: 10, cols: 5 },
+                { label: '5×10', rows: 5, cols: 10 }
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => {
+                    setRows(preset.rows);
+                    setColumns(preset.cols);
+                    const newData = Array(preset.rows).fill(null).map(() => Array(preset.cols).fill(''));
+                    setTableData(newData);
+                    setHeaders(Array.from({ length: preset.cols }, (_, i) => `Column ${i + 1}`));
+                    const hot = hotRef.current?.hotInstance;
+                    if (hot) {
+                      hot.loadData(newData);
+                      hot.updateSettings({
+                        colHeaders: Array.from({ length: preset.cols }, (_, i) => `Column ${i + 1}`)
+                      });
+                    }
+                    toast.success(`Table size set to ${preset.label}`);
+                  }}
+                  className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[60px]">
@@ -1630,6 +1706,26 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             }
           }}
           afterChange={handleAfterChange}
+          afterOnCellMouseDown={(event: any, coords: any) => {
+            // Handle column header click (row is -1)
+            if (coords.row === -1 && coords.col >= 0 && isEditingTemplate && !previewMode) {
+              event.stopPropagation();
+              handleSelectColumn(coords.col);
+            }
+          }}
+          afterGetRowHeader={(row: number, TH: HTMLTableCellElement) => {
+            if (isEditingTemplate && !previewMode) {
+              TH.style.cursor = 'pointer';
+              TH.title = 'Click to select entire row';
+              TH.onclick = () => handleSelectRow(row);
+            }
+          }}
+          afterGetColHeader={(col: number, TH: HTMLTableCellElement) => {
+            if (isEditingTemplate && !previewMode) {
+              TH.style.cursor = 'pointer';
+              TH.title = 'Click to select entire column';
+            }
+          }}
           stretchH="all"
         />
       </div>
@@ -1677,6 +1773,134 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             Table completed!
           </span>
         </div>
+      )}
+
+      {/* Keyboard Shortcuts Help Modal */}
+      {showKeyboardHelp && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={() => setShowKeyboardHelp(false)}
+          />
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-300 dark:border-gray-700 max-w-2xl w-full max-h-[80vh] overflow-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                    ⌨️ Keyboard Shortcuts
+                  </h3>
+                  <button
+                    onClick={() => setShowKeyboardHelp(false)}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Cell Configuration */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Cell Configuration
+                    </h4>
+                    <div className="space-y-2">
+                      {[
+                        { keys: ['Ctrl', 'L'], desc: 'Mark selected cells as Locked' },
+                        { keys: ['Ctrl', 'E'], desc: 'Mark selected cells as Editable' },
+                        { keys: ['Delete'], desc: 'Clear selected cells' },
+                        { keys: ['Esc'], desc: 'Clear selection' },
+                        { keys: ['Right-click'], desc: 'Quick configure cell' }
+                      ].map((shortcut, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">{shortcut.desc}</span>
+                          <div className="flex gap-1">
+                            {shortcut.keys.map((key, j) => (
+                              <kbd key={j} className="px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                                {key}
+                              </kbd>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Selection */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Selection
+                    </h4>
+                    <div className="space-y-2">
+                      {[
+                        { keys: ['Click'], desc: 'Select/deselect cell' },
+                        { keys: ['Column header'], desc: 'Select entire column' },
+                        { keys: ['Row header'], desc: 'Select entire row' }
+                      ].map((shortcut, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">{shortcut.desc}</span>
+                          <div className="flex gap-1">
+                            {shortcut.keys.map((key, j) => (
+                              <kbd key={j} className="px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                                {key}
+                              </kbd>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Modes */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Special Modes
+                    </h4>
+                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">🎨 Paint Mode:</span>
+                        <span>Enable to quickly apply cell types by clicking</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">👁️ Preview Mode:</span>
+                        <span>See how students will interact with the table</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">💾 Auto-save:</span>
+                        <span>Changes automatically saved every 10 seconds</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tips */}
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                      💡 Pro Tips
+                    </h4>
+                    <ul className="space-y-1 text-xs text-blue-800 dark:text-blue-200">
+                      <li>• Type directly into cells - they default to locked</li>
+                      <li>• Click row/column headers to select entire rows/columns</li>
+                      <li>• Use paint mode for quick pattern application</li>
+                      <li>• Green checkmark (✓) indicates expected answer is set</li>
+                      <li>• Preview mode shows exact student experience</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => setShowKeyboardHelp(false)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Got it!
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Inline Edit Popover */}
