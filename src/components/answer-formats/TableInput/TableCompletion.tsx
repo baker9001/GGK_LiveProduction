@@ -120,6 +120,22 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [loading, setLoading] = useState(false);
   const [showValidationWarnings, setShowValidationWarnings] = useState(false);
 
+  // Inline editing popover state
+  const [inlineEditCell, setInlineEditCell] = useState<{row: number; col: number; x: number; y: number} | null>(null);
+  const [inlineEditValue, setInlineEditValue] = useState('');
+  const [inlineEditType, setInlineEditType] = useState<'locked' | 'editable'>('editable');
+
+  // Paint mode state
+  const [paintModeEnabled, setPaintModeEnabled] = useState(false);
+  const [paintModeType, setPaintModeType] = useState<'locked' | 'editable'>('editable');
+
+  // Auto-save state
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+
+  // Preview mode state
+  const [previewMode, setPreviewMode] = useState(false);
+
   // Load template from database when in admin mode
   useEffect(() => {
     if (isAdminMode) {
@@ -227,10 +243,20 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   }, [template, value, isAdminMode]);
 
   // Cell selection and configuration handlers
-  const handleCellClick = useCallback((row: number, col: number) => {
+  const handleCellClick = useCallback((row: number, col: number, event?: MouseEvent) => {
     if (!isEditingTemplate) return;
 
     const cellKey = `${row}-${col}`;
+
+    // Paint mode: quickly change cell type by clicking
+    if (paintModeEnabled) {
+      const updatedTypes = { ...cellTypes };
+      updatedTypes[cellKey] = paintModeType;
+      setCellTypes(updatedTypes);
+      return;
+    }
+
+    // Single click: toggle selection (existing behavior)
     const newSelection = new Set(selectedCells);
 
     if (newSelection.has(cellKey)) {
@@ -240,7 +266,27 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     setSelectedCells(newSelection);
-  }, [isEditingTemplate, selectedCells]);
+  }, [isEditingTemplate, selectedCells, paintModeEnabled, paintModeType, cellTypes]);
+
+  // Right-click handler for context menu
+  const handleCellRightClick = useCallback((row: number, col: number, event: MouseEvent) => {
+    if (!isEditingTemplate) return;
+
+    event.preventDefault();
+    const cellKey = `${row}-${col}`;
+    const cellType = cellTypes[cellKey] || 'locked';
+    const cellValue = cellType === 'locked' ? cellValues[cellKey] : expectedAnswers[cellKey];
+
+    // Show inline edit popover at click position
+    setInlineEditCell({
+      row,
+      col,
+      x: event.clientX,
+      y: event.clientY
+    });
+    setInlineEditType(cellType);
+    setInlineEditValue(cellValue || '');
+  }, [isEditingTemplate, cellTypes, cellValues, expectedAnswers]);
 
   // Configure cell meta (locked/editable styling)
   const cellRenderer = useCallback((
@@ -386,14 +432,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
     }
 
-    // Add click handler for cell selection in edit mode
-    if (isEditingTemplate) {
-      td.style.cursor = 'pointer';
+    // Add click handlers for cell selection in edit mode (but not in preview mode)
+    if (isEditingTemplate && !previewMode) {
+      td.style.cursor = paintModeEnabled ? 'crosshair' : 'pointer';
       td.onclick = () => handleCellClick(row, col);
+      td.oncontextmenu = (e: any) => handleCellRightClick(row, col, e);
     }
 
     return td;
-  }, [template, showCorrectAnswers, isEditingTemplate, selectedCells, cellTypes, handleCellClick]);
+  }, [template, showCorrectAnswers, isEditingTemplate, selectedCells, cellTypes, handleCellClick, handleCellRightClick, paintModeEnabled, previewMode]);
 
   const checkAnswer = (row: number, col: number, studentValue: any): boolean => {
     if (!template.correctAnswers || !autoGrade) return true;
@@ -641,6 +688,44 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     setTempCellValue('');
   }, []);
 
+  // Handle inline edit apply
+  const handleApplyInlineEdit = useCallback(() => {
+    if (!inlineEditCell) return;
+
+    const cellKey = `${inlineEditCell.row}-${inlineEditCell.col}`;
+    const updatedTypes = { ...cellTypes };
+    const updatedValues = { ...cellValues };
+    const updatedAnswers = { ...expectedAnswers };
+    const newTableData = [...tableData];
+
+    updatedTypes[cellKey] = inlineEditType;
+
+    if (inlineEditType === 'locked') {
+      updatedValues[cellKey] = inlineEditValue;
+      if (newTableData[inlineEditCell.row] && newTableData[inlineEditCell.row][inlineEditCell.col] !== undefined) {
+        newTableData[inlineEditCell.row][inlineEditCell.col] = inlineEditValue;
+      }
+      delete updatedAnswers[cellKey]; // Remove from answers if switching to locked
+    } else {
+      updatedAnswers[cellKey] = inlineEditValue;
+      delete updatedValues[cellKey]; // Remove from values if switching to editable
+    }
+
+    setCellTypes(updatedTypes);
+    setCellValues(updatedValues);
+    setExpectedAnswers(updatedAnswers);
+    setTableData(newTableData);
+
+    // Update Handsontable
+    const hot = hotRef.current?.hotInstance;
+    if (hot) {
+      hot.loadData(newTableData);
+    }
+
+    setInlineEditCell(null);
+    toast.success(`Cell configured as ${inlineEditType}`);
+  }, [inlineEditCell, inlineEditType, inlineEditValue, cellTypes, cellValues, expectedAnswers, tableData]);
+
   // Keyboard shortcuts for better UX
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -720,9 +805,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   }, [isEditingTemplate, selectedCells, tempCellValue, handleClearSelection, handleApplyCellType, cellTypes, cellValues, expectedAnswers, tableData, hotRef]);
 
   // Template save handler
-  const handleSaveTemplate = async () => {
-    // Show validation warnings on save attempt
-    setShowValidationWarnings(true);
+  const handleSaveTemplate = async (silent = false) => {
+    if (!silent) {
+      // Show validation warnings on save attempt
+      setShowValidationWarnings(true);
+    }
 
     // Check for validation issues
     const editableCellsCount = Object.values(cellTypes).filter(type => type === 'editable').length;
@@ -730,17 +817,20 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
     // Block save if no editable cells
     if (editableCellsCount === 0) {
-      toast.error('Cannot save: No editable cells defined. Mark at least one cell as editable.');
+      if (!silent) {
+        toast.error('Cannot save: No editable cells defined. Mark at least one cell as editable.');
+      }
       return;
     }
 
     // Warn if missing expected answers but allow save
-    if (answersSetCount < editableCellsCount) {
+    if (!silent && answersSetCount < editableCellsCount) {
       toast.error(`Warning: ${editableCellsCount - answersSetCount} editable cell(s) missing expected answers. Auto-grading may not work properly.`, {
         duration: 5000
       });
     }
 
+    setAutoSaveStatus('saving');
     setLoading(true);
     try {
       // Build cells array - include ALL cells, defaulting undefined to locked
@@ -779,19 +869,46 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       const result = await TableTemplateService.saveTemplate(template);
 
       if (result.success) {
-        toast.success('Template saved successfully!');
+        if (!silent) {
+          toast.success('Template saved successfully!');
+        }
         onTemplateSave?.(template);
-        setIsEditingTemplate(false);
+        setAutoSaveStatus('saved');
+        setLastSaveTime(new Date());
+        if (!silent) {
+          setIsEditingTemplate(false);
+        }
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       console.error('Error saving template:', error);
-      toast.error('Failed to save template');
+      setAutoSaveStatus('unsaved');
+      if (!silent) {
+        toast.error('Failed to save template');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  // Auto-save: Monitor changes and mark as unsaved
+  useEffect(() => {
+    if (isEditingTemplate) {
+      setAutoSaveStatus('unsaved');
+    }
+  }, [cellTypes, cellValues, expectedAnswers, headers, rows, columns, isEditingTemplate]);
+
+  // Auto-save: Debounced save every 10 seconds when unsaved
+  useEffect(() => {
+    if (autoSaveStatus === 'unsaved' && isEditingTemplate) {
+      const timer = setTimeout(() => {
+        handleSaveTemplate(true); // Silent save
+      }, 10000); // 10 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [autoSaveStatus, isEditingTemplate, cellTypes, cellValues, expectedAnswers, headers, rows, columns]);
 
   const completionPercentage = value && value.requiredCells > 0
     ? Math.round((value.completedCells / value.requiredCells) * 100)
@@ -837,6 +954,39 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               </Button>
             ) : (
               <>
+                {/* Auto-save indicator */}
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                  {autoSaveStatus === 'saving' && (
+                    <>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                      <span>Saving...</span>
+                    </>
+                  )}
+                  {autoSaveStatus === 'saved' && lastSaveTime && (
+                    <>
+                      <Check className="w-3 h-3 text-green-600" />
+                      <span>Saved {new Date().getTime() - lastSaveTime.getTime() < 60000 ? 'just now' : `${Math.floor((new Date().getTime() - lastSaveTime.getTime()) / 60000)}m ago`}</span>
+                    </>
+                  )}
+                  {autoSaveStatus === 'unsaved' && (
+                    <>
+                      <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                      <span>Unsaved changes</span>
+                    </>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant={previewMode ? 'default' : 'outline'}
+                  onClick={() => setPreviewMode(!previewMode)}
+                  className={cn(
+                    previewMode && "bg-blue-600 text-white hover:bg-blue-700"
+                  )}
+                  title="Toggle preview mode to see student view"
+                >
+                  {previewMode ? <Edit3 className="w-4 h-4 mr-1" /> : <TableIcon className="w-4 h-4 mr-1" />}
+                  {previewMode ? 'Edit Mode' : 'Preview'}
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
@@ -847,7 +997,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                 </Button>
                 <Button
                   size="sm"
-                  onClick={handleSaveTemplate}
+                  onClick={() => handleSaveTemplate(false)}
                   disabled={loading}
                   className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
                 >
@@ -860,8 +1010,20 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
+      {/* Preview Mode Banner */}
+      {isEditingTemplate && previewMode && (
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-500 dark:border-blue-400">
+          <div className="flex items-center justify-center gap-2">
+            <TableIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+              Student Preview Mode - This is how students will see the table
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Dimension Controls */}
-      {isEditingTemplate && (
+      {isEditingTemplate && !previewMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Table Dimensions
@@ -932,7 +1094,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Header Editor */}
-      {isEditingTemplate && (
+      {isEditingTemplate && !previewMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Column Headers
@@ -960,7 +1122,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Cell Configuration Panel */}
-      {isEditingTemplate && (
+      {isEditingTemplate && !previewMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -977,7 +1139,62 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             <p className="text-xs text-blue-700 dark:text-blue-300">
               <strong>Keyboard Shortcuts:</strong> Ctrl+L (Lock) | Ctrl+E (Editable) | Delete (Clear) | Esc (Deselect)
             </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              <strong>Right-click</strong> any cell for quick configuration | <strong>Paint Mode</strong> to click-and-fill
+            </p>
           </div>
+
+          {/* Paint Mode Toggle */}
+          <div className="mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={paintModeEnabled}
+                    onChange={(e) => setPaintModeEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                </label>
+                <div>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    🎨 Paint Mode {paintModeEnabled && '(Active)'}
+                  </span>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Click cells to quickly apply type
+                  </p>
+                </div>
+              </div>
+              {paintModeEnabled && (
+                <div className="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 px-3 py-2 rounded border border-orange-300 dark:border-orange-700">
+                  <button
+                    onClick={() => setPaintModeType('locked')}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded transition-colors",
+                      paintModeType === 'locked'
+                        ? "bg-gray-500 text-white"
+                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100"
+                    )}
+                  >
+                    🔒 Locked
+                  </button>
+                  <button
+                    onClick={() => setPaintModeType('editable')}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded transition-colors",
+                      paintModeType === 'editable'
+                        ? "bg-green-500 text-white"
+                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100"
+                    )}
+                  >
+                    ✏️ Editable
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center gap-6 mb-4">
             <label className="flex items-center gap-3 cursor-pointer group" role="switch" aria-checked={currentCellType === 'editable'}>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Cell Type:</span>
@@ -1214,7 +1431,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Template Statistics and Validation */}
-      {isEditingTemplate && (
+      {isEditingTemplate && !previewMode && (
         <div className="space-y-2">
           {/* Progress Indicator */}
           <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
@@ -1399,9 +1616,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               const cellKey = `${row}-${col}`;
               const cellType = cellTypes[cellKey];
               return {
-                // During template editing, allow direct editing of ALL cells
-                // Cell type only matters for student view
-                readOnly: isEditingTemplate ? false : (cellType !== 'editable' || disabled),
+                // During template editing, allow direct editing of ALL cells (unless in preview mode)
+                // In preview mode, only editable cells can be edited (student view)
+                readOnly: isEditingTemplate ? (previewMode ? cellType !== 'editable' : false) : (cellType !== 'editable' || disabled),
                 renderer: cellRenderer
               };
             } else {
@@ -1460,6 +1677,117 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             Table completed!
           </span>
         </div>
+      )}
+
+      {/* Inline Edit Popover */}
+      {inlineEditCell && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setInlineEditCell(null)}
+          />
+          {/* Popover */}
+          <div
+            className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 border-blue-500 dark:border-blue-400 p-4 min-w-[320px]"
+            style={{
+              left: `${Math.min(inlineEditCell.x, window.innerWidth - 350)}px`,
+              top: `${Math.min(inlineEditCell.y, window.innerHeight - 300)}px`,
+            }}
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Configure Cell ({inlineEditCell.row + 1}, {inlineEditCell.col + 1})
+                </h4>
+                <button
+                  onClick={() => setInlineEditCell(null)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Cell Type Toggle */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 block">
+                  Cell Type
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setInlineEditType('locked')}
+                    className={cn(
+                      "flex-1 px-3 py-2 text-sm font-medium rounded-lg border-2 transition-all",
+                      inlineEditType === 'locked'
+                        ? "bg-gray-100 dark:bg-gray-700 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-gray-100"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
+                    )}
+                  >
+                    🔒 Locked
+                  </button>
+                  <button
+                    onClick={() => setInlineEditType('editable')}
+                    className={cn(
+                      "flex-1 px-3 py-2 text-sm font-medium rounded-lg border-2 transition-all",
+                      inlineEditType === 'editable'
+                        ? "bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-600 text-green-900 dark:text-green-100"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"
+                    )}
+                  >
+                    ✏️ Editable
+                  </button>
+                </div>
+              </div>
+
+              {/* Value Input */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 block">
+                  {inlineEditType === 'locked' ? 'Cell Value' : 'Expected Answer'}
+                </label>
+                <input
+                  type="text"
+                  value={inlineEditValue}
+                  onChange={(e) => setInlineEditValue(e.target.value)}
+                  placeholder={inlineEditType === 'locked' ? 'Enter value...' : 'Enter expected answer...'}
+                  className="w-full px-3 py-2 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleApplyInlineEdit();
+                    } else if (e.key === 'Escape') {
+                      setInlineEditCell(null);
+                    }
+                  }}
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {inlineEditType === 'locked'
+                    ? 'This value will be pre-filled and students cannot edit it'
+                    : 'Students must enter this answer (case-insensitive)'}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  size="sm"
+                  onClick={handleApplyInlineEdit}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Check className="w-4 h-4 mr-1" />
+                  Apply
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setInlineEditCell(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
