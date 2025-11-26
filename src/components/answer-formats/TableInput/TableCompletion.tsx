@@ -118,6 +118,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [currentCellType, setCurrentCellType] = useState<'locked' | 'editable'>('locked');
   const [tempCellValue, setTempCellValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showValidationWarnings, setShowValidationWarnings] = useState(false);
 
   // Load template from database when in admin mode
   useEffect(() => {
@@ -265,10 +266,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
     // Cell type styling with visual badges
     if (cellType === 'locked') {
-      td.style.backgroundColor = isEditingTemplate ? '#f9fafb' : '#f3f4f6';
-      td.style.color = '#6b7280';
+      // Improved locked cell colors - more distinct
+      td.style.backgroundColor = isEditingTemplate ? '#f3f4f6' : '#e5e7eb';
+      td.style.color = '#4b5563';
       td.style.fontWeight = '500';
       td.style.position = 'relative';
+      td.style.borderLeft = '3px solid #9ca3af';
       td.classList.add('locked-cell');
 
       // Add visual badge for locked cells in admin mode
@@ -285,21 +288,23 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           opacity: 0.7;
           pointer-events: none;
           z-index: 10;
-          background: rgba(107, 114, 128, 0.1);
+          background: rgba(107, 114, 128, 0.15);
           padding: 2px 4px;
           border-radius: 3px;
         `;
         td.appendChild(badge);
       }
-
-      // Add subtle border in edit mode for clarity
-      if (isEditingTemplate) {
-        td.style.border = '1px solid #e5e7eb';
-      }
     } else if (cellType === 'editable') {
-      td.style.backgroundColor = showCorrectAnswers ?
-        (checkAnswer(row, col, value) ? '#dcfce7' : '#fee2e2') :
-        (isEditingTemplate ? '#fefce8' : '#ffffff');
+      const hasExpectedAnswer = expectedAnswers[cellKey] && expectedAnswers[cellKey].trim() !== '';
+
+      // Improved editable cell colors - more vibrant and distinct
+      if (showCorrectAnswers) {
+        td.style.backgroundColor = checkAnswer(row, col, value) ? '#d1fae5' : '#fee2e2';
+      } else {
+        // Different colors based on whether expected answer is set
+        td.style.backgroundColor = hasExpectedAnswer ? '#d1fae5' : '#fef3c7';
+        td.style.borderLeft = hasExpectedAnswer ? '3px solid #10b981' : '3px solid #f59e0b';
+      }
       td.style.position = 'relative';
       td.classList.add('editable-cell');
 
@@ -307,17 +312,20 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       if (isEditingTemplate && !td.querySelector('.cell-badge')) {
         const badge = document.createElement('span');
         badge.className = 'cell-badge';
-        badge.innerHTML = '✏️';
-        badge.title = 'Editable cell - students must fill this';
+        // Show checkmark if expected answer is set, otherwise pencil
+        badge.innerHTML = hasExpectedAnswer ? '✓' : '✏️';
+        badge.title = hasExpectedAnswer ? 'Editable cell with expected answer set' : 'Editable cell - set expected answer';
         badge.style.cssText = `
           position: absolute;
           top: 2px;
           right: 2px;
-          font-size: 11px;
+          font-size: ${hasExpectedAnswer ? '14px' : '11px'};
+          font-weight: ${hasExpectedAnswer ? 'bold' : 'normal'};
           opacity: 0.8;
           pointer-events: none;
           z-index: 10;
-          background: rgba(250, 204, 21, 0.2);
+          background: ${hasExpectedAnswer ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'};
+          color: ${hasExpectedAnswer ? '#059669' : '#d97706'};
           padding: 2px 4px;
           border-radius: 3px;
         `;
@@ -713,6 +721,26 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   // Template save handler
   const handleSaveTemplate = async () => {
+    // Show validation warnings on save attempt
+    setShowValidationWarnings(true);
+
+    // Check for validation issues
+    const editableCellsCount = Object.values(cellTypes).filter(type => type === 'editable').length;
+    const answersSetCount = Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length;
+
+    // Block save if no editable cells
+    if (editableCellsCount === 0) {
+      toast.error('Cannot save: No editable cells defined. Mark at least one cell as editable.');
+      return;
+    }
+
+    // Warn if missing expected answers but allow save
+    if (answersSetCount < editableCellsCount) {
+      toast.error(`Warning: ${editableCellsCount - answersSetCount} editable cell(s) missing expected answers. Auto-grading may not work properly.`, {
+        duration: 5000
+      });
+    }
+
     setLoading(true);
     try {
       // Build cells array - include ALL cells, defaulting undefined to locked
@@ -997,9 +1025,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                   setCellTypes(updatedTypes);
                   toast.success(`Marked ${selectedCells.size} cell(s) as locked`);
                 }}
-                className="text-xs"
+                className="text-xs flex items-center gap-2"
+                title="Mark selected cells as locked (Ctrl+L)"
               >
                 🔒 Mark as Locked
+                <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 bg-gray-100 border border-gray-300 rounded dark:text-gray-400 dark:bg-gray-700 dark:border-gray-600">
+                  Ctrl+L
+                </kbd>
               </Button>
               <Button
                 size="sm"
@@ -1012,9 +1044,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                   setCellTypes(updatedTypes);
                   toast.success(`Marked ${selectedCells.size} cell(s) as editable`);
                 }}
-                className="text-xs"
+                className="text-xs flex items-center gap-2"
+                title="Mark selected cells as editable (Ctrl+E)"
               >
                 ✏️ Mark as Editable
+                <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 bg-gray-100 border border-gray-300 rounded dark:text-gray-400 dark:bg-gray-700 dark:border-gray-600">
+                  Ctrl+E
+                </kbd>
               </Button>
               <Button
                 size="sm"
@@ -1047,9 +1083,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
                   toast.success(`Cleared ${selectedCells.size} cell(s)`);
                 }}
-                className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
+                title="Clear selected cells (Delete)"
               >
                 ✕ Clear Selected
+                <kbd className="px-1.5 py-0.5 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-300 rounded dark:text-red-400 dark:bg-red-900/20 dark:border-red-700">
+                  Del
+                </kbd>
               </Button>
             </div>
           )}
@@ -1176,6 +1216,75 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       {/* Template Statistics and Validation */}
       {isEditingTemplate && (
         <div className="space-y-2">
+          {/* Progress Indicator */}
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Template Configuration Progress
+              </span>
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                {(() => {
+                  const configuredCells = lockedCount + editableCount;
+                  const progress = totalCells > 0 ? Math.round((configuredCells / totalCells) * 100) : 0;
+                  const answersSet = Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length;
+                  const answersProgress = editableCount > 0 ? Math.round((answersSet / editableCount) * 100) : 0;
+                  return `${configuredCells}/${totalCells} cells configured • ${answersSet}/${editableCount} answers set`;
+                })()}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {/* Cell Configuration Progress */}
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-gray-600 dark:text-gray-400">Cell Types</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                    {(() => {
+                      const configuredCells = lockedCount + editableCount;
+                      return totalCells > 0 ? Math.round((configuredCells / totalCells) * 100) : 0;
+                    })()}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+                    style={{
+                      width: `${(() => {
+                        const configuredCells = lockedCount + editableCount;
+                        return totalCells > 0 ? (configuredCells / totalCells) * 100 : 0;
+                      })()}%`
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Expected Answers Progress */}
+              {editableCount > 0 && (
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-600 dark:text-gray-400">Expected Answers</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      {(() => {
+                        const answersSet = Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length;
+                        return editableCount > 0 ? Math.round((answersSet / editableCount) * 100) : 0;
+                      })()}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-300"
+                      style={{
+                        width: `${(() => {
+                          const answersSet = Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length;
+                          return editableCount > 0 ? (answersSet / editableCount) * 100 : 0;
+                        })()}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Statistics */}
           <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-4">
@@ -1200,37 +1309,41 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             </div>
           </div>
 
-          {/* Validation Warnings */}
-          {editableCount === 0 && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                    No Editable Cells Defined
-                  </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                    Students won't be able to answer this question. Mark some cells as editable and set expected answers.
-                  </p>
+          {/* Validation Warnings - Only show when user tries to save */}
+          {showValidationWarnings && (
+            <>
+              {editableCount === 0 && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                        No Editable Cells Defined
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        Students won't be able to answer this question. Mark some cells as editable and set expected answers.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {editableCount > 0 && Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length < editableCount && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                    Some Editable Cells Missing Expected Answers
-                  </p>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    {editableCount - Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length} editable cell(s) don't have expected answers defined. This may affect auto-grading.
-                  </p>
+              {editableCount > 0 && Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length < editableCount && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                        Some Editable Cells Missing Expected Answers
+                      </p>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                        {editableCount - Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length} editable cell(s) don't have expected answers defined. This may affect auto-grading.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1305,19 +1418,25 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       </div>
 
       {/* Legend - Non-interactive documentation */}
-      <div className="flex items-center gap-4 text-sm opacity-75">
+      <div className="flex flex-wrap items-center gap-4 text-sm opacity-75">
         <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Legend:</span>
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-gray-100 border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
+          <div className="w-6 h-6 bg-gray-200 border-l-[3px] border-l-gray-400 rounded flex items-center justify-center shadow-sm">
             🔒
           </div>
-          <span className="text-xs text-gray-600 dark:text-gray-400">= Locked cell (default - not fillable)</span>
+          <span className="text-xs text-gray-600 dark:text-gray-400">Locked (not fillable)</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-white border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
+          <div className="w-6 h-6 bg-amber-100 border-l-[3px] border-l-orange-400 rounded flex items-center justify-center shadow-sm">
             ✏️
           </div>
-          <span className="text-xs text-gray-600 dark:text-gray-400">= Editable cell (student fills in)</span>
+          <span className="text-xs text-gray-600 dark:text-gray-400">Editable (no answer set)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-green-100 border-l-[3px] border-l-green-500 rounded flex items-center justify-center shadow-sm text-green-600 font-bold">
+            ✓
+          </div>
+          <span className="text-xs text-gray-600 dark:text-gray-400">Editable (answer set)</span>
         </div>
         {showCorrectAnswers && (
           <>
