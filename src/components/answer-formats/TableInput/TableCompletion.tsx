@@ -60,7 +60,9 @@ interface TableCompletionProps {
   autoGrade?: boolean;
 
   // Admin/Template Editing Props
-  isAdminMode?: boolean;
+  isAdminMode?: boolean; // DEPRECATED: Use isTemplateEditor instead
+  isTemplateEditor?: boolean; // True only when actually editing template
+  isAdminTestMode?: boolean; // True when admin is testing/previewing (shows clean student view)
   onTemplateSave?: (template: TableTemplateDTO) => void;
 
   // Student Test Mode (Exam Simulation)
@@ -97,7 +99,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   disabled = false,
   showCorrectAnswers = false,
   autoGrade = false,
-  isAdminMode = false,
+  isAdminMode = false, // DEPRECATED but kept for backward compatibility
+  isTemplateEditor: isTemplateEditorProp,
+  isAdminTestMode = false,
   onTemplateSave,
   isStudentTestMode = false,
   showValidationWarnings = false,
@@ -108,12 +112,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   defaultRows = 5,
   defaultCols = 5
 }) => {
+  // Determine actual mode: prioritize new props, fallback to deprecated isAdminMode
+  const isTemplateEditor = isTemplateEditorProp ?? isAdminMode;
+  const isEditingTemplate = isTemplateEditor && !isStudentTestMode && !isAdminTestMode;
   const hotRef = useRef<HotTable>(null);
   const [tableData, setTableData] = useState<any[][]>([]);
   const [validation, setValidation] = useState<any>(null);
-
-  // Template editing state
-  const [isEditingTemplate, setIsEditingTemplate] = useState(false);
   const [rows, setRows] = useState(defaultRows);
   const [columns, setColumns] = useState(defaultCols);
   const [headers, setHeaders] = useState<string[]>(
@@ -1255,7 +1259,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Preview Mode Banner */}
-      {isEditingTemplate && previewMode && !isStudentTestMode && (
+      {isEditingTemplate && previewMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-500 dark:border-blue-400">
           <div className="flex items-center justify-center gap-2">
             <TableIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -1267,7 +1271,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Dimension Controls */}
-      {isEditingTemplate && !previewMode && !isStudentTestMode && (
+      {isEditingTemplate && !previewMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1371,7 +1375,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Header Editor */}
-      {isEditingTemplate && !previewMode && !isStudentTestMode && (
+      {isEditingTemplate && !previewMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Column Headers
@@ -1399,7 +1403,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Cell Configuration Panel */}
-      {isEditingTemplate && !previewMode && !isStudentTestMode && (
+      {isEditingTemplate && !previewMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -1635,7 +1639,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Persistent Quick Actions Toolbar */}
-      {isEditingTemplate && selectedCells.size > 0 && !isStudentTestMode && (
+      {isEditingTemplate && selectedCells.size > 0 && (
         <div className="sticky top-0 z-10 p-3 bg-[#8CC63F] text-white rounded-lg shadow-lg border-2 border-[#7AB62F]">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -1708,7 +1712,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Template Statistics and Validation */}
-      {isEditingTemplate && !previewMode && !isStudentTestMode && (
+      {isEditingTemplate && !previewMode && (
         <div className="space-y-2">
           {/* Progress Indicator */}
           <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg border border-blue-200 dark:border-blue-700">

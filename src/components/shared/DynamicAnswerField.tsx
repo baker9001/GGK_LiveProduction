@@ -760,7 +760,12 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     // Table Completion format
     if (format === 'table_completion') {
       const parsedTableCompletion = parseJsonValue<TableCompletionData | null>(value, null);
+
+      // Determine the correct mode
+      const isTemplateEditing = mode === 'admin' && isEditing;
+      const isAdminTesting = mode === 'qa_preview';
       const isStudentTest = mode === 'exam' && !isEditing;
+
       return (
         <TableCompletion
           questionId={question.id}
@@ -769,7 +774,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           disabled={disabled && !isEditing}
           showCorrectAnswers={showCorrectAnswer}
           autoGrade={true}
-          isAdminMode={isEditing || mode === 'admin' || mode === 'qa_preview'}
+          isTemplateEditor={isTemplateEditing}
+          isAdminTestMode={isAdminTesting}
           isStudentTestMode={isStudentTest}
           showValidationWarnings={triggerValidation && isStudentTest}
         />

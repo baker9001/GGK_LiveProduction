@@ -3060,6 +3060,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                   <section className="space-y-3">
                     <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Preview</h4>
                     <EnhancedQuestionDisplay
+                      key={`${question.id}-${question.answer_format || 'default'}`}
                       question={question}
                       showAnswers={true}
                       showHints={true}

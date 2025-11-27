@@ -1589,7 +1589,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                           disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
                           showHints={features.showHints}
                           showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                          mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                          mode={isQAMode ? 'exam' : (features.showCorrectAnswers ? 'review' : 'practice')}
                         />
                       </div>
                     )}
@@ -1664,7 +1664,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
                                 showHints={features.showHints}
                                 showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                                mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                mode={isQAMode ? 'exam' : (features.showCorrectAnswers ? 'review' : 'practice')}
                               />
 
                               {isQAMode && (
@@ -1725,7 +1725,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                             disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
                                             showHints={features.showHints}
                                             showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                                            mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                            mode={isQAMode ? 'exam' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                           />
 
                                           {isQAMode && (
