@@ -158,8 +158,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   // Load template from database when in admin mode
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
-    if (isAdminMode) {
+    if (isAdminMode && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
       loadExistingTemplate();
     }
   }, [questionId, subQuestionId, isAdminMode]);
@@ -201,6 +203,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
         // Fill locked cell values
         Object.entries(values).forEach(([key, val]) => {
+          const [row, col] = key.split('-').map(Number);
+          if (data[row] && data[row][col] !== undefined) {
+            data[row][col] = val;
+          }
+        });
+
+        // Fill expected answers for editable cells (display in admin template editing mode)
+        Object.entries(answers).forEach(([key, val]) => {
           const [row, col] = key.split('-').map(Number);
           if (data[row] && data[row][col] !== undefined) {
             data[row][col] = val;
@@ -751,9 +761,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     newHeaders[index] = value;
     setHeaders(newHeaders);
 
+    // Force Handsontable to update column headers
     const hot = hotRef.current?.hotInstance;
     if (hot) {
-      hot.updateSettings({ colHeaders: newHeaders });
+      // Use setTimeout to ensure state has propagated
+      setTimeout(() => {
+        hot.updateSettings({ colHeaders: newHeaders }, false);
+        hot.render();
+      }, 0);
     }
   }, [headers]);
 
@@ -763,7 +778,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     const updatedTypes = { ...cellTypes };
     const updatedValues = { ...cellValues };
     const updatedAnswers = { ...expectedAnswers };
-    const newTableData = [...tableData];
+    const newTableData = tableData.map(row => [...row]); // Deep copy for proper state update
 
     selectedCells.forEach(cellKey => {
       const [row, col] = cellKey.split('-').map(Number);
@@ -771,11 +786,17 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
       if (currentCellType === 'locked') {
         updatedValues[cellKey] = tempCellValue;
+        // Update table data for locked cells
         if (newTableData[row] && newTableData[row][col] !== undefined) {
           newTableData[row][col] = tempCellValue;
         }
       } else {
+        // Store expected answer and also display it in the table (for admin template editing)
         updatedAnswers[cellKey] = tempCellValue;
+        // Update table data for editable cells to show expected answer
+        if (newTableData[row] && newTableData[row][col] !== undefined) {
+          newTableData[row][col] = tempCellValue;
+        }
       }
     });
 
@@ -786,13 +807,17 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     setSelectedCells(new Set());
     setTempCellValue('');
 
-    // Update Handsontable
+    // Update Handsontable with force render
     const hot = hotRef.current?.hotInstance;
     if (hot) {
       hot.loadData(newTableData);
+      // Force a complete re-render to show the updates
+      setTimeout(() => {
+        hot.render();
+      }, 0);
     }
 
-    toast.success(`Applied ${currentCellType} type to ${selectedCells.size} cell(s)`);
+    toast.success(`Applied ${currentCellType} type to ${selectedCells.size} cell(s) with value "${tempCellValue}"`);
   }, [selectedCells, currentCellType, tempCellValue, cellTypes, cellValues, expectedAnswers, tableData]);
 
   const handleClearSelection = useCallback(() => {
@@ -808,7 +833,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     const updatedTypes = { ...cellTypes };
     const updatedValues = { ...cellValues };
     const updatedAnswers = { ...expectedAnswers };
-    const newTableData = [...tableData];
+    const newTableData = tableData.map(row => [...row]); // Deep copy for proper state update
 
     updatedTypes[cellKey] = inlineEditType;
 
@@ -819,7 +844,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
       delete updatedAnswers[cellKey]; // Remove from answers if switching to locked
     } else {
+      // Store expected answer and also display it in the table (for admin template editing)
       updatedAnswers[cellKey] = inlineEditValue;
+      // Update table data for editable cells to show expected answer
+      if (newTableData[inlineEditCell.row] && newTableData[inlineEditCell.row][inlineEditCell.col] !== undefined) {
+        newTableData[inlineEditCell.row][inlineEditCell.col] = inlineEditValue;
+      }
       delete updatedValues[cellKey]; // Remove from values if switching to editable
     }
 
@@ -828,14 +858,18 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     setExpectedAnswers(updatedAnswers);
     setTableData(newTableData);
 
-    // Update Handsontable
+    // Update Handsontable with force render
     const hot = hotRef.current?.hotInstance;
     if (hot) {
       hot.loadData(newTableData);
+      // Force a complete re-render to show the updates
+      setTimeout(() => {
+        hot.render();
+      }, 0);
     }
 
     setInlineEditCell(null);
-    toast.success(`Cell configured as ${inlineEditType}`);
+    toast.success(`Cell configured as ${inlineEditType} with value "${inlineEditValue}"`);
   }, [inlineEditCell, inlineEditType, inlineEditValue, cellTypes, cellValues, expectedAnswers, tableData]);
 
   // Keyboard shortcuts for better UX
@@ -1557,7 +1591,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                   const updatedTypes = { ...cellTypes };
                   const updatedValues = { ...cellValues };
                   const updatedAnswers = { ...expectedAnswers };
-                  const newTableData = [...tableData];
+                  const newTableData = tableData.map(row => [...row]); // Deep copy for proper state update
 
                   selectedCells.forEach(cellKey => {
                     const [row, col] = cellKey.split('-').map(Number);
@@ -1577,6 +1611,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                   const hot = hotRef.current?.hotInstance;
                   if (hot) {
                     hot.loadData(newTableData);
+                    // Force a complete re-render to show the updates
+                    setTimeout(() => {
+                      hot.render();
+                    }, 0);
                   }
 
                   toast.success(`Cleared ${selectedCells.size} cell(s)`);
