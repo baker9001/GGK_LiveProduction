@@ -181,6 +181,7 @@ interface AnswerFieldProps {
   contextRequirements?: ContextRequirement[];
   validationMode?: 'strict' | 'flexible' | 'owtte' | 'ora';
   subjectSpecificConfig?: SubjectSpecificConfig;
+  triggerValidation?: boolean;
 }
 
 const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
@@ -195,7 +196,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   answerComponents,
   contextRequirements,
   validationMode = 'flexible',
-  subjectSpecificConfig
+  subjectSpecificConfig,
+  triggerValidation = false
 }) => {
   const questionIdRef = useRef(question.id);
   const isInitializedRef = useRef(false);
@@ -758,13 +760,18 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     // Table Completion format
     if (format === 'table_completion') {
       const parsedTableCompletion = parseJsonValue<TableCompletionData | null>(value, null);
+      const isStudentTest = mode === 'exam' && !isEditing;
       return (
         <TableCompletion
           questionId={question.id}
           value={parsedTableCompletion}
           onChange={(data) => onChange(JSON.stringify(data))}
           disabled={disabled && !isEditing}
+          showCorrectAnswers={showCorrectAnswer}
+          autoGrade={true}
           isAdminMode={isEditing || mode === 'admin' || mode === 'qa_preview'}
+          isStudentTestMode={isStudentTest}
+          showValidationWarnings={triggerValidation && isStudentTest}
         />
       );
     }

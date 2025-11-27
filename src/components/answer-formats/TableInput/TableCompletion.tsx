@@ -23,7 +23,10 @@ import {
   Save,
   Edit3,
   X,
-  HelpCircle
+  HelpCircle,
+  CheckCircle,
+  MinusCircle,
+  Award
 } from 'lucide-react';
 import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
@@ -60,6 +63,10 @@ interface TableCompletionProps {
   isAdminMode?: boolean;
   onTemplateSave?: (template: TableTemplateDTO) => void;
 
+  // Student Test Mode (Exam Simulation)
+  isStudentTestMode?: boolean;
+  showValidationWarnings?: boolean;
+
   // Dimension Constraints
   minRows?: number;
   maxRows?: number;
@@ -92,6 +99,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   autoGrade = false,
   isAdminMode = false,
   onTemplateSave,
+  isStudentTestMode = false,
+  showValidationWarnings = false,
   minRows = 2,
   maxRows = 50,
   minCols = 2,
@@ -119,7 +128,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [currentCellType, setCurrentCellType] = useState<'locked' | 'editable'>('locked');
   const [tempCellValue, setTempCellValue] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showValidationWarnings, setShowValidationWarnings] = useState(false);
+  const [showTemplateValidationWarnings, setShowTemplateValidationWarnings] = useState(false);
 
   // Inline editing popover state
   const [inlineEditCell, setInlineEditCell] = useState<{row: number; col: number; x: number; y: number} | null>(null);
@@ -337,6 +346,71 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     const cellKey = `${row}-${col}`;
     const isSelected = isEditingTemplate && selectedCells.has(cellKey);
     const cellType = cellTypes[cellKey];
+
+    // Student Test Mode - Clean, simple rendering
+    if (isStudentTestMode) {
+      const isEditable = template.editableCells?.some(c => c.row === row && c.col === col);
+      const hasAnswer = value && String(value).trim().length > 0;
+      const isEmpty = !hasAnswer && isEditable;
+
+      if (isEditable) {
+        // Editable cells: white background for student input
+        td.style.backgroundColor = showCorrectAnswers
+          ? (checkAnswer(row, col, value) ? '#d1fae5' : '#fee2e2')
+          : '#ffffff';
+        td.style.color = '#1f2937';
+        td.style.fontWeight = 'normal';
+        td.style.border = '1px solid #e5e7eb';
+
+        // Show validation warning for empty cells when showValidationWarnings is true
+        if (isEmpty && showValidationWarnings) {
+          td.style.border = '2px solid #ef4444';
+          td.style.backgroundColor = '#fee2e2';
+        }
+
+        // Show correct/incorrect indicators after submission
+        if (showCorrectAnswers && hasAnswer) {
+          const isCorrect = checkAnswer(row, col, value);
+          const indicator = document.createElement('span');
+          indicator.style.cssText = `
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 14px;
+            font-weight: bold;
+          `;
+          indicator.innerHTML = isCorrect ? '✓' : '✗';
+          td.style.position = 'relative';
+          if (!td.querySelector('span')) {
+            td.appendChild(indicator);
+          }
+        }
+      } else {
+        // Locked cells: gray background with pre-filled data
+        td.style.backgroundColor = '#f3f4f6';
+        td.style.color = '#4b5563';
+        td.style.fontWeight = '500';
+        td.style.border = '1px solid #d1d5db';
+        td.style.position = 'relative';
+
+        // Add small lock icon
+        if (!td.querySelector('.lock-icon')) {
+          const lockIcon = document.createElement('span');
+          lockIcon.className = 'lock-icon';
+          lockIcon.innerHTML = '🔒';
+          lockIcon.style.cssText = `
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 10px;
+            opacity: 0.4;
+          `;
+          td.appendChild(lockIcon);
+        }
+      }
+
+      return td;
+    }
 
     // Selection styling (blue border in edit mode)
     if (isSelected) {
@@ -842,7 +916,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const handleSaveTemplate = async (silent = false) => {
     if (!silent) {
       // Show validation warnings on save attempt
-      setShowValidationWarnings(true);
+      setShowTemplateValidationWarnings(true);
     }
 
     // Check for validation issues
@@ -967,8 +1041,135 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Student Test Mode - Progress Indicator (IGCSE Best Practice) */}
+      {isStudentTestMode && !showCorrectAnswers && (
+        <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <TableIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Table Completion Progress
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Answered: {value?.completedCells ?? 0} of {value?.requiredCells ?? 0} cells
+              </span>
+              {(value?.completedCells ?? 0) === (value?.requiredCells ?? 0) && (value?.requiredCells ?? 0) > 0 && (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              )}
+            </div>
+          </div>
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-300"
+              style={{
+                width: `${completionPercentage}%`
+              }}
+            />
+          </div>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+            {completionPercentage}% complete
+            {showValidationWarnings && (value?.completedCells ?? 0) < (value?.requiredCells ?? 0) && (
+              <span className="ml-2 text-amber-600 dark:text-amber-400 font-medium">
+                • {(value?.requiredCells ?? 0) - (value?.completedCells ?? 0)} cell(s) unanswered
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+
+      {/* Validation Warning Banner */}
+      {isStudentTestMode && showValidationWarnings && (value?.completedCells ?? 0) < (value?.requiredCells ?? 0) && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-400 dark:border-amber-600 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                Incomplete Answers Detected
+              </h4>
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                You have {(value?.requiredCells ?? 0) - (value?.completedCells ?? 0)} unanswered cell(s).
+                You can still submit, but consider reviewing your answers.
+                Empty cells are highlighted with a red border.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Results Summary After Submission */}
+      {isStudentTestMode && showCorrectAnswers && (
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-300 dark:border-blue-700 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Award className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              Answer Results
+            </h3>
+          </div>
+          {(() => {
+            let correctCount = 0;
+            let incorrectCount = 0;
+            let unansweredCount = 0;
+
+            template.editableCells?.forEach(cell => {
+              const key = `${cell.row}-${cell.col}`;
+              const studentAnswer = value?.studentAnswers?.[key];
+              const hasAnswer = studentAnswer && String(studentAnswer).trim().length > 0;
+
+              if (!hasAnswer) {
+                unansweredCount++;
+              } else if (checkAnswer(cell.row, cell.col, studentAnswer)) {
+                correctCount++;
+              } else {
+                incorrectCount++;
+              }
+            });
+
+            const totalCells = template.editableCells?.length ?? 0;
+            const percentage = totalCells > 0 ? Math.round((correctCount / totalCells) * 100) : 0;
+
+            return (
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-green-100 dark:bg-green-900/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Check className="w-4 h-4 text-green-600" />
+                      <span className="text-xs font-medium text-green-700 dark:text-green-300">Correct</span>
+                    </div>
+                    <p className="text-2xl font-bold text-green-800 dark:text-green-200">{correctCount}</p>
+                  </div>
+                  <div className="bg-red-100 dark:bg-red-900/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <X className="w-4 h-4 text-red-600" />
+                      <span className="text-xs font-medium text-red-700 dark:text-red-300">Incorrect</span>
+                    </div>
+                    <p className="text-2xl font-bold text-red-800 dark:text-red-200">{incorrectCount}</p>
+                  </div>
+                  <div className="bg-amber-100 dark:bg-amber-900/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <MinusCircle className="w-4 h-4 text-amber-600" />
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Unanswered</span>
+                    </div>
+                    <p className="text-2xl font-bold text-amber-800 dark:text-amber-200">{unansweredCount}</p>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Overall Score:</span>
+                    <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                      {correctCount}/{totalCells} ({percentage}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Admin Mode Controls */}
-      {isAdminMode && (
+      {isAdminMode && !isStudentTestMode && (
         <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
           <div className="flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -1054,7 +1255,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Preview Mode Banner */}
-      {isEditingTemplate && previewMode && (
+      {isEditingTemplate && previewMode && !isStudentTestMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-500 dark:border-blue-400">
           <div className="flex items-center justify-center gap-2">
             <TableIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -1066,7 +1267,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Dimension Controls */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isStudentTestMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1170,7 +1371,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Header Editor */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isStudentTestMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Column Headers
@@ -1198,7 +1399,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Cell Configuration Panel */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isStudentTestMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -1434,7 +1635,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Persistent Quick Actions Toolbar */}
-      {isEditingTemplate && selectedCells.size > 0 && (
+      {isEditingTemplate && selectedCells.size > 0 && !isStudentTestMode && (
         <div className="sticky top-0 z-10 p-3 bg-[#8CC63F] text-white rounded-lg shadow-lg border-2 border-[#7AB62F]">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -1507,7 +1708,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Template Statistics and Validation */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isStudentTestMode && (
         <div className="space-y-2">
           {/* Progress Indicator */}
           <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
@@ -1603,7 +1804,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           </div>
 
           {/* Validation Warnings - Only show when user tries to save */}
-          {showValidationWarnings && (
+          {showTemplateValidationWarnings && (
             <>
               {editableCount === 0 && (
                 <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
@@ -1642,36 +1843,38 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Table Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <TableIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-            {isEditingTemplate ? 'Table Preview' : 'Complete the Table'}
-          </h3>
-        </div>
-
-        {!isEditingTemplate && (
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {value?.completedCells ?? 0} / {value?.requiredCells ?? 0} cells
-              <span className="ml-2 font-medium text-[#8CC63F]">
-                ({completionPercentage}%)
-              </span>
-            </div>
-
-            {!disabled && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleReset}
-                title="Reset table"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-            )}
+      {!isStudentTestMode && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TableIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+              {isEditingTemplate ? 'Table Preview' : 'Complete the Table'}
+            </h3>
           </div>
-        )}
-      </div>
+
+          {!isEditingTemplate && (
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {value?.completedCells ?? 0} / {value?.requiredCells ?? 0} cells
+                <span className="ml-2 font-medium text-[#8CC63F]">
+                  ({completionPercentage}%)
+                </span>
+              </div>
+
+              {!disabled && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleReset}
+                  title="Reset table"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className={cn(
@@ -1730,43 +1933,79 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         />
       </div>
 
-      {/* Legend - Non-interactive documentation */}
-      <div className="flex flex-wrap items-center gap-4 text-sm opacity-75">
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Legend:</span>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-gray-200 border-l-[3px] border-l-gray-400 rounded flex items-center justify-center shadow-sm">
-            🔒
-          </div>
-          <span className="text-xs text-gray-600 dark:text-gray-400">Locked (not fillable)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-amber-100 border-l-[3px] border-l-orange-400 rounded flex items-center justify-center shadow-sm">
-            ✏️
-          </div>
-          <span className="text-xs text-gray-600 dark:text-gray-400">Editable (no answer set)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-green-100 border-l-[3px] border-l-green-500 rounded flex items-center justify-center shadow-sm text-green-600 font-bold">
-            ✓
-          </div>
-          <span className="text-xs text-gray-600 dark:text-gray-400">Editable (answer set)</span>
-        </div>
-        {showCorrectAnswers && (
-          <>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-100 border border-green-300 rounded" />
-              <span className="text-gray-600 dark:text-gray-400">Correct</span>
+      {/* Legend - Student Test Mode Simple */}
+      {isStudentTestMode ? (
+        <div className="flex flex-wrap items-center gap-4 text-sm bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Guide:</span>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-gray-200 rounded flex items-center justify-center shadow-sm">
+              🔒
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-100 border border-red-300 rounded" />
-              <span className="text-gray-600 dark:text-gray-400">Incorrect</span>
+            <span className="text-xs text-gray-700 dark:text-gray-300">Gray cells are pre-filled (locked)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-white border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
+              <span className="text-xs text-gray-400">?</span>
             </div>
-          </>
-        )}
-      </div>
+            <span className="text-xs text-gray-700 dark:text-gray-300">White cells require your answer</span>
+          </div>
+          {showCorrectAnswers && (
+            <>
+              <div className="h-4 w-px bg-gray-300 dark:bg-gray-600" />
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 bg-green-100 border border-green-400 rounded flex items-center justify-center">
+                  <Check className="w-3 h-3 text-green-600" />
+                </div>
+                <span className="text-xs text-gray-700 dark:text-gray-300">Correct</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 bg-red-100 border border-red-400 rounded flex items-center justify-center">
+                  <X className="w-3 h-3 text-red-600" />
+                </div>
+                <span className="text-xs text-gray-700 dark:text-gray-300">Incorrect</span>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        /* Legend - Admin/Practice Mode */
+        <div className="flex flex-wrap items-center gap-4 text-sm opacity-75">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Legend:</span>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-gray-200 border-l-[3px] border-l-gray-400 rounded flex items-center justify-center shadow-sm">
+              🔒
+            </div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Locked (not fillable)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-amber-100 border-l-[3px] border-l-orange-400 rounded flex items-center justify-center shadow-sm">
+              ✏️
+            </div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Editable (no answer set)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-green-100 border-l-[3px] border-l-green-500 rounded flex items-center justify-center shadow-sm text-green-600 font-bold">
+              ✓
+            </div>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Editable (answer set)</span>
+          </div>
+          {showCorrectAnswers && (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-green-100 border border-green-300 rounded" />
+                <span className="text-gray-600 dark:text-gray-400">Correct</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-red-100 border border-red-300 rounded" />
+                <span className="text-gray-600 dark:text-gray-400">Incorrect</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Completion Status */}
-      {completionPercentage === 100 && (
+      {!isStudentTestMode && completionPercentage === 100 && (
         <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
           <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
           <span className="text-sm font-medium text-green-800 dark:text-green-300">
@@ -1776,7 +2015,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Keyboard Shortcuts Help Modal */}
-      {showKeyboardHelp && (
+      {showKeyboardHelp && !isStudentTestMode && (
         <>
           {/* Backdrop */}
           <div
@@ -1904,7 +2143,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Inline Edit Popover */}
-      {inlineEditCell && (
+      {inlineEditCell && !isStudentTestMode && (
         <>
           {/* Backdrop */}
           <div
