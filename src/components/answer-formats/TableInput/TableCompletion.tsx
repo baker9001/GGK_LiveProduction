@@ -174,6 +174,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const lastLoadedId = useRef<string>(''); // Track last loaded question
 
   useEffect(() => {
+    // If template prop is provided and we're in preview mode, use it instead of loading from DB
+    if ((isAdminTestMode || isStudentTestMode) && template && isPreviewQuestion) {
+      // Use the provided template prop for preview mode
+      loadTemplateFromProp(template);
+      return;
+    }
+
     // Load template for: template editor mode, admin test mode, or student test mode
     const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode;
     const currentId = `${questionId}-${subQuestionId || 'main'}`;
@@ -187,7 +194,55 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         loadingRef.current = false;
       });
     }
-  }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode]);
+  }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode, template, isPreviewQuestion]);
+
+  const loadTemplateFromProp = (tmpl: TableTemplate) => {
+    setRows(tmpl.rows);
+    setColumns(tmpl.columns);
+    setHeaders(tmpl.headers || Array.from({ length: tmpl.columns }, (_, i) => `Column ${i + 1}`));
+
+    // Build cell types and values
+    const types: Record<string, 'locked' | 'editable'> = {};
+    const values: Record<string, string> = {};
+    const answers: Record<string, string> = {};
+
+    // Process locked cells
+    tmpl.lockedCells.forEach(cell => {
+      const key = `${cell.row}-${cell.col}`;
+      types[key] = 'locked';
+      values[key] = String(cell.value || '');
+    });
+
+    // Process editable cells
+    tmpl.editableCells.forEach(cell => {
+      const key = `${cell.row}-${cell.col}`;
+      types[key] = 'editable';
+      // Find correct answer if exists
+      const correctAnswer = tmpl.correctAnswers?.find(ca => ca.row === cell.row && ca.col === cell.col);
+      if (correctAnswer) {
+        answers[key] = String(correctAnswer.value || '');
+      }
+    });
+
+    setCellTypes(types);
+    setCellValues(values);
+    setExpectedAnswers(answers);
+
+    // Initialize table data
+    const data: any[][] = Array(tmpl.rows).fill(null).map(() =>
+      Array(tmpl.columns).fill('')
+    );
+
+    // Fill locked cell values
+    Object.entries(values).forEach(([key, val]) => {
+      const [row, col] = key.split('-').map(Number);
+      if (data[row] && data[row][col] !== undefined) {
+        data[row][col] = val;
+      }
+    });
+
+    setTableData(data);
+  };
 
   const loadExistingTemplate = async () => {
     setLoading(true);
@@ -1010,6 +1065,61 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
     setAutoSaveStatus('saving');
     setLoading(true);
+
+    // If in preview mode, save template locally via callback instead of database
+    if (isPreviewQuestion) {
+      try {
+        // Build template object
+        const cells: TableCellDTO[] = [];
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < columns; col++) {
+            const key = `${row}-${col}`;
+            const type = cellTypes[key] || 'locked';
+            cells.push({
+              rowIndex: row,
+              colIndex: col,
+              cellType: type,
+              lockedValue: type === 'locked' ? (cellValues[key] || '') : undefined,
+              expectedAnswer: type === 'editable' ? (expectedAnswers[key] || '') : undefined,
+              marks: 1,
+              caseSensitive: false
+            });
+          }
+        }
+
+        const templateData: TableTemplateDTO = {
+          questionId,
+          subQuestionId,
+          rows,
+          columns,
+          headers,
+          cells
+        };
+
+        // Notify parent via callback (for in-memory storage)
+        onTemplateSave?.(templateData);
+
+        if (!silent) {
+          toast.success('Template saved locally. Save the question to persist to database.');
+        }
+        setAutoSaveStatus('saved');
+        setLastSaveTime(new Date());
+      } catch (error) {
+        console.error('Error saving template locally:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (!silent) {
+          toast.error('Failed to save template locally', {
+            description: errorMessage
+          });
+        }
+        setAutoSaveStatus('unsaved');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Database save for real questions
     try {
       // Build cells array - include ALL cells, defaulting undefined to locked
       const cells: TableCellDTO[] = [];
@@ -1352,12 +1462,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                 <Button
                   size="sm"
                   onClick={() => handleSaveTemplate(false)}
-                  disabled={loading || isPreviewQuestion}
-                  className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={isPreviewQuestion ? 'Save the question first before saving the template' : 'Save template to database'}
+                  disabled={loading}
+                  className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
+                  title={isPreviewQuestion ? 'Save template locally for preview' : 'Save template to database'}
                 >
                   <Save className="w-4 h-4 mr-1" />
-                  {isPreviewQuestion ? 'Save Question First' : 'Save Template'}
+                  {isPreviewQuestion ? 'Save Template (Preview)' : 'Save Template'}
                 </Button>
               </>
             )}
