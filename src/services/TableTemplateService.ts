@@ -124,9 +124,13 @@ export class TableTemplateService {
       return { success: true, templateId };
     } catch (error) {
       console.error('Error saving table template:', error);
+      // Handle Supabase PostgresError which has message, details, hint, code
+      const errorMsg = error instanceof Error
+        ? error.message
+        : (error as any)?.message || (error as any)?.details || JSON.stringify(error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMsg
       };
     }
   }
@@ -203,9 +207,13 @@ export class TableTemplateService {
       return { success: true, template };
     } catch (error) {
       console.error('Error loading table template:', error);
+      // Handle Supabase PostgresError which has message, details, hint, code
+      const errorMsg = error instanceof Error
+        ? error.message
+        : (error as any)?.message || (error as any)?.details || JSON.stringify(error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMsg
       };
     }
   }

@@ -240,7 +240,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
     } catch (error) {
       console.error('Error loading template:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      // Handle both Error instances and Supabase PostgresError objects
+      const errorMessage = error instanceof Error
+        ? error.message
+        : (error as any)?.message || JSON.stringify(error) || 'Unknown error occurred';
       toast.error('Failed to load template', {
         description: errorMessage
       });
@@ -1050,7 +1053,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       console.error('Error saving template:', error);
       setAutoSaveStatus('unsaved');
       if (!silent) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        // Handle both Error instances and Supabase PostgresError objects
+        const errorMessage = error instanceof Error
+          ? error.message
+          : (error as any)?.message || JSON.stringify(error) || 'Unknown error occurred';
         toast.error('Failed to save template', {
           description: errorMessage
         });
