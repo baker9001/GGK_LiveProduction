@@ -1001,11 +1001,43 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   // Handle template saves for complex answer formats
   const handleTemplateSave = useCallback((questionId: string, template: any) => {
+    console.log('[Template Save] Saving template for question:', questionId, template);
+
+    // Store in local state for immediate access
     setQuestionTemplates(prev => ({
       ...prev,
       [questionId]: template
     }));
-  }, []);
+
+    // Find the question in the current questions array
+    const question = questions.find(q => q.id === questionId);
+    if (!question) {
+      console.warn('[Template Save] Question not found:', questionId);
+      return;
+    }
+
+    // Convert template to correct_answers format
+    // For table_completion, store the entire template as a JSON string in correct_answers
+    const templateAnswer = {
+      answer_text: JSON.stringify(template),
+      marks: template.cells?.filter((c: any) => c.cellType === 'editable').length || 1,
+      answer_type: 'table_template'
+    };
+
+    // Update the question's correct_answers
+    const updatedAnswers = [templateAnswer];
+
+    console.log('[Template Save] Updating question with template data:', {
+      questionId,
+      templateCells: template.cells?.length,
+      editableCells: template.cells?.filter((c: any) => c.cellType === 'editable').length
+    });
+
+    // Trigger the question update which will auto-save
+    commitQuestionUpdate(question, { correct_answers: updatedAnswers });
+
+    toast.success('Template saved and will be persisted automatically');
+  }, [questions, commitQuestionUpdate]);
 
   // Save all questions to database immediately
   const saveAllQuestionsToDatabase = useCallback(async () => {
@@ -1093,6 +1125,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     // If format requires specialized component, use DynamicAnswerField
     if (useComplexInput && questionContext) {
+      // For table_completion format, extract template from correct_answers if it exists
+      let initialValue: string | undefined;
+      if (questionContext.answer_format === 'table_completion' && list.length > 0) {
+        const templateAnswer = list.find(
+          (ans: any) => ans.answer_type === 'table_template' || ans.answer_text
+        );
+        if (templateAnswer?.answer_text) {
+          initialValue = templateAnswer.answer_text;
+          console.log('[Template Load] Loading saved template for question:', questionContext.id);
+        }
+      }
+
       return (
         <div className="space-y-3">
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
@@ -1117,6 +1161,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               marks: questionContext.marks,
               correct_answers: list
             }}
+            value={initialValue}
             mode="admin"
             forceTemplateEditor={true}
             onTemplateSave={(template) => handleTemplateSave(questionContext.id, template)}
