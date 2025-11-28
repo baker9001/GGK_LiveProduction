@@ -274,6 +274,81 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     };
   }, [subjectId]);
 
+  // Save question updates to database (debounced)
+  const debouncedSaveToDatabase = useCallback(
+    async (updatedQuestions: QuestionDisplayData[]) => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      setSaveStatus('saving');
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          if (!importSessionId) {
+            console.warn('[Auto-Save] No import session ID, skipping save');
+            setSaveStatus('idle');
+            return;
+          }
+
+          // Fetch current session data
+          const { data: session, error: fetchError } = await supabase
+            .from('past_paper_import_sessions')
+            .select('working_json, raw_json')
+            .eq('id', importSessionId)
+            .single();
+
+          if (fetchError) {
+            console.error('[Auto-Save] Failed to fetch session:', fetchError);
+            throw fetchError;
+          }
+
+          // Get base JSON structure (preserve metadata)
+          const baseJson = session.working_json || session.raw_json || {};
+
+          // Build updated working_json with latest question data
+          const workingJson = {
+            ...baseJson,
+            questions: updatedQuestions.map(q => ({
+              ...q,
+              last_updated: new Date().toISOString()
+            }))
+          };
+
+          // Save to database
+          const { error: updateError } = await supabase
+            .from('past_paper_import_sessions')
+            .update({
+              working_json: workingJson,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', importSessionId);
+
+          if (updateError) {
+            console.error('[Auto-Save] Failed to save:', updateError);
+            throw updateError;
+          }
+
+          console.log(`[Auto-Save] Saved ${updatedQuestions.length} questions to working_json`);
+          lastSaveRef.current = Date.now();
+          setSaveStatus('saved');
+
+          // Reset to idle after showing saved status
+          setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (error) {
+          console.error('[Auto-Save] Error:', error);
+          setSaveStatus('error');
+          toast.error('Failed to save changes automatically. Please try refreshing.');
+
+          // Retry once after error
+          setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+      }, 1500); // 1.5 second debounce
+    },
+    [importSessionId]
+  );
+
   const commitQuestionUpdate = useCallback(
     (question: QuestionDisplayData, updates: Partial<QuestionDisplayData>) => {
       // Update parent state (optimistic update)
@@ -931,81 +1006,6 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       [questionId]: template
     }));
   }, []);
-
-  // Save question updates to database (debounced)
-  const debouncedSaveToDatabase = useCallback(
-    async (updatedQuestions: QuestionDisplayData[]) => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
-      setSaveStatus('saving');
-
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          if (!importSessionId) {
-            console.warn('[Auto-Save] No import session ID, skipping save');
-            setSaveStatus('idle');
-            return;
-          }
-
-          // Fetch current session data
-          const { data: session, error: fetchError } = await supabase
-            .from('past_paper_import_sessions')
-            .select('working_json, raw_json')
-            .eq('id', importSessionId)
-            .single();
-
-          if (fetchError) {
-            console.error('[Auto-Save] Failed to fetch session:', fetchError);
-            throw fetchError;
-          }
-
-          // Get base JSON structure (preserve metadata)
-          const baseJson = session.working_json || session.raw_json || {};
-
-          // Build updated working_json with latest question data
-          const workingJson = {
-            ...baseJson,
-            questions: updatedQuestions.map(q => ({
-              ...q,
-              last_updated: new Date().toISOString()
-            }))
-          };
-
-          // Save to database
-          const { error: updateError } = await supabase
-            .from('past_paper_import_sessions')
-            .update({
-              working_json: workingJson,
-              last_synced_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', importSessionId);
-
-          if (updateError) {
-            console.error('[Auto-Save] Failed to save:', updateError);
-            throw updateError;
-          }
-
-          console.log(`[Auto-Save] Saved ${updatedQuestions.length} questions to working_json`);
-          lastSaveRef.current = Date.now();
-          setSaveStatus('saved');
-
-          // Reset to idle after showing saved status
-          setTimeout(() => setSaveStatus('idle'), 2000);
-        } catch (error) {
-          console.error('[Auto-Save] Error:', error);
-          setSaveStatus('error');
-          toast.error('Failed to save changes automatically. Please try refreshing.');
-
-          // Retry once after error
-          setTimeout(() => setSaveStatus('idle'), 3000);
-        }
-      }, 1500); // 1.5 second debounce
-    },
-    [importSessionId]
-  );
 
   // Save all questions to database immediately
   const saveAllQuestionsToDatabase = useCallback(async () => {
