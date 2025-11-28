@@ -43,8 +43,10 @@ import {
   type GraphData,
   type StructuralDiagramData,
   type TableCreatorData,
-  type ChemicalStructureData
+  type ChemicalStructureData,
+  type TableTemplate
 } from '@/components/answer-formats';
+import { type TableTemplateDTO, type TableCellDTO } from '@/services/TableTemplateService';
 
 // Type definitions
 interface CorrectAnswer {
@@ -187,6 +189,45 @@ interface AnswerFieldProps {
   // Callback for template saves in preview mode
   onTemplateSave?: (template: any) => void;
 }
+
+// Helper function to convert TableTemplateDTO to TableTemplate format
+const convertTableTemplateDTOToTemplate = (dto: TableTemplateDTO): TableTemplate => {
+  const lockedCells: Array<{ row: number; col: number; value: string | number }> = [];
+  const editableCells: Array<{ row: number; col: number }> = [];
+  const correctAnswers: Array<{ row: number; col: number; value: string | number }> = [];
+
+  // Convert cells array to separate arrays by type
+  dto.cells.forEach((cell: TableCellDTO) => {
+    if (cell.cellType === 'locked') {
+      lockedCells.push({
+        row: cell.rowIndex,
+        col: cell.colIndex,
+        value: cell.lockedValue || ''
+      });
+    } else if (cell.cellType === 'editable') {
+      editableCells.push({
+        row: cell.rowIndex,
+        col: cell.colIndex
+      });
+      if (cell.expectedAnswer) {
+        correctAnswers.push({
+          row: cell.rowIndex,
+          col: cell.colIndex,
+          value: cell.expectedAnswer
+        });
+      }
+    }
+  });
+
+  return {
+    rows: dto.rows,
+    columns: dto.columns,
+    headers: dto.headers || Array.from({ length: dto.columns }, (_, i) => `Column ${i + 1}`),
+    lockedCells,
+    editableCells,
+    correctAnswers
+  };
+};
 
 const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   question,
@@ -765,17 +806,40 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
     // Table Completion format
     if (format === 'table_completion') {
-      const parsedTableCompletion = parseJsonValue<TableCompletionData | null>(value, null);
-
       // Determine the correct mode
       const isTemplateEditing = (mode === 'admin' && isEditing) || forceTemplateEditor;
       const isAdminTesting = mode === 'qa_preview';
       const isStudentTest = mode === 'exam' && !isEditing;
 
+      // In template editing mode, check if value contains a TableTemplateDTO
+      let templateProp: TableTemplate | undefined;
+      let valueProp: TableCompletionData | null = null;
+
+      if (value && typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+
+          // Check if it's a TableTemplateDTO (has cells array with rowIndex/colIndex)
+          if (parsed && Array.isArray(parsed.cells) && parsed.cells.length > 0 &&
+              'rowIndex' in parsed.cells[0] && 'colIndex' in parsed.cells[0]) {
+            // This is a TableTemplateDTO - convert it to TableTemplate
+            console.log('[DynamicAnswerField] Detected TableTemplateDTO, converting to TableTemplate');
+            templateProp = convertTableTemplateDTOToTemplate(parsed as TableTemplateDTO);
+            console.log('[DynamicAnswerField] Converted template with headers:', templateProp.headers);
+          } else if (parsed && 'studentAnswers' in parsed) {
+            // This is TableCompletionData (student answers)
+            valueProp = parsed as TableCompletionData;
+          }
+        } catch (e) {
+          console.warn('[DynamicAnswerField] Failed to parse table completion value:', e);
+        }
+      }
+
       return (
         <TableCompletion
           questionId={question.id}
-          value={parsedTableCompletion}
+          template={templateProp}
+          value={valueProp}
           onChange={(data) => onChange(JSON.stringify(data))}
           disabled={disabled && !isEditing}
           showCorrectAnswers={showCorrectAnswer}

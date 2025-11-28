@@ -174,19 +174,29 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const lastLoadedId = useRef<string>(''); // Track last loaded question
 
   useEffect(() => {
-    // If template prop is provided and we're in preview mode, use it instead of loading from DB
-    if ((isAdminTestMode || isStudentTestMode) && template && isPreviewQuestion) {
-      // Use the provided template prop for preview mode
+    // PRIORITY 1: If template prop is provided, use it (regardless of preview mode)
+    // This ensures templates passed from parent components are used
+    if (template && (template.rows > 0 || template.columns > 0)) {
+      console.log('[TableCompletion] Using provided template prop with headers:', template.headers);
       loadTemplateFromProp(template);
       return;
     }
 
-    // Load template for: template editor mode, admin test mode, or student test mode
+    // PRIORITY 2: If in preview mode (question not saved yet), initialize with defaults
+    if (isPreviewQuestion) {
+      console.log('[TableCompletion] Preview mode - initializing with defaults');
+      initializeDefaultTable();
+      setIsEditingTemplate(true); // Enable editing for preview
+      return;
+    }
+
+    // PRIORITY 3: Load template from database for saved questions
     const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode;
     const currentId = `${questionId}-${subQuestionId || 'main'}`;
 
     // Only load if: should load, not currently loading, and haven't loaded this specific question yet
     if (shouldLoadTemplate && !loadingRef.current && lastLoadedId.current !== currentId) {
+      console.log('[TableCompletion] Loading template from database for:', currentId);
       lastLoadedId.current = currentId;
       loadingRef.current = true;
       hasLoadedRef.current = true;
