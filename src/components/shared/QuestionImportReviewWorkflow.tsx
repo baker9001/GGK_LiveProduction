@@ -1001,7 +1001,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   // Handle template saves for complex answer formats
   const handleTemplateSave = useCallback((questionId: string, template: any) => {
-    console.log('[Template Save] Saving template for question:', questionId, template);
+    console.log('[Template Save] ========== TEMPLATE SAVE STARTED ==========');
+    console.log('[Template Save] Question ID:', questionId);
+    console.log('[Template Save] Template data:', template);
+    console.log('[Template Save] Template headers:', template.headers);
+    console.log('[Template Save] Template rows/cols:', template.rows, '/', template.columns);
+    console.log('[Template Save] Template cells count:', template.cells?.length);
 
     // Store in local state for immediate access
     setQuestionTemplates(prev => ({
@@ -1012,9 +1017,11 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     // Find the question in the current questions array
     const question = questions.find(q => q.id === questionId);
     if (!question) {
-      console.warn('[Template Save] Question not found:', questionId);
+      console.error('[Template Save] ❌ Question not found:', questionId);
       return;
     }
+
+    console.log('[Template Save] Found question:', question.id, question.question_number);
 
     // Convert template to correct_answers format
     // For table_completion, store the entire template as a JSON string in correct_answers
@@ -1027,15 +1034,19 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     // Update the question's correct_answers
     const updatedAnswers = [templateAnswer];
 
-    console.log('[Template Save] Updating question with template data:', {
-      questionId,
-      templateCells: template.cells?.length,
-      editableCells: template.cells?.filter((c: any) => c.cellType === 'editable').length
+    console.log('[Template Save] Created answer object:', {
+      answer_type: templateAnswer.answer_type,
+      marks: templateAnswer.marks,
+      answer_text_length: templateAnswer.answer_text.length,
+      answer_text_preview: templateAnswer.answer_text.substring(0, 200)
     });
+
+    console.log('[Template Save] Calling commitQuestionUpdate with correct_answers');
 
     // Trigger the question update which will auto-save
     commitQuestionUpdate(question, { correct_answers: updatedAnswers });
 
+    console.log('[Template Save] ========== TEMPLATE SAVE COMPLETE ==========');
     toast.success('Template saved and will be persisted automatically');
   }, [questions, commitQuestionUpdate]);
 
@@ -1128,13 +1139,40 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       // For table_completion format, extract template from correct_answers if it exists
       let initialValue: string | undefined;
       if (questionContext.answer_format === 'table_completion' && list.length > 0) {
+        console.log('[Template Load] ========== TEMPLATE LOAD STARTED ==========');
+        console.log('[Template Load] Question ID:', questionContext.id);
+        console.log('[Template Load] Answer format:', questionContext.answer_format);
+        console.log('[Template Load] correct_answers list:', list);
+        console.log('[Template Load] correct_answers count:', list.length);
+
         const templateAnswer = list.find(
           (ans: any) => ans.answer_type === 'table_template' || ans.answer_text
         );
+
+        console.log('[Template Load] Found template answer:', templateAnswer);
+
         if (templateAnswer?.answer_text) {
           initialValue = templateAnswer.answer_text;
-          console.log('[Template Load] Loading saved template for question:', questionContext.id);
+          console.log('[Template Load] ✅ Template data found');
+          console.log('[Template Load] Template length:', initialValue.length);
+          console.log('[Template Load] Template preview:', initialValue.substring(0, 200));
+
+          // Try to parse and log the template structure
+          try {
+            const parsed = JSON.parse(initialValue);
+            console.log('[Template Load] Parsed template:', {
+              headers: parsed.headers,
+              rows: parsed.rows,
+              columns: parsed.columns,
+              cellsCount: parsed.cells?.length
+            });
+          } catch (e) {
+            console.error('[Template Load] ❌ Failed to parse template:', e);
+          }
+        } else {
+          console.warn('[Template Load] ⚠️ No template data found in correct_answers');
         }
+        console.log('[Template Load] ========== TEMPLATE LOAD COMPLETE ==========');
       }
 
       return (
