@@ -250,7 +250,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   // Initialize table data from template
   useEffect(() => {
-    if (!isAdminMode) {
+    if (!isTemplateEditor) {
       const data: any[][] = Array(template.rows).fill(null).map(() =>
         Array(template.columns).fill('')
       );
@@ -274,7 +274,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
       setTableData(data);
     }
-  }, [template, value, isAdminMode]);
+  }, [template, value, isTemplateEditor]);
 
   // Cell selection and configuration handlers
   const handleCellClick = useCallback((row: number, col: number, event?: MouseEvent) => {
@@ -580,8 +580,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const handleAfterChange = useCallback((changes: any, source: string) => {
     if (!changes || source === 'loadData') return;
 
-    // Admin mode: Track direct cell edits during template creation
-    if (isAdminMode && isEditingTemplate) {
+    // Template editor mode: Track direct cell edits during template creation
+    if (isTemplateEditor && isEditingTemplate) {
       const updatedValues = { ...cellValues };
       const updatedAnswers = { ...expectedAnswers };
       const updatedTypes = { ...cellTypes };
@@ -638,7 +638,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       completedCells,
       requiredCells: template.editableCells.length
     });
-  }, [template, value, onChange, isAdminMode, isEditingTemplate, cellValues, expectedAnswers, cellTypes]);
+  }, [template, value, onChange, isTemplateEditor, isEditingTemplate, cellValues, expectedAnswers, cellTypes]);
 
   const handleReset = () => {
     onChange({
@@ -1965,14 +1965,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         <HotTable
           ref={hotRef}
           data={tableData}
-          colHeaders={isAdminMode ? headers : template.headers}
+          colHeaders={isTemplateEditor ? headers : template.headers}
           rowHeaders={true}
           width="100%"
           height="auto"
           licenseKey="non-commercial-and-evaluation"
           readOnly={disabled && !isEditingTemplate}
           cells={(row, col) => {
-            if (isAdminMode) {
+            if (isTemplateEditor) {
               const cellKey = `${row}-${col}`;
               const cellType = cellTypes[cellKey];
               return {
