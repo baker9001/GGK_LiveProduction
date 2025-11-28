@@ -160,12 +160,22 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   // Load template from database when in template editor or test modes
   const hasLoadedRef = useRef(false);
+  const loadingRef = useRef(false); // Prevent concurrent loads
+  const lastLoadedId = useRef<string>(''); // Track last loaded question
+
   useEffect(() => {
     // Load template for: template editor mode, admin test mode, or student test mode
     const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode;
-    if (shouldLoadTemplate && !hasLoadedRef.current) {
+    const currentId = `${questionId}-${subQuestionId || 'main'}`;
+
+    // Only load if: should load, not currently loading, and haven't loaded this specific question yet
+    if (shouldLoadTemplate && !loadingRef.current && lastLoadedId.current !== currentId) {
+      lastLoadedId.current = currentId;
+      loadingRef.current = true;
       hasLoadedRef.current = true;
-      loadExistingTemplate();
+      loadExistingTemplate().finally(() => {
+        loadingRef.current = false;
+      });
     }
   }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode]);
 
@@ -195,6 +205,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }
         });
 
+        // Batch state updates to reduce re-renders
         setCellTypes(types);
         setCellValues(values);
         setExpectedAnswers(answers);
@@ -771,7 +782,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       hot.render();
     }
 
-    // Mark as unsaved to trigger auto-save
+    // Mark as unsaved to trigger auto-save (debounced)
     if (isEditingTemplate) {
       setAutoSaveStatus('unsaved');
     }
