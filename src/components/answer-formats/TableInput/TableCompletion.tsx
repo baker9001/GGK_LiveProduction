@@ -148,6 +148,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
 
+  // Check if questionId is a valid UUID (not a preview ID like "q_1")
+  const isValidUUID = (id: string | undefined): boolean => {
+    if (!id) return false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+  };
+
+  // Check if we're in preview mode (question not saved yet)
+  const isPreviewQuestion = !isValidUUID(questionId) || (subQuestionId && !isValidUUID(subQuestionId));
+
   // Preview mode state
   const [previewMode, setPreviewMode] = useState(false);
 
@@ -1342,11 +1352,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                 <Button
                   size="sm"
                   onClick={() => handleSaveTemplate(false)}
-                  disabled={loading}
-                  className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
+                  disabled={loading || isPreviewQuestion}
+                  className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={isPreviewQuestion ? 'Save the question first before saving the template' : 'Save template to database'}
                 >
                   <Save className="w-4 h-4 mr-1" />
-                  Save Template
+                  {isPreviewQuestion ? 'Save Question First' : 'Save Template'}
                 </Button>
               </>
             )}
@@ -1354,8 +1365,20 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
+      {/* Preview Question Warning Banner */}
+      {isEditingTemplate && isPreviewQuestion && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border-2 border-amber-500 dark:border-amber-400">
+          <div className="flex items-center justify-center gap-2">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              Preview Mode: Save the question first to enable template saving
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Preview Mode Banner */}
-      {isEditingTemplate && previewMode && (
+      {isEditingTemplate && previewMode && !isPreviewQuestion && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-500 dark:border-blue-400">
           <div className="flex items-center justify-center gap-2">
             <TableIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
