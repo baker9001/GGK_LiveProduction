@@ -1094,22 +1094,27 @@ export const fetchImportedQuestions = async (importSessionId: string) => {
       .select('*')
       .eq('id', importSessionId)
       .single();
-    
+
     if (error) throw error;
-    
-    if (data?.raw_json) {
+
+    // Prioritize working_json (edited data) over raw_json (original data)
+    if (data?.working_json) {
+      console.log('✅ Loading from working_json (edited data)');
+      return data.working_json;
+    } else if (data?.raw_json) {
+      console.log('⚠️ Loading from raw_json (original data) - no edits yet');
       return data.raw_json;
     } else if (data?.json_file_name) {
       const { data: fileData, error: fileError } = await supabase.storage
         .from('past-paper-imports')
         .download(data.json_file_name);
-      
+
       if (fileError) throw fileError;
-      
+
       const text = await fileData.text();
       return JSON.parse(text);
     }
-    
+
     throw new Error('No data found for this import session');
   } catch (error) {
     console.error('Error fetching imported questions:', error);

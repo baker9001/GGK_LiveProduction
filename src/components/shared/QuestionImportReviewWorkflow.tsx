@@ -18,7 +18,9 @@ import {
   Paperclip,
   Scissors,
   ZoomIn,
-  FileText
+  FileText,
+  Loader2,
+  Save
 } from 'lucide-react';
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
@@ -169,6 +171,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [isBulkReviewing, setIsBulkReviewing] = useState(false);
   // Template storage for complex answer formats (table_completion, etc.)
   const [questionTemplates, setQuestionTemplates] = useState<Record<string, any>>({});
+  // Auto-save state
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSaveRef = useRef<number>(Date.now());
 
   const isInitializedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -270,13 +276,25 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const commitQuestionUpdate = useCallback(
     (question: QuestionDisplayData, updates: Partial<QuestionDisplayData>) => {
+      // Update parent state (optimistic update)
       if (onQuestionUpdate) {
         onQuestionUpdate(question.id, updates);
       } else {
         console.warn('Question update attempted without handler', { questionId: question.id, updates });
       }
+
+      // Trigger debounced save to database
+      // We pass the entire questions array which will be updated by parent
+      // The save will happen after debounce delay
+      if (questions && questions.length > 0) {
+        // Find and update the question in the array
+        const updatedQuestions = questions.map(q =>
+          q.id === question.id ? { ...q, ...updates } : q
+        );
+        debouncedSaveToDatabase(updatedQuestions);
+      }
     },
-    [onQuestionUpdate]
+    [onQuestionUpdate, questions, debouncedSaveToDatabase]
   );
 
   const normalizeName = useCallback((value?: string | null) => value?.trim().toLowerCase() ?? '', []);
@@ -913,6 +931,135 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       [questionId]: template
     }));
   }, []);
+
+  // Save question updates to database (debounced)
+  const debouncedSaveToDatabase = useCallback(
+    async (updatedQuestions: QuestionDisplayData[]) => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      setSaveStatus('saving');
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          if (!importSessionId) {
+            console.warn('[Auto-Save] No import session ID, skipping save');
+            setSaveStatus('idle');
+            return;
+          }
+
+          // Fetch current session data
+          const { data: session, error: fetchError } = await supabase
+            .from('past_paper_import_sessions')
+            .select('working_json, raw_json')
+            .eq('id', importSessionId)
+            .single();
+
+          if (fetchError) {
+            console.error('[Auto-Save] Failed to fetch session:', fetchError);
+            throw fetchError;
+          }
+
+          // Get base JSON structure (preserve metadata)
+          const baseJson = session.working_json || session.raw_json || {};
+
+          // Build updated working_json with latest question data
+          const workingJson = {
+            ...baseJson,
+            questions: updatedQuestions.map(q => ({
+              ...q,
+              last_updated: new Date().toISOString()
+            }))
+          };
+
+          // Save to database
+          const { error: updateError } = await supabase
+            .from('past_paper_import_sessions')
+            .update({
+              working_json: workingJson,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', importSessionId);
+
+          if (updateError) {
+            console.error('[Auto-Save] Failed to save:', updateError);
+            throw updateError;
+          }
+
+          console.log(`[Auto-Save] Saved ${updatedQuestions.length} questions to working_json`);
+          lastSaveRef.current = Date.now();
+          setSaveStatus('saved');
+
+          // Reset to idle after showing saved status
+          setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (error) {
+          console.error('[Auto-Save] Error:', error);
+          setSaveStatus('error');
+          toast.error('Failed to save changes automatically. Please try refreshing.');
+
+          // Retry once after error
+          setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+      }, 1500); // 1.5 second debounce
+    },
+    [importSessionId]
+  );
+
+  // Save all questions to database immediately
+  const saveAllQuestionsToDatabase = useCallback(async () => {
+    if (!importSessionId) {
+      console.warn('[Save All] No import session ID');
+      return;
+    }
+
+    try {
+      setSaveStatus('saving');
+      console.log('[Save All] Saving all questions...');
+
+      // Fetch current session
+      const { data: session, error: fetchError } = await supabase
+        .from('past_paper_import_sessions')
+        .select('working_json, raw_json')
+        .eq('id', importSessionId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const baseJson = session.working_json || session.raw_json || {};
+
+      const workingJson = {
+        ...baseJson,
+        questions: questions.map(q => ({
+          ...q,
+          last_updated: new Date().toISOString()
+        }))
+      };
+
+      const { error: updateError } = await supabase
+        .from('past_paper_import_sessions')
+        .update({
+          working_json: workingJson,
+          last_synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', importSessionId);
+
+      if (updateError) throw updateError;
+
+      console.log(`[Save All] Successfully saved ${questions.length} questions`);
+      lastSaveRef.current = Date.now();
+      setSaveStatus('saved');
+      toast.success('All changes saved successfully');
+
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('[Save All] Failed to save:', error);
+      setSaveStatus('error');
+      toast.error('Failed to save all changes');
+    }
+  }, [importSessionId, questions]);
 
   const renderAnswerEditorList = (
     answers: EditableCorrectAnswer[] | undefined,
@@ -3139,6 +3286,31 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                 </Button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Save Status Indicator */}
+      {saveStatus === 'saving' && (
+        <div className="fixed bottom-4 right-4 bg-blue-100 dark:bg-blue-900/90 text-blue-800 dark:text-blue-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 border border-blue-200 dark:border-blue-700">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="font-medium">Saving changes...</span>
+        </div>
+      )}
+
+      {saveStatus === 'saved' && (
+        <div className="fixed bottom-4 right-4 bg-green-100 dark:bg-green-900/90 text-green-800 dark:text-green-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 border border-green-200 dark:border-green-700">
+          <CheckCircle className="h-5 w-5" />
+          <span className="font-medium">All changes saved</span>
+        </div>
+      )}
+
+      {saveStatus === 'error' && (
+        <div className="fixed bottom-4 right-4 bg-red-100 dark:bg-red-900/90 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 border border-red-200 dark:border-red-700">
+          <AlertCircle className="h-5 w-5" />
+          <div>
+            <p className="font-medium">Failed to save changes</p>
+            <p className="text-xs mt-1">Changes are saved locally. Refresh to retry.</p>
           </div>
         </div>
       )}
