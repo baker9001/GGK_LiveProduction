@@ -57,6 +57,17 @@ export class TableTemplateService {
         throw new Error('Either questionId or subQuestionId must be provided');
       }
 
+      // Validate UUID format (reject preview/temporary IDs like "q_1")
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      if (template.questionId && !uuidRegex.test(template.questionId)) {
+        throw new Error('Cannot save template for preview question. Please save the question first.');
+      }
+
+      if (template.subQuestionId && !uuidRegex.test(template.subQuestionId)) {
+        throw new Error('Cannot save template for preview sub-question. Please save the question first.');
+      }
+
       if (template.rows < 2 || template.rows > 50) {
         throw new Error('Rows must be between 2 and 50');
       }
@@ -149,6 +160,25 @@ export class TableTemplateService {
     try {
       if (!questionId && !subQuestionId) {
         throw new Error('Either questionId or subQuestionId must be provided');
+      }
+
+      // Validate UUID format (reject preview/temporary IDs)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      if (questionId && !uuidRegex.test(questionId)) {
+        // Preview question - return empty template
+        return {
+          success: true,
+          template: undefined
+        };
+      }
+
+      if (subQuestionId && !uuidRegex.test(subQuestionId)) {
+        // Preview sub-question - return empty template
+        return {
+          success: true,
+          template: undefined
+        };
       }
 
       // 1. Fetch template
