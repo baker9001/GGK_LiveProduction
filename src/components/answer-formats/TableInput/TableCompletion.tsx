@@ -32,7 +32,7 @@ import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
 import { validateTableData } from '../utils/dataValidation';
 import { TableTemplateService, type TableTemplateDTO, type TableCellDTO } from '@/services/TableTemplateService';
-import toast from 'react-hot-toast';
+import { toast } from '@/components/shared/Toast';
 
 export interface TableTemplate {
   rows: number;
@@ -240,7 +240,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
     } catch (error) {
       console.error('Error loading template:', error);
-      toast.error('Failed to load template');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error('Failed to load template', {
+        description: errorMessage
+      });
       initializeDefaultTable();
       // Auto-enable edit mode on error (likely means no template exists)
       setIsEditingTemplate(true);
@@ -1047,7 +1050,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       console.error('Error saving template:', error);
       setAutoSaveStatus('unsaved');
       if (!silent) {
-        toast.error('Failed to save template');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        toast.error('Failed to save template', {
+          description: errorMessage
+        });
       }
     } finally {
       setLoading(false);
