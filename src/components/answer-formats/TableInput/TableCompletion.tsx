@@ -114,7 +114,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 }) => {
   // Determine actual mode: only use explicit isTemplateEditor prop, no fallback
   const isTemplateEditor = isTemplateEditorProp ?? false;
-  const isEditingTemplate = isTemplateEditor && !isStudentTestMode && !isAdminTestMode;
+  // isEditingTemplate is separate state that can be toggled in template editor mode
+  const [isEditingTemplate, setIsEditingTemplate] = useState(isTemplateEditor);
   const hotRef = useRef<HotTable>(null);
   const [tableData, setTableData] = useState<any[][]>([]);
   const [validation, setValidation] = useState<any>(null);
@@ -157,14 +158,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   // Help panel state
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
-  // Load template from database when in admin mode
+  // Load template from database when in template editor or test modes
   const hasLoadedRef = useRef(false);
   useEffect(() => {
-    if (isAdminMode && !hasLoadedRef.current) {
+    // Load template for: template editor mode, admin test mode, or student test mode
+    const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode;
+    if (shouldLoadTemplate && !hasLoadedRef.current) {
       hasLoadedRef.current = true;
       loadExistingTemplate();
     }
-  }, [questionId, subQuestionId, isAdminMode]);
+  }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode]);
 
   const loadExistingTemplate = async () => {
     setLoading(true);
@@ -761,16 +764,18 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     newHeaders[index] = value;
     setHeaders(newHeaders);
 
-    // Force Handsontable to update column headers
+    // Force Handsontable to update column headers immediately
     const hot = hotRef.current?.hotInstance;
     if (hot) {
-      // Use setTimeout to ensure state has propagated
-      setTimeout(() => {
-        hot.updateSettings({ colHeaders: newHeaders }, false);
-        hot.render();
-      }, 0);
+      hot.updateSettings({ colHeaders: newHeaders }, false);
+      hot.render();
     }
-  }, [headers]);
+
+    // Mark as unsaved to trigger auto-save
+    if (isEditingTemplate) {
+      setAutoSaveStatus('unsaved');
+    }
+  }, [headers, isEditingTemplate]);
 
   const handleApplyCellType = useCallback(() => {
     if (selectedCells.size === 0 || !tempCellValue.trim()) return;
@@ -1038,12 +1043,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
   };
 
-  // Auto-save: Monitor changes and mark as unsaved
+  // Auto-save: Monitor changes and mark as unsaved (excluding headers to prevent continuous refresh)
   useEffect(() => {
     if (isEditingTemplate) {
       setAutoSaveStatus('unsaved');
     }
-  }, [cellTypes, cellValues, expectedAnswers, headers, rows, columns, isEditingTemplate]);
+  }, [cellTypes, cellValues, expectedAnswers, rows, columns, isEditingTemplate]);
 
   // Auto-save: Debounced save every 10 seconds when unsaved
   useEffect(() => {
