@@ -167,6 +167,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(false);
   const taxonomyErrorNotifiedRef = useRef(false);
   const [isBulkReviewing, setIsBulkReviewing] = useState(false);
+  // Template storage for complex answer formats (table_completion, etc.)
+  const [questionTemplates, setQuestionTemplates] = useState<Record<string, any>>({});
 
   const isInitializedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -528,9 +530,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
+    // Formats that require specialized components (should NOT trigger auto-fill)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const isComplexFormat = question.answer_format && complexFormats.includes(question.answer_format);
+
     // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    // Skip auto-fill for complex formats that have their own specialized editors
     const questionType = question.question_type || 'descriptive';
-    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf' && !isComplexFormat;
 
     if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
@@ -549,9 +560,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
+    // Formats that require specialized components (should NOT trigger auto-fill)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const isComplexFormat = question.answer_format && complexFormats.includes(question.answer_format);
+
     // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    // Skip auto-fill for complex formats that have their own specialized editors
     const questionType = question.question_type || 'descriptive';
-    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf' && !isComplexFormat;
 
     if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
@@ -570,9 +590,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
+    // Formats that require specialized components (should NOT trigger auto-fill)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const isComplexFormat = question.answer_format && complexFormats.includes(question.answer_format);
+
     // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    // Skip auto-fill for complex formats that have their own specialized editors
     const questionType = question.question_type || 'descriptive';
-    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf' && !isComplexFormat;
 
     if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
@@ -877,6 +906,14 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     );
   };
 
+  // Handle template saves for complex answer formats
+  const handleTemplateSave = useCallback((questionId: string, template: any) => {
+    setQuestionTemplates(prev => ({
+      ...prev,
+      [questionId]: template
+    }));
+  }, []);
+
   const renderAnswerEditorList = (
     answers: EditableCorrectAnswer[] | undefined,
     config: {
@@ -934,6 +971,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               correct_answers: list
             }}
             mode="admin"
+            forceTemplateEditor={true}
+            onTemplateSave={(template) => handleTemplateSave(questionContext.id, template)}
             onChange={(newAnswers) => {
               // DynamicAnswerField returns the full answers array
               // We need to sync this back to our state

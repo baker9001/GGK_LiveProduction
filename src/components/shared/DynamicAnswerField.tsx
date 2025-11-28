@@ -182,6 +182,10 @@ interface AnswerFieldProps {
   validationMode?: 'strict' | 'flexible' | 'owtte' | 'ora';
   subjectSpecificConfig?: SubjectSpecificConfig;
   triggerValidation?: boolean;
+  // Force template editor mode for complex formats (e.g., table_completion)
+  forceTemplateEditor?: boolean;
+  // Callback for template saves in preview mode
+  onTemplateSave?: (template: any) => void;
 }
 
 const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
@@ -197,7 +201,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   contextRequirements,
   validationMode = 'flexible',
   subjectSpecificConfig,
-  triggerValidation = false
+  triggerValidation = false,
+  forceTemplateEditor = false,
+  onTemplateSave
 }) => {
   const questionIdRef = useRef(question.id);
   const isInitializedRef = useRef(false);
@@ -762,7 +768,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       const parsedTableCompletion = parseJsonValue<TableCompletionData | null>(value, null);
 
       // Determine the correct mode
-      const isTemplateEditing = mode === 'admin' && isEditing;
+      const isTemplateEditing = (mode === 'admin' && isEditing) || forceTemplateEditor;
       const isAdminTesting = mode === 'qa_preview';
       const isStudentTest = mode === 'exam' && !isEditing;
 
@@ -778,6 +784,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           isAdminTestMode={isAdminTesting}
           isStudentTestMode={isStudentTest}
           showValidationWarnings={triggerValidation && isStudentTest}
+          onTemplateSave={onTemplateSave}
         />
       );
     }
