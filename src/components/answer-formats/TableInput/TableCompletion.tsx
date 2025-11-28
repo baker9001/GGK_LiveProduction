@@ -112,8 +112,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   defaultRows = 5,
   defaultCols = 5
 }) => {
-  // Determine actual mode: prioritize new props, fallback to deprecated isAdminMode
-  const isTemplateEditor = isTemplateEditorProp ?? isAdminMode;
+  // Determine actual mode: only use explicit isTemplateEditor prop, no fallback
+  const isTemplateEditor = isTemplateEditorProp ?? false;
   const isEditingTemplate = isTemplateEditor && !isStudentTestMode && !isAdminTestMode;
   const hotRef = useRef<HotTable>(null);
   const [tableData, setTableData] = useState<any[][]>([]);
@@ -1206,13 +1206,47 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
+      {/* Template Editor Mode Banner */}
+      {isEditingTemplate && (
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div>
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                Template Editor Mode
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                Configure table structure, locked cells, and expected answers
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Test Simulation Mode Banner */}
+      {isAdminTestMode && !isEditingTemplate && (
+        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 dark:border-yellow-400 rounded-lg">
+          <div className="flex items-center gap-2">
+            <TableIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+            <div>
+              <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
+                Test Simulation Mode
+              </p>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                Answer as a student would - Template editor is hidden
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Admin Mode Controls */}
-      {isAdminMode && !isStudentTestMode && (
+      {isTemplateEditor && !isStudentTestMode && (
         <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
           <div className="flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-              Template Builder Mode
+              Template Builder Controls
             </span>
           </div>
           <div className="flex items-center gap-2">

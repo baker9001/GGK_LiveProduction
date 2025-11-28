@@ -1937,7 +1937,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             }}
             disabled={disabled}
             showCorrectAnswers={showCorrectAnswer}
-            isAdminMode={mode === 'admin' || mode === 'qa_preview'}
+            isTemplateEditor={false}
+            isAdminTestMode={mode === 'qa_preview'}
+            isStudentTestMode={mode === 'exam'}
           />
           {renderCorrectAnswers()}
         </div>
