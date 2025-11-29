@@ -812,36 +812,64 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       const isAdminTesting = mode === 'qa_preview';
       const isStudentTest = mode === 'exam' && !isEditing;
 
-      // CRITICAL FIX: Load template from correct_answers and student data from preview_data
+      // CRITICAL FIX: Load template from correct_answers[0].answer_text and student data from value
       let templateProp: TableTemplate | undefined;
       let valueProp: TableCompletionData | null = null;
 
-      // 1. Load template structure from correct_answers
-      if (value && typeof value === 'string') {
-        try {
-          const parsed = JSON.parse(value);
+      // 1. Load template structure from correct_answers[0].answer_text
+      // Template should be in answer_text field, NOT in value prop
+      if (question.correct_answers && question.correct_answers.length > 0) {
+        const firstAnswer = question.correct_answers[0];
+        const templateSource = (firstAnswer as any).answer_text || null;
 
-          // Check if it's a TableTemplateDTO (has cells array with rowIndex/colIndex)
-          if (parsed && Array.isArray(parsed.cells) && parsed.cells.length > 0 &&
-              'rowIndex' in parsed.cells[0] && 'colIndex' in parsed.cells[0]) {
-            // This is a TableTemplateDTO - convert it to TableTemplate
-            console.log('[DynamicAnswerField] Detected TableTemplateDTO, converting to TableTemplate');
-            templateProp = convertTableTemplateDTOToTemplate(parsed as TableTemplateDTO);
-            console.log('[DynamicAnswerField] Converted template with headers:', templateProp.headers);
+        if (templateSource && typeof templateSource === 'string') {
+          try {
+            const parsed = JSON.parse(templateSource);
+
+            // Check if it's a TableTemplateDTO (has cells array with rowIndex/colIndex)
+            if (parsed && Array.isArray(parsed.cells) && parsed.cells.length > 0 &&
+                'rowIndex' in parsed.cells[0] && 'colIndex' in parsed.cells[0]) {
+              // This is a TableTemplateDTO - convert it to TableTemplate
+              console.log('[DynamicAnswerField] ✅ Loaded template from correct_answers[0].answer_text');
+              templateProp = convertTableTemplateDTOToTemplate(parsed as TableTemplateDTO);
+              console.log('[DynamicAnswerField] Converted template:', {
+                rows: templateProp.rows,
+                columns: templateProp.columns,
+                headers: templateProp.headers,
+                editableCells: templateProp.editableCells.length
+              });
+            }
+          } catch (e) {
+            console.warn('[DynamicAnswerField] Failed to parse template from answer_text:', e);
           }
-        } catch (e) {
-          console.warn('[DynamicAnswerField] Failed to parse table completion template:', e);
         }
       }
 
-      // 2. Load student/preview data from preview_data field
-      if (question.preview_data && typeof question.preview_data === 'string') {
+      // 2. Load student answer data from value prop (for practice/exam mode)
+      //    OR from preview_data (for review/admin preview mode)
+      if (mode === 'practice' || mode === 'exam') {
+        // In practice/exam mode, value contains student's current answers
+        if (value && typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            if (parsed && 'studentAnswers' in parsed) {
+              valueProp = parsed as TableCompletionData;
+              console.log('[DynamicAnswerField] ✅ Loaded student answers from value prop:', {
+                completedCells: valueProp.completedCells,
+                requiredCells: valueProp.requiredCells
+              });
+            }
+          } catch (e) {
+            console.warn('[DynamicAnswerField] Failed to parse student answer data from value:', e);
+          }
+        }
+      } else if (question.preview_data && typeof question.preview_data === 'string') {
+        // In review/admin mode, load from preview_data
         try {
           const parsed = JSON.parse(question.preview_data);
           if (parsed && 'studentAnswers' in parsed) {
-            // This is TableCompletionData (student answers)
-            console.log('[DynamicAnswerField] ✅ Loading preview data:', parsed);
             valueProp = parsed as TableCompletionData;
+            console.log('[DynamicAnswerField] ✅ Loaded preview data:', valueProp);
           }
         } catch (e) {
           console.warn('[DynamicAnswerField] Failed to parse preview_data:', e);
