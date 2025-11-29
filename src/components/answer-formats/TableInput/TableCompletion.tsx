@@ -913,6 +913,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   }, [columns, minCols, headers, tableData, rows, cellTypes, cellValues, expectedAnswers]);
 
   const handleHeaderChange = useCallback((index: number, value: string) => {
+    console.log(`[TableCompletion] Header change: Column ${index} = "${value}"`);
+
     const newHeaders = [...headers];
     newHeaders[index] = value;
     setHeaders(newHeaders);
@@ -926,9 +928,48 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
     // Mark as unsaved to trigger auto-save (debounced)
     if (isEditingTemplate) {
+      console.log('[TableCompletion] Marking template as unsaved due to header change');
       setAutoSaveStatus('unsaved');
+
+      // CRITICAL FIX: Immediately trigger onChange to persist header changes
+      // This ensures headers are saved with the same fast auto-save flow as cell content
+      console.log('[TableCompletion] Triggering debounced onChange for header change');
+
+      // Build current state and call onChange
+      const studentAnswers: Record<string, string | number> = {};
+
+      // Include locked cell values
+      Object.entries(cellValues).forEach(([key, val]) => {
+        if (val && String(val).trim().length > 0) {
+          studentAnswers[key] = val;
+        }
+      });
+
+      // Include expected answers for editable cells
+      Object.entries(expectedAnswers).forEach(([key, val]) => {
+        if (val && String(val).trim().length > 0) {
+          studentAnswers[key] = val;
+        }
+      });
+
+      const completedCells = Object.keys(studentAnswers).length;
+      const requiredCells = Object.values(cellTypes).filter(t => t === 'editable').length || 1;
+
+      console.log('[TableCompletion] Header change triggering onChange with current state:', {
+        headerIndex: index,
+        newHeaderValue: value,
+        studentAnswersCount: completedCells,
+        requiredCells
+      });
+
+      // Trigger debounced onChange to save current state (includes header metadata indirectly)
+      debouncedOnChange({
+        studentAnswers,
+        completedCells,
+        requiredCells
+      });
     }
-  }, [headers, isEditingTemplate]);
+  }, [headers, isEditingTemplate, cellValues, expectedAnswers, cellTypes, debouncedOnChange]);
 
   const handleApplyCellType = useCallback(() => {
     if (selectedCells.size === 0 || !tempCellValue.trim()) return;
