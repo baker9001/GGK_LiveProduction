@@ -148,6 +148,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
 
+  // Debounced onChange timer for fast auto-save
+  const onChangeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Check if questionId is a valid UUID (not a preview ID like "q_1")
   const isValidUUID = (id: string | undefined): boolean => {
     if (!id) return false;
@@ -669,8 +672,30 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
            String(correctCell.value).trim().toLowerCase();
   };
 
+  // Debounced onChange to prevent excessive save calls
+  const debouncedOnChange = useCallback((data: TableCompletionData) => {
+    // Clear any pending timer
+    if (onChangeTimerRef.current) {
+      clearTimeout(onChangeTimerRef.current);
+    }
+
+    // Set new timer for 1.5 seconds (fast auto-save like other fields)
+    onChangeTimerRef.current = setTimeout(() => {
+      console.log('[TableCompletion] Debounced onChange triggered:', data);
+      onChange(data);
+      onChangeTimerRef.current = null;
+    }, 1500);
+  }, [onChange]);
+
   const handleAfterChange = useCallback((changes: any, source: string) => {
     if (!changes || source === 'loadData') return;
+
+    console.log('[TableCompletion] handleAfterChange:', {
+      changes,
+      source,
+      isTemplateEditor,
+      isEditingTemplate
+    });
 
     // Template editor mode: Track direct cell edits during template creation
     if (isTemplateEditor && isEditingTemplate) {
@@ -701,6 +726,36 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       setCellValues(updatedValues);
       setExpectedAnswers(updatedAnswers);
       setCellTypes(updatedTypes);
+
+      // CRITICAL FIX: Also trigger onChange for auto-save
+      // Build student answers from current cell values (for preview/testing)
+      const studentAnswers: Record<string, string | number> = {};
+      Object.entries(updatedValues).forEach(([key, val]) => {
+        if (val && String(val).trim().length > 0) {
+          studentAnswers[key] = val;
+        }
+      });
+      Object.entries(updatedAnswers).forEach(([key, val]) => {
+        if (val && String(val).trim().length > 0) {
+          studentAnswers[key] = val;
+        }
+      });
+
+      const completedCells = Object.keys(studentAnswers).length;
+      const requiredCells = Object.values(updatedTypes).filter(t => t === 'editable').length || 1;
+
+      console.log('[TableCompletion] Triggering debounced onChange from template editor:', {
+        studentAnswers,
+        completedCells,
+        requiredCells
+      });
+
+      debouncedOnChange({
+        studentAnswers,
+        completedCells,
+        requiredCells
+      });
+
       return;
     }
 
@@ -725,12 +780,18 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     completedCells = Object.values(studentAnswers)
       .filter(v => v && String(v).trim().length > 0).length;
 
-    onChange({
+    console.log('[TableCompletion] Triggering debounced onChange from student mode:', {
       studentAnswers,
       completedCells,
       requiredCells: template.editableCells.length
     });
-  }, [template, value, onChange, isTemplateEditor, isEditingTemplate, cellValues, expectedAnswers, cellTypes]);
+
+    debouncedOnChange({
+      studentAnswers,
+      completedCells,
+      requiredCells: template.editableCells.length
+    });
+  }, [template, value, debouncedOnChange, isTemplateEditor, isEditingTemplate, cellValues, expectedAnswers, cellTypes]);
 
   const handleReset = () => {
     onChange({
@@ -1054,6 +1115,40 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       setShowTemplateValidationWarnings(true);
     }
 
+    // CRITICAL FIX: Flush any pending debounced onChange immediately
+    if (onChangeTimerRef.current) {
+      clearTimeout(onChangeTimerRef.current);
+      onChangeTimerRef.current = null;
+
+      // Build and trigger immediate onChange for pending data
+      const studentAnswers: Record<string, string | number> = {};
+      Object.entries(cellValues).forEach(([key, val]) => {
+        if (val && String(val).trim().length > 0) {
+          studentAnswers[key] = val;
+        }
+      });
+      Object.entries(expectedAnswers).forEach(([key, val]) => {
+        if (val && String(val).trim().length > 0) {
+          studentAnswers[key] = val;
+        }
+      });
+
+      const completedCells = Object.keys(studentAnswers).length;
+      const requiredCells = Object.values(cellTypes).filter(t => t === 'editable').length || 1;
+
+      console.log('[TableCompletion] Flushing pending onChange before template save:', {
+        studentAnswers,
+        completedCells,
+        requiredCells
+      });
+
+      onChange({
+        studentAnswers,
+        completedCells,
+        requiredCells
+      });
+    }
+
     // Check for validation issues
     const editableCellsCount = Object.values(cellTypes).filter(type => type === 'editable').length;
     const answersSetCount = Object.values(expectedAnswers).filter(v => v && String(v).trim().length > 0).length;
@@ -1203,16 +1298,27 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
   }, [cellTypes, cellValues, expectedAnswers, rows, columns, isEditingTemplate]);
 
-  // Auto-save: Debounced save every 10 seconds when unsaved
+  // Auto-save: Debounced save every 2 seconds when unsaved (fast auto-save)
   useEffect(() => {
     if (autoSaveStatus === 'unsaved' && isEditingTemplate) {
       const timer = setTimeout(() => {
+        console.log('[TableCompletion] Auto-save template structure triggered');
         handleSaveTemplate(true); // Silent save
-      }, 10000); // 10 seconds
+      }, 2000); // 2 seconds (fast like other fields)
 
       return () => clearTimeout(timer);
     }
   }, [autoSaveStatus, isEditingTemplate, cellTypes, cellValues, expectedAnswers, headers, rows, columns]);
+
+  // Cleanup: Clear debounced onChange timer on unmount
+  useEffect(() => {
+    return () => {
+      if (onChangeTimerRef.current) {
+        clearTimeout(onChangeTimerRef.current);
+        onChangeTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const completionPercentage = value && value.requiredCells > 0
     ? Math.round((value.completedCells / value.requiredCells) * 100)
