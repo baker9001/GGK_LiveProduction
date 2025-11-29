@@ -4307,6 +4307,72 @@ function QuestionsTabInner({
     });
   };
 
+  // Auto-save functionality for question updates (including table templates)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveQuestionsToDatabase = useCallback(async (updatedQuestions: ProcessedQuestion[]) => {
+    // Clear any existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce the save by 1.5 seconds
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        if (!importSession?.id) {
+          console.warn('[Auto-Save QuestionsTab] No import session ID');
+          return;
+        }
+
+        console.log('[Auto-Save QuestionsTab] Saving', updatedQuestions.length, 'questions to database');
+
+        // Fetch current session data
+        const { data: session, error: fetchError } = await supabase
+          .from('past_paper_import_sessions')
+          .select('working_json, raw_json')
+          .eq('id', importSession.id)
+          .single();
+
+        if (fetchError) {
+          console.error('[Auto-Save QuestionsTab] Failed to fetch session:', fetchError);
+          throw fetchError;
+        }
+
+        // Get base JSON structure (preserve metadata)
+        const baseJson = session.working_json || session.raw_json || {};
+
+        // Build updated working_json with latest question data
+        const workingJson = {
+          ...baseJson,
+          questions: updatedQuestions.map(q => ({
+            ...q,
+            last_updated: new Date().toISOString()
+          }))
+        };
+
+        // Save to database
+        const { error: updateError } = await supabase
+          .from('past_paper_import_sessions')
+          .update({
+            working_json: workingJson,
+            last_synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', importSession.id);
+
+        if (updateError) {
+          console.error('[Auto-Save QuestionsTab] Failed to save:', updateError);
+          throw updateError;
+        }
+
+        console.log('✅ [Auto-Save QuestionsTab] Successfully saved', updatedQuestions.length, 'questions');
+        toast.success('Changes saved successfully', { duration: 2000 });
+      } catch (error) {
+        console.error('❌ [Auto-Save QuestionsTab] Error:', error);
+        toast.error('Failed to save changes automatically. Please try again.');
+      }
+    }, 1500); // 1.5 second debounce
+  }, [importSession?.id]);
+
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
@@ -4345,35 +4411,48 @@ function QuestionsTabInner({
   };
 
   const handleQuestionUpdateFromReview = (questionId: string, updates: Partial<QuestionDisplayData>) => {
-    setQuestions(prev => prev.map(q => {
-      if (q.id !== questionId) {
-        return q;
+    console.log('[QuestionsTab] Question update received:', { questionId, updates: Object.keys(updates) });
+
+    setQuestions(prev => {
+      const updatedQuestions = prev.map(q => {
+        if (q.id !== questionId) {
+          return q;
+        }
+
+        return {
+          ...q,
+          question_text: updates.question_text ?? q.question_text,
+          marks: updates.marks ?? q.marks,
+          unit: updates.unit ?? q.unit,
+          unit_id: updates.unit_id ?? q.unit_id,
+          difficulty: updates.difficulty ?? q.difficulty,
+          topic: updates.topic ?? q.topic,
+          topic_id: updates.topic_id ?? q.topic_id,
+          subtopic: updates.subtopic ?? q.subtopic,
+          subtopic_id: updates.subtopic_id ?? q.subtopic_id,
+          answer_format: updates.answer_format ?? q.answer_format,
+          answer_requirement: updates.answer_requirement ?? q.answer_requirement,
+          hint: updates.hint ?? q.hint,
+          explanation: updates.explanation ?? q.explanation,
+          correct_answers: updates.correct_answers ?? q.correct_answers,
+          options: updates.options ?? q.options,
+          requires_manual_marking: updates.requires_manual_marking ?? q.requires_manual_marking,
+          marking_criteria: updates.marking_criteria ?? q.marking_criteria,
+          parts: updates.parts ?? q.parts,
+          figure_required: updates.figure_required ?? q.figure_required,
+          figure: updates.figure ?? q.figure,
+        };
+      });
+
+      // CRITICAL FIX: Trigger auto-save to database after state update
+      // This ensures table template changes are persisted
+      if (importSession?.id) {
+        console.log('[QuestionsTab] Triggering auto-save for updated questions');
+        saveQuestionsToDatabase(updatedQuestions);
       }
 
-      return {
-        ...q,
-        question_text: updates.question_text ?? q.question_text,
-        marks: updates.marks ?? q.marks,
-        unit: updates.unit ?? q.unit,
-        unit_id: updates.unit_id ?? q.unit_id,
-        difficulty: updates.difficulty ?? q.difficulty,
-        topic: updates.topic ?? q.topic,
-        topic_id: updates.topic_id ?? q.topic_id,
-        subtopic: updates.subtopic ?? q.subtopic,
-        subtopic_id: updates.subtopic_id ?? q.subtopic_id,
-        answer_format: updates.answer_format ?? q.answer_format,
-        answer_requirement: updates.answer_requirement ?? q.answer_requirement,
-        hint: updates.hint ?? q.hint,
-        explanation: updates.explanation ?? q.explanation,
-        correct_answers: updates.correct_answers ?? q.correct_answers,
-        options: updates.options ?? q.options,
-        requires_manual_marking: updates.requires_manual_marking ?? q.requires_manual_marking,
-        marking_criteria: updates.marking_criteria ?? q.marking_criteria,
-        parts: updates.parts ?? q.parts,
-        figure_required: updates.figure_required ?? q.figure_required,
-        figure: updates.figure ?? q.figure,
-      };
-    }));
+      return updatedQuestions;
+    });
   };
 
   const handleRequestSnippingTool = (questionId: string, context?: { partIndex?: number; subpartIndex?: number }) => {
