@@ -135,6 +135,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [loading, setLoading] = useState(false);
   const [showTemplateValidationWarnings, setShowTemplateValidationWarnings] = useState(false);
 
+  // ✅ NEW: Per-cell marking configuration state
+  const [cellMarks, setCellMarks] = useState<Record<string, number>>({});
+  const [cellCaseSensitive, setCellCaseSensitive] = useState<Record<string, boolean>>({});
+  const [cellEquivalentPhrasing, setCellEquivalentPhrasing] = useState<Record<string, boolean>>({});
+  const [cellAlternatives, setCellAlternatives] = useState<Record<string, string[]>>({});
+
+  // ✅ NEW: Table metadata state
+  const [tableTitle, setTableTitle] = useState<string>('');
+  const [tableDescription, setTableDescription] = useState<string>('');
+
   // Inline editing popover state
   const [inlineEditCell, setInlineEditCell] = useState<{row: number; col: number; x: number; y: number} | null>(null);
   const [inlineEditValue, setInlineEditValue] = useState('');
@@ -273,6 +283,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         const values: Record<string, string> = {};
         const answers: Record<string, string> = {};
 
+        // ✅ NEW: Build marking configuration from template cells
+        const marks: Record<string, number> = {};
+        const caseSensitive: Record<string, boolean> = {};
+        const equivalentPhrasing: Record<string, boolean> = {};
+        const alternatives: Record<string, string[]> = {};
+
         tmpl.cells.forEach(cell => {
           const key = `${cell.rowIndex}-${cell.colIndex}`;
           types[key] = cell.cellType;
@@ -281,12 +297,30 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           } else if (cell.cellType === 'editable' && cell.expectedAnswer) {
             answers[key] = cell.expectedAnswer;
           }
+
+          // ✅ Load marking configuration (defaults to standard values if not set)
+          if (cell.cellType === 'editable') {
+            marks[key] = cell.marks ?? 1;
+            caseSensitive[key] = cell.caseSensitive ?? false;
+            equivalentPhrasing[key] = cell.acceptsEquivalentPhrasing ?? false;
+            alternatives[key] = cell.alternativeAnswers ?? [];
+          }
         });
+
+        // ✅ Load table metadata
+        setTableTitle(tmpl.title || '');
+        setTableDescription(tmpl.description || '');
 
         // Batch state updates to reduce re-renders
         setCellTypes(types);
         setCellValues(values);
         setExpectedAnswers(answers);
+
+        // ✅ Set marking configuration state
+        setCellMarks(marks);
+        setCellCaseSensitive(caseSensitive);
+        setCellEquivalentPhrasing(equivalentPhrasing);
+        setCellAlternatives(alternatives);
 
         // Initialize table data
         const data: any[][] = Array(tmpl.rows).fill(null).map(() =>
@@ -574,28 +608,112 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       td.style.position = 'relative';
       td.classList.add('editable-cell');
 
-      // Add visual badge for editable cells in admin mode
-      if (isEditingTemplate && !td.querySelector('.cell-badge')) {
-        const badge = document.createElement('span');
-        badge.className = 'cell-badge';
-        // Show checkmark if expected answer is set, otherwise pencil
-        badge.innerHTML = hasExpectedAnswer ? '✓' : '✏️';
-        badge.title = hasExpectedAnswer ? 'Editable cell with expected answer set' : 'Editable cell - set expected answer';
-        badge.style.cssText = `
+      // Add visual badges for editable cells in admin mode
+      if (isEditingTemplate && !td.querySelector('.cell-badges-container')) {
+        const badgesContainer = document.createElement('div');
+        badgesContainer.className = 'cell-badges-container';
+        badgesContainer.style.cssText = `
           position: absolute;
           top: 2px;
           right: 2px;
+          display: flex;
+          gap: 2px;
+          align-items: center;
+          pointer-events: none;
+          z-index: 10;
+        `;
+
+        // Main status badge (checkmark or pencil)
+        const mainBadge = document.createElement('span');
+        mainBadge.className = 'cell-badge';
+        mainBadge.innerHTML = hasExpectedAnswer ? '✓' : '✏️';
+        mainBadge.title = hasExpectedAnswer ? 'Expected answer set' : 'Set expected answer';
+        mainBadge.style.cssText = `
           font-size: ${hasExpectedAnswer ? '14px' : '11px'};
           font-weight: ${hasExpectedAnswer ? 'bold' : 'normal'};
           opacity: 0.8;
-          pointer-events: none;
-          z-index: 10;
           background: ${hasExpectedAnswer ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'};
           color: ${hasExpectedAnswer ? '#059669' : '#d97706'};
           padding: 2px 4px;
           border-radius: 3px;
         `;
-        td.appendChild(badge);
+        badgesContainer.appendChild(mainBadge);
+
+        // Marking configuration badges
+        const marks = cellMarks[cellKey] ?? 1;
+        const isCaseSensitive = cellCaseSensitive[cellKey] ?? false;
+        const hasEquivPhrasing = cellEquivalentPhrasing[cellKey] ?? false;
+        const altCount = (cellAlternatives[cellKey] || []).filter(a => a.trim()).length;
+
+        // Show marks badge if not default (1)
+        if (marks > 1) {
+          const marksBadge = document.createElement('span');
+          marksBadge.className = 'marks-badge';
+          marksBadge.innerHTML = `${marks}pt${marks > 1 ? 's' : ''}`;
+          marksBadge.title = `Worth ${marks} mark${marks > 1 ? 's' : ''}`;
+          marksBadge.style.cssText = `
+            font-size: 9px;
+            font-weight: bold;
+            background: #fbbf24;
+            color: #78350f;
+            padding: 2px 4px;
+            border-radius: 3px;
+          `;
+          badgesContainer.appendChild(marksBadge);
+        }
+
+        // Show case sensitivity badge
+        if (isCaseSensitive) {
+          const caseBadge = document.createElement('span');
+          caseBadge.className = 'case-badge';
+          caseBadge.innerHTML = 'Aa';
+          caseBadge.title = 'Case sensitive';
+          caseBadge.style.cssText = `
+            font-size: 9px;
+            font-weight: bold;
+            background: #dc2626;
+            color: white;
+            padding: 2px 4px;
+            border-radius: 3px;
+          `;
+          badgesContainer.appendChild(caseBadge);
+        }
+
+        // Show equivalent phrasing badge
+        if (hasEquivPhrasing) {
+          const equivBadge = document.createElement('span');
+          equivBadge.className = 'equiv-badge';
+          equivBadge.innerHTML = '≈';
+          equivBadge.title = 'Accepts equivalent phrasing';
+          equivBadge.style.cssText = `
+            font-size: 11px;
+            font-weight: bold;
+            background: #3b82f6;
+            color: white;
+            padding: 2px 4px;
+            border-radius: 3px;
+          `;
+          badgesContainer.appendChild(equivBadge);
+        }
+
+        // Show alternatives count badge
+        if (altCount > 0) {
+          const altBadge = document.createElement('span');
+          altBadge.className = 'alt-badge';
+          altBadge.innerHTML = `+${altCount}`;
+          altBadge.title = `${altCount} alternative answer${altCount > 1 ? 's' : ''}`;
+          altBadge.style.cssText = `
+            font-size: 9px;
+            font-weight: bold;
+            background: #8b5cf6;
+            color: white;
+            padding: 2px 4px;
+            border-radius: 3px;
+          `;
+          badgesContainer.appendChild(altBadge);
+        }
+
+        td.appendChild(badgesContainer);
       }
 
       // Add distinctive border in edit mode
@@ -660,7 +778,24 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     return td;
-  }, [template, showCorrectAnswers, isEditingTemplate, selectedCells, cellTypes, handleCellClick, handleCellRightClick, paintModeEnabled, previewMode]);
+  }, [
+    template,
+    showCorrectAnswers,
+    isEditingTemplate,
+    selectedCells,
+    cellTypes,
+    expectedAnswers,
+    cellMarks,
+    cellCaseSensitive,
+    cellEquivalentPhrasing,
+    cellAlternatives,
+    handleCellClick,
+    handleCellRightClick,
+    paintModeEnabled,
+    previewMode,
+    isStudentTestMode,
+    showValidationWarnings
+  ]);
 
   const checkAnswer = (row: number, col: number, studentValue: any): boolean => {
     if (!template.correctAnswers || !autoGrade) return true;
@@ -1227,8 +1362,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               cellType: type,
               lockedValue: type === 'locked' ? (cellValues[key] || '') : undefined,
               expectedAnswer: type === 'editable' ? (expectedAnswers[key] || '') : undefined,
-              marks: 1,
-              caseSensitive: false
+              // ✅ Use configured marking values instead of hardcoded
+              marks: cellMarks[key] ?? 1,
+              caseSensitive: cellCaseSensitive[key] ?? false,
+              acceptsEquivalentPhrasing: cellEquivalentPhrasing[key] ?? false,
+              alternativeAnswers: cellAlternatives[key] ?? []
             });
           }
         }
@@ -1239,6 +1377,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           rows,
           columns,
           headers,
+          title: tableTitle || undefined,
+          description: tableDescription || undefined,
           cells
         };
 
@@ -1285,8 +1425,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             cellType: cellType,
             lockedValue: cellType === 'locked' ? (cellValues[key] || '') : undefined,
             expectedAnswer: cellType === 'editable' ? (expectedAnswers[key] || '') : undefined,
-            marks: 1,
-            caseSensitive: false
+            // ✅ Use configured marking values instead of hardcoded
+            marks: cellMarks[key] ?? 1,
+            caseSensitive: cellCaseSensitive[key] ?? false,
+            acceptsEquivalentPhrasing: cellEquivalentPhrasing[key] ?? false,
+            alternativeAnswers: cellAlternatives[key] ?? []
           });
         }
       }
@@ -1297,6 +1440,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         rows,
         columns,
         headers,
+        title: tableTitle || undefined,
+        description: tableDescription || undefined,
         cells
       };
 
@@ -2025,6 +2170,283 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               Clear Selection
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Table Metadata Panel */}
+      {isEditingTemplate && !previewMode && (
+        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-300 dark:border-purple-700">
+          <div className="flex items-center gap-2 mb-3">
+            <TableIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <h4 className="text-sm font-medium text-purple-900 dark:text-purple-100">
+              Table Information (Optional)
+            </h4>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Table Title
+              </label>
+              <input
+                type="text"
+                value={tableTitle}
+                onChange={(e) => setTableTitle(e.target.value)}
+                placeholder="e.g., Population Growth Data"
+                className="w-full px-3 py-2 text-sm border rounded dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Optional title displayed above the table
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Instructions/Description
+              </label>
+              <textarea
+                value={tableDescription}
+                onChange={(e) => setTableDescription(e.target.value)}
+                placeholder="e.g., Complete the missing values using the data provided above..."
+                rows={3}
+                className="w-full px-3 py-2 text-sm border rounded dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Instructions shown to students
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-Cell Marking Configuration Panel */}
+      {isEditingTemplate && !previewMode && selectedCells.size > 0 && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-300 dark:border-amber-700">
+          <div className="flex items-center gap-2 mb-3">
+            <Award className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <h4 className="text-sm font-medium text-amber-900 dark:text-amber-100">
+              Marking Configuration for Selected Cells
+            </h4>
+            <span className="text-xs text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 px-2 py-1 rounded-full">
+              {selectedCells.size} editable cell(s)
+            </span>
+          </div>
+
+          {/* Only show marking config for editable cells */}
+          {Array.from(selectedCells).some(key => cellTypes[key] === 'editable') ? (
+            <div className="space-y-4">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Configure how these cells will be marked when students complete the table.
+              </p>
+
+              {/* Marks Input */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Marks per Cell
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={(() => {
+                      // Get marks from first selected editable cell
+                      const firstEditableCell = Array.from(selectedCells).find(key => cellTypes[key] === 'editable');
+                      return firstEditableCell ? (cellMarks[firstEditableCell] ?? 1) : 1;
+                    })()}
+                    onChange={(e) => {
+                      const value = Math.min(10, Math.max(1, parseInt(e.target.value) || 1));
+                      const newMarks = {...cellMarks};
+                      selectedCells.forEach(key => {
+                        if (cellTypes[key] === 'editable') {
+                          newMarks[key] = value;
+                        }
+                      });
+                      setCellMarks(newMarks);
+                    }}
+                    className="w-full px-3 py-2 text-sm border rounded dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Range: 1-10 marks (default: 1)
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Case Sensitivity */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(() => {
+                        const firstEditableCell = Array.from(selectedCells).find(key => cellTypes[key] === 'editable');
+                        return firstEditableCell ? (cellCaseSensitive[firstEditableCell] ?? false) : false;
+                      })()}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        const newCS = {...cellCaseSensitive};
+                        selectedCells.forEach(key => {
+                          if (cellTypes[key] === 'editable') {
+                            newCS[key] = checked;
+                          }
+                        });
+                        setCellCaseSensitive(newCS);
+                      }}
+                      className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Case Sensitive
+                      </span>
+                      <p className="text-xs text-gray-500">
+                        Answer must match exact case (e.g., "DNA" ≠ "dna")
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Equivalent Phrasing */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(() => {
+                        const firstEditableCell = Array.from(selectedCells).find(key => cellTypes[key] === 'editable');
+                        return firstEditableCell ? (cellEquivalentPhrasing[firstEditableCell] ?? false) : false;
+                      })()}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        const newEP = {...cellEquivalentPhrasing};
+                        selectedCells.forEach(key => {
+                          if (cellTypes[key] === 'editable') {
+                            newEP[key] = checked;
+                          }
+                        });
+                        setCellEquivalentPhrasing(newEP);
+                      }}
+                      className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Accept Equivalent Phrasing
+                      </span>
+                      <p className="text-xs text-gray-500">
+                        Accept synonyms and similar answers
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Alternative Answers */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Alternative Correct Answers
+                </label>
+                <div className="space-y-2">
+                  {(() => {
+                    const firstEditableCell = Array.from(selectedCells).find(key => cellTypes[key] === 'editable');
+                    const alternatives = firstEditableCell ? (cellAlternatives[firstEditableCell] || []) : [];
+
+                    return (
+                      <>
+                        {alternatives.map((alt, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={alt}
+                              onChange={(e) => {
+                                const newAlts = {...cellAlternatives};
+                                selectedCells.forEach(key => {
+                                  if (cellTypes[key] === 'editable') {
+                                    const currentAlts = [...(newAlts[key] || [])];
+                                    currentAlts[idx] = e.target.value;
+                                    newAlts[key] = currentAlts;
+                                  }
+                                });
+                                setCellAlternatives(newAlts);
+                              }}
+                              placeholder={`Alternative ${idx + 1}`}
+                              className="flex-1 px-3 py-2 text-sm border rounded dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-amber-500"
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                const newAlts = {...cellAlternatives};
+                                selectedCells.forEach(key => {
+                                  if (cellTypes[key] === 'editable') {
+                                    newAlts[key] = (newAlts[key] || []).filter((_, i) => i !== idx);
+                                  }
+                                });
+                                setCellAlternatives(newAlts);
+                              }}
+                              className="text-red-600 hover:bg-red-50"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const newAlts = {...cellAlternatives};
+                            selectedCells.forEach(key => {
+                              if (cellTypes[key] === 'editable') {
+                                newAlts[key] = [...(newAlts[key] || []), ''];
+                              }
+                            });
+                            setCellAlternatives(newAlts);
+                          }}
+                          className="w-full border-dashed"
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add Alternative Answer
+                        </Button>
+                      </>
+                    );
+                  })()}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  e.g., "USA", "United States", "America" all count as correct
+                </p>
+              </div>
+
+              {/* Summary */}
+              <div className="p-3 bg-white dark:bg-gray-800 rounded border border-amber-300 dark:border-amber-700">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+                  Marking Summary
+                </p>
+                <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                  {(() => {
+                    const editableCells = Array.from(selectedCells).filter(key => cellTypes[key] === 'editable');
+                    const firstCell = editableCells[0];
+                    if (!firstCell) return null;
+
+                    const marks = cellMarks[firstCell] ?? 1;
+                    const caseSensitive = cellCaseSensitive[firstCell] ?? false;
+                    const equivPhrasing = cellEquivalentPhrasing[firstCell] ?? false;
+                    const alternatives = (cellAlternatives[firstCell] || []).filter(a => a.trim());
+                    const totalMarks = marks * editableCells.length;
+
+                    return (
+                      <>
+                        <li>✓ {editableCells.length} editable cell(s) × {marks} mark(s) = <strong>{totalMarks} total marks</strong></li>
+                        <li>✓ Case matching: {caseSensitive ? 'Exact case required' : 'Case-insensitive'}</li>
+                        <li>✓ Equivalent phrasing: {equivPhrasing ? 'Enabled (synonyms accepted)' : 'Disabled (exact match)'}</li>
+                        <li>✓ Alternative answers: {alternatives.length > 0 ? `${alternatives.length} alternative(s) configured` : 'None'}</li>
+                      </>
+                    );
+                  })()}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Select editable cells to configure marking options
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Marking configuration only applies to editable cells
+              </p>
+            </div>
+          )}
         </div>
       )}
 
