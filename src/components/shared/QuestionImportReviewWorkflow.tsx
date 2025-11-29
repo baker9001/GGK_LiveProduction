@@ -1173,16 +1173,11 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           console.warn('[Template Load] ⚠️ No template data found in correct_answers');
         }
 
-        // CRITICAL FIX: Also check for preview_data (student answers for testing)
-        const question = questions.find(q => q.id === questionContext.id);
-        if (question && (question as any).preview_data) {
-          console.log('[Template Load] ✅ Preview data found');
-          console.log('[Template Load] Preview data:', (question as any).preview_data);
-          // If preview_data exists, use it as the value (student answers)
-          // The template structure from correct_answers will still be used to build the table
-          initialValue = (question as any).preview_data;
-        }
-
+        // NOTE: preview_data (student answers) is loaded separately by DynamicAnswerField
+        // via question.preview_data prop (line 1213). Do NOT overwrite initialValue here!
+        // initialValue contains the template structure from correct_answers
+        // preview_data contains student/test data and is passed via question prop
+        console.log('[Template Load] Template structure loaded. Preview data will be loaded from question.preview_data prop.');
         console.log('[Template Load] ========== TEMPLATE LOAD COMPLETE ==========');
       }
 
