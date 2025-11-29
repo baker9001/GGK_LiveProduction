@@ -79,6 +79,7 @@ export interface QuestionPart {
   subparts?: QuestionPart[];
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 export interface QuestionDisplayData {
