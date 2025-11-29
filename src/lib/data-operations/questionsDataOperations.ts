@@ -1644,7 +1644,9 @@ export const insertSubQuestion = async (
         unit: ca.unit || null,
         context_type: ca.context?.type || null,
         context_value: ca.context?.value || null,
-        context_label: ca.context?.label || null
+        context_label: ca.context?.label || null,
+        answer_text: ca.answer_text || null,
+        answer_type: ca.answer_type || null
       }));
 
       const { error: caError } = await supabase
@@ -2498,7 +2500,9 @@ export const importQuestions = async (params: {
             unit: ca.unit || null,
             context_type: ca.context?.type || null,
             context_value: ca.context?.value || null,
-            context_label: ca.context?.label || null
+            context_label: ca.context?.label || null,
+            answer_text: ca.answer_text || null,
+            answer_type: ca.answer_type || null
           }));
 
           const { data: insertedAnswers, error: caError } = await supabase
