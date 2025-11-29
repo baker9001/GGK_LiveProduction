@@ -140,6 +140,9 @@ export interface QuestionMasterAdmin {
   updated_at: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
+
+  // Review phase data (not stored in DB table, only in working_json during import review)
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 export interface SubQuestion {
@@ -190,6 +193,9 @@ export interface SubQuestion {
   updated_at: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
+
+  // Review phase data (not stored in DB table, only in working_json during import review)
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 export interface PaperSetup {
