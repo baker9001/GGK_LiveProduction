@@ -37,6 +37,8 @@ interface CorrectAnswer {
   accepts_equivalent_phrasing?: boolean;
   error_carried_forward?: boolean;
   answer_requirement?: string;
+  answer_text?: string; // For complex formats like table_completion template structure
+  answer_type?: string; // Type identifier (e.g., 'table_template')
 }
 
 interface QuestionOption {
@@ -105,6 +107,7 @@ export interface QuestionDisplayData {
   parts?: QuestionPart[];
   figure_required?: boolean;
   figure?: boolean;
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 type ExpandedSectionsConfig = {
