@@ -1406,7 +1406,7 @@ function QuestionsTabInner({
     return () => {
       isMounted = false;
     };
-  }, [importSession, parsedData, existingPaperId, savedPaperDetails]);
+  }, [importSession?.id, existingPaperId, savedPaperDetails?.data_structure_id]);
 
   // Check existing questions after questions are loaded
   useEffect(() => {
@@ -2567,9 +2567,12 @@ function QuestionsTabInner({
       initializeFromParsedData(data);
 
       // Sync loaded data back to parent component
+      // Note: This sync is optional since we now always fetch fresh data from DB
+      // It keeps parent state in sync but doesn't affect the child's operation
       if (onDataSync) {
         console.log('[QuestionsTab] Syncing loaded data to parent component');
-        onDataSync(data);
+        // Use setTimeout to break the synchronous update chain and prevent loops
+        setTimeout(() => onDataSync(data), 0);
       }
     } catch (error) {
       console.error('Error loading questions:', error);
