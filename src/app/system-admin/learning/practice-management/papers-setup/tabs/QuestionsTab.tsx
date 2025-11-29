@@ -313,6 +313,8 @@ interface ProcessedQuestion {
   // Simulation tracking
   simulation_flags?: string[];
   simulation_notes?: string;
+  // Table completion preview data (student answers for testing)
+  preview_data?: string;
 }
 
 interface ProcessedPart {
@@ -342,6 +344,8 @@ interface ProcessedPart {
   conditional_marking?: any;
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
+  // Table completion preview data (student answers for testing)
+  preview_data?: string;
 }
 
 interface ProcessedSubpart {
@@ -368,6 +372,8 @@ interface ProcessedSubpart {
   conditional_marking?: any;
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
+  // Table completion preview data (student answers for testing)
+  preview_data?: string;
 }
 
 interface ProcessedAnswer {
@@ -2001,8 +2007,15 @@ function QuestionsTabInner({
           original_unit: rawUnit,
           // Initialize simulation tracking
           simulation_flags: [],
-          simulation_notes: ''
+          simulation_notes: '',
+          // CRITICAL FIX: Preserve preview_data from database (table completion student answers)
+          preview_data: q.preview_data
         };
+
+        // Log preview_data preservation for debugging
+        if (q.preview_data) {
+          console.log(`[Question ${questionNumber}] ✅ Preserved preview_data:`, q.preview_data.substring(0, 100) + '...');
+        }
 
         console.log(`Processing question ${index + 1}:`, {
           topic: processedQuestion.topic,
@@ -2203,8 +2216,15 @@ function QuestionsTabInner({
       partial_marking: part.partial_marking,
       conditional_marking: part.conditional_marking || part.marking_conditions,
       has_direct_answer: expectsAnswer,
-      is_contextual_only: isContextualOnly
+      is_contextual_only: isContextualOnly,
+      // CRITICAL FIX: Preserve preview_data from database (table completion student answers)
+      preview_data: part.preview_data
     };
+
+    // Log preview_data preservation for debugging
+    if (part.preview_data) {
+      console.log(`  [Part ${partLabel}] ✅ Preserved preview_data:`, part.preview_data.substring(0, 100) + '...');
+    }
 
     if (part.subparts && Array.isArray(part.subparts)) {
       console.log(`  [Part ${partLabel}] Processing ${part.subparts.length} subparts...`);
@@ -2360,8 +2380,15 @@ function QuestionsTabInner({
       partial_marking: subpart.partial_marking,
       conditional_marking: subpart.conditional_marking || subpart.marking_conditions,
       has_direct_answer: expectsAnswer,
-      is_contextual_only: isContextualOnly
+      is_contextual_only: isContextualOnly,
+      // CRITICAL FIX: Preserve preview_data from database (table completion student answers)
+      preview_data: subpart.preview_data
     };
+
+    // Log preview_data preservation for debugging
+    if (subpart.preview_data) {
+      console.log(`  [Subpart ${subpartLabel}] ✅ Preserved preview_data:`, subpart.preview_data.substring(0, 100) + '...');
+    }
 
     return processedSubpart;
   };
