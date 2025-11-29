@@ -4441,6 +4441,7 @@ function QuestionsTabInner({
           parts: updates.parts ?? q.parts,
           figure_required: updates.figure_required ?? q.figure_required,
           figure: updates.figure ?? q.figure,
+          preview_data: updates.preview_data ?? q.preview_data, // Store table completion student data
         };
       });
 

@@ -1172,6 +1172,17 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
         } else {
           console.warn('[Template Load] ⚠️ No template data found in correct_answers');
         }
+
+        // CRITICAL FIX: Also check for preview_data (student answers for testing)
+        const question = questions.find(q => q.id === questionContext.id);
+        if (question && (question as any).preview_data) {
+          console.log('[Template Load] ✅ Preview data found');
+          console.log('[Template Load] Preview data:', (question as any).preview_data);
+          // If preview_data exists, use it as the value (student answers)
+          // The template structure from correct_answers will still be used to build the table
+          initialValue = (question as any).preview_data;
+        }
+
         console.log('[Template Load] ========== TEMPLATE LOAD COMPLETE ==========');
       }
 
@@ -1197,15 +1208,40 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               answer_format: questionContext.answer_format,
               answer_requirement: questionContext.answer_requirement,
               marks: questionContext.marks,
-              correct_answers: list
+              correct_answers: list,
+              // CRITICAL FIX: Pass preview_data for table completion student answers
+              preview_data: (questions.find(q => q.id === questionContext.id) as any)?.preview_data
             }}
             value={initialValue}
             mode="admin"
             forceTemplateEditor={true}
             onTemplateSave={(template) => handleTemplateSave(questionContext.id, template)}
             onChange={(newAnswers) => {
-              // DynamicAnswerField returns the full answers array
-              // We need to sync this back to our state
+              console.log('[QuestionImportReviewWorkflow] onChange received:', typeof newAnswers, newAnswers);
+
+              // Handle table_completion student data (preview/test data)
+              if (questionContext.answer_format === 'table_completion' && typeof newAnswers === 'string') {
+                try {
+                  const parsed = JSON.parse(newAnswers);
+                  console.log('[QuestionImportReviewWorkflow] Parsed table completion data:', parsed);
+
+                  // Store student/preview data separately from template structure
+                  if (parsed && 'studentAnswers' in parsed) {
+                    console.log('[QuestionImportReviewWorkflow] Storing table preview data');
+                    const question = questions.find(q => q.id === questionContext.id);
+                    if (question) {
+                      commitQuestionUpdate(question, {
+                        preview_data: newAnswers // Store as JSON string
+                      });
+                    }
+                    return;
+                  }
+                } catch (e) {
+                  console.warn('[QuestionImportReviewWorkflow] Failed to parse table completion data:', e);
+                }
+              }
+
+              // Handle array-based answers (normal flow)
               if (Array.isArray(newAnswers) && newAnswers.length > 0) {
                 // Update each answer
                 newAnswers.forEach((newAnswer, index) => {

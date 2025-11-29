@@ -170,6 +170,7 @@ interface AnswerFieldProps {
     marks: number;
     figure?: boolean;
     attachments?: string[];
+    preview_data?: string; // For table_completion: stores student/test data separately from template
   };
   value?: AnswerValue;
   onChange: (value: AnswerValue) => void;
@@ -811,10 +812,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       const isAdminTesting = mode === 'qa_preview';
       const isStudentTest = mode === 'exam' && !isEditing;
 
-      // In template editing mode, check if value contains a TableTemplateDTO
+      // CRITICAL FIX: Load template from correct_answers and student data from preview_data
       let templateProp: TableTemplate | undefined;
       let valueProp: TableCompletionData | null = null;
 
+      // 1. Load template structure from correct_answers
       if (value && typeof value === 'string') {
         try {
           const parsed = JSON.parse(value);
@@ -826,12 +828,23 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             console.log('[DynamicAnswerField] Detected TableTemplateDTO, converting to TableTemplate');
             templateProp = convertTableTemplateDTOToTemplate(parsed as TableTemplateDTO);
             console.log('[DynamicAnswerField] Converted template with headers:', templateProp.headers);
-          } else if (parsed && 'studentAnswers' in parsed) {
+          }
+        } catch (e) {
+          console.warn('[DynamicAnswerField] Failed to parse table completion template:', e);
+        }
+      }
+
+      // 2. Load student/preview data from preview_data field
+      if (question.preview_data && typeof question.preview_data === 'string') {
+        try {
+          const parsed = JSON.parse(question.preview_data);
+          if (parsed && 'studentAnswers' in parsed) {
             // This is TableCompletionData (student answers)
+            console.log('[DynamicAnswerField] ✅ Loading preview data:', parsed);
             valueProp = parsed as TableCompletionData;
           }
         } catch (e) {
-          console.warn('[DynamicAnswerField] Failed to parse table completion value:', e);
+          console.warn('[DynamicAnswerField] Failed to parse preview_data:', e);
         }
       }
 
