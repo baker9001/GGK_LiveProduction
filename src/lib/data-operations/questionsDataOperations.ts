@@ -1089,6 +1089,8 @@ export const fetchDataStructureInfo = async (dataStructureId: string) => {
 
 export const fetchImportedQuestions = async (importSessionId: string) => {
   try {
+    console.log('[fetchImportedQuestions] Fetching session data for:', importSessionId);
+
     const { data, error } = await supabase
       .from('past_paper_import_sessions')
       .select('*')
@@ -1099,12 +1101,24 @@ export const fetchImportedQuestions = async (importSessionId: string) => {
 
     // Prioritize working_json (edited data) over raw_json (original data)
     if (data?.working_json) {
-      console.log('✅ Loading from working_json (edited data)');
+      console.log('✅ [fetchImportedQuestions] Loading from working_json (edited data)');
+      console.log('[fetchImportedQuestions] Data structure:', {
+        hasQuestions: !!data.working_json.questions,
+        questionCount: data.working_json.questions?.length,
+        hasMetadata: !!data.working_json.metadata,
+        lastSynced: data.last_synced_at
+      });
       return data.working_json;
     } else if (data?.raw_json) {
-      console.log('⚠️ Loading from raw_json (original data) - no edits yet');
+      console.log('⚠️ [fetchImportedQuestions] Loading from raw_json (original data) - no edits yet');
+      console.log('[fetchImportedQuestions] Data structure:', {
+        hasQuestions: !!data.raw_json.questions,
+        questionCount: data.raw_json.questions?.length,
+        hasMetadata: !!data.raw_json.metadata
+      });
       return data.raw_json;
     } else if (data?.json_file_name) {
+      console.log('📁 [fetchImportedQuestions] Loading from storage file:', data.json_file_name);
       const { data: fileData, error: fileError } = await supabase.storage
         .from('past-paper-imports')
         .download(data.json_file_name);
@@ -1117,7 +1131,7 @@ export const fetchImportedQuestions = async (importSessionId: string) => {
 
     throw new Error('No data found for this import session');
   } catch (error) {
-    console.error('Error fetching imported questions:', error);
+    console.error('❌ [fetchImportedQuestions] Error fetching imported questions:', error);
     throw error;
   }
 };
