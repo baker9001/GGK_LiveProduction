@@ -1198,11 +1198,14 @@ export default function PapersSetupPage() {
 
       if (data && !error) {
         setImportSession(data);
-        if (data.raw_json) {
-          setParsedData(data.raw_json);
+        // CRITICAL FIX: Prioritize working_json (edited data) over raw_json (original data)
+        const sessionData = data.working_json || data.raw_json;
+        if (sessionData) {
+          console.log('[Session Load] Using data source:', data.working_json ? 'working_json (edited)' : 'raw_json (original)');
+          setParsedData(sessionData);
           // Create a mock file for UI display
           const mockFile = new File(
-            [JSON.stringify(data.raw_json)], 
+            [JSON.stringify(sessionData)],
             data.json_file_name || 'previous_import.json',
             { type: 'application/json' }
           );
@@ -1349,10 +1352,13 @@ export default function PapersSetupPage() {
         }
 
         setImportSession(data);
-        if (data.raw_json) {
-          setParsedData(data.raw_json);
+        // CRITICAL FIX: Prioritize working_json (edited data) over raw_json (original data)
+        const sessionData = data.working_json || data.raw_json;
+        if (sessionData) {
+          console.log('[Session Load from URL] Using data source:', data.working_json ? 'working_json (edited)' : 'raw_json (original)');
+          setParsedData(sessionData);
           const mockFile = new File(
-            [JSON.stringify(data.raw_json)], 
+            [JSON.stringify(sessionData)],
             data.json_file_name || 'imported_data.json',
             { type: 'application/json' }
           );
@@ -1874,6 +1880,14 @@ export default function PapersSetupPage() {
     }));
   };
 
+  // Handle data sync from QuestionsTab back to parent
+  // This ensures parsedData stays in sync with edits in the database
+  const handleQuestionsDataSync = useCallback((updatedData: any) => {
+    console.log('[Data Sync] Questions data updated from child component');
+    console.log('[Data Sync] Questions count:', updatedData?.questions?.length);
+    setParsedData(updatedData);
+  }, []);
+
   // Scroll navigation sections
   const scrollSections = [
     { id: 'workflow', label: 'Import Workflow' },
@@ -2126,6 +2140,7 @@ export default function PapersSetupPage() {
               extractionRules={extractionRules}
               updateStagedAttachments={updateStagedAttachments}
               stagedAttachments={stagedAttachments}
+              onDataSync={handleQuestionsDataSync}
             />
           ) : importSession && parsedData && !existingPaperId ? (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
