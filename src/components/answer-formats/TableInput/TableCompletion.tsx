@@ -176,10 +176,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   };
 
   // ✅ FIXED: Check if we're in preview mode (question not saved to database yet)
-  // Now uses both UUID validation AND database existence check
+  // In template editor mode with valid UUID, always allow database save (admin is actively editing)
+  // Only treat as preview if: invalid UUID OR (not in template editor mode AND not in database)
   const isPreviewQuestion = !isValidUUID(questionId) ||
                            (subQuestionId && !isValidUUID(subQuestionId)) ||
-                           (questionExistsInDB === false);
+                           (!isTemplateEditor && questionExistsInDB === false);
 
   // Preview mode state
   const [previewMode, setPreviewMode] = useState(false);
@@ -1415,7 +1416,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     setAutoSaveStatus('saving');
     setLoading(true);
 
-    // If in preview mode, save template locally via callback instead of database
+    // If in preview mode (invalid UUID or not actively editing), save template locally via callback
     if (isPreviewQuestion) {
       try {
         // Build template object
@@ -1455,7 +1456,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
         if (!silent) {
           toast.success('Template saved locally (in memory)', {
-            description: 'Click "Save Question" button to persist template to database',
+            description: 'Template will be saved when you finalize the import',
             duration: 6000
           });
         }
