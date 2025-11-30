@@ -890,7 +890,13 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           isAdminTestMode={isAdminTesting}
           isStudentTestMode={isStudentTest}
           showValidationWarnings={triggerValidation && isStudentTest}
-          onTemplateSave={onTemplateSave}
+          onTemplateSave={(templateConfig) => {
+            // ✅ Store template configuration in preview_data for later database save
+            console.log('[DynamicAnswerField] Template save callback (inline) - storing in preview_data:', templateConfig);
+            question.preview_data = JSON.stringify(templateConfig);
+            // Pass up to parent if callback provided
+            onTemplateSave?.(templateConfig);
+          }}
         />
       );
     }
@@ -2058,6 +2064,13 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             isTemplateEditor={isTemplateEditing}  // ✅ Enable template editor in admin mode
             isAdminTestMode={isAdminTesting}
             isStudentTestMode={isStudentTest}
+            onTemplateSave={(templateConfig) => {
+              // ✅ Store template configuration in preview_data for later database save
+              console.log('[DynamicAnswerField] Template save callback - storing in preview_data:', templateConfig);
+              question.preview_data = JSON.stringify(templateConfig);
+              // Pass up to parent if callback provided
+              onTemplateSave?.(templateConfig);
+            }}
           />
           {renderCorrectAnswers()}
         </div>

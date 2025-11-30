@@ -404,4 +404,76 @@ export class TableTemplateService {
       return false;
     }
   }
+
+  /**
+   * ✅ NEW: Extract table template from question.preview_data and save to database
+   * This is called when a question with temporary ID gets saved to database with real UUID
+   */
+  static async extractAndSaveFromPreviewData(
+    questionId: string,
+    previewData: string | undefined | null,
+    subQuestionId?: string
+  ): Promise<{
+    success: boolean;
+    templateId?: string;
+    error?: string;
+  }> {
+    try {
+      // No preview data - nothing to extract
+      if (!previewData) {
+        return { success: true }; // Not an error, just nothing to do
+      }
+
+      // Parse preview data
+      let templateConfig: any;
+      try {
+        templateConfig = JSON.parse(previewData);
+      } catch (parseError) {
+        console.warn('[TableTemplateService] Failed to parse preview_data:', parseError);
+        return { success: true }; // Not an error, just invalid data
+      }
+
+      // Check if it looks like a table template config
+      if (!templateConfig.rows || !templateConfig.columns || !templateConfig.cells) {
+        console.log('[TableTemplateService] preview_data is not a table template config');
+        return { success: true }; // Not a table template
+      }
+
+      // Build the template DTO with the real UUID
+      const template: TableTemplateDTO = {
+        questionId,
+        subQuestionId: subQuestionId || undefined,
+        rows: templateConfig.rows,
+        columns: templateConfig.columns,
+        headers: templateConfig.headers || [],
+        title: templateConfig.title,
+        description: templateConfig.description,
+        cells: templateConfig.cells || []
+      };
+
+      console.log('[TableTemplateService] Extracting template from preview_data:', {
+        questionId,
+        subQuestionId,
+        templateConfig
+      });
+
+      // Save to database
+      const result = await this.saveTemplate(template);
+
+      if (result.success) {
+        console.log('[TableTemplateService] ✅ Successfully saved template from preview_data');
+      } else {
+        console.error('[TableTemplateService] ❌ Failed to save template from preview_data:', result.error);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('[TableTemplateService] Error extracting template from preview_data:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      return {
+        success: false,
+        error: errorMsg
+      };
+    }
+  }
 }

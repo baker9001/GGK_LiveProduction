@@ -162,7 +162,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [paintModeType, setPaintModeType] = useState<'locked' | 'editable'>('editable');
 
   // Auto-save state
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved' | 'preview' | 'error'>('saved');
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
 
   // Debounced onChange timer for fast auto-save
@@ -174,6 +174,17 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(id);
   };
+
+  // ✅ NEW: Check if ID is a temporary ID from JSON import (e.g., "q_1", "q_1-part-0", "q_1-part-0-sub-2")
+  const isTemporaryId = (id: string | undefined): boolean => {
+    if (!id) return false;
+    // Match patterns like: q_1, q_1-part-0, q_1-part-0-sub-2
+    return /^q_\d+(-part-\d+)?(-sub-\d+)?$/.test(id);
+  };
+
+  // ✅ NEW: Determine question save state
+  const isQuestionSaved = questionId && isValidUUID(questionId.trim());
+  const isInPreviewMode = questionId && isTemporaryId(questionId);
 
   // ✅ FIXED: Check if we're in preview mode (question not saved to database yet)
   // In template editor mode with valid UUID, ALWAYS allow database save (admin is actively editing)
@@ -1416,8 +1427,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     setAutoSaveStatus('saving');
     setLoading(true);
 
-    // If in preview mode (invalid UUID or not actively editing), save template locally via callback
-    if (isPreviewQuestion) {
+    // ✅ ENHANCED: Check if question has temporary ID from import or not saved yet
+    // If question not saved (temporary ID or no valid UUID), save template to preview_data
+    if (isInPreviewMode || !isQuestionSaved) {
+      console.log('[TableCompletion] Preview mode detected - saving to preview_data:', {
+        questionId,
+        isInPreviewMode,
+        isQuestionSaved,
+        isTemporaryId: isTemporaryId(questionId)
+      });
       try {
         // Build template object
         const cells: TableCellDTO[] = [];
@@ -1456,22 +1474,22 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         onTemplateSave?.(templateData);
 
         if (!silent) {
-          toast.success('Template saved locally (in memory)', {
-            description: 'Template will be saved when you finalize the import',
-            duration: 6000
+          toast.info('✓ Template configured (Preview Mode)', {
+            description: 'Template will be saved to database when question is saved',
+            duration: 5000
           });
         }
-        setAutoSaveStatus('saved');
+        setAutoSaveStatus('preview');
         setLastSaveTime(new Date());
       } catch (error) {
-        console.error('Error saving template locally:', error);
+        console.error('Error saving template in preview mode:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         if (!silent) {
-          toast.error('Failed to save template locally', {
+          toast.error('Failed to configure template', {
             description: errorMessage
           });
         }
-        setAutoSaveStatus('unsaved');
+        setAutoSaveStatus('error');
       } finally {
         setLoading(false);
       }
@@ -1479,6 +1497,27 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     // Database save for real questions
+    console.log('[TableCompletion] Database save mode - question has valid UUID:', {
+      questionId,
+      isValidUUID: isValidUUID(questionId),
+      subQuestionId
+    });
+
+    // ✅ Additional validation before database save
+    if (!questionId || !isValidUUID(questionId.trim())) {
+      const errorMsg = 'Cannot save template: Question must be saved first';
+      console.error('[TableCompletion]', errorMsg, { questionId });
+      if (!silent) {
+        toast.error(errorMsg, {
+          description: 'Please save the question before configuring table template',
+          duration: 5000
+        });
+      }
+      setAutoSaveStatus('error');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Build cells array - include ALL cells, defaulting undefined to locked
       const cells: TableCellDTO[] = [];
@@ -1538,14 +1577,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         throw new Error(result.error);
       }
     } catch (error) {
-      console.error('Error saving template:', error);
-      setAutoSaveStatus('unsaved');
+      console.error('Error saving template to database:', error);
+      setAutoSaveStatus('error');
       if (!silent) {
         // Handle both Error instances and Supabase PostgresError objects
         const errorMessage = error instanceof Error
           ? error.message
           : (error as any)?.message || JSON.stringify(error) || 'Unknown error occurred';
-        toast.error('Failed to save template', {
+        toast.error('Failed to save template to database', {
           description: errorMessage
         });
       }
@@ -1796,30 +1835,47 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                       <span className="text-gray-600 dark:text-gray-400">Checking...</span>
                     </>
                   )}
-                  {!checkingDBExistence && questionExistsInDB === false && (
+                  {/* ✅ NEW: Preview mode indicator for temporary/unsaved questions */}
+                  {(isInPreviewMode || (!checkingDBExistence && !isQuestionSaved)) && (
                     <>
                       <AlertTriangle className="w-3 h-3 text-amber-600" />
-                      <span className="text-amber-700 dark:text-amber-400 font-medium">Preview Only</span>
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">
+                        {isInPreviewMode ? 'Preview Mode (Imported)' : 'Preview Only'}
+                      </span>
                     </>
                   )}
-                  {!checkingDBExistence && questionExistsInDB === true && autoSaveStatus === 'saving' && (
+                  {/* ✅ NEW: Preview status - configured but not saved to DB */}
+                  {!checkingDBExistence && isQuestionSaved && autoSaveStatus === 'preview' && (
+                    <>
+                      <Check className="w-3 h-3 text-blue-600" />
+                      <span className="text-blue-600 dark:text-blue-400 font-medium">Configured (pending save)</span>
+                    </>
+                  )}
+                  {!checkingDBExistence && isQuestionSaved && autoSaveStatus === 'saving' && (
                     <>
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                       <Database className="w-3 h-3 text-blue-600 animate-pulse" />
                       <span className="text-gray-600 dark:text-gray-400">Saving to DB...</span>
                     </>
                   )}
-                  {!checkingDBExistence && questionExistsInDB === true && autoSaveStatus === 'saved' && lastSaveTime && (
+                  {!checkingDBExistence && isQuestionSaved && autoSaveStatus === 'saved' && lastSaveTime && (
                     <>
                       <Check className="w-3 h-3 text-green-600" />
                       <Database className="w-3 h-3 text-green-600" />
                       <span className="text-gray-600 dark:text-gray-400">DB Saved {new Date().getTime() - lastSaveTime.getTime() < 60000 ? 'just now' : `${Math.floor((new Date().getTime() - lastSaveTime.getTime()) / 60000)}m ago`}</span>
                     </>
                   )}
-                  {!checkingDBExistence && questionExistsInDB === true && autoSaveStatus === 'unsaved' && (
+                  {!checkingDBExistence && isQuestionSaved && autoSaveStatus === 'unsaved' && (
                     <>
                       <div className="w-2 h-2 bg-orange-500 rounded-full" />
                       <span className="text-gray-600 dark:text-gray-400">Unsaved changes</span>
+                    </>
+                  )}
+                  {/* ✅ NEW: Error status */}
+                  {!checkingDBExistence && autoSaveStatus === 'error' && (
+                    <>
+                      <X className="w-3 h-3 text-red-600" />
+                      <span className="text-red-600 dark:text-red-400 font-medium">Save failed</span>
                     </>
                   )}
                 </div>
@@ -1857,10 +1913,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                   onClick={() => handleSaveTemplate(false)}
                   disabled={loading}
                   className="bg-[#8CC63F] hover:bg-[#7AB62F] text-white"
-                  title={isPreviewQuestion ? 'Save template locally for preview' : 'Save template to database'}
+                  title={
+                    isInPreviewMode
+                      ? 'Configure template (will be saved when question is saved)'
+                      : !isQuestionSaved
+                      ? 'Question must be saved first'
+                      : 'Save template to database'
+                  }
                 >
                   <Save className="w-4 h-4 mr-1" />
-                  {isPreviewQuestion ? 'Save Template (Preview)' : 'Save Template'}
+                  {isInPreviewMode ? 'Configure Template' : 'Save Template'}
                 </Button>
               </>
             )}
