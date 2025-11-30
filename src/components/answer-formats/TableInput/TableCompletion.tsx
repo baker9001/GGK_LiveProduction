@@ -1440,9 +1440,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }
         }
 
+        // ✅ FIX: Only include valid UUIDs to avoid validation errors
         const templateData: TableTemplateDTO = {
-          questionId,
-          subQuestionId,
+          questionId: isValidUUID(questionId) ? questionId : undefined,
+          subQuestionId: isValidUUID(subQuestionId) ? subQuestionId : undefined,
           rows,
           columns,
           headers,
@@ -1506,9 +1507,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         }
       }
 
+      // ✅ FIX: Only include valid UUIDs to avoid validation errors
       const template: TableTemplateDTO = {
-        questionId,
-        subQuestionId,
+        questionId: isValidUUID(questionId) ? questionId : undefined,
+        subQuestionId: isValidUUID(subQuestionId) ? subQuestionId : undefined,
         rows,
         columns,
         headers,
