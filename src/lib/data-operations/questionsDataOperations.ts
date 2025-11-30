@@ -1,6 +1,7 @@
 // Path: src/lib/data-operations/questionsDataOperations.ts
 
 import { supabase } from '@/lib/supabase';
+import { TableTemplateService } from '@/services/TableTemplateService';
 // REMOVED: import { toast } from '@/components/shared/Toast';
 // Toast import caused "Cannot access 'Rt' before initialization" error
 // All toast notifications moved to UI layer (QuestionsTab.tsx)
@@ -1656,6 +1657,35 @@ export const insertSubQuestion = async (
       if (caError) {
         console.error('Error inserting sub-question correct answers:', caError);
       }
+
+      // ✅ NEW: Persist table completion templates for sub-questions
+      const tableTemplateAnswer = part.correct_answers.find(
+        (ca: any) => ca.answer_type === 'table_template' && ca.answer_text
+      );
+
+      if (tableTemplateAnswer?.answer_text) {
+        try {
+          const parsedTemplate = JSON.parse(tableTemplateAnswer.answer_text);
+
+          if (parsedTemplate?.rows && parsedTemplate?.columns && Array.isArray(parsedTemplate?.cells)) {
+            const templateResult = await TableTemplateService.saveTemplate({
+              ...(parsedTemplate || {}),
+              questionId: undefined,
+              subQuestionId: subQuestionRecord.id
+            });
+
+            if (templateResult.success) {
+              console.log('✅ Table template saved for sub-question', subQuestionRecord.id);
+            } else {
+              console.error('❌ Failed to persist table template for sub-question', subQuestionRecord.id, templateResult.error);
+            }
+          } else {
+            console.warn('⚠️ Skipping table template save for sub-question: Parsed template missing required structure');
+          }
+        } catch (templateError) {
+          console.error('❌ Failed to parse/save table template for sub-question', subQuestionRecord.id, templateError);
+        }
+      }
     }
 
     // Insert distractors if available (for MCQ)
@@ -2515,6 +2545,36 @@ export const importQuestions = async (params: {
             console.error('   Error details:', JSON.stringify(caError, null, 2));
           } else {
             console.log('✅ Correct answers inserted:', insertedAnswers?.length || 0);
+          }
+
+          // ✅ NEW: Persist table completion templates to normalized tables
+          const tableTemplateAnswer = question.correct_answers.find(
+            (ca: any) => ca.answer_type === 'table_template' && ca.answer_text
+          );
+
+          if (tableTemplateAnswer?.answer_text) {
+            try {
+              const parsedTemplate = JSON.parse(tableTemplateAnswer.answer_text);
+
+              // Validate minimal structure before attempting save
+              if (parsedTemplate?.rows && parsedTemplate?.columns && Array.isArray(parsedTemplate?.cells)) {
+                const templateResult = await TableTemplateService.saveTemplate({
+                  ...(parsedTemplate || {}),
+                  questionId: insertedQuestion.id,
+                  subQuestionId: undefined
+                });
+
+                if (templateResult.success) {
+                  console.log('✅ Table template saved to table_templates for question', insertedQuestion.id);
+                } else {
+                  console.error('❌ Failed to persist table template for question', insertedQuestion.id, templateResult.error);
+                }
+              } else {
+                console.warn('⚠️ Skipping table template save: Parsed template missing required structure');
+              }
+            } catch (templateError) {
+              console.error('❌ Failed to parse/save table template for question', insertedQuestion.id, templateError);
+            }
           }
         } else if (ensureString(question.correct_answer)) {
           const normalizedCorrectAnswer = ensureString(question.correct_answer);
