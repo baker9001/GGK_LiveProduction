@@ -1440,10 +1440,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }
         }
 
-        // ✅ FIX: Only include valid UUIDs to avoid validation errors
+        // ✅ FIX: Always include questionId, only include subQuestionId if valid UUID
         const templateData: TableTemplateDTO = {
-          questionId: isValidUUID(questionId) ? questionId : undefined,
-          subQuestionId: isValidUUID(subQuestionId) ? subQuestionId : undefined,
+          questionId, // Always include - required by service
+          subQuestionId: (subQuestionId && isValidUUID(subQuestionId)) ? subQuestionId : undefined,
           rows,
           columns,
           headers,
@@ -1507,10 +1507,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         }
       }
 
-      // ✅ FIX: Only include valid UUIDs to avoid validation errors
+      // ✅ FIX: Always include questionId, only include subQuestionId if valid UUID
       const template: TableTemplateDTO = {
-        questionId: isValidUUID(questionId) ? questionId : undefined,
-        subQuestionId: isValidUUID(subQuestionId) ? subQuestionId : undefined,
+        questionId, // Always include - required by service
+        subQuestionId: (subQuestionId && isValidUUID(subQuestionId)) ? subQuestionId : undefined,
         rows,
         columns,
         headers,
