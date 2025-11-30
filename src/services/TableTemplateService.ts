@@ -44,6 +44,47 @@ export interface ValidationResult {
 
 export class TableTemplateService {
   /**
+   * Calculate Levenshtein distance between two strings
+   * Used for fuzzy matching when acceptsEquivalentPhrasing is enabled
+   */
+  private static levenshteinDistance(str1: string, str2: string): number {
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const matrix: number[][] = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+
+    for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+    for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,      // deletion
+          matrix[i][j - 1] + 1,      // insertion
+          matrix[i - 1][j - 1] + cost // substitution
+        );
+      }
+    }
+
+    return matrix[len1][len2];
+  }
+
+  /**
+   * Calculate similarity percentage between two strings (0-100)
+   * Higher percentage means more similar
+   */
+  private static calculateSimilarity(str1: string, str2: string): number {
+    if (str1 === str2) return 100;
+    if (!str1 || !str2) return 0;
+
+    const maxLen = Math.max(str1.length, str2.length);
+    if (maxLen === 0) return 100;
+
+    const distance = this.levenshteinDistance(str1, str2);
+    return ((maxLen - distance) / maxLen) * 100;
+  }
+
+  /**
    * Save or update table template
    */
   static async saveTemplate(template: TableTemplateDTO): Promise<{
@@ -295,19 +336,40 @@ export class TableTemplateService {
         const studentStr = String(studentAnswer).trim();
         const expectedStr = String(expectedAnswer).trim();
 
+        // First try exact match (respecting case sensitivity)
         if (cell.caseSensitive) {
           isCorrect = studentStr === expectedStr;
         } else {
           isCorrect = studentStr.toLowerCase() === expectedStr.toLowerCase();
         }
 
-        // Check alternative answers
+        // Check alternative answers if not correct yet
         if (!isCorrect && cell.alternativeAnswers && cell.alternativeAnswers.length > 0) {
           isCorrect = cell.alternativeAnswers.some(alt =>
             cell.caseSensitive
               ? studentStr === alt.trim()
               : studentStr.toLowerCase() === alt.trim().toLowerCase()
           );
+        }
+
+        // If still not correct, try fuzzy matching if enabled
+        if (!isCorrect && cell.acceptsEquivalentPhrasing) {
+          const compareStudent = cell.caseSensitive ? studentStr : studentStr.toLowerCase();
+          const compareExpected = cell.caseSensitive ? expectedStr : expectedStr.toLowerCase();
+
+          // Check similarity with expected answer
+          const similarity = this.calculateSimilarity(compareStudent, compareExpected);
+
+          // Accept if similarity is 85% or higher
+          if (similarity >= 85) {
+            isCorrect = true;
+          } else if (cell.alternativeAnswers && cell.alternativeAnswers.length > 0) {
+            // Also check similarity with alternative answers
+            isCorrect = cell.alternativeAnswers.some(alt => {
+              const compareAlt = cell.caseSensitive ? alt.trim() : alt.trim().toLowerCase();
+              return this.calculateSimilarity(compareStudent, compareAlt) >= 85;
+            });
+          }
         }
       }
 

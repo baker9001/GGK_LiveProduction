@@ -135,6 +135,46 @@ export class TableGradingService {
   /**
    * Get detailed cell-by-cell feedback
    */
+  /**
+   * Calculate Levenshtein distance between two strings
+   * (Duplicated from TableTemplateService for encapsulation)
+   */
+  private static levenshteinDistance(str1: string, str2: string): number {
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const matrix: number[][] = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+
+    for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+    for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        );
+      }
+    }
+
+    return matrix[len1][len2];
+  }
+
+  /**
+   * Calculate similarity percentage between two strings
+   */
+  private static calculateSimilarity(str1: string, str2: string): number {
+    if (str1 === str2) return 100;
+    if (!str1 || !str2) return 0;
+
+    const maxLen = Math.max(str1.length, str2.length);
+    if (maxLen === 0) return 100;
+
+    const distance = this.levenshteinDistance(str1, str2);
+    return ((maxLen - distance) / maxLen) * 100;
+  }
+
   static getCellFeedback(
     cellKey: string,
     studentAnswer: string | number,
@@ -151,23 +191,75 @@ export class TableGradingService {
     const expectedStr = String(cell.expectedAnswer || '').trim();
 
     let isCorrect = false;
+    let matchType = '';
 
+    // First try exact match (respecting case sensitivity)
     if (cell.caseSensitive) {
       isCorrect = studentStr === expectedStr;
     } else {
       isCorrect = studentStr.toLowerCase() === expectedStr.toLowerCase();
     }
 
-    // Check alternative answers
+    if (isCorrect) {
+      matchType = 'exact';
+    }
+
+    // Check alternative answers if not correct yet
     if (!isCorrect && cell.alternativeAnswers && cell.alternativeAnswers.length > 0) {
       isCorrect = cell.alternativeAnswers.some(alt =>
         cell.caseSensitive
           ? studentStr === alt.trim()
           : studentStr.toLowerCase() === alt.trim().toLowerCase()
       );
+
+      if (isCorrect) {
+        matchType = 'alternative';
+      }
+    }
+
+    // If still not correct, try fuzzy matching if enabled
+    if (!isCorrect && cell.acceptsEquivalentPhrasing) {
+      const compareStudent = cell.caseSensitive ? studentStr : studentStr.toLowerCase();
+      const compareExpected = cell.caseSensitive ? expectedStr : expectedStr.toLowerCase();
+
+      // Check similarity with expected answer
+      const similarity = this.calculateSimilarity(compareStudent, compareExpected);
+
+      if (similarity >= 85) {
+        isCorrect = true;
+        matchType = 'fuzzy';
+      } else if (cell.alternativeAnswers && cell.alternativeAnswers.length > 0) {
+        // Also check similarity with alternative answers
+        const fuzzyMatch = cell.alternativeAnswers.some(alt => {
+          const compareAlt = cell.caseSensitive ? alt.trim() : alt.trim().toLowerCase();
+          return this.calculateSimilarity(compareStudent, compareAlt) >= 85;
+        });
+
+        if (fuzzyMatch) {
+          isCorrect = true;
+          matchType = 'fuzzy-alternative';
+        }
+      }
     }
 
     const cellMarks = cell.marks || 1;
+
+    // Generate feedback based on match type
+    let feedback = '';
+    if (isCorrect) {
+      if (matchType === 'exact') {
+        feedback = 'Correct!';
+      } else if (matchType === 'alternative') {
+        feedback = 'Correct! (Alternative answer accepted)';
+      } else if (matchType === 'fuzzy' || matchType === 'fuzzy-alternative') {
+        feedback = 'Correct! (Equivalent phrasing accepted)';
+      }
+    } else {
+      feedback = `Incorrect. Expected: ${cell.expectedAnswer}`;
+      if (cell.alternativeAnswers && cell.alternativeAnswers.length > 0) {
+        feedback += ` (or alternatives: ${cell.alternativeAnswers.join(', ')})`;
+      }
+    }
 
     return {
       isCorrect,
@@ -175,9 +267,7 @@ export class TableGradingService {
       studentAnswer,
       marks: cellMarks,
       achievedMarks: isCorrect ? cellMarks : 0,
-      feedback: isCorrect
-        ? 'Correct!'
-        : `Incorrect. Expected: ${cell.expectedAnswer}`
+      feedback
     };
   }
 
