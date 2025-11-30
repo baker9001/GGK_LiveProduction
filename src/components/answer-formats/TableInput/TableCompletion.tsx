@@ -26,13 +26,16 @@ import {
   HelpCircle,
   CheckCircle,
   MinusCircle,
-  Award
+  Award,
+  Database,
+  AlertTriangle
 } from 'lucide-react';
 import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
 import { validateTableData } from '../utils/dataValidation';
 import { TableTemplateService, type TableTemplateDTO, type TableCellDTO } from '@/services/TableTemplateService';
 import { toast } from '@/components/shared/Toast';
+import { supabase } from '@/lib/supabase';
 
 export interface TableTemplate {
   rows: number;
@@ -145,6 +148,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [tableTitle, setTableTitle] = useState<string>('');
   const [tableDescription, setTableDescription] = useState<string>('');
 
+  // ✅ NEW: Database existence tracking
+  const [questionExistsInDB, setQuestionExistsInDB] = useState<boolean | null>(null);
+  const [checkingDBExistence, setCheckingDBExistence] = useState(false);
+
   // Inline editing popover state
   const [inlineEditCell, setInlineEditCell] = useState<{row: number; col: number; x: number; y: number} | null>(null);
   const [inlineEditValue, setInlineEditValue] = useState('');
@@ -168,8 +175,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     return uuidRegex.test(id);
   };
 
-  // Check if we're in preview mode (question not saved yet)
-  const isPreviewQuestion = !isValidUUID(questionId) || (subQuestionId && !isValidUUID(subQuestionId));
+  // ✅ FIXED: Check if we're in preview mode (question not saved to database yet)
+  // Now uses both UUID validation AND database existence check
+  const isPreviewQuestion = !isValidUUID(questionId) ||
+                           (subQuestionId && !isValidUUID(subQuestionId)) ||
+                           (questionExistsInDB === false);
 
   // Preview mode state
   const [previewMode, setPreviewMode] = useState(false);
@@ -180,6 +190,64 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   // Help panel state
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+
+  // ✅ NEW: Check if question exists in database
+  useEffect(() => {
+    const checkQuestionExistence = async () => {
+      // Skip check if questionId is not a valid UUID
+      if (!isValidUUID(questionId)) {
+        setQuestionExistsInDB(false);
+        return;
+      }
+
+      setCheckingDBExistence(true);
+      try {
+        let exists = false;
+
+        // Check in questions_master_admin
+        if (questionId) {
+          const { data, error } = await supabase
+            .from('questions_master_admin')
+            .select('id')
+            .eq('id', questionId)
+            .maybeSingle();
+
+          if (!error && data) {
+            exists = true;
+          }
+        }
+
+        // Check in sub_questions if subQuestionId provided
+        if (!exists && subQuestionId && isValidUUID(subQuestionId)) {
+          const { data, error } = await supabase
+            .from('sub_questions')
+            .select('id')
+            .eq('id', subQuestionId)
+            .maybeSingle();
+
+          if (!error && data) {
+            exists = true;
+          }
+        }
+
+        console.log('[TableCompletion] Database existence check:', {
+          questionId,
+          subQuestionId,
+          exists
+        });
+
+        setQuestionExistsInDB(exists);
+      } catch (error) {
+        console.error('[TableCompletion] Error checking question existence:', error);
+        // Assume exists to avoid blocking saves for existing questions
+        setQuestionExistsInDB(true);
+      } finally {
+        setCheckingDBExistence(false);
+      }
+    };
+
+    checkQuestionExistence();
+  }, [questionId, subQuestionId]);
 
   // Load template from database when in template editor or test modes
   const hasLoadedRef = useRef(false);
@@ -1386,7 +1454,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         onTemplateSave?.(templateData);
 
         if (!silent) {
-          toast.success('Template saved locally. Save the question to persist to database.');
+          toast.success('Template saved locally (in memory)', {
+            description: 'Click "Save Question" button to persist template to database',
+            duration: 6000
+          });
         }
         setAutoSaveStatus('saved');
         setLastSaveTime(new Date());
@@ -1449,7 +1520,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
       if (result.success) {
         if (!silent) {
-          toast.success('Template saved successfully!');
+          toast.success('✅ Template saved to database!', {
+            description: 'Table configuration persisted successfully',
+            duration: 4000
+          });
         }
         onTemplateSave?.(template);
         setAutoSaveStatus('saved');
@@ -1711,24 +1785,38 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               </Button>
             ) : (
               <>
-                {/* Auto-save indicator */}
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  {autoSaveStatus === 'saving' && (
+                {/* Auto-save indicator with database status */}
+                <div className="flex items-center gap-2 text-xs">
+                  {checkingDBExistence && (
+                    <>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" />
+                      <span className="text-gray-600 dark:text-gray-400">Checking...</span>
+                    </>
+                  )}
+                  {!checkingDBExistence && questionExistsInDB === false && (
+                    <>
+                      <AlertTriangle className="w-3 h-3 text-amber-600" />
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">Preview Only</span>
+                    </>
+                  )}
+                  {!checkingDBExistence && questionExistsInDB === true && autoSaveStatus === 'saving' && (
                     <>
                       <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                      <span>Saving...</span>
+                      <Database className="w-3 h-3 text-blue-600 animate-pulse" />
+                      <span className="text-gray-600 dark:text-gray-400">Saving to DB...</span>
                     </>
                   )}
-                  {autoSaveStatus === 'saved' && lastSaveTime && (
+                  {!checkingDBExistence && questionExistsInDB === true && autoSaveStatus === 'saved' && lastSaveTime && (
                     <>
                       <Check className="w-3 h-3 text-green-600" />
-                      <span>Saved {new Date().getTime() - lastSaveTime.getTime() < 60000 ? 'just now' : `${Math.floor((new Date().getTime() - lastSaveTime.getTime()) / 60000)}m ago`}</span>
+                      <Database className="w-3 h-3 text-green-600" />
+                      <span className="text-gray-600 dark:text-gray-400">DB Saved {new Date().getTime() - lastSaveTime.getTime() < 60000 ? 'just now' : `${Math.floor((new Date().getTime() - lastSaveTime.getTime()) / 60000)}m ago`}</span>
                     </>
                   )}
-                  {autoSaveStatus === 'unsaved' && (
+                  {!checkingDBExistence && questionExistsInDB === true && autoSaveStatus === 'unsaved' && (
                     <>
                       <div className="w-2 h-2 bg-orange-500 rounded-full" />
-                      <span>Unsaved changes</span>
+                      <span className="text-gray-600 dark:text-gray-400">Unsaved changes</span>
                     </>
                   )}
                 </div>
@@ -1780,11 +1868,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       {/* Preview Question Warning Banner */}
       {isEditingTemplate && isPreviewQuestion && (
         <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border-2 border-amber-500 dark:border-amber-400">
-          <div className="flex items-center justify-center gap-2">
-            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-              Preview Mode: Save the question first to enable template saving
-            </span>
+          <div className="flex items-center justify-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                ⚠️ Question Not in Database - Preview Mode Only
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+                Template data will be saved locally. Click "Save Question" in the main form to persist to database.
+              </p>
+            </div>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import { supabase } from '../../../../../../lib/supabase';
 import { toast } from '../../../../../../components/shared/Toast';
 import type { PaperStatus } from '../../../../../../types/questions';
 import { deriveAnswerRequirement } from '../../../../../../lib/extraction/answerRequirementDeriver';
+import { TableTemplateService, type TableTemplateDTO } from '../../../../../../services/TableTemplateService';
 
 interface UpdateFieldParams {
   id: string;
@@ -54,6 +55,10 @@ interface ConfirmPaperParams {
 interface UpdatePaperStatusParams {
   paperId: string;
   newStatus: string;
+}
+
+interface SaveTableTemplateParams {
+  template: TableTemplateDTO;
 }
 
 export function useQuestionMutations() {
@@ -760,6 +765,33 @@ export function useQuestionMutations() {
     }
   });
 
+  // ✅ NEW: Save table completion template
+  const saveTableTemplate = useMutation({
+    mutationFn: async ({ template }: SaveTableTemplateParams) => {
+      console.log('[useQuestionMutations] Saving table template:', template);
+
+      const result = await TableTemplateService.saveTemplate(template);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save template');
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+      queryClient.invalidateQueries({ queryKey: ['table-templates'] });
+      // Don't show toast here - TableCompletion component already shows it
+      console.log('[useQuestionMutations] Table template saved successfully');
+    },
+    onError: (error) => {
+      console.error('[useQuestionMutations] Error saving table template:', error);
+      toast.error('Failed to save table template', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   return {
     updateField,
     updateSubtopics,
@@ -770,7 +802,8 @@ export function useQuestionMutations() {
     deleteAttachment,
     confirmQuestion,
     confirmPaper,
-    updatePaperStatus
+    updatePaperStatus,
+    saveTableTemplate  // ✅ NEW: Export the template save mutation
   };
 }
 

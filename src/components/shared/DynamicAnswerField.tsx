@@ -2036,6 +2036,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
     // Table Completion format
     if (format === 'table_completion') {
+      // ✅ FIXED: Determine if we're in template editor mode (admin creating/editing question)
+      const isTemplateEditing = mode === 'admin';
+      const isAdminTesting = mode === 'qa_preview';
+      const isStudentTest = mode === 'exam';
+
       return (
         <div>
           <TableCompletion
@@ -2049,9 +2054,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             }}
             disabled={disabled}
             showCorrectAnswers={showCorrectAnswer}
-            isTemplateEditor={false}
-            isAdminTestMode={mode === 'qa_preview' || mode === 'admin'}
-            isStudentTestMode={mode === 'exam'}
+            isTemplateEditor={isTemplateEditing}  // ✅ Enable template editor in admin mode
+            isAdminTestMode={isAdminTesting}
+            isStudentTestMode={isStudentTest}
           />
           {renderCorrectAnswers()}
         </div>
