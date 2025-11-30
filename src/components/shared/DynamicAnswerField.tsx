@@ -808,7 +808,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     // Table Completion format
     if (format === 'table_completion') {
       // Determine the correct mode
-      const isTemplateEditing = (mode === 'admin' && isEditing) || forceTemplateEditor;
+      // ✅ FIX: In admin mode, always enable template editing (don't require isEditing flag)
+      const isTemplateEditing = mode === 'admin' || forceTemplateEditor;
       const isAdminTesting = mode === 'qa_preview';
       const isStudentTest = mode === 'exam' && !isEditing;
 
