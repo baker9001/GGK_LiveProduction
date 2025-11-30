@@ -176,11 +176,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   };
 
   // ✅ FIXED: Check if we're in preview mode (question not saved to database yet)
-  // In template editor mode with valid UUID, always allow database save (admin is actively editing)
-  // Only treat as preview if: invalid UUID OR (not in template editor mode AND not in database)
-  const isPreviewQuestion = !isValidUUID(questionId) ||
-                           (subQuestionId && !isValidUUID(subQuestionId)) ||
-                           (!isTemplateEditor && questionExistsInDB === false);
+  // In template editor mode with valid UUID, ALWAYS allow database save (admin is actively editing)
+  // Only treat as preview if: invalid UUID AND not in template editor mode
+  const isPreviewQuestion = !isTemplateEditor &&
+                           (!isValidUUID(questionId) ||
+                            (subQuestionId && !isValidUUID(subQuestionId)));
 
   // Preview mode state
   const [previewMode, setPreviewMode] = useState(false);
