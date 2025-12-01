@@ -290,13 +290,26 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       return;
     }
 
-    // PRIORITY 3: Load template from database for saved questions
-    const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode;
-    const currentId = `${questionId}-${subQuestionId || 'main'}`;
+    // PRIORITY 3: Load template from database for saved questions OR review sessions
+    const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode || (reviewSessionId && questionIdentifier);
+    const currentId = reviewSessionId && questionIdentifier
+      ? `review-${reviewSessionId}-${questionIdentifier}`
+      : `${questionId}-${subQuestionId || 'main'}`;
+
+    console.log('[TableCompletion] Load decision:', {
+      shouldLoadTemplate,
+      currentId,
+      lastLoadedId: lastLoadedId.current,
+      reviewSessionId,
+      questionIdentifier,
+      isTemplateEditor,
+      isAdminTestMode,
+      isStudentTestMode
+    });
 
     // Only load if: should load, not currently loading, and haven't loaded this specific question yet
     if (shouldLoadTemplate && !loadingRef.current && lastLoadedId.current !== currentId) {
-      console.log('[TableCompletion] Loading template from database for:', currentId);
+      console.log('[TableCompletion] �� Loading template from database for:', currentId);
       lastLoadedId.current = currentId;
       loadingRef.current = true;
       hasLoadedRef.current = true;
@@ -304,7 +317,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         loadingRef.current = false;
       });
     }
-  }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode, template, isPreviewQuestion]);
+  }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode, template, isPreviewQuestion, reviewSessionId, questionIdentifier]);
 
   const loadTemplateFromProp = (tmpl: TableTemplate) => {
     setRows(tmpl.rows);
@@ -357,6 +370,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const loadExistingTemplate = async () => {
     setLoading(true);
     try {
+      console.log('[TableCompletion] 🔍 Loading template with params:', {
+        questionId,
+        subQuestionId,
+        reviewSessionId,
+        questionIdentifier
+      });
+
       // ✅ Use universal loader that checks review tables first, then production tables
       const result = await TableTemplateService.loadTemplateUniversal(
         questionId,
@@ -366,7 +386,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       );
 
       if (result.source === 'review') {
-        console.log('[TableCompletion] ✅ Loaded template from REVIEW tables');
+        console.log('[TableCompletion] ✅ Loaded template from REVIEW tables:', {
+          rows: result.template?.rows,
+          columns: result.template?.columns,
+          cellsCount: result.template?.cells.length
+        });
       } else if (result.source === 'production') {
         console.log('[TableCompletion] ✅ Loaded template from PRODUCTION tables');
       }
