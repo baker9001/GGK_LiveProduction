@@ -282,6 +282,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       if (!loadingRef.current && lastLoadedId.current !== currentId) {
         lastLoadedId.current = currentId;
         loadingRef.current = true;
+
+        // ✅ FIX: Initialize with defaults BEFORE async load to prevent undefined errors
+        if (rows === 0 || columns === 0) {
+          console.log('[TableCompletion] Initializing defaults before database load');
+          initializeDefaultTable();
+        }
+
         loadExistingTemplate().finally(() => { loadingRef.current = false; });
       }
       return; // Exit early - review takes precedence
@@ -1030,6 +1037,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     // Student mode: Track answers to editable cells
+    // ✅ FIX: Check if template exists before accessing editableCells
+    if (!template || !template.editableCells) {
+      console.warn('[TableCompletion] Template not loaded yet, skipping student answer tracking');
+      return;
+    }
+
     const studentAnswers = { ...(value?.studentAnswers || {}) };
     let completedCells = 0;
 
@@ -1064,6 +1077,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   }, [template, value, debouncedOnChange, isTemplateEditor, isEditingTemplate, cellValues, expectedAnswers, cellTypes]);
 
   const handleReset = () => {
+    // ✅ FIX: Check if template exists before accessing editableCells
+    if (!template || !template.editableCells) {
+      console.warn('[TableCompletion] Template not loaded, cannot reset');
+      return;
+    }
+
     onChange({
       studentAnswers: {},
       completedCells: 0,
