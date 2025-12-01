@@ -650,8 +650,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     const cellType = cellTypes[cellKey];
 
     // Student Test Mode - Clean, simple rendering
-    if (isStudentTestMode) {
-      const isEditable = template.editableCells?.some(c => c.row === row && c.col === col);
+    if (isStudentTestMode && template?.editableCells) {
+      const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
       const hasAnswer = value && String(value).trim().length > 0;
       const isEmpty = !hasAnswer && isEditable;
 
@@ -878,8 +878,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
     } else {
       // Undefined cells or legacy template support
-      const isEditable = template.editableCells?.some(c => c.row === row && c.col === col);
-      const isLocked = template.lockedCells?.some(c => c.row === row && c.col === col);
+      const isEditable = template?.editableCells?.some(c => c.row === row && c.col === col) ?? false;
+      const isLocked = template?.lockedCells?.some(c => c.row === row && c.col === col) ?? false;
 
       if (isEditable) {
         td.style.backgroundColor = showCorrectAnswers ?
@@ -1926,11 +1926,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             </h3>
           </div>
           {(() => {
+            if (!template?.editableCells) {
+              return null;
+            }
+
             let correctCount = 0;
             let incorrectCount = 0;
             let unansweredCount = 0;
 
-            template.editableCells?.forEach(cell => {
+            template.editableCells.forEach(cell => {
               const key = `${cell.row}-${cell.col}`;
               const studentAnswer = value?.studentAnswers?.[key];
               const hasAnswer = studentAnswer && String(studentAnswer).trim().length > 0;
@@ -1944,7 +1948,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               }
             });
 
-            const totalCells = template.editableCells?.length ?? 0;
+            const totalCells = template.editableCells.length;
             const percentage = totalCells > 0 ? Math.round((correctCount / totalCells) * 100) : 0;
 
             return (
@@ -3089,7 +3093,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                 renderer: cellRenderer
               };
             } else {
-              const isEditable = template.editableCells?.some(c => c.row === row && c.col === col);
+              const isEditable = template?.editableCells?.some(c => c.row === row && c.col === col) ?? false;
               return {
                 readOnly: !isEditable || disabled,
                 renderer: cellRenderer
