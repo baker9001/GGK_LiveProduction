@@ -530,6 +530,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   // Initialize table data from template
   useEffect(() => {
+    // ✅ FIX: Guard against undefined template to prevent crash
+    if (!template) return;
+
     if (!isTemplateEditor) {
       const data: any[][] = Array(template.rows).fill(null).map(() =>
         Array(template.columns).fill('')
@@ -553,6 +556,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
 
       setTableData(data);
+      // ✅ Mark data as loaded after template is processed
+      setHasLoadedData(true);
     }
   }, [template, value, isTemplateEditor]);
 
@@ -1826,9 +1831,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     );
   }
 
-  // ✅ FIX: Prevent render if in review mode and data hasn't loaded yet
+  // ✅ FIX: Prevent render if in review mode and data/template hasn't loaded yet
   // This prevents crashes when accessing template.editableCells before async load completes
-  if (reviewSessionId && questionIdentifier && !hasLoadedData) {
+  if (reviewSessionId && questionIdentifier && (!hasLoadedData || !template)) {
     return (
       <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div className="text-center">
