@@ -101,7 +101,7 @@ const DEFAULT_TEMPLATE: TableTemplate = {
 const TableCompletion: React.FC<TableCompletionProps> = ({
   questionId,
   subQuestionId,
-  template = DEFAULT_TEMPLATE,
+  template, // ✅ FIXED: No default value - allows proper detection of explicit vs implicit template
   value,
   onChange,
   disabled = false,
@@ -274,15 +274,27 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const lastLoadedId = useRef<string>(''); // Track last loaded question
 
   useEffect(() => {
-    // PRIORITY 1: If template prop is provided, use it (regardless of preview mode)
-    // This ensures templates passed from parent components are used
+    // PRIORITY 1: Review session - ALWAYS load from database first for import review
+    if (reviewSessionId && questionIdentifier) {
+      const currentId = `review-${reviewSessionId}-${questionIdentifier}`;
+      console.log('[TableCompletion] REVIEW SESSION detected - loading from database');
+
+      if (!loadingRef.current && lastLoadedId.current !== currentId) {
+        lastLoadedId.current = currentId;
+        loadingRef.current = true;
+        loadExistingTemplate().finally(() => { loadingRef.current = false; });
+      }
+      return; // Exit early - review takes precedence
+    }
+
+    // PRIORITY 2: If template prop is provided, use it
     if (template && (template.rows > 0 || template.columns > 0)) {
       console.log('[TableCompletion] Using provided template prop with headers:', template.headers);
       loadTemplateFromProp(template);
       return;
     }
 
-    // PRIORITY 2: If in preview mode (question not saved yet), initialize with defaults
+    // PRIORITY 3: If in preview mode (question not saved yet), initialize with defaults
     if (isPreviewQuestion) {
       console.log('[TableCompletion] Preview mode - initializing with defaults');
       initializeDefaultTable();
@@ -290,18 +302,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       return;
     }
 
-    // PRIORITY 3: Load template from database for saved questions OR review sessions
-    const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode || (reviewSessionId && questionIdentifier);
-    const currentId = reviewSessionId && questionIdentifier
-      ? `review-${reviewSessionId}-${questionIdentifier}`
-      : `${questionId}-${subQuestionId || 'main'}`;
+    // PRIORITY 4: Load template from database for saved questions (production tables)
+    const shouldLoadTemplate = isTemplateEditor || isAdminTestMode || isStudentTestMode;
+    const currentId = `${questionId}-${subQuestionId || 'main'}`;
 
-    console.log('[TableCompletion] Load decision:', {
+    console.log('[TableCompletion] Production load decision:', {
       shouldLoadTemplate,
       currentId,
       lastLoadedId: lastLoadedId.current,
-      reviewSessionId,
-      questionIdentifier,
       isTemplateEditor,
       isAdminTestMode,
       isStudentTestMode
@@ -309,13 +317,17 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
     // Only load if: should load, not currently loading, and haven't loaded this specific question yet
     if (shouldLoadTemplate && !loadingRef.current && lastLoadedId.current !== currentId) {
-      console.log('[TableCompletion] �� Loading template from database for:', currentId);
+      console.log('[TableCompletion] Loading template from production database');
       lastLoadedId.current = currentId;
       loadingRef.current = true;
       hasLoadedRef.current = true;
       loadExistingTemplate().finally(() => {
         loadingRef.current = false;
       });
+    }
+    else if (!shouldLoadTemplate) {
+      console.log('[TableCompletion] No load needed - initializing defaults');
+      initializeDefaultTable();
     }
   }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode, template, isPreviewQuestion, reviewSessionId, questionIdentifier]);
 

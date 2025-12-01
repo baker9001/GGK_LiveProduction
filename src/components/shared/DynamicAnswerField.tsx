@@ -882,10 +882,21 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
         }
       }
 
+      // ✅ FIX: Don't pass template prop during review mode - let component load from database
+      const shouldPassTemplate = !(reviewSessionId && questionIdentifier);
+      console.log('[DynamicAnswerField] Table Completion Props:', {
+        reviewSessionId,
+        questionIdentifier,
+        shouldPassTemplate,
+        templatePropExists: !!templateProp,
+        mode,
+        isTemplateEditing
+      });
+
       return (
         <TableCompletion
           questionId={question.id}
-          template={templateProp}
+          template={shouldPassTemplate ? templateProp : undefined}
           value={valueProp}
           onChange={(data) => onChange(JSON.stringify(data))}
           disabled={disabled && !isEditing}
