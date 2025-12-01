@@ -1817,6 +1817,19 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     );
   }
 
+  // ✅ FIX: Prevent render if in review mode and template not loaded yet
+  // This prevents crashes when accessing template.editableCells before async load completes
+  if (reviewSessionId && questionIdentifier && !template && rows === 0) {
+    return (
+      <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-600 dark:text-gray-400">Loading table template...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Calculate statistics for admin mode
   const lockedCount = Object.values(cellTypes).filter(t => t === 'locked').length;
   const editableCount = Object.values(cellTypes).filter(t => t === 'editable').length;
