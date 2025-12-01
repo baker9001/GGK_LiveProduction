@@ -1,7 +1,8 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/UploadTab.tsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, Loader2, FileJson } from 'lucide-react';
+import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, FileJson } from 'lucide-react';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 import { supabase } from '../../../../../../lib/supabase';
 import { FileUploader } from '../../../../../../components/shared/FileUploader';
 import { ScrollNavigator } from '../../../../../../components/shared/ScrollNavigator';
@@ -349,7 +350,7 @@ export function UploadTab({
                 >
                   {isContinuing ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <LoadingSpinner size="sm" inline centered={false} />
                       Resuming...
                     </>
                   ) : (
@@ -401,7 +402,7 @@ export function UploadTab({
                 >
                   {isDeleting ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <LoadingSpinner size="sm" inline centered={false} />
                       Deleting...
                     </>
                   ) : (

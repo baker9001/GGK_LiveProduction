@@ -17,11 +17,12 @@ import {
   AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X,
   ChevronDown, ChevronRight, FileText, Image, Upload, Scissors,
   Trash2, Eye, Link, BarChart3, Paperclip, Clock, Hash, Database,
-  Loader2, Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
+  Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
   Calculator, PenTool, Table, Code, Mic, LineChart, FileUp,
   HelpCircle, BookOpen, Lightbulb, Target, Award, PlayCircle,
   Flag, CheckSquare, FileCheck, ShieldCheck, MinusCircle, Menu
 } from 'lucide-react';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 
 // Import shared components
 import { Button } from '../../../../../../components/shared/Button';
@@ -5337,12 +5338,10 @@ function QuestionsTabInner({
   if (loading || !isInitialized) {
     return (
       <div className="flex flex-col justify-center items-center min-h-[400px] gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <div className="text-center">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {!academicStructureLoaded ? 'Loading academic structure...' : 'Initializing questions...'}
-          </p>
-        </div>
+        <LoadingSpinner
+          size="lg"
+          message={!academicStructureLoaded ? 'Loading academic structure...' : 'Initializing questions...'}
+        />
       </div>
     );
   }
@@ -5439,7 +5438,7 @@ function QuestionsTabInner({
           >
             {autoMappingInProgress ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoadingSpinner size="sm" inline centered={false} />
                 Mapping...
               </>
             ) : (
@@ -5987,7 +5986,7 @@ function QuestionsTabInner({
             />
             {reviewWorkflowLoading && (
               <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoadingSpinner size="sm" inline centered={false} />
                 Syncing review data…
               </div>
             )}
@@ -6053,7 +6052,7 @@ function QuestionsTabInner({
             >
               {isImporting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <LoadingSpinner size="sm" inline centered={false} />
                   Importing...
                 </>
               ) : (

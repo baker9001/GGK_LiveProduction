@@ -1,11 +1,12 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/StructureTab.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Database, ChevronRight, Loader2, CheckCircle, AlertCircle, 
+import {
+  Database, ChevronRight, CheckCircle, AlertCircle,
   XCircle, Plus, RefreshCw, Shield, Info, BookOpen, Building2,
   Package, FileText, Eye, EyeOff, MapPin
 } from 'lucide-react';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
 import { CollapsibleSection } from '../../../../../../components/shared/CollapsibleSection';
@@ -803,7 +804,7 @@ export default function StructureTab({
         >
           {loading ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <LoadingSpinner size="sm" inline centered={false} />
               Saving...
             </>
           ) : (

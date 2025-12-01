@@ -26,12 +26,14 @@ import { supabase } from '../../../../../lib/supabase';
 import { toast } from '../../../../../components/shared/Toast';
 import { useUser } from '../../../../../contexts/UserContext';
 import {
-  Loader2, AlertCircle, FileJson, Database,
+  AlertCircle, FileJson, Database,
   FileText, ClipboardList, Shield, Settings, Info, ChevronDown
 } from 'lucide-react';
 import { ScrollNavigator } from '../../../../../components/shared/ScrollNavigator';
 import { Button } from '../../../../../components/shared/Button';
 import { cn } from '../../../../../lib/utils';
+import { LoadingSpinner } from '../../../../../components/shared/LoadingSpinner';
+import { LoadingOverlay } from '../../../../../components/shared/LoadingOverlay';
 import { ExtractionRules, JsonGuidelineSummary } from './types';
 import { JsonGuidelineChecklist } from './components/JsonGuidelineChecklist';
 
@@ -1899,7 +1901,7 @@ export default function PapersSetupPage() {
   if (isLoadingSession && !uploadedFile) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <LoadingSpinner size="lg" message="Loading session..." />
       </div>
     );
   }
@@ -2144,7 +2146,7 @@ export default function PapersSetupPage() {
             />
           ) : importSession && parsedData && !existingPaperId ? (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
-              <Loader2 className="h-12 w-12 text-blue-600 mx-auto mb-3 animate-spin" />
+              <LoadingSpinner size="xl" />
               <p className="text-gray-600 dark:text-gray-400">
                 Loading paper data...
               </p>

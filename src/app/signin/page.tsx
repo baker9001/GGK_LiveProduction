@@ -3,10 +3,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { 
-  GraduationCap, 
-  AlertCircle, 
-  Loader2, 
+import {
+  GraduationCap,
+  AlertCircle,
   Mail,
   Lock,
   Eye,
@@ -16,6 +15,7 @@ import {
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { toast } from '../../components/shared/Toast';
+import { LoadingSpinner } from '../../components/shared/LoadingSpinner';
 import {
   setAuthenticatedUser,
   clearAuthenticatedUser,
@@ -615,8 +615,8 @@ export default function SignInPage() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Signing in...
+                  <LoadingSpinner size="sm" inline centered={false} />
+                  <span className="ml-2">Signing in...</span>
                 </>
               ) : (
                 'Sign in'
