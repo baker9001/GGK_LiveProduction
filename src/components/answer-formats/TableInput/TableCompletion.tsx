@@ -1518,13 +1518,23 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     // ✅ NEW: Determine if we're in review mode or production mode
     const isReviewMode = !!(reviewSessionId && questionIdentifier);
 
-    console.log('[TableCompletion] Save mode detection:', {
+    console.group('[TableCompletion] ========== SAVE TEMPLATE ==========');
+    console.log('Save mode detection:', {
       isReviewMode,
-      reviewSessionId,
-      questionIdentifier,
+      reviewSessionId: reviewSessionId || 'NULL',
+      reviewSessionIdType: typeof reviewSessionId,
+      questionIdentifier: questionIdentifier || 'NULL',
       questionId,
-      isValidUUID: isValidUUID(questionId)
+      isValidUUID: isValidUUID(questionId),
+      silent
     });
+    console.log('Template data:', {
+      rows,
+      columns,
+      cellsCount: Object.keys(cellTypes).length,
+      editableCellsCount: Object.values(cellTypes).filter(t => t === 'editable').length
+    });
+    console.groupEnd();
 
     // ✅ REVIEW MODE: Save to review tables (allows temporary IDs)
     if (isReviewMode) {

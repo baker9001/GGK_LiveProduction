@@ -93,8 +93,14 @@ export class TableTemplateImportReviewService {
         .single();
 
       if (templateError) {
-        console.error('[TableTemplateImportReviewService] Template upsert error:', templateError);
-        throw templateError;
+        console.error('[TableTemplateImportReviewService] Template upsert error:', {
+          error: templateError,
+          code: templateError.code,
+          message: templateError.message,
+          details: templateError.details,
+          hint: templateError.hint
+        });
+        throw new Error(`Database error: ${templateError.message || templateError.code || 'Unknown error'}`);
       }
 
       const templateId = templateData.id;
