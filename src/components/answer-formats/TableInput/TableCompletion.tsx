@@ -159,6 +159,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const [questionExistsInDB, setQuestionExistsInDB] = useState<boolean | null>(null);
   const [checkingDBExistence, setCheckingDBExistence] = useState(false);
 
+  // ✅ NEW: Loading state flag to prevent rendering before data is ready
+  const [hasLoadedData, setHasLoadedData] = useState(false);
+
   // Inline editing popover state
   const [inlineEditCell, setInlineEditCell] = useState<{row: number; col: number; x: number; y: number} | null>(null);
   const [inlineEditValue, setInlineEditValue] = useState('');
@@ -384,6 +387,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     });
 
     setTableData(data);
+    // ✅ Mark data as loaded after template prop is processed
+    setHasLoadedData(true);
   };
 
   const loadExistingTemplate = async () => {
@@ -486,6 +491,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         });
 
         setTableData(data);
+        // ✅ Mark data as loaded after successful database load
+        setHasLoadedData(true);
       } else {
         // Initialize with default dimensions
         initializeDefaultTable();
@@ -517,6 +524,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       Array(defaultCols).fill('')
     );
     setTableData(data);
+    // ✅ Mark data as loaded after initialization
+    setHasLoadedData(true);
   };
 
   // Initialize table data from template
@@ -1817,9 +1826,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     );
   }
 
-  // ✅ FIX: Prevent render if in review mode and template not loaded yet
+  // ✅ FIX: Prevent render if in review mode and data hasn't loaded yet
   // This prevents crashes when accessing template.editableCells before async load completes
-  if (reviewSessionId && questionIdentifier && !template && rows === 0) {
+  if (reviewSessionId && questionIdentifier && !hasLoadedData) {
     return (
       <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div className="text-center">
@@ -3051,7 +3060,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         <HotTable
           ref={hotRef}
           data={tableData}
-          colHeaders={isTemplateEditor ? headers : template.headers}
+          colHeaders={isTemplateEditor ? headers : (template?.headers || headers)}
           rowHeaders={true}
           width="100%"
           height="auto"
