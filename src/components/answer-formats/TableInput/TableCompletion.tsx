@@ -561,6 +561,23 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
   }, [template, value, isTemplateEditor]);
 
+  // Sync tableData changes with Handsontable instance
+  // This ensures that when data is loaded from database, Handsontable displays it
+  useEffect(() => {
+    if (hotRef.current && tableData.length > 0) {
+      const hotInstance = hotRef.current.hotInstance;
+      if (hotInstance) {
+        console.log('[TableCompletion] Syncing tableData with Handsontable:', {
+          rows: tableData.length,
+          cols: tableData[0]?.length,
+          sampleData: tableData[0]
+        });
+        // Load data into Handsontable (source: 'loadData' prevents triggering handleAfterChange)
+        hotInstance.loadData(tableData);
+      }
+    }
+  }, [tableData]);
+
   // Cell selection and configuration handlers
   const handleCellClick = useCallback((row: number, col: number, event?: MouseEvent) => {
     if (!isEditingTemplate) return;

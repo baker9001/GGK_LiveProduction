@@ -107,20 +107,11 @@ export class TableTemplateImportReviewService {
 
       console.log('[TableTemplateImportReviewService] Template saved with ID:', templateId);
 
-      // 2. Delete existing cells for this template
-      const { error: deleteError } = await supabase
-        .from('table_template_cells_import_review')
-        .delete()
-        .eq('template_id', templateId);
-
-      if (deleteError) {
-        console.error('[TableTemplateImportReviewService] Cell deletion error:', deleteError);
-        throw deleteError;
-      }
-
-      // 3. Insert new cells
+      // 2. UPSERT cells (update existing, insert new)
+      // Using UPSERT with unique constraint (template_id, row_index, col_index)
+      // This updates existing records instead of deleting and recreating them
       if (template.cells.length > 0) {
-        const cellsToInsert = template.cells.map(cell => ({
+        const cellsToUpsert = template.cells.map(cell => ({
           template_id: templateId,
           row_index: cell.rowIndex,
           col_index: cell.colIndex,
@@ -135,14 +126,17 @@ export class TableTemplateImportReviewService {
 
         const { error: cellsError } = await supabase
           .from('table_template_cells_import_review')
-          .insert(cellsToInsert);
+          .upsert(cellsToUpsert, {
+            onConflict: 'template_id,row_index,col_index',
+            ignoreDuplicates: false // Update on conflict instead of ignoring
+          });
 
         if (cellsError) {
-          console.error('[TableTemplateImportReviewService] Cell insertion error:', cellsError);
+          console.error('[TableTemplateImportReviewService] Cell upsert error:', cellsError);
           throw cellsError;
         }
 
-        console.log('[TableTemplateImportReviewService] Inserted', cellsToInsert.length, 'cells');
+        console.log('[TableTemplateImportReviewService] Upserted', cellsToUpsert.length, 'cells');
       }
 
       console.log('[TableTemplateImportReviewService] ✅ Template saved successfully');
