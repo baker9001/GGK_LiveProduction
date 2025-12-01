@@ -476,4 +476,75 @@ export class TableTemplateService {
       };
     }
   }
+
+  /**
+   * Load template from either production tables OR review tables
+   * Checks review tables first (if reviewSessionId provided), then production tables
+   * This allows seamless transition from review to production
+   */
+  static async loadTemplateUniversal(
+    questionId?: string,
+    subQuestionId?: string,
+    reviewSessionId?: string,
+    questionIdentifier?: string
+  ): Promise<{
+    success: boolean;
+    template?: TableTemplateDTO;
+    error?: string;
+    source?: 'production' | 'review';
+  }> {
+    // If review context provided, try loading from review tables first
+    if (reviewSessionId && questionIdentifier) {
+      const { TableTemplateImportReviewService } = await import('./TableTemplateImportReviewService');
+
+      const reviewResult = await TableTemplateImportReviewService.loadTemplateForReview(
+        reviewSessionId,
+        questionIdentifier
+      );
+
+      if (reviewResult.success && reviewResult.template) {
+        // Convert review DTO to production DTO format
+        const productionTemplate: TableTemplateDTO = {
+          id: reviewResult.template.id,
+          questionId: reviewResult.template.questionIdentifier, // Will be temp ID in review
+          subQuestionId: reviewResult.template.isSubquestion ? reviewResult.template.questionIdentifier : undefined,
+          rows: reviewResult.template.rows,
+          columns: reviewResult.template.columns,
+          headers: reviewResult.template.headers,
+          title: reviewResult.template.title,
+          description: reviewResult.template.description,
+          cells: reviewResult.template.cells.map(cell => ({
+            rowIndex: cell.rowIndex,
+            colIndex: cell.colIndex,
+            cellType: cell.cellType,
+            lockedValue: cell.lockedValue,
+            expectedAnswer: cell.expectedAnswer,
+            marks: cell.marks,
+            acceptsEquivalentPhrasing: cell.acceptsEquivalentPhrasing,
+            caseSensitive: cell.caseSensitive,
+            alternativeAnswers: cell.alternativeAnswers
+          }))
+        };
+
+        return {
+          success: true,
+          template: productionTemplate,
+          source: 'review'
+        };
+      }
+    }
+
+    // Fall back to production tables
+    const productionResult = await this.loadTemplate(questionId, subQuestionId);
+
+    if (productionResult.success && productionResult.template) {
+      return {
+        success: true,
+        template: productionResult.template,
+        source: 'production'
+      };
+    }
+
+    return productionResult;
+  }
 }

@@ -189,6 +189,9 @@ interface AnswerFieldProps {
   forceTemplateEditor?: boolean;
   // Callback for template saves in preview mode
   onTemplateSave?: (template: any) => void;
+  // Review mode props (for import review workflow)
+  reviewSessionId?: string;
+  questionIdentifier?: string;
 }
 
 // Helper function to convert TableTemplateDTO to TableTemplate format
@@ -245,7 +248,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   subjectSpecificConfig,
   triggerValidation = false,
   forceTemplateEditor = false,
-  onTemplateSave
+  onTemplateSave,
+  reviewSessionId,
+  questionIdentifier
 }) => {
   const questionIdRef = useRef(question.id);
   const isInitializedRef = useRef(false);
@@ -890,6 +895,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           isAdminTestMode={isAdminTesting}
           isStudentTestMode={isStudentTest}
           showValidationWarnings={triggerValidation && isStudentTest}
+          reviewSessionId={reviewSessionId}
+          questionIdentifier={questionIdentifier}
           onTemplateSave={(templateConfig) => {
             // ✅ Store template configuration in preview_data for later database save
             console.log('[DynamicAnswerField] Template save callback (inline) - storing in preview_data:', templateConfig);
@@ -2064,6 +2071,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             isTemplateEditor={isTemplateEditing}  // ✅ Enable template editor in admin mode
             isAdminTestMode={isAdminTesting}
             isStudentTestMode={isStudentTest}
+            reviewSessionId={reviewSessionId}
+            questionIdentifier={questionIdentifier}
             onTemplateSave={(templateConfig) => {
               // ✅ Store template configuration in preview_data for later database save
               console.log('[DynamicAnswerField] Template save callback - storing in preview_data:', templateConfig);

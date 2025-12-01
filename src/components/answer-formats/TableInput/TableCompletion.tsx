@@ -34,6 +34,7 @@ import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
 import { validateTableData } from '../utils/dataValidation';
 import { TableTemplateService, type TableTemplateDTO, type TableCellDTO } from '@/services/TableTemplateService';
+import { TableTemplateImportReviewService, type TableTemplateReviewDTO } from '@/services/TableTemplateImportReviewService';
 import { toast } from '@/components/shared/Toast';
 import { supabase } from '@/lib/supabase';
 
@@ -72,6 +73,10 @@ interface TableCompletionProps {
   isStudentTestMode?: boolean;
   showValidationWarnings?: boolean;
 
+  // Review Mode Props (for import review workflow)
+  reviewSessionId?: string; // If provided, saves to review tables instead of production
+  questionIdentifier?: string; // Question identifier for review mode
+
   // Dimension Constraints
   minRows?: number;
   maxRows?: number;
@@ -108,6 +113,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   onTemplateSave,
   isStudentTestMode = false,
   showValidationWarnings = false,
+  reviewSessionId,
+  questionIdentifier,
   minRows = 2,
   maxRows = 50,
   minCols = 2,
@@ -350,7 +357,19 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const loadExistingTemplate = async () => {
     setLoading(true);
     try {
-      const result = await TableTemplateService.loadTemplate(questionId, subQuestionId);
+      // ✅ Use universal loader that checks review tables first, then production tables
+      const result = await TableTemplateService.loadTemplateUniversal(
+        questionId,
+        subQuestionId,
+        reviewSessionId,
+        questionIdentifier
+      );
+
+      if (result.source === 'review') {
+        console.log('[TableCompletion] ✅ Loaded template from REVIEW tables');
+      } else if (result.source === 'production') {
+        console.log('[TableCompletion] ✅ Loaded template from PRODUCTION tables');
+      }
 
       if (result.success && result.template) {
         const tmpl = result.template;
@@ -1496,14 +1515,112 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       return;
     }
 
-    // Database save for real questions
-    console.log('[TableCompletion] Database save mode - question has valid UUID:', {
+    // ✅ NEW: Determine if we're in review mode or production mode
+    const isReviewMode = !!(reviewSessionId && questionIdentifier);
+
+    console.log('[TableCompletion] Save mode detection:', {
+      isReviewMode,
+      reviewSessionId,
+      questionIdentifier,
       questionId,
-      isValidUUID: isValidUUID(questionId),
-      subQuestionId
+      isValidUUID: isValidUUID(questionId)
     });
 
-    // ✅ Additional validation before database save
+    // ✅ REVIEW MODE: Save to review tables (allows temporary IDs)
+    if (isReviewMode) {
+      console.log('[TableCompletion] ✅ Using REVIEW MODE save');
+
+      try {
+        // Build cells array
+        const cells: TableCellDTO[] = [];
+
+      // Iterate through all cells in the table
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < columns; col++) {
+          const key = `${row}-${col}`;
+          const type = cellTypes[key];
+
+          // Default undefined cells to locked with empty value
+          const cellType = type || 'locked';
+
+          cells.push({
+            rowIndex: row,
+            colIndex: col,
+            cellType: cellType,
+            lockedValue: cellType === 'locked' ? (cellValues[key] || '') : undefined,
+            expectedAnswer: cellType === 'editable' ? (expectedAnswers[key] || '') : undefined,
+            // ✅ Use configured marking values instead of hardcoded
+            marks: cellMarks[key] ?? 1,
+            caseSensitive: cellCaseSensitive[key] ?? false,
+            acceptsEquivalentPhrasing: cellEquivalentPhrasing[key] ?? false,
+            alternativeAnswers: cellAlternatives[key] ?? []
+          });
+        }
+      }
+
+        // Build review template
+        const reviewTemplate: TableTemplateReviewDTO = {
+          reviewSessionId: reviewSessionId!,
+          questionIdentifier: questionIdentifier!,
+          isSubquestion: !!subQuestionId,
+          rows,
+          columns,
+          headers,
+          title: tableTitle || undefined,
+          description: tableDescription || undefined,
+          cells
+        };
+
+        const result = await TableTemplateImportReviewService.saveTemplateForReview(reviewTemplate);
+
+        if (result.success) {
+          if (!silent) {
+            toast.success('✅ Template saved to review database!', {
+              description: 'Template will migrate to production on import approval',
+              duration: 4000
+            });
+          }
+          // Convert to production DTO format for callback
+          const productionTemplate: TableTemplateDTO = {
+            questionId: questionIdentifier!,
+            subQuestionId: reviewTemplate.isSubquestion ? questionIdentifier : undefined,
+            rows: reviewTemplate.rows,
+            columns: reviewTemplate.columns,
+            headers: reviewTemplate.headers,
+            title: reviewTemplate.title,
+            description: reviewTemplate.description,
+            cells: reviewTemplate.cells
+          };
+          onTemplateSave?.(productionTemplate);
+          setAutoSaveStatus('saved');
+          setLastSaveTime(new Date());
+          if (!silent) {
+            setIsEditingTemplate(false);
+          }
+        } else {
+          throw new Error(result.error);
+        }
+      } catch (error) {
+        console.error('Error saving template to review database:', error);
+        setAutoSaveStatus('error');
+        if (!silent) {
+          const errorMessage = error instanceof Error
+            ? error.message
+            : (error as any)?.message || JSON.stringify(error) || 'Unknown error occurred';
+          toast.error('Failed to save template to review database', {
+            description: errorMessage
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ✅ PRODUCTION MODE: Save to production tables (requires valid UUIDs)
+    console.log('[TableCompletion] ✅ Using PRODUCTION MODE save');
+
+    // Validation before database save
     if (!questionId || !isValidUUID(questionId.trim())) {
       const errorMsg = 'Cannot save template: Question must be saved first';
       console.error('[TableCompletion]', errorMsg, { questionId });
@@ -1537,7 +1654,6 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             cellType: cellType,
             lockedValue: cellType === 'locked' ? (cellValues[key] || '') : undefined,
             expectedAnswer: cellType === 'editable' ? (expectedAnswers[key] || '') : undefined,
-            // ✅ Use configured marking values instead of hardcoded
             marks: cellMarks[key] ?? 1,
             caseSensitive: cellCaseSensitive[key] ?? false,
             acceptsEquivalentPhrasing: cellEquivalentPhrasing[key] ?? false,
@@ -1546,9 +1662,9 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         }
       }
 
-      // ✅ FIX: Always include questionId, only include subQuestionId if valid UUID
+      // Build production template
       const template: TableTemplateDTO = {
-        questionId, // Always include - required by service
+        questionId,
         subQuestionId: (subQuestionId && isValidUUID(subQuestionId)) ? subQuestionId : undefined,
         rows,
         columns,
@@ -1562,7 +1678,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
       if (result.success) {
         if (!silent) {
-          toast.success('✅ Template saved to database!', {
+          toast.success('✅ Template saved to production database!', {
             description: 'Table configuration persisted successfully',
             duration: 4000
           });
@@ -1577,14 +1693,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         throw new Error(result.error);
       }
     } catch (error) {
-      console.error('Error saving template to database:', error);
+      console.error('Error saving template to production database:', error);
       setAutoSaveStatus('error');
       if (!silent) {
-        // Handle both Error instances and Supabase PostgresError objects
         const errorMessage = error instanceof Error
           ? error.message
           : (error as any)?.message || JSON.stringify(error) || 'Unknown error occurred';
-        toast.error('Failed to save template to database', {
+        toast.error('Failed to save template to production database', {
           description: errorMessage
         });
       }

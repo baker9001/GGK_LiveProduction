@@ -1210,6 +1210,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             value={initialValue}
             mode="admin"
             forceTemplateEditor={true}
+            reviewSessionId={reviewSessionId}
+            questionIdentifier={questionContext.id}
             onTemplateSave={(template) => handleTemplateSave(questionContext.id, template)}
             onChange={(newAnswers) => {
               console.log('[QuestionImportReviewWorkflow] onChange received:', typeof newAnswers, newAnswers);
