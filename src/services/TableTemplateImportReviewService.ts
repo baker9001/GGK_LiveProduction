@@ -107,7 +107,23 @@ export class TableTemplateImportReviewService {
 
       console.log('[TableTemplateImportReviewService] Template saved with ID:', templateId);
 
-      // 2. UPSERT cells (update existing, insert new)
+      // 2. Clean up orphaned cells (cells outside current table dimensions)
+      // This happens when table dimensions shrink (e.g., 5x5 -> 3x3)
+      // Delete cells with row_index >= rows OR col_index >= columns
+      const { error: cleanupError } = await supabase
+        .from('table_template_cells_import_review')
+        .delete()
+        .eq('template_id', templateId)
+        .or(`row_index.gte.${template.rows},col_index.gte.${template.columns}`);
+
+      if (cleanupError) {
+        console.warn('[TableTemplateImportReviewService] Cell cleanup warning (non-critical):', cleanupError);
+        // Don't throw - this is non-critical, proceed with upsert
+      } else {
+        console.log('[TableTemplateImportReviewService] Cleaned up orphaned cells outside dimensions:', template.rows, 'x', template.columns);
+      }
+
+      // 3. UPSERT cells (update existing, insert new)
       // Using UPSERT with unique constraint (template_id, row_index, col_index)
       // This updates existing records instead of deleting and recreating them
       if (template.cells.length > 0) {
@@ -170,9 +186,10 @@ export class TableTemplateImportReviewService {
         throw new Error('reviewSessionId and questionIdentifier are required');
       }
 
-      console.log('[TableTemplateImportReviewService] Loading template for review:', {
+      console.log('[TableTemplateImportReviewService] 📥 Loading template for review:', {
         reviewSessionId,
-        questionIdentifier
+        questionIdentifier,
+        dataSource: 'table_templates_import_review (REVIEW MODE)'
       });
 
       // 1. Fetch template
@@ -184,16 +201,22 @@ export class TableTemplateImportReviewService {
         .maybeSingle();
 
       if (templateError) {
-        console.error('[TableTemplateImportReviewService] Template fetch error:', templateError);
+        console.error('[TableTemplateImportReviewService] ❌ Template fetch error:', templateError);
         throw templateError;
       }
 
       if (!templateData) {
-        console.log('[TableTemplateImportReviewService] No template found');
+        console.log('[TableTemplateImportReviewService] ℹ️ No template found in review tables');
         return { success: true, template: undefined };
       }
 
-      console.log('[TableTemplateImportReviewService] Template found:', templateData.id);
+      console.log('[TableTemplateImportReviewService] ✅ Template found:', {
+        templateId: templateData.id,
+        dimensions: `${templateData.rows}x${templateData.columns}`,
+        dataSource: 'REVIEW TABLES',
+        createdAt: templateData.created_at,
+        updatedAt: templateData.updated_at
+      });
 
       // 2. Fetch cells
       const { data: cellsData, error: cellsError } = await supabase

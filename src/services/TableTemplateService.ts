@@ -493,8 +493,19 @@ export class TableTemplateService {
     error?: string;
     source?: 'production' | 'review';
   }> {
+    console.log('[TableTemplateService] 🔍 Universal loader called:', {
+      questionId,
+      subQuestionId,
+      reviewSessionId: reviewSessionId || 'NULL',
+      questionIdentifier: questionIdentifier || 'NULL',
+      willCheckReview: !!(reviewSessionId && questionIdentifier),
+      willCheckProduction: !!(questionId || subQuestionId)
+    });
+
     // If review context provided, try loading from review tables first
     if (reviewSessionId && questionIdentifier) {
+      console.log('[TableTemplateService] 📥 PRIORITY 1: Checking REVIEW TABLES first');
+
       const { TableTemplateImportReviewService } = await import('./TableTemplateImportReviewService');
 
       const reviewResult = await TableTemplateImportReviewService.loadTemplateForReview(
@@ -503,6 +514,8 @@ export class TableTemplateService {
       );
 
       if (reviewResult.success && reviewResult.template) {
+        console.log('[TableTemplateService] ✅ Found template in REVIEW TABLES - using this data');
+
         // Convert review DTO to production DTO format
         const productionTemplate: TableTemplateDTO = {
           id: reviewResult.template.id,
@@ -531,13 +544,17 @@ export class TableTemplateService {
           template: productionTemplate,
           source: 'review'
         };
+      } else {
+        console.log('[TableTemplateService] ℹ️ No template found in REVIEW TABLES, will check PRODUCTION TABLES');
       }
     }
 
     // Fall back to production tables
+    console.log('[TableTemplateService] 📥 Checking PRODUCTION TABLES');
     const productionResult = await this.loadTemplate(questionId, subQuestionId);
 
     if (productionResult.success && productionResult.template) {
+      console.log('[TableTemplateService] ✅ Found template in PRODUCTION TABLES');
       return {
         success: true,
         template: productionResult.template,
@@ -545,6 +562,7 @@ export class TableTemplateService {
       };
     }
 
+    console.log('[TableTemplateService] ℹ️ No template found in any source');
     return productionResult;
   }
 }

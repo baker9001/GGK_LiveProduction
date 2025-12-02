@@ -1622,6 +1622,21 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     });
     console.groupEnd();
 
+    // ✅ GUARD: Prevent save if reviewSessionId is expected but not yet initialized
+    if (questionIdentifier && !reviewSessionId) {
+      const warningMsg = 'Review session not initialized yet - cannot save to database';
+      console.warn('[TableCompletion]', warningMsg, { questionIdentifier, reviewSessionId });
+      if (!silent) {
+        toast.warning('Review session initializing...', {
+          description: 'Please wait a moment and try again',
+          duration: 3000
+        });
+      }
+      setAutoSaveStatus('unsaved');
+      setLoading(false);
+      return;
+    }
+
     // ✅ REVIEW MODE: Save to review tables (allows temporary IDs)
     if (isReviewMode) {
       console.log('[TableCompletion] ✅ Using REVIEW MODE save');
