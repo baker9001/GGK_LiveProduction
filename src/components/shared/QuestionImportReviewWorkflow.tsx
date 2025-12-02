@@ -1002,7 +1002,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   // Handle template saves for complex answer formats
   const handleTemplateSave = useCallback(async (questionId: string, template: any) => {
-    console.log('[Template Save] ========== TEMPLATE SAVE CALLBACK ==========');
+    console.log('[Template Save] ========== TEMPLATE SAVE STARTED ==========');
     console.log('[Template Save] Question ID:', questionId);
     console.log('[Template Save] reviewSessionId:', reviewSessionId);
     console.log('[Template Save] Template data:', template);
@@ -1016,11 +1016,51 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       [questionId]: template
     }));
 
-    // ✅ FIX: Database save is now handled by TableCompletion component directly
-    // This callback is ONLY for syncing local state, not for database operations
-    // Removing duplicate database save to prevent race conditions
-    console.log('[Template Save] ℹ️ Database save handled by TableCompletion component');
-    console.log('[Template Save] ℹ️ This callback only syncs local state cache');
+    // ✅ SOLUTION 2: Direct database save to review tables
+    if (reviewSessionId && template.rows && template.columns && Array.isArray(template.cells)) {
+      console.log('[Template Save] ✅ Attempting DIRECT save to review tables');
+
+      try {
+        const result = await TableTemplateImportReviewService.saveTemplateForReview({
+          reviewSessionId: reviewSessionId,
+          questionIdentifier: questionId,
+          isSubquestion: false,
+          rows: template.rows,
+          columns: template.columns,
+          headers: template.headers || [],
+          title: template.title,
+          description: template.description,
+          cells: template.cells
+        });
+
+        if (result.success) {
+          console.log('[Template Save] ✅ SUCCESS! Saved to review database, template ID:', result.templateId);
+          toast.success('✅ Template saved to database!', {
+            description: 'Changes are persisted and will migrate on import approval',
+            duration: 3000
+          });
+        } else {
+          console.error('[Template Save] ❌ Failed to save to review database:', result.error);
+          toast.error('Failed to save template to database', {
+            description: result.error,
+            duration: 5000
+          });
+        }
+      } catch (error) {
+        console.error('[Template Save] ❌ Exception during save:', error);
+        toast.error('Error saving template', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+          duration: 5000
+        });
+      }
+    } else {
+      console.warn('[Template Save] ⚠️ Cannot save to review tables:', {
+        hasReviewSessionId: !!reviewSessionId,
+        hasRows: !!template.rows,
+        hasColumns: !!template.columns,
+        hasCells: Array.isArray(template.cells)
+      });
+    }
 
     // Find the question in the current questions array
     const question = questions.find(q => q.id === questionId);
