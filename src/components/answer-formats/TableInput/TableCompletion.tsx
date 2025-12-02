@@ -1622,24 +1622,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     });
     console.groupEnd();
 
-    // ✅ GUARD: Prevent save if reviewSessionId is expected but not yet initialized
-    if (questionIdentifier && !reviewSessionId) {
-      const warningMsg = 'Review session not initialized yet - cannot save to database';
-      console.warn('[TableCompletion]', warningMsg, { questionIdentifier, reviewSessionId });
-      if (!silent) {
-        toast.warning('Review session initializing...', {
-          description: 'Please wait a moment and try again',
-          duration: 3000
-        });
-      }
-      setAutoSaveStatus('unsaved');
-      setLoading(false);
-      return;
-    }
-
     // ✅ REVIEW MODE: Save to review tables (allows temporary IDs)
     if (isReviewMode) {
       console.log('[TableCompletion] ✅ Using REVIEW MODE save');
+      console.log('[TableCompletion] Review context:', {
+        reviewSessionId,
+        questionIdentifier,
+        tableSize: `${rows}x${columns}`,
+        editableCells: Object.values(cellTypes).filter(t => t === 'editable').length
+      });
 
       try {
         // Build cells array
@@ -1682,9 +1673,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           cells
         };
 
+        console.log('[TableCompletion] 💾 Calling saveTemplateForReview...');
         const result = await TableTemplateImportReviewService.saveTemplateForReview(reviewTemplate);
 
         if (result.success) {
+          console.log('[TableCompletion] ✅ SAVE SUCCESSFUL to table_templates_import_review', {
+            templateId: result.templateId,
+            silent,
+            timestamp: new Date().toISOString()
+          });
+
           if (!silent) {
             toast.success('✅ Template saved to review database!', {
               description: 'Template will migrate to production on import approval',
@@ -1702,6 +1700,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             description: reviewTemplate.description,
             cells: reviewTemplate.cells
           };
+
+          console.log('[TableCompletion] 📤 Calling onTemplateSave callback for local state sync');
           onTemplateSave?.(productionTemplate);
           setAutoSaveStatus('saved');
           setLastSaveTime(new Date());
@@ -1709,6 +1709,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             setIsEditingTemplate(false);
           }
         } else {
+          console.error('[TableCompletion] ❌ SAVE FAILED:', result.error);
           throw new Error(result.error);
         }
       } catch (error) {
@@ -1729,7 +1730,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     // ✅ PRODUCTION MODE: Save to production tables (requires valid UUIDs)
-    console.log('[TableCompletion] ✅ Using PRODUCTION MODE save');
+    console.log('[TableCompletion] ⚠️ Using PRODUCTION MODE save (not in review context)');
+    console.log('[TableCompletion] Production context:', {
+      questionId,
+      subQuestionId,
+      hasReviewSessionId: !!reviewSessionId,
+      hasQuestionIdentifier: !!questionIdentifier,
+      reason: !reviewSessionId ? 'reviewSessionId is null/undefined' :
+              !questionIdentifier ? 'questionIdentifier is null/undefined' :
+              'unknown'
+    });
 
     // Validation before database save
     if (!questionId || !isValidUUID(questionId.trim())) {
