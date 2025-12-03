@@ -2043,6 +2043,64 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* 🔍 DEBUG PANEL - Shows query parameters for troubleshooting */}
+      {reviewSessionId && questionIdentifier && isTemplateEditor && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-700 rounded-lg p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                🔍 Database Query Debug Info
+              </h4>
+              <div className="space-y-1 text-xs font-mono text-blue-800 dark:text-blue-200">
+                <div className="grid grid-cols-[140px,1fr] gap-2">
+                  <span className="font-semibold">Review Session ID:</span>
+                  <span className="break-all">{reviewSessionId}</span>
+                </div>
+                <div className="grid grid-cols-[140px,1fr] gap-2">
+                  <span className="font-semibold">Question Identifier:</span>
+                  <span className="break-all">{questionIdentifier}</span>
+                </div>
+                <div className="grid grid-cols-[140px,1fr] gap-2">
+                  <span className="font-semibold">Last Loaded ID:</span>
+                  <span className="break-all">{lastLoadedId.current || 'none'}</span>
+                </div>
+                <div className="grid grid-cols-[140px,1fr] gap-2">
+                  <span className="font-semibold">Loading State:</span>
+                  <span className={loadingRef.current ? 'text-orange-600 font-bold' : 'text-green-600'}>
+                    {loadingRef.current ? 'Loading...' : 'Idle'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[140px,1fr] gap-2">
+                  <span className="font-semibold">Data Loaded:</span>
+                  <span className={hasLoadedData ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                    {hasLoadedData ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[140px,1fr] gap-2">
+                  <span className="font-semibold">Cells Configured:</span>
+                  <span>{lockedCount + editableCount} / {totalCells}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  console.log('[TableCompletion] 🔄 Manual reload triggered');
+                  lastLoadedId.current = '';
+                  loadingRef.current = false;
+                  loadExistingTemplate();
+                }}
+                className="mt-3 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+              >
+                🔄 Force Reload from Database
+              </button>
+              <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">
+                💡 <strong>Tip:</strong> Check browser console (F12) for detailed query logs. Compare these values with your database records.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Student Test Mode - Progress Indicator (IGCSE Best Practice) */}
       {isStudentTestMode && !showCorrectAnswers && (
         <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
