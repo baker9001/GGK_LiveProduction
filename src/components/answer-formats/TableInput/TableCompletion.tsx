@@ -280,19 +280,30 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     // PRIORITY 1: Review session - ALWAYS load from database first for import review
     if (reviewSessionId && questionIdentifier) {
       const currentId = `review-${reviewSessionId}-${questionIdentifier}`;
-      console.log('[TableCompletion] REVIEW SESSION detected - loading from database');
+      console.log('[TableCompletion] REVIEW SESSION detected - loading from database', {
+        currentId,
+        reviewSessionId,
+        questionIdentifier,
+        lastLoadedId: lastLoadedId.current,
+        loadingRef: loadingRef.current
+      });
 
-      if (!loadingRef.current && lastLoadedId.current !== currentId) {
+      // ✅ FIX: Always reload in review mode to ensure fresh data after tab navigation
+      // Reset lastLoadedId if switching to a different question
+      if (lastLoadedId.current !== currentId) {
+        console.log('[TableCompletion] New question detected in review mode, resetting load tracking');
+        lastLoadedId.current = '';
+      }
+
+      // Force reload even if returning to same question (no lastLoadedId check)
+      if (!loadingRef.current) {
         lastLoadedId.current = currentId;
         loadingRef.current = true;
 
-        // ✅ FIX: Initialize with defaults BEFORE async load to prevent undefined errors
-        if (rows === 0 || columns === 0) {
-          console.log('[TableCompletion] Initializing defaults before database load');
-          initializeDefaultTable();
-        }
-
-        loadExistingTemplate().finally(() => { loadingRef.current = false; });
+        console.log('[TableCompletion] Loading template from review database...');
+        loadExistingTemplate().finally(() => {
+          loadingRef.current = false;
+        });
       }
       return; // Exit early - review takes precedence
     }
@@ -415,6 +426,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           columns: result.template?.columns,
           cellsCount: result.template?.cells.length
         });
+
+        // Show success feedback for review mode
+        if (result.template) {
+          const editableCells = result.template.cells.filter(c => c.cellType === 'editable').length;
+          toast.success('Template loaded from database', {
+            description: `${result.template.rows}×${result.template.columns} table with ${editableCells} editable cells`,
+            duration: 3000
+          });
+        }
       } else if (result.source === 'production') {
         console.log('[TableCompletion] ✅ Loaded template from PRODUCTION tables');
       }
@@ -495,6 +515,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         setHasLoadedData(true);
       } else {
         // Initialize with default dimensions
+        console.log('[TableCompletion] No template found in database - initializing with defaults');
+
+        // Show info message for review mode when no template exists
+        if (reviewSessionId && questionIdentifier) {
+          toast.info('No saved template found', {
+            description: 'Starting with default 5×5 table. Configure cells and save to persist.',
+            duration: 4000
+          });
+        }
+
         initializeDefaultTable();
         // Auto-enable edit mode when no template exists (first-time setup)
         setIsEditingTemplate(true);

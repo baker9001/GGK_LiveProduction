@@ -493,8 +493,13 @@ export class TableTemplateService {
     error?: string;
     source?: 'production' | 'review';
   }> {
-    // If review context provided, try loading from review tables first
+    // If review context provided, load ONLY from review tables (paper setup preview mode)
     if (reviewSessionId && questionIdentifier) {
+      console.log('[TableTemplateService] Loading from REVIEW TABLES only (paper setup mode):', {
+        reviewSessionId,
+        questionIdentifier
+      });
+
       const { TableTemplateImportReviewService } = await import('./TableTemplateImportReviewService');
 
       const reviewResult = await TableTemplateImportReviewService.loadTemplateForReview(
@@ -503,6 +508,12 @@ export class TableTemplateService {
       );
 
       if (reviewResult.success && reviewResult.template) {
+        console.log('[TableTemplateService] ✅ Template found in review tables:', {
+          rows: reviewResult.template.rows,
+          columns: reviewResult.template.columns,
+          cellsCount: reviewResult.template.cells.length
+        });
+
         // Convert review DTO to production DTO format
         const productionTemplate: TableTemplateDTO = {
           id: reviewResult.template.id,
@@ -531,10 +542,19 @@ export class TableTemplateService {
           template: productionTemplate,
           source: 'review'
         };
+      } else {
+        // No template in review tables - return success with no template
+        console.log('[TableTemplateService] No template found in review tables (first-time setup)');
+        return {
+          success: true,
+          template: undefined,
+          source: 'review'
+        };
       }
     }
 
-    // Fall back to production tables
+    // Fall back to production tables (questions setup mode)
+    console.log('[TableTemplateService] Loading from PRODUCTION TABLES (questions setup mode)');
     const productionResult = await this.loadTemplate(questionId, subQuestionId);
 
     if (productionResult.success && productionResult.template) {
