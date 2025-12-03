@@ -4,12 +4,13 @@
  * Uses extracted hooks and memoization for better performance
  */
 
-import React, { useState, useCallback, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useCallback, useMemo, Suspense, lazy, useEffect } from 'react';
 import { FileText, Upload, Database, CheckCircle } from 'lucide-react';
 import { toast } from '../../../../../../components/shared/Toast';
 import { ProgressBar } from '../../../../../../components/shared/ProgressBar';
 import { DataTableSkeleton } from '../../../../../../components/shared/DataTableSkeleton';
 import { PapersSetupErrorBoundary } from './PapersSetupErrorBoundary';
+import { supabase } from '../../../../../../lib/supabase';
 
 // Lazy load heavy tabs
 const UploadTab = lazy(() => import('../tabs/UploadTab'));
@@ -46,6 +47,66 @@ export const OptimizedPapersSetupWizard: React.FC<OptimizedPapersSetupWizardProp
 
   // Staged attachments (shared across steps)
   const [stagedAttachments, setStagedAttachments] = useState<Record<string, any[]>>({});
+
+  // 🔧 FIX: Persist importSession ID to localStorage to maintain session across navigation
+  const STORAGE_KEY = 'papers_setup_import_session_id';
+
+  // Load existing import session from localStorage on mount
+  useEffect(() => {
+    const restoreImportSession = async () => {
+      const storedSessionId = localStorage.getItem(STORAGE_KEY);
+
+      if (storedSessionId && !importSession) {
+        console.log('[OptimizedWizard] 🔄 Restoring import session from localStorage:', storedSessionId);
+
+        try {
+          const { data: session, error } = await supabase
+            .from('question_import_sessions')
+            .select('*')
+            .eq('id', storedSessionId)
+            .maybeSingle();
+
+          if (error) {
+            console.error('[OptimizedWizard] ❌ Error restoring session:', error);
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+          }
+
+          if (session) {
+            console.log('[OptimizedWizard] ✅ Import session restored successfully');
+            setImportSession(session);
+          } else {
+            console.log('[OptimizedWizard] ⚠️ Session not found in database, clearing localStorage');
+            localStorage.removeItem(STORAGE_KEY);
+          }
+        } catch (err) {
+          console.error('[OptimizedWizard] ❌ Exception restoring session:', err);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    };
+
+    restoreImportSession();
+  }, []); // Only run on mount
+
+  // Save importSession ID to localStorage whenever it changes
+  useEffect(() => {
+    if (importSession?.id) {
+      console.log('[OptimizedWizard] 💾 Saving import session ID to localStorage:', importSession.id);
+      localStorage.setItem(STORAGE_KEY, importSession.id);
+    }
+  }, [importSession?.id]);
+
+  // Clear localStorage when wizard is completed or abandoned
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount if all steps are completed
+      if (completedSteps.has('questions')) {
+        console.log('[OptimizedWizard] 🧹 Clearing import session from localStorage (wizard completed)');
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    };
+  }, [completedSteps]);
 
   // Define steps with memoization
   const steps = useMemo<WizardStep[]>(() => [
