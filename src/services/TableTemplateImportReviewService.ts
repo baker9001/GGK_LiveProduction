@@ -166,16 +166,26 @@ export class TableTemplateImportReviewService {
     error?: string;
   }> {
     try {
+      console.log('[TableTemplateImportReviewService] 🔍 ====== STARTING LOAD ======');
+
       if (!reviewSessionId || !questionIdentifier) {
         throw new Error('reviewSessionId and questionIdentifier are required');
       }
 
-      console.log('[TableTemplateImportReviewService] Loading template for review:', {
+      console.log('[TableTemplateImportReviewService] 🔍 Loading template with params:', {
         reviewSessionId,
-        questionIdentifier
+        questionIdentifier,
+        reviewSessionIdType: typeof reviewSessionId,
+        questionIdentifierType: typeof questionIdentifier,
+        reviewSessionIdLength: reviewSessionId.length,
+        questionIdentifierLength: questionIdentifier.length,
+        timestamp: new Date().toISOString()
       });
 
       // 1. Fetch template
+      console.log('[TableTemplateImportReviewService] 📞 Executing database query for template...');
+      console.log('[TableTemplateImportReviewService] Query: table_templates_import_review WHERE review_session_id =', reviewSessionId, 'AND question_identifier =', questionIdentifier);
+
       const { data: templateData, error: templateError } = await supabase
         .from('table_templates_import_review')
         .select('*')
@@ -183,19 +193,52 @@ export class TableTemplateImportReviewService {
         .eq('question_identifier', questionIdentifier)
         .maybeSingle();
 
+      console.log('[TableTemplateImportReviewService] 📦 Query result:', {
+        hasData: !!templateData,
+        hasError: !!templateError,
+        dataId: templateData?.id,
+        dataRows: templateData?.rows,
+        dataColumns: templateData?.columns,
+        dataHeaders: templateData?.headers,
+        errorCode: templateError?.code,
+        errorMessage: templateError?.message,
+        errorDetails: templateError?.details
+      });
+
       if (templateError) {
-        console.error('[TableTemplateImportReviewService] Template fetch error:', templateError);
+        console.error('[TableTemplateImportReviewService] ❌ Template fetch error:', {
+          error: templateError,
+          code: templateError.code,
+          message: templateError.message,
+          details: templateError.details,
+          hint: templateError.hint
+        });
         throw templateError;
       }
 
       if (!templateData) {
-        console.log('[TableTemplateImportReviewService] No template found');
+        console.log('[TableTemplateImportReviewService] ℹ️ No template found in database');
+        console.log('[TableTemplateImportReviewService] This means either:');
+        console.log('  1. No data was saved yet for this question');
+        console.log('  2. The reviewSessionId or questionIdentifier does not match database values');
+        console.log('  3. RLS policies are blocking access');
         return { success: true, template: undefined };
       }
 
-      console.log('[TableTemplateImportReviewService] Template found:', templateData.id);
+      console.log('[TableTemplateImportReviewService] ✅ Template found:', {
+        id: templateData.id,
+        reviewSessionId: templateData.review_session_id,
+        questionIdentifier: templateData.question_identifier,
+        rows: templateData.rows,
+        columns: templateData.columns,
+        headers: templateData.headers,
+        title: templateData.title,
+        description: templateData.description
+      });
 
       // 2. Fetch cells
+      console.log('[TableTemplateImportReviewService] 📞 Fetching cells for template_id:', templateData.id);
+
       const { data: cellsData, error: cellsError } = await supabase
         .from('table_template_cells_import_review')
         .select('*')
@@ -203,12 +246,36 @@ export class TableTemplateImportReviewService {
         .order('row_index')
         .order('col_index');
 
+      console.log('[TableTemplateImportReviewService] 📦 Cells query result:', {
+        hasData: !!cellsData,
+        hasError: !!cellsError,
+        cellsCount: cellsData?.length || 0,
+        errorCode: cellsError?.code,
+        errorMessage: cellsError?.message
+      });
+
       if (cellsError) {
-        console.error('[TableTemplateImportReviewService] Cells fetch error:', cellsError);
+        console.error('[TableTemplateImportReviewService] ❌ Cells fetch error:', {
+          error: cellsError,
+          code: cellsError.code,
+          message: cellsError.message,
+          details: cellsError.details
+        });
         throw cellsError;
       }
 
-      console.log('[TableTemplateImportReviewService] Loaded', cellsData?.length || 0, 'cells');
+      console.log('[TableTemplateImportReviewService] ✅ Loaded', cellsData?.length || 0, 'cells');
+
+      if (cellsData && cellsData.length > 0) {
+        console.log('[TableTemplateImportReviewService] 📊 Sample cells (first 5):',
+          cellsData.slice(0, 5).map(cell => ({
+            position: `${cell.row_index}-${cell.col_index}`,
+            type: cell.cell_type,
+            lockedValue: cell.locked_value,
+            expectedAnswer: cell.expected_answer
+          }))
+        );
+      }
 
       // 3. Build DTO
       const template: TableTemplateReviewDTO = {

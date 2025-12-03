@@ -275,37 +275,95 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const hasLoadedRef = useRef(false);
   const loadingRef = useRef(false); // Prevent concurrent loads
   const lastLoadedId = useRef<string>(''); // Track last loaded question
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout to reset stuck loading state
 
   useEffect(() => {
+    console.log('[TableCompletion] 🔄 useEffect triggered with params:', {
+      reviewSessionId,
+      questionIdentifier,
+      questionId,
+      subQuestionId,
+      isTemplateEditor,
+      isAdminTestMode,
+      isStudentTestMode,
+      templateProvided: !!template,
+      isPreviewQuestion,
+      loadingRef: loadingRef.current,
+      lastLoadedId: lastLoadedId.current
+    });
+
     // PRIORITY 1: Review session - ALWAYS load from database first for import review
     if (reviewSessionId && questionIdentifier) {
       const currentId = `review-${reviewSessionId}-${questionIdentifier}`;
-      console.log('[TableCompletion] REVIEW SESSION detected - loading from database', {
+      console.log('[TableCompletion] 🎯 REVIEW SESSION detected - loading from database', {
         currentId,
         reviewSessionId,
         questionIdentifier,
         lastLoadedId: lastLoadedId.current,
-        loadingRef: loadingRef.current
+        loadingRef: loadingRef.current,
+        timestamp: new Date().toISOString()
       });
 
-      // ✅ FIX: Always reload in review mode to ensure fresh data after tab navigation
-      // Reset lastLoadedId if switching to a different question
+      // ✅ FIX: Reset loading state if switching to a different question
       if (lastLoadedId.current !== currentId) {
-        console.log('[TableCompletion] New question detected in review mode, resetting load tracking');
+        console.log('[TableCompletion] 🔄 New question detected in review mode, resetting load tracking');
         lastLoadedId.current = '';
+        loadingRef.current = false; // ✅ Reset loading ref for new question
+        // Clear any existing timeout
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
       }
 
-      // Force reload even if returning to same question (no lastLoadedId check)
+      // ✅ FIX: Always allow loading if not currently in progress (removed lastLoadedId check)
       if (!loadingRef.current) {
         lastLoadedId.current = currentId;
         loadingRef.current = true;
 
-        console.log('[TableCompletion] Loading template from review database...');
-        loadExistingTemplate().finally(() => {
-          loadingRef.current = false;
-        });
+        console.log('[TableCompletion] 🚀 Starting template load from review database...');
+
+        // ✅ FIX: Set a failsafe timeout to reset loadingRef if load hangs
+        loadingTimeoutRef.current = setTimeout(() => {
+          if (loadingRef.current) {
+            console.error('[TableCompletion] ⚠️ Loading timeout - resetting loadingRef after 10 seconds');
+            loadingRef.current = false;
+            toast.error('Loading timeout', {
+              description: 'Table template loading took too long. Please try again.',
+              duration: 5000
+            });
+          }
+        }, 10000); // 10 second timeout
+
+        loadExistingTemplate()
+          .then(() => {
+            console.log('[TableCompletion] ✅ Template load completed successfully');
+          })
+          .catch((error) => {
+            console.error('[TableCompletion] ❌ Template load failed:', error);
+          })
+          .finally(() => {
+            console.log('[TableCompletion] 🏁 Template load finished, resetting loadingRef');
+            loadingRef.current = false;
+            // Clear timeout on successful completion
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current);
+              loadingTimeoutRef.current = null;
+            }
+          });
+      } else {
+        console.warn('[TableCompletion] ⚠️ Load already in progress, skipping duplicate load request');
       }
-      return; // Exit early - review takes precedence
+
+      // ✅ Cleanup function to reset loading state on unmount or dependency change
+      return () => {
+        console.log('[TableCompletion] 🧹 Cleanup: Resetting loading state');
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
+        // Don't reset loadingRef here to prevent race conditions
+      };
     }
 
     // PRIORITY 2: If template prop is provided, use it
@@ -404,15 +462,21 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   const loadExistingTemplate = async () => {
     setLoading(true);
-    try {
-      console.log('[TableCompletion] 🔍 Loading template with params:', {
-        questionId,
-        subQuestionId,
-        reviewSessionId,
-        questionIdentifier
-      });
+    console.log('[TableCompletion] 🔍 ====== STARTING TEMPLATE LOAD ======');
+    console.log('[TableCompletion] 🔍 Loading template with params:', {
+      questionId,
+      subQuestionId,
+      reviewSessionId,
+      questionIdentifier,
+      questionIdType: typeof questionId,
+      questionIdentifierType: typeof questionIdentifier,
+      reviewSessionIdType: typeof reviewSessionId,
+      timestamp: new Date().toISOString()
+    });
 
+    try {
       // ✅ Use universal loader that checks review tables first, then production tables
+      console.log('[TableCompletion] 📞 Calling TableTemplateService.loadTemplateUniversal...');
       const result = await TableTemplateService.loadTemplateUniversal(
         questionId,
         subQuestionId,
@@ -420,27 +484,53 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         questionIdentifier
       );
 
+      console.log('[TableCompletion] 📦 Received result from service:', {
+        success: result.success,
+        source: result.source,
+        hasTemplate: !!result.template,
+        error: result.error,
+        templateId: result.template?.id,
+        templateRows: result.template?.rows,
+        templateColumns: result.template?.columns,
+        templateCellsCount: result.template?.cells?.length,
+        templateHeaders: result.template?.headers
+      });
+
       if (result.source === 'review') {
         console.log('[TableCompletion] ✅ Loaded template from REVIEW tables:', {
+          id: result.template?.id,
           rows: result.template?.rows,
           columns: result.template?.columns,
-          cellsCount: result.template?.cells.length
+          headers: result.template?.headers,
+          cellsCount: result.template?.cells.length,
+          cells: result.template?.cells
         });
 
         // Show success feedback for review mode
         if (result.template) {
           const editableCells = result.template.cells.filter(c => c.cellType === 'editable').length;
+          const lockedCells = result.template.cells.filter(c => c.cellType === 'locked').length;
           toast.success('Template loaded from database', {
-            description: `${result.template.rows}×${result.template.columns} table with ${editableCells} editable cells`,
+            description: `${result.template.rows}×${result.template.columns} table with ${editableCells} editable cells and ${lockedCells} locked cells`,
             duration: 3000
           });
         }
       } else if (result.source === 'production') {
         console.log('[TableCompletion] ✅ Loaded template from PRODUCTION tables');
+      } else {
+        console.log('[TableCompletion] ℹ️ No template source (no data found)');
       }
 
       if (result.success && result.template) {
+        console.log('[TableCompletion] 🔧 Processing template data...');
         const tmpl = result.template;
+
+        console.log('[TableCompletion] 📊 Setting dimensions:', {
+          rows: tmpl.rows,
+          columns: tmpl.columns,
+          headers: tmpl.headers
+        });
+
         setRows(tmpl.rows);
         setColumns(tmpl.columns);
         setHeaders(tmpl.headers || Array.from({ length: tmpl.columns }, (_, i) => `Column ${i + 1}`));
@@ -455,6 +545,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         const caseSensitive: Record<string, boolean> = {};
         const equivalentPhrasing: Record<string, boolean> = {};
         const alternatives: Record<string, string[]> = {};
+
+        console.log('[TableCompletion] 🔧 Processing', tmpl.cells.length, 'cells...');
 
         tmpl.cells.forEach(cell => {
           const key = `${cell.rowIndex}-${cell.colIndex}`;
@@ -474,11 +566,20 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }
         });
 
+        console.log('[TableCompletion] 📝 Processed cell data:', {
+          totalCells: tmpl.cells.length,
+          lockedCells: Object.entries(types).filter(([_, type]) => type === 'locked').length,
+          editableCells: Object.entries(types).filter(([_, type]) => type === 'editable').length,
+          cellsWithValues: Object.keys(values).length,
+          cellsWithAnswers: Object.keys(answers).length
+        });
+
         // ✅ Load table metadata
         setTableTitle(tmpl.title || '');
         setTableDescription(tmpl.description || '');
 
         // Batch state updates to reduce re-renders
+        console.log('[TableCompletion] 🔄 Applying state updates...');
         setCellTypes(types);
         setCellValues(values);
         setExpectedAnswers(answers);
@@ -510,12 +611,23 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }
         });
 
+        console.log('[TableCompletion] 📋 Final table data preview (first 3 rows):',
+          data.slice(0, 3).map((row, idx) => ({ row: idx, data: row }))
+        );
+
         setTableData(data);
         // ✅ Mark data as loaded after successful database load
         setHasLoadedData(true);
+
+        console.log('[TableCompletion] ✅ ====== TEMPLATE LOAD COMPLETE ======');
       } else {
         // Initialize with default dimensions
-        console.log('[TableCompletion] No template found in database - initializing with defaults');
+        console.log('[TableCompletion] ⚠️ No template found in database - initializing with defaults');
+        console.log('[TableCompletion] Result details:', {
+          success: result.success,
+          hasTemplate: !!result.template,
+          error: result.error
+        });
 
         // Show info message for review mode when no template exists
         if (reviewSessionId && questionIdentifier) {
@@ -530,18 +642,31 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         setIsEditingTemplate(true);
       }
     } catch (error) {
-      console.error('Error loading template:', error);
+      console.error('[TableCompletion] ❌ ====== ERROR LOADING TEMPLATE ======');
+      console.error('[TableCompletion] Error details:', {
+        error,
+        errorType: typeof error,
+        errorConstructor: error?.constructor?.name,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        rawError: JSON.stringify(error, null, 2)
+      });
+
       // Handle both Error instances and Supabase PostgresError objects
       const errorMessage = error instanceof Error
         ? error.message
         : (error as any)?.message || JSON.stringify(error) || 'Unknown error occurred';
+
       toast.error('Failed to load template', {
-        description: errorMessage
+        description: `${errorMessage}. Please check console for details.`,
+        duration: 6000
       });
+
       initializeDefaultTable();
       // Auto-enable edit mode on error (likely means no template exists)
       setIsEditingTemplate(true);
     } finally {
+      console.log('[TableCompletion] 🏁 Setting loading to false');
       setLoading(false);
     }
   };
@@ -1869,10 +1994,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-[#8CC63F] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Loading template...</p>
+      <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+        <div className="text-center max-w-md">
+          <Database className="w-12 h-12 text-[#8CC63F] mx-auto mb-3 animate-pulse" />
+          <div className="w-8 h-8 border-4 border-[#8CC63F] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-base font-medium text-gray-800 dark:text-gray-200 mb-1">Loading table template from database...</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {reviewSessionId && questionIdentifier
+              ? 'Fetching saved configuration for this question'
+              : 'Loading template data'}
+          </p>
         </div>
       </div>
     );
@@ -1888,10 +2019,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
     if (shouldShowLoading) {
       return (
-        <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          <div className="text-center">
-            <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-sm text-gray-600 dark:text-gray-400">Loading table template...</p>
+        <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+          <div className="text-center max-w-md">
+            <Database className="w-12 h-12 text-[#8CC63F] mx-auto mb-3 animate-pulse" />
+            <div className="w-8 h-8 border-4 border-[#8CC63F] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-base font-medium text-gray-800 dark:text-gray-200 mb-1">
+              {!hasLoadedData ? 'Loading table template from database...' : 'Preparing table...'}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Review session: {reviewSessionId.substring(0, 8)}... | Question: {questionIdentifier}
+            </p>
           </div>
         </div>
       );
