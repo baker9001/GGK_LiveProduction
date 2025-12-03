@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 
 export interface TableTemplateReviewDTO {
   id?: string;
-  reviewSessionId: string;
+  importSessionId: string;
   questionIdentifier: string;
   isSubquestion?: boolean;
   parentQuestionIdentifier?: string;
@@ -46,8 +46,8 @@ export class TableTemplateImportReviewService {
   }> {
     try {
       // Validate template
-      if (!template.reviewSessionId || !template.questionIdentifier) {
-        throw new Error('reviewSessionId and questionIdentifier are required');
+      if (!template.importSessionId || !template.questionIdentifier) {
+        throw new Error('importSessionId and questionIdentifier are required');
       }
 
       if (template.rows < 2 || template.rows > 50) {
@@ -59,7 +59,7 @@ export class TableTemplateImportReviewService {
       }
 
       console.log('[TableTemplateImportReviewService] Saving template for review:', {
-        reviewSessionId: template.reviewSessionId,
+        importSessionId: template.importSessionId,
         questionIdentifier: template.questionIdentifier,
         rows: template.rows,
         columns: template.columns,
@@ -68,7 +68,7 @@ export class TableTemplateImportReviewService {
 
       // 1. Upsert template
       const templatePayload: any = {
-        review_session_id: template.reviewSessionId,
+        import_session_id: template.importSessionId,
         question_identifier: template.questionIdentifier,
         is_subquestion: template.isSubquestion || false,
         parent_question_identifier: template.parentQuestionIdentifier || null,
@@ -87,7 +87,7 @@ export class TableTemplateImportReviewService {
       const { data: templateData, error: templateError } = await supabase
         .from('table_templates_import_review')
         .upsert(templatePayload, {
-          onConflict: 'review_session_id,question_identifier'
+          onConflict: 'import_session_id,question_identifier'
         })
         .select()
         .single();
@@ -158,7 +158,7 @@ export class TableTemplateImportReviewService {
    * Load table template during import review
    */
   static async loadTemplateForReview(
-    reviewSessionId: string,
+    importSessionId: string,
     questionIdentifier: string
   ): Promise<{
     success: boolean;
@@ -168,28 +168,28 @@ export class TableTemplateImportReviewService {
     try {
       console.log('[TableTemplateImportReviewService] 🔍 ====== STARTING LOAD ======');
 
-      if (!reviewSessionId || !questionIdentifier) {
-        throw new Error('reviewSessionId and questionIdentifier are required');
+      if (!importSessionId || !questionIdentifier) {
+        throw new Error('importSessionId and questionIdentifier are required');
       }
 
       console.log('[TableTemplateImportReviewService] 🔍 Loading template with params:', {
-        reviewSessionId,
+        importSessionId,
         questionIdentifier,
-        reviewSessionIdType: typeof reviewSessionId,
+        importSessionIdType: typeof importSessionId,
         questionIdentifierType: typeof questionIdentifier,
-        reviewSessionIdLength: reviewSessionId.length,
+        importSessionIdLength: importSessionId.length,
         questionIdentifierLength: questionIdentifier.length,
         timestamp: new Date().toISOString()
       });
 
       // 1. Fetch template
       console.log('[TableTemplateImportReviewService] 📞 Executing database query for template...');
-      console.log('[TableTemplateImportReviewService] Query: table_templates_import_review WHERE review_session_id =', reviewSessionId, 'AND question_identifier =', questionIdentifier);
+      console.log('[TableTemplateImportReviewService] Query: table_templates_import_review WHERE import_session_id =', importSessionId, 'AND question_identifier =', questionIdentifier);
 
       const { data: templateData, error: templateError } = await supabase
         .from('table_templates_import_review')
         .select('*')
-        .eq('review_session_id', reviewSessionId)
+        .eq('import_session_id', importSessionId)
         .eq('question_identifier', questionIdentifier)
         .maybeSingle();
 
@@ -220,14 +220,14 @@ export class TableTemplateImportReviewService {
         console.log('[TableTemplateImportReviewService] ℹ️ No template found in database');
         console.log('[TableTemplateImportReviewService] This means either:');
         console.log('  1. No data was saved yet for this question');
-        console.log('  2. The reviewSessionId or questionIdentifier does not match database values');
+        console.log('  2. The importSessionId or questionIdentifier does not match database values');
         console.log('  3. RLS policies are blocking access');
         return { success: true, template: undefined };
       }
 
       console.log('[TableTemplateImportReviewService] ✅ Template found:', {
         id: templateData.id,
-        reviewSessionId: templateData.review_session_id,
+        importSessionId: templateData.import_session_id,
         questionIdentifier: templateData.question_identifier,
         rows: templateData.rows,
         columns: templateData.columns,
@@ -280,7 +280,7 @@ export class TableTemplateImportReviewService {
       // 3. Build DTO
       const template: TableTemplateReviewDTO = {
         id: templateData.id,
-        reviewSessionId: templateData.review_session_id,
+        importSessionId: templateData.import_session_id,
         questionIdentifier: templateData.question_identifier,
         isSubquestion: templateData.is_subquestion,
         parentQuestionIdentifier: templateData.parent_question_identifier,
@@ -321,7 +321,7 @@ export class TableTemplateImportReviewService {
    * Delete table template during import review
    */
   static async deleteTemplateForReview(
-    reviewSessionId: string,
+    importSessionId: string,
     questionIdentifier: string
   ): Promise<{
     success: boolean;
@@ -329,14 +329,14 @@ export class TableTemplateImportReviewService {
   }> {
     try {
       console.log('[TableTemplateImportReviewService] Deleting template:', {
-        reviewSessionId,
+        importSessionId,
         questionIdentifier
       });
 
       const { error } = await supabase
         .from('table_templates_import_review')
         .delete()
-        .eq('review_session_id', reviewSessionId)
+        .eq('import_session_id', importSessionId)
         .eq('question_identifier', questionIdentifier);
 
       if (error) {
@@ -360,14 +360,14 @@ export class TableTemplateImportReviewService {
    * Check if a template exists for a question in review
    */
   static async templateExistsForReview(
-    reviewSessionId: string,
+    importSessionId: string,
     questionIdentifier: string
   ): Promise<boolean> {
     try {
       const { data } = await supabase
         .from('table_templates_import_review')
         .select('id')
-        .eq('review_session_id', reviewSessionId)
+        .eq('import_session_id', importSessionId)
         .eq('question_identifier', questionIdentifier)
         .maybeSingle();
 
@@ -379,10 +379,10 @@ export class TableTemplateImportReviewService {
   }
 
   /**
-   * Get all templates for a review session
+   * Get all templates for an import session
    */
   static async getTemplatesForSession(
-    reviewSessionId: string
+    importSessionId: string
   ): Promise<{
     success: boolean;
     templates?: TableTemplateReviewDTO[];
@@ -395,13 +395,13 @@ export class TableTemplateImportReviewService {
           *,
           cells:table_template_cells_import_review(*)
         `)
-        .eq('review_session_id', reviewSessionId);
+        .eq('import_session_id', importSessionId);
 
       if (templateError) throw templateError;
 
       const templatesDTO: TableTemplateReviewDTO[] = (templates || []).map(t => ({
         id: t.id,
-        reviewSessionId: t.review_session_id,
+        importSessionId: t.import_session_id,
         questionIdentifier: t.question_identifier,
         isSubquestion: t.is_subquestion,
         parentQuestionIdentifier: t.parent_question_identifier,
@@ -434,11 +434,11 @@ export class TableTemplateImportReviewService {
   }
 
   /**
-   * Migrate all templates from a review session to production tables
+   * Migrate all templates from an import session to production tables
    * Called when import is approved and questions get real UUIDs
    */
   static async migrateTemplatesToProduction(
-    reviewSessionId: string,
+    importSessionId: string,
     questionMapping: Record<string, { question_id?: string; sub_question_id?: string }>
   ): Promise<{
     success: boolean;
@@ -447,13 +447,13 @@ export class TableTemplateImportReviewService {
   }> {
     try {
       console.log('[TableTemplateImportReviewService] Migrating templates to production:', {
-        reviewSessionId,
+        importSessionId,
         mappingKeys: Object.keys(questionMapping)
       });
 
       // Call the database function to migrate templates
       const { data, error } = await supabase.rpc('migrate_review_templates_to_production', {
-        p_review_session_id: reviewSessionId,
+        p_import_session_id: importSessionId,
         p_question_mapping: questionMapping
       });
 

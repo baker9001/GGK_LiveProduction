@@ -190,7 +190,7 @@ interface AnswerFieldProps {
   // Callback for template saves in preview mode
   onTemplateSave?: (template: any) => void;
   // Review mode props (for import review workflow)
-  reviewSessionId?: string;
+  importSessionId?: string;
   questionIdentifier?: string;
 }
 
@@ -249,7 +249,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   triggerValidation = false,
   forceTemplateEditor = false,
   onTemplateSave,
-  reviewSessionId,
+  importSessionId,
   questionIdentifier
 }) => {
   const questionIdRef = useRef(question.id);
@@ -883,9 +883,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       }
 
       // ✅ FIX: Don't pass template prop during review mode - let component load from database
-      const shouldPassTemplate = !(reviewSessionId && questionIdentifier);
+      const shouldPassTemplate = !(importSessionId && questionIdentifier);
       console.log('[DynamicAnswerField] Table Completion Props:', {
-        reviewSessionId,
+        importSessionId,
         questionIdentifier,
         shouldPassTemplate,
         templatePropExists: !!templateProp,
@@ -906,7 +906,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           isAdminTestMode={isAdminTesting}
           isStudentTestMode={isStudentTest}
           showValidationWarnings={triggerValidation && isStudentTest}
-          reviewSessionId={reviewSessionId}
+          importSessionId={importSessionId}
           questionIdentifier={questionIdentifier}
           onTemplateSave={(templateConfig) => {
             // ✅ Store template configuration in preview_data for later database save
@@ -2082,7 +2082,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             isTemplateEditor={isTemplateEditing}  // ✅ Enable template editor in admin mode
             isAdminTestMode={isAdminTesting}
             isStudentTestMode={isStudentTest}
-            reviewSessionId={reviewSessionId}
+            importSessionId={importSessionId}
             questionIdentifier={questionIdentifier}
             onTemplateSave={(templateConfig) => {
               // ✅ Store template configuration in preview_data for later database save

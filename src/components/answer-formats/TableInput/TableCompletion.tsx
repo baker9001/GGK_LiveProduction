@@ -74,7 +74,7 @@ interface TableCompletionProps {
   showValidationWarnings?: boolean;
 
   // Review Mode Props (for import review workflow)
-  reviewSessionId?: string; // If provided, saves to review tables instead of production
+  importSessionId?: string; // If provided, saves to review tables instead of production
   questionIdentifier?: string; // Question identifier for review mode
 
   // Dimension Constraints
@@ -113,7 +113,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   onTemplateSave,
   isStudentTestMode = false,
   showValidationWarnings = false,
-  reviewSessionId,
+  importSessionId,
   questionIdentifier,
   minRows = 2,
   maxRows = 50,
@@ -279,7 +279,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
   useEffect(() => {
     console.log('[TableCompletion] 🔄 useEffect triggered with params:', {
-      reviewSessionId,
+      importSessionId,
       questionIdentifier,
       questionId,
       subQuestionId,
@@ -293,11 +293,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     });
 
     // PRIORITY 1: Review session - ALWAYS load from database first for import review
-    if (reviewSessionId && questionIdentifier) {
-      const currentId = `review-${reviewSessionId}-${questionIdentifier}`;
+    if (importSessionId && questionIdentifier) {
+      const currentId = `review-${importSessionId}-${questionIdentifier}`;
       console.log('[TableCompletion] 🎯 REVIEW SESSION detected - loading from database', {
         currentId,
-        reviewSessionId,
+        importSessionId,
         questionIdentifier,
         lastLoadedId: lastLoadedId.current,
         loadingRef: loadingRef.current,
@@ -408,7 +408,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       console.log('[TableCompletion] No load needed - initializing defaults');
       initializeDefaultTable();
     }
-  }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode, template, isPreviewQuestion, reviewSessionId, questionIdentifier]);
+  }, [questionId, subQuestionId, isTemplateEditor, isAdminTestMode, isStudentTestMode, template, isPreviewQuestion, importSessionId, questionIdentifier]);
 
   const loadTemplateFromProp = (tmpl: TableTemplate) => {
     setRows(tmpl.rows);
@@ -466,11 +466,11 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     console.log('[TableCompletion] 🔍 Loading template with params:', {
       questionId,
       subQuestionId,
-      reviewSessionId,
+      importSessionId,
       questionIdentifier,
       questionIdType: typeof questionId,
       questionIdentifierType: typeof questionIdentifier,
-      reviewSessionIdType: typeof reviewSessionId,
+      importSessionIdType: typeof importSessionId,
       timestamp: new Date().toISOString()
     });
 
@@ -480,7 +480,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       const result = await TableTemplateService.loadTemplateUniversal(
         questionId,
         subQuestionId,
-        reviewSessionId,
+        importSessionId,
         questionIdentifier
       );
 
@@ -630,7 +630,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         });
 
         // Show info message for review mode when no template exists
-        if (reviewSessionId && questionIdentifier) {
+        if (importSessionId && questionIdentifier) {
           toast.info('No saved template found', {
             description: 'Starting with default 5×5 table. Configure cells and save to persist.',
             duration: 4000
@@ -1757,13 +1757,13 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     // ✅ NEW: Determine if we're in review mode or production mode
-    const isReviewMode = !!(reviewSessionId && questionIdentifier);
+    const isReviewMode = !!(importSessionId && questionIdentifier);
 
     console.group('[TableCompletion] ========== SAVE TEMPLATE ==========');
     console.log('Save mode detection:', {
       isReviewMode,
-      reviewSessionId: reviewSessionId || 'NULL',
-      reviewSessionIdType: typeof reviewSessionId,
+      importSessionId: importSessionId || 'NULL',
+      importSessionIdType: typeof importSessionId,
       questionIdentifier: questionIdentifier || 'NULL',
       questionId,
       isValidUUID: isValidUUID(questionId),
@@ -1811,7 +1811,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
         // Build review template
         const reviewTemplate: TableTemplateReviewDTO = {
-          reviewSessionId: reviewSessionId!,
+          importSessionId: importSessionId!,
           questionIdentifier: questionIdentifier!,
           isSubquestion: !!subQuestionId,
           rows,
@@ -2000,7 +2000,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           <div className="w-8 h-8 border-4 border-[#8CC63F] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           <p className="text-base font-medium text-gray-800 dark:text-gray-200 mb-1">Loading table template from database...</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {reviewSessionId && questionIdentifier
+            {importSessionId && questionIdentifier
               ? 'Fetching saved configuration for this question'
               : 'Loading template data'}
           </p>
@@ -2012,7 +2012,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   // ✅ FIX: Prevent render if in review mode and data hasn't loaded yet
   // In template editor mode, we don't need the template prop (we work from state)
   // In non-editor mode, we need both data loaded and template prop
-  if (reviewSessionId && questionIdentifier) {
+  if (importSessionId && questionIdentifier) {
     const shouldShowLoading = isTemplateEditor
       ? !hasLoadedData  // Editor mode: only wait for data initialization
       : (!hasLoadedData || !template);  // Non-editor: wait for both data and template prop
@@ -2027,7 +2027,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               {!hasLoadedData ? 'Loading table template from database...' : 'Preparing table...'}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Review session: {reviewSessionId.substring(0, 8)}... | Question: {questionIdentifier}
+              Review session: {importSessionId.substring(0, 8)}... | Question: {questionIdentifier}
             </p>
           </div>
         </div>
@@ -2044,7 +2044,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   return (
     <div className="space-y-4">
       {/* 🔍 DEBUG PANEL - Shows query parameters for troubleshooting */}
-      {reviewSessionId && questionIdentifier && isTemplateEditor && (
+      {importSessionId && questionIdentifier && isTemplateEditor && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-700 rounded-lg p-4 mb-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
@@ -2055,7 +2055,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
               <div className="space-y-1 text-xs font-mono text-blue-800 dark:text-blue-200">
                 <div className="grid grid-cols-[140px,1fr] gap-2">
                   <span className="font-semibold">Review Session ID:</span>
-                  <span className="break-all">{reviewSessionId}</span>
+                  <span className="break-all">{importSessionId}</span>
                 </div>
                 <div className="grid grid-cols-[140px,1fr] gap-2">
                   <span className="font-semibold">Question Identifier:</span>

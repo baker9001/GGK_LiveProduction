@@ -159,7 +159,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
   const simulationResults = externalSimulationResults;
   const simulationCompleted = externalSimulationCompleted;
-  const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
+  // Note: This state is deprecated and should be removed - use importSessionId prop directly
+  const [localSessionId, setLocalSessionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -1004,7 +1005,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const handleTemplateSave = useCallback(async (questionId: string, template: any) => {
     console.log('[Template Save] ========== TEMPLATE SAVE STARTED ==========');
     console.log('[Template Save] Question ID:', questionId);
-    console.log('[Template Save] reviewSessionId:', reviewSessionId);
+    console.log('[Template Save] importSessionId:', importSessionId);
     console.log('[Template Save] Template data:', template);
     console.log('[Template Save] Template headers:', template.headers);
     console.log('[Template Save] Template rows/cols:', template.rows, '/', template.columns);
@@ -1017,12 +1018,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     }));
 
     // ✅ SOLUTION 2: Direct database save to review tables
-    if (reviewSessionId && template.rows && template.columns && Array.isArray(template.cells)) {
+    if (importSessionId && template.rows && template.columns && Array.isArray(template.cells)) {
       console.log('[Template Save] ✅ Attempting DIRECT save to review tables');
 
       try {
         const result = await TableTemplateImportReviewService.saveTemplateForReview({
-          reviewSessionId: reviewSessionId,
+          importSessionId: importSessionId,
           questionIdentifier: questionId,
           isSubquestion: false,
           rows: template.rows,
@@ -1055,7 +1056,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
     } else {
       console.warn('[Template Save] ⚠️ Cannot save to review tables:', {
-        hasReviewSessionId: !!reviewSessionId,
+        hasReviewSessionId: !!importSessionId,
         hasRows: !!template.rows,
         hasColumns: !!template.columns,
         hasCells: Array.isArray(template.cells)
@@ -1095,7 +1096,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     commitQuestionUpdate(question, { correct_answers: updatedAnswers });
 
     console.log('[Template Save] ========== TEMPLATE SAVE COMPLETE ==========');
-  }, [questions, commitQuestionUpdate, reviewSessionId]);
+  }, [questions, commitQuestionUpdate, importSessionId]);
 
   // Save all questions to database immediately
   const saveAllQuestionsToDatabase = useCallback(async () => {
@@ -1243,17 +1244,17 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           </div>
 
           {/* Diagnostic info - remove after debugging */}
-          {!reviewSessionId && (
+          {!importSessionId && (
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex items-center gap-2 text-yellow-800 text-sm">
                 <span className="font-semibold">⚠️ Debug:</span>
-                <span>Review session not initialized yet (reviewSessionId is null)</span>
+                <span>Review session not initialized yet (importSessionId is null)</span>
               </div>
             </div>
           )}
 
           <DynamicAnswerField
-            key={`${questionContext.id}-${reviewSessionId || 'loading'}`}
+            key={`${questionContext.id}-${importSessionId || 'loading'}`}
             question={{
               id: questionContext.id,
               type: questionContext.question_type || 'descriptive',
@@ -1268,7 +1269,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             value={initialValue}
             mode="admin"
             forceTemplateEditor={true}
-            reviewSessionId={reviewSessionId}
+            importSessionId={importSessionId}
             questionIdentifier={questionContext.id}
             onTemplateSave={(template) => handleTemplateSave(questionContext.id, template)}
             onChange={(newAnswers) => {
@@ -1666,7 +1667,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   // Initialize review session
   useEffect(() => {
     // Prevent duplicate initialization
-    if (isInitializedRef.current && reviewSessionId) {
+    if (isInitializedRef.current && importSessionId) {
       return;
     }
 
@@ -1746,7 +1747,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const initializeReviewSession = useCallback(async () => {
     // Check if already initialized
-    if (isInitializedRef.current && reviewSessionId) {
+    if (isInitializedRef.current && importSessionId) {
       console.log('Review session already initialized, skipping...');
       return;
     }
@@ -1781,7 +1782,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
 
       // Check if there's an existing review session
-      let sessionId = reviewSessionId;
+      let sessionId = importSessionId;
 
       if (!sessionId && importSessionId) {
         try {
@@ -1801,7 +1802,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           if (existingSession) {
             console.log('Found existing review session:', existingSession.id);
             sessionId = existingSession.id;
-            setReviewSessionId(sessionId);
+            setLocalSessionId(sessionId);
 
             // Load existing review statuses
             const { data: existingStatuses, error: statusError } = await supabase
@@ -1888,7 +1889,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
         }
 
         sessionId = newSession.id;
-        setReviewSessionId(sessionId);
+        setLocalSessionId(sessionId);
         console.log('Created new review session:', sessionId);
 
         // Initialize review statuses for all questions
@@ -1939,10 +1940,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     } finally {
       setIsInitializing(false);
     }
-  }, [importSessionId, memoizedQuestions.length, paperTitle, paperDuration, totalMarks, requireSimulation, reviewSessionId]);
+  }, [importSessionId, memoizedQuestions.length, paperTitle, paperDuration, totalMarks, requireSimulation, importSessionId]);
 
   const handleToggleReview = async (questionId: string) => {
-    if (!reviewSessionId) return;
+    if (!importSessionId) return;
 
     const currentStatus = reviewStatuses[questionId];
     const newReviewedState = !currentStatus?.isReviewed;
@@ -1956,7 +1957,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: newReviewedState ? new Date().toISOString() : null,
           reviewed_by: newReviewedState ? (await supabase.auth.getUser()).data.user?.id : null
         })
-        .eq('review_session_id', reviewSessionId)
+        .eq('review_session_id', importSessionId)
         .eq('question_identifier', questionId);
 
       if (error) throw error;
@@ -1987,7 +1988,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   };
 
   const handleMarkAllReviewed = useCallback(async () => {
-    if (!reviewSessionId) {
+    if (!importSessionId) {
       return;
     }
 
@@ -2016,7 +2017,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: now,
           reviewed_by: reviewerId,
         })
-        .eq('review_session_id', reviewSessionId)
+        .eq('review_session_id', importSessionId)
         .in('question_identifier', unreviewedQuestionIds);
 
       if (error) {
@@ -2048,7 +2049,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     } finally {
       setIsBulkReviewing(false);
     }
-  }, [memoizedQuestions, reviewSessionId, reviewStatuses]);
+  }, [memoizedQuestions, importSessionId, reviewStatuses]);
 
   const handleStartSimulation = () => {
     // Validate questions before requesting simulation from parent
@@ -2080,13 +2081,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const handleRetrySync = () => {
     isInitializedRef.current = false;
-    setReviewSessionId(null);
+    setLocalSessionId(null);
     setSyncError(null);
     initializeReviewSession();
   };
 
   const handleSimulationComplete = async (results: SimulationResults) => {
-    if (!reviewSessionId) return;
+    if (!importSessionId) return;
 
     try {
       // Get current user
@@ -2097,7 +2098,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       const { error } = await supabase
         .from('question_import_simulation_results')
         .insert({
-          review_session_id: reviewSessionId,
+          review_session_id: importSessionId,
           user_id: user.id,
           simulation_completed_at: new Date().toISOString(),
           total_questions: results.totalQuestions,
@@ -2124,7 +2125,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           simulation_passed: results.percentage >= 70,
           updated_at: new Date().toISOString()
         })
-        .eq('id', reviewSessionId);
+        .eq('id', importSessionId);
 
       setSimulationResults(results);
       toast.success('Simulation completed successfully');
