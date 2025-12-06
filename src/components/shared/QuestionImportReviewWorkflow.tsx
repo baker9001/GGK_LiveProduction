@@ -44,6 +44,11 @@ import {
 } from '../../lib/constants/answerOptions';
 import EnhancedAnswerFormatSelector from './EnhancedAnswerFormatSelector';
 import DynamicAnswerField from './DynamicAnswerField';
+import {
+  generateQuestionIdentifier,
+  generatePartIdentifier,
+  generateSubpartIdentifier
+} from '../../lib/questionIdentifiers';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -2856,7 +2861,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                       emptyLabel: 'No correct answers defined. Add mark scheme entries so the system can validate responses.',
                       keyPrefix: `question-${question.id}`
                     }, {
-                      id: question.id,
+                      id: generateQuestionIdentifier(question.question_number || question.number || question.id),
                       question_type: question.question_type,
                       answer_format: question.answer_format,
                       answer_requirement: question.answer_requirement,
@@ -3108,7 +3113,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                               emptyLabel: 'Provide the expected answer for this part.',
                               keyPrefix: `question-${question.id}-part-${partIndex}`
                             }, {
-                              id: `${question.id}-part-${partIndex}`,
+                              id: generatePartIdentifier(
+                                question.question_number || question.number || question.id,
+                                part.part_label || part.part || String.fromCharCode(97 + partIndex)
+                              ),
                               question_type: question.question_type,
                               answer_format: part.answer_format,
                               answer_requirement: part.answer_requirement,
@@ -3387,7 +3395,14 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         emptyLabel: 'Define the expected responses for this subpart.',
                                         keyPrefix: `question-${question.id}-part-${partIndex}-sub-${subIndex}`
                                       }, {
-                                        id: `${question.id}-part-${partIndex}-sub-${subIndex}`,
+                                        id: generateSubpartIdentifier(
+                                          question.question_number || question.number || question.id,
+                                          part.part_label || part.part || String.fromCharCode(97 + partIndex),
+                                          (() => {
+                                            const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+                                            return subpart.subpart_label || romanNumerals[subIndex] || String(subIndex + 1);
+                                          })()
+                                        ),
                                         question_type: question.question_type,
                                         answer_format: subpart.answer_format,
                                         answer_requirement: subpart.answer_requirement,
