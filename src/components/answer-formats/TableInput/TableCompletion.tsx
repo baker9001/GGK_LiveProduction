@@ -821,6 +821,72 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     const isSelected = isEditingTemplate && selectedCells.has(cellKey);
     const cellType = cellTypes[cellKey];
 
+    // Admin Test Mode - Render like student view with clean styling
+    if (isAdminTestMode && template?.editableCells) {
+      const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
+      const hasAnswer = value && String(value).trim().length > 0;
+      const isEmpty = !hasAnswer && isEditable;
+
+      if (isEditable) {
+        // Editable cells: Light cream/yellow background for answer entry (best practice)
+        td.style.backgroundColor = showCorrectAnswers
+          ? (checkAnswer(row, col, value) ? '#d1fae5' : '#fee2e2')
+          : '#fffbeb'; // Light cream/yellow (best practice for fillable fields)
+        td.style.color = '#1f2937';
+        td.style.fontWeight = 'normal';
+        td.style.border = '2px solid #fbbf24'; // Golden border to highlight editable
+        td.style.position = 'relative';
+
+        // Show validation warning for empty cells when showValidationWarnings is true
+        if (isEmpty && showValidationWarnings) {
+          td.style.border = '2px solid #ef4444';
+          td.style.backgroundColor = '#fee2e2';
+        }
+
+        // Show correct/incorrect indicators after submission
+        if (showCorrectAnswers && hasAnswer) {
+          const isCorrect = checkAnswer(row, col, value);
+          const indicator = document.createElement('span');
+          indicator.style.cssText = `
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 14px;
+            font-weight: bold;
+          `;
+          indicator.innerHTML = isCorrect ? '✓' : '✗';
+          td.style.position = 'relative';
+          if (!td.querySelector('span')) {
+            td.appendChild(indicator);
+          }
+        }
+      } else {
+        // Locked cells: Light gray background with pre-filled data
+        td.style.backgroundColor = '#f3f4f6';
+        td.style.color = '#4b5563';
+        td.style.fontWeight = '500';
+        td.style.border = '1px solid #d1d5db';
+        td.style.position = 'relative';
+
+        // Add small lock icon
+        if (!td.querySelector('.lock-icon')) {
+          const lockIcon = document.createElement('span');
+          lockIcon.className = 'lock-icon';
+          lockIcon.innerHTML = '🔒';
+          lockIcon.style.cssText = `
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 10px;
+            opacity: 0.4;
+          `;
+          td.appendChild(lockIcon);
+        }
+      }
+
+      return td;
+    }
+
     // Student Test Mode - Clean, simple rendering
     if (isStudentTestMode && template?.editableCells) {
       const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
@@ -1121,6 +1187,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     handleCellRightClick,
     paintModeEnabled,
     previewMode,
+    isAdminTestMode,
     isStudentTestMode,
     showValidationWarnings
   ]);
@@ -2193,15 +2260,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
       {/* Admin Test Simulation Mode Banner */}
       {isAdminTestMode && !isEditingTemplate && (
-        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 dark:border-yellow-400 rounded-lg">
-          <div className="flex items-center gap-2">
-            <TableIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-            <div>
-              <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
-                Test Simulation Mode
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-lg">
+          <div className="flex items-center gap-3">
+            <TableIcon className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                🎯 Test Preview Mode (QA/Review)
               </p>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                Answer as a student would - Template editor is hidden
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                Fill in answers like a student would. Hints and explanations remain visible for quality assurance. Submit to see correct/incorrect feedback.
               </p>
             </div>
           </div>
@@ -2209,7 +2276,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Admin Mode Controls */}
-      {isTemplateEditor && !isStudentTestMode && (
+      {isTemplateEditor && !isStudentTestMode && !isAdminTestMode && (
         <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
           <div className="flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -2362,7 +2429,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Dimension Controls */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isAdminTestMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2466,7 +2533,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Header Editor */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isAdminTestMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Column Headers
@@ -2494,7 +2561,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Cell Configuration Panel */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isAdminTestMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -2734,7 +2801,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Table Metadata Panel */}
-      {isEditingTemplate && !previewMode && (
+      {isEditingTemplate && !previewMode && !isAdminTestMode && (
         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-300 dark:border-purple-700">
           <div className="flex items-center gap-2 mb-3">
             <TableIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -2778,7 +2845,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Per-Cell Marking Configuration Panel */}
-      {isEditingTemplate && !previewMode && selectedCells.size > 0 && (
+      {isEditingTemplate && !previewMode && !isAdminTestMode && selectedCells.size > 0 && (
         <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-300 dark:border-amber-700">
           <div className="flex items-center gap-2 mb-3">
             <Award className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -3267,6 +3334,15 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           licenseKey="non-commercial-and-evaluation"
           readOnly={disabled && !isEditingTemplate}
           cells={(row, col) => {
+            // Admin Test Mode - Allow editing only in editable cells (like student would)
+            if (isAdminTestMode) {
+              const isEditable = template?.editableCells?.some(c => c.row === row && c.col === col) ?? false;
+              return {
+                readOnly: !isEditable || disabled,
+                renderer: cellRenderer
+              };
+            }
+
             if (isTemplateEditor) {
               const cellKey = `${row}-${col}`;
               const cellType = cellTypes[cellKey];
@@ -3309,8 +3385,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         />
       </div>
 
-      {/* Legend - Student Test Mode Simple */}
-      {isStudentTestMode ? (
+      {/* Legend - Admin Test Mode or Student Test Mode Simple */}
+      {(isAdminTestMode || isStudentTestMode) ? (
         <div className="flex flex-wrap items-center gap-4 text-sm bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
           <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Guide:</span>
           <div className="flex items-center gap-2">
@@ -3320,10 +3396,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             <span className="text-xs text-gray-700 dark:text-gray-300">Gray cells are pre-filled (locked)</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-white border-2 border-gray-300 rounded flex items-center justify-center shadow-sm">
-              <span className="text-xs text-gray-400">?</span>
+            <div className="w-6 h-6 bg-amber-50 border-2 border-amber-400 rounded flex items-center justify-center shadow-sm">
+              <span className="text-xs text-amber-600">✏️</span>
             </div>
-            <span className="text-xs text-gray-700 dark:text-gray-300">White cells require your answer</span>
+            <span className="text-xs text-gray-700 dark:text-gray-300">Light yellow cells require your answer</span>
           </div>
           {showCorrectAnswers && (
             <>
