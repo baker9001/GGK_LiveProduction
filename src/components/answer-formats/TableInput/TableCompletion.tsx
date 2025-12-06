@@ -125,7 +125,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   // Determine actual mode: only use explicit isTemplateEditor prop, no fallback
   const isTemplateEditor = isTemplateEditorProp ?? false;
   // isEditingTemplate is separate state that can be toggled in template editor mode
-  const [isEditingTemplate, setIsEditingTemplate] = useState(isTemplateEditor);
+  // ✅ FIX: Force false when in admin test mode to prevent template editing UI from showing
+  const [isEditingTemplate, setIsEditingTemplate] = useState(isAdminTestMode ? false : isTemplateEditor);
   const hotRef = useRef<HotTable>(null);
   const [tableData, setTableData] = useState<any[][]>([]);
   const [validation, setValidation] = useState<any>(null);
@@ -276,6 +277,24 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const loadingRef = useRef(false); // Prevent concurrent loads
   const lastLoadedId = useRef<string>(''); // Track last loaded question
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout to reset stuck loading state
+
+  // ✅ FIX: Monitor mode changes and force reset isEditingTemplate when in admin test mode
+  useEffect(() => {
+    console.log('[TableCompletion] 🎯 Mode change detected:', {
+      isAdminTestMode,
+      isTemplateEditor,
+      currentIsEditingTemplate: isEditingTemplate
+    });
+
+    if (isAdminTestMode && isEditingTemplate) {
+      console.log('[TableCompletion] ⚠️ Admin test mode active - forcing isEditingTemplate to false');
+      setIsEditingTemplate(false);
+    } else if (!isAdminTestMode && isTemplateEditor && !isEditingTemplate) {
+      // Restore template editor state when exiting admin test mode
+      console.log('[TableCompletion] ✅ Exiting admin test mode - restoring template editor state');
+      setIsEditingTemplate(isTemplateEditor);
+    }
+  }, [isAdminTestMode, isTemplateEditor]);
 
   useEffect(() => {
     console.log('[TableCompletion] 🔄 useEffect triggered with params:', {
@@ -580,6 +599,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
 
         // Batch state updates to reduce re-renders
         console.log('[TableCompletion] 🔄 Applying state updates...');
+        console.log('[TableCompletion] 📊 State being set:', {
+          cellTypesCount: Object.keys(types).length,
+          cellValuesCount: Object.keys(values).length,
+          expectedAnswersCount: Object.keys(answers).length,
+          sampleCellTypes: Object.entries(types).slice(0, 5),
+          sampleCellValues: Object.entries(values).slice(0, 5),
+          sampleExpectedAnswers: Object.entries(answers).slice(0, 5)
+        });
         setCellTypes(types);
         setCellValues(values);
         setExpectedAnswers(answers);
@@ -603,13 +630,19 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }
         });
 
-        // Fill expected answers for editable cells (display in admin template editing mode)
-        Object.entries(answers).forEach(([key, val]) => {
-          const [row, col] = key.split('-').map(Number);
-          if (data[row] && data[row][col] !== undefined) {
-            data[row][col] = val;
-          }
-        });
+        // ✅ FIX: Only pre-fill expected answers when in template editing mode
+        // In admin test mode or student test mode, leave editable cells empty for user input
+        if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode) {
+          console.log('[TableCompletion] 📝 Template editing mode - pre-filling expected answers for preview');
+          Object.entries(answers).forEach(([key, val]) => {
+            const [row, col] = key.split('-').map(Number);
+            if (data[row] && data[row][col] !== undefined) {
+              data[row][col] = val;
+            }
+          });
+        } else {
+          console.log('[TableCompletion] 🎯 Test/simulation mode - leaving editable cells empty for user input');
+        }
 
         console.log('[TableCompletion] 📋 Final table data preview (first 3 rows):',
           data.slice(0, 3).map((row, idx) => ({ row: idx, data: row }))
@@ -620,6 +653,18 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         setHasLoadedData(true);
 
         console.log('[TableCompletion] ✅ ====== TEMPLATE LOAD COMPLETE ======');
+        console.log('[TableCompletion] 🎯 Final state summary:', {
+          rows: tmpl.rows,
+          columns: tmpl.columns,
+          headers: tmpl.headers,
+          totalCellsInState: Object.keys(types).length,
+          editableCellsCount: Object.values(types).filter(t => t === 'editable').length,
+          lockedCellsCount: Object.values(types).filter(t => t === 'locked').length,
+          tableDataDimensions: `${data.length}×${data[0]?.length || 0}`,
+          isAdminTestMode,
+          isStudentTestMode,
+          isTemplateEditor
+        });
       } else {
         // Initialize with default dimensions
         console.log('[TableCompletion] ⚠️ No template found in database - initializing with defaults');
@@ -805,6 +850,30 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     toast.success(`Selected column ${colIndex + 1} (${rows} cells)`);
   }, [isEditingTemplate, previewMode, selectedCells, rows]);
 
+  // ✅ Helper function to check if a cell is editable
+  // Works with both database-loaded templates (using cellTypes) and prop-based templates (using template.editableCells)
+  const isCellEditable = useCallback((row: number, col: number): boolean => {
+    const cellKey = `${row}-${col}`;
+
+    // First, check cellTypes state (populated from database)
+    if (cellTypes[cellKey]) {
+      const isEditable = cellTypes[cellKey] === 'editable';
+      console.log(`[TableCompletion] 🔍 Cell ${row},${col} editability from cellTypes:`, isEditable);
+      return isEditable;
+    }
+
+    // Fall back to template.editableCells (for prop-based templates)
+    if (template?.editableCells) {
+      const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
+      console.log(`[TableCompletion] 🔍 Cell ${row},${col} editability from template.editableCells:`, isEditable);
+      return isEditable;
+    }
+
+    // Default to non-editable if no configuration found
+    console.log(`[TableCompletion] 🔍 Cell ${row},${col} has no configuration - defaulting to non-editable`);
+    return false;
+  }, [cellTypes, template]);
+
   // Configure cell meta (locked/editable styling)
   const cellRenderer = useCallback((
     instance: any,
@@ -822,8 +891,18 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     const cellType = cellTypes[cellKey];
 
     // Admin Test Mode - Render like student view with clean styling
-    if (isAdminTestMode && template?.editableCells) {
-      const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
+    if (isAdminTestMode) {
+      // Check cellTypes state first (database-loaded), then fall back to template prop
+      const isEditable = cellTypes[cellKey] === 'editable' ||
+                         template?.editableCells?.some(c => c.row === row && c.col === col) ||
+                         false;
+      console.log(`[TableCompletion] 🎨 Admin test mode renderer - Cell ${row},${col}:`, {
+        cellKey,
+        cellType: cellTypes[cellKey],
+        isEditable,
+        hasCellTypes: Object.keys(cellTypes).length > 0,
+        hasTemplateProp: !!template
+      });
       const hasAnswer = value && String(value).trim().length > 0;
       const isEmpty = !hasAnswer && isEditable;
 
@@ -888,8 +967,16 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     // Student Test Mode - Clean, simple rendering
-    if (isStudentTestMode && template?.editableCells) {
-      const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
+    if (isStudentTestMode) {
+      // Check cellTypes state first (database-loaded), then fall back to template prop
+      const isEditable = cellTypes[cellKey] === 'editable' ||
+                         template?.editableCells?.some(c => c.row === row && c.col === col) ||
+                         false;
+      console.log(`[TableCompletion] 🎨 Student test mode renderer - Cell ${row},${col}:`, {
+        cellKey,
+        cellType: cellTypes[cellKey],
+        isEditable
+      });
       const hasAnswer = value && String(value).trim().length > 0;
       const isEmpty = !hasAnswer && isEditable;
 
@@ -1289,18 +1376,56 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       return;
     }
 
-    // Student mode: Track answers to editable cells
-    // ✅ FIX: Check if template exists before accessing editableCells
-    if (!template || !template.editableCells) {
-      console.warn('[TableCompletion] Template not loaded yet, skipping student answer tracking');
+    // ✅ FIX: Admin Test Mode - Track answers like student mode
+    if (isAdminTestMode) {
+      console.log('[TableCompletion] 🎯 Admin test mode - tracking answers');
+      const studentAnswers = { ...(value?.studentAnswers || {}) };
+      let completedCells = 0;
+
+      changes.forEach(([row, col, oldValue, newValue]: any) => {
+        const isEditable = isCellEditable(row, col);
+        console.log(`[TableCompletion] 🎯 Admin test - Cell ${row},${col} change:`, { isEditable, oldValue, newValue });
+
+        if (isEditable) {
+          const key = `${row}-${col}`;
+          studentAnswers[key] = newValue;
+
+          if (newValue && String(newValue).trim().length > 0) {
+            completedCells++;
+          }
+        }
+      });
+
+      // Count all completed cells
+      completedCells = Object.values(studentAnswers)
+        .filter(v => v && String(v).trim().length > 0).length;
+
+      // Count required cells from cellTypes
+      const requiredCells = Object.values(cellTypes).filter(t => t === 'editable').length || 1;
+
+      console.log('[TableCompletion] 🎯 Admin test onChange:', {
+        studentAnswers,
+        completedCells,
+        requiredCells
+      });
+
+      debouncedOnChange({
+        studentAnswers,
+        completedCells,
+        requiredCells
+      });
+
       return;
     }
 
+    // Student mode: Track answers to editable cells
+    // ✅ FIX: Use cellTypes as fallback if template.editableCells is not available
     const studentAnswers = { ...(value?.studentAnswers || {}) };
     let completedCells = 0;
 
     changes.forEach(([row, col, oldValue, newValue]: any) => {
-      const isEditable = template.editableCells.some(c => c.row === row && c.col === col);
+      // Use helper function for consistent editability check
+      const isEditable = isCellEditable(row, col);
 
       if (isEditable) {
         const key = `${row}-${col}`;
@@ -1316,18 +1441,23 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     completedCells = Object.values(studentAnswers)
       .filter(v => v && String(v).trim().length > 0).length;
 
+    // Calculate required cells from either template or cellTypes
+    const requiredCells = template?.editableCells?.length ||
+                          Object.values(cellTypes).filter(t => t === 'editable').length ||
+                          1;
+
     console.log('[TableCompletion] Triggering debounced onChange from student mode:', {
       studentAnswers,
       completedCells,
-      requiredCells: template.editableCells.length
+      requiredCells
     });
 
     debouncedOnChange({
       studentAnswers,
       completedCells,
-      requiredCells: template.editableCells.length
+      requiredCells
     });
-  }, [template, value, debouncedOnChange, isTemplateEditor, isEditingTemplate, cellValues, expectedAnswers, cellTypes]);
+  }, [template, value, debouncedOnChange, isTemplateEditor, isEditingTemplate, cellValues, expectedAnswers, cellTypes, isAdminTestMode, isCellEditable]);
 
   const handleReset = () => {
     // ✅ FIX: Check if template exists before accessing editableCells
@@ -2108,6 +2238,18 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const totalCells = rows * columns;
   const undefinedCount = totalCells - lockedCount - editableCount;
 
+  // Debug logging for statistics display
+  console.log('[TableCompletion] 📊 Statistics at render:', {
+    lockedCount,
+    editableCount,
+    undefinedCount,
+    totalCells,
+    cellTypesKeys: Object.keys(cellTypes).length,
+    isAdminTestMode,
+    isStudentTestMode,
+    hasLoadedData
+  });
+
   return (
     <div className="space-y-4">
       {/* Student Test Mode - Progress Indicator (IGCSE Best Practice) */}
@@ -2242,7 +2384,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Template Editor Mode Banner */}
-      {isEditingTemplate && (
+      {/* ✅ FIX: Hide in admin test mode */}
+      {isEditingTemplate && !isAdminTestMode && (
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-lg">
           <div className="flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -3327,16 +3470,28 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         <HotTable
           ref={hotRef}
           data={tableData}
-          colHeaders={isTemplateEditor ? headers : (template?.headers || headers)}
+          colHeaders={(() => {
+            // Use headers state for all cases - it's populated from database or template
+            const finalHeaders = headers;
+            console.log(`[TableCompletion] 🏷️ Rendering column headers:`, {
+              isTemplateEditor,
+              headersCount: finalHeaders.length,
+              headers: finalHeaders,
+              hasTemplate: !!template,
+              templateHeaders: template?.headers
+            });
+            return finalHeaders;
+          })()}
           rowHeaders={true}
           width="100%"
           height="auto"
           licenseKey="non-commercial-and-evaluation"
           readOnly={disabled && !isEditingTemplate}
           cells={(row, col) => {
-            // Admin Test Mode - Allow editing only in editable cells (like student would)
+            // ✅ Admin Test Mode - Allow editing only in editable cells (like student would)
             if (isAdminTestMode) {
-              const isEditable = template?.editableCells?.some(c => c.row === row && c.col === col) ?? false;
+              const isEditable = isCellEditable(row, col);
+              console.log(`[TableCompletion] 🎯 Admin test mode - Cell ${row},${col} editable:`, isEditable);
               return {
                 readOnly: !isEditable || disabled,
                 renderer: cellRenderer
@@ -3353,7 +3508,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
                 renderer: cellRenderer
               };
             } else {
-              const isEditable = template?.editableCells?.some(c => c.row === row && c.col === col) ?? false;
+              // ✅ Student mode - use helper function for consistent editability check
+              const isEditable = isCellEditable(row, col);
               return {
                 readOnly: !isEditable || disabled,
                 renderer: cellRenderer
