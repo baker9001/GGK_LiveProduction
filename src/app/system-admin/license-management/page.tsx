@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, Loader2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
 import dayjs from 'dayjs';
 import { supabase } from '../../../lib/supabase';
 import { DataTable } from '../../../components/shared/DataTable';
@@ -20,6 +20,7 @@ import { ScrollNavigator } from '../../../components/shared/ScrollNavigator';
 import { toast } from '../../../components/shared/Toast';
 import { useSingleExpansion } from '../../../hooks/useSingleExpansion';
 import { PaginationControls } from '../../../components/shared/PaginationControls';
+import { LoadingSpinner } from '../../../components/shared/LoadingSpinner';
 import { usePagination } from '../../../hooks/usePagination';
 
 interface License {
@@ -926,7 +927,12 @@ export default function LicenseManagementPage() {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-gray-900/20 transition-colors duration-200">
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+            <LoadingSpinner
+              size="md"
+              showLogo={false}
+              animation="hybrid"
+              message="Loading licenses..."
+            />
           </div>
         ) : companiesTotalCount === 0 ? (
           <div className="text-center py-12">

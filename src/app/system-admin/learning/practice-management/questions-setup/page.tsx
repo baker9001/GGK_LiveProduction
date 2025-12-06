@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader2, FileText, BarChart3, X, CheckCircle, Clock, Archive, AlertTriangle, Menu } from 'lucide-react';
+import { FileText, BarChart3, X, CheckCircle, Clock, Archive, AlertTriangle, Menu } from 'lucide-react';
 import { Button } from '../../../../../components/shared/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
 import EnhancedQuestionNavigator, { buildEnhancedNavigationItems, NavigationItem, QuestionStatus, AttachmentStatus } from '../../../../../components/shared/EnhancedQuestionNavigator';
@@ -15,6 +15,7 @@ import { supabase } from '../../../../../lib/supabase';
 import { toast } from '../../../../../components/shared/Toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { autoPopulateAnswerFields } from '../../../../../services/answerFieldAutoPopulationService';
+import { LoadingSpinner } from '../../../../../components/shared/LoadingSpinner';
 
 // Type definitions (keeping your existing types)
 export interface Attachment {
@@ -1079,7 +1080,12 @@ export default function QuestionsSetupPage() {
     if (isLoading) {
       return (
         <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <LoadingSpinner
+            size="md"
+            showLogo={false}
+            animation="hybrid"
+            message="Loading papers..."
+          />
         </div>
       );
     }

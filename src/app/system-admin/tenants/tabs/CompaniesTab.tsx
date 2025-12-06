@@ -39,9 +39,9 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
+  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X,
   Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key,
-  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2, RefreshCw,
+  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, RefreshCw,
   AlertTriangle
 } from 'lucide-react';
 import { z } from 'zod';
@@ -58,6 +58,7 @@ import { SearchableMultiSelect } from '../../../../components/shared/SearchableM
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
+import { LoadingSpinner } from '../../../../components/shared/LoadingSpinner';
 import { getAuthenticatedUser } from '../../../../lib/auth';
 
 // ===== VALIDATION SCHEMAS =====
@@ -2617,7 +2618,13 @@ export default function CompaniesTab() {
                                   title="Resend verification email"
                                 >
                                   {resendVerificationMutation.isLoading ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                    <LoadingSpinner
+                                      size="xs"
+                                      inline
+                                      centered={false}
+                                      showLogo={false}
+                                      className="!gap-0"
+                                    />
                                   ) : (
                                     <Mail className="h-5 w-5" />
                                   )}
