@@ -8,7 +8,6 @@ import {
   Upload, 
   Eye, 
   Download,
-  Loader2,
   X,
   Scissors,
   ChevronUp,
@@ -25,6 +24,7 @@ import { cn } from '../../../../../../lib/utils';
 import { useQuestionMutations } from '../hooks/useQuestionMutations';
 import { Attachment } from '../page';
 import { toast } from '../../../../../../components/shared/Toast';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 
 interface AttachmentManagerProps {
   attachments: Attachment[];
@@ -438,7 +438,13 @@ export function AttachmentManager({
               data-snip-button
               leftIcon={
                 loadingPdf ? 
-                <Loader2 className="h-3 w-3 animate-spin" /> : 
+                <LoadingSpinner
+                  size="xs"
+                  inline
+                  centered={false}
+                  showLogo={false}
+                  className="!gap-0"
+                /> :
                 showSnippingTool ? 
                 <ChevronUp className="h-3 w-3" /> :
                 <Scissors className="h-3 w-3" />
@@ -474,7 +480,19 @@ export function AttachmentManager({
               variant="outline"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingFile}
-              leftIcon={uploadingFile ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+              leftIcon={
+                uploadingFile ? (
+                  <LoadingSpinner
+                    size="xs"
+                    inline
+                    centered={false}
+                    showLogo={false}
+                    className="!gap-0"
+                  />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )
+              }
               className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               {uploadingFile ? 'Uploading...' : 'Upload'}

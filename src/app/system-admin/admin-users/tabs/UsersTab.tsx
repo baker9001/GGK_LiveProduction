@@ -7,7 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { Key, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, Loader2, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
+import { Key, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -27,6 +27,7 @@ import {
   getAuthToken,
   dispatchAuthChange
 } from '../../../../lib/auth';
+import { LoadingSpinner } from '../../../../components/shared/LoadingSpinner';
 
 // ===== CONFIGURATION =====
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
@@ -1416,7 +1417,13 @@ export default function UsersTab() {
           title="Send password reset email"
         >
           {sendPasswordResetMutation.isLoading && resettingUserId === row.id ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <LoadingSpinner
+              size="xs"
+              inline
+              centered={false}
+              showLogo={false}
+              className="!gap-0"
+            />
           ) : (
             <Key className="h-4 w-4" />
           )}
@@ -1577,7 +1584,13 @@ export default function UsersTab() {
               </div>
             ) : invitationsLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500 dark:text-gray-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <LoadingSpinner
+                  size="xs"
+                  inline
+                  centered={false}
+                  showLogo={false}
+                  className="flex-row !gap-1"
+                />
                 <span>Loading invitations…</span>
               </div>
             ) : invitations.length === 0 ? (
@@ -1637,7 +1650,13 @@ export default function UsersTab() {
                           title={canResend ? 'Resend invitation email' : 'Invitation cannot be resent'}
                         >
                           {resendingInvitationId === invitation.id && resendInviteMutation.isLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <LoadingSpinner
+                              size="xs"
+                              inline
+                              centered={false}
+                              showLogo={false}
+                              className="!gap-0"
+                            />
                           ) : (
                             <Send className="h-4 w-4" />
                           )}
@@ -1810,7 +1829,13 @@ export default function UsersTab() {
               />
               {emailValidation.checking && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  <LoadingSpinner
+                    size="xs"
+                    inline
+                    centered={false}
+                    showLogo={false}
+                    className="!gap-0"
+                  />
                 </div>
               )}
               {!emailValidation.checking && emailValidation.exists && (

@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Save, FileText } from 'lucide-react';
+import { Save, FileText } from 'lucide-react';
 import { EnhancedQuestionSelector } from '../../../../../components/shared/EnhancedQuestionSelector';
 import { EnhancedQuestionPreview } from '../../../../../components/shared/EnhancedQuestionPreview';
 import { Button } from '../../../../../components/shared/Button';
 import { supabase } from '../../../../../lib/supabase';
 import { toast } from '../../../../../components/shared/Toast';
 import type { Question, SelectedQuestion } from '../../../../../components/shared/EnhancedQuestionSelector';
+import { LoadingSpinner } from '../../../../../components/shared/LoadingSpinner';
 
 export default function EnhancedQuestionSelectionPage() {
   const [selectedQuestions, setSelectedQuestions] = useState<SelectedQuestion[]>([]);
@@ -220,8 +221,12 @@ export default function EnhancedQuestionSelectionPage() {
         {papersLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <Loader2 className="w-12 h-12 text-[#8CC63F] animate-spin mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400">Loading papers...</p>
+              <LoadingSpinner
+                size="md"
+                showLogo={false}
+                animation="hybrid"
+                message="Loading papers..."
+              />
             </div>
           </div>
         ) : !selectedPaperId ? (

@@ -10,13 +10,13 @@ import {
   FlaskConical,
   MapPin,
   Thermometer,
-  Clock3,
-  Loader2
+  Clock3
 } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { TestAnyUserModal } from '../../../components/admin/TestAnyUserModal';
 import { getRealAdminUser, isInTestMode } from '../../../lib/auth';
 import { getPreferredName, getTimeBasedGreeting } from '../../../lib/greeting';
+import { LoadingSpinner } from '../../../components/shared/LoadingSpinner';
 
 interface EnvironmentSnapshot {
   locationLabel: string;
@@ -95,7 +95,13 @@ function EnvironmentSummary({ environment, status, timeDisplay }: EnvironmentSum
           </span>
           {status === 'loading' && (
             <span className="flex items-center gap-2 text-sm font-medium">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <LoadingSpinner
+                size="xs"
+                inline
+                centered={false}
+                showLogo={false}
+                className="flex-row !gap-1"
+              />
               Checking nearby weather…
             </span>
           )}

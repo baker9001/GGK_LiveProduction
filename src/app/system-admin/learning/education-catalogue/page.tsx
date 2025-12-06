@@ -1,7 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../../../components/shared/Tabs";
-import { Loader2 } from 'lucide-react';
+import { LoadingSpinner } from '../../../../components/shared/LoadingSpinner';
 
 // Import your new tables
 import RegionsTable from './regions/RegionsTable';
@@ -19,8 +19,12 @@ const ConceptsTable = lazy(() => import('./components/ConceptsTable'));
 // Loading fallback component
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-64">
-    <Loader2 className="h-8 w-8 text-blue-500 dark:text-blue-400 animate-spin mb-4" />
-    <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+    <LoadingSpinner
+      size="sm"
+      message="Loading..."
+      animation="hybrid"
+      showLogo={false}
+    />
   </div>
 );
 
