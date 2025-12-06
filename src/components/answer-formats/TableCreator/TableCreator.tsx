@@ -23,8 +23,9 @@ import {
 } from 'lucide-react';
 import Button from '@/components/shared/Button';
 import { cn } from '@/lib/utils';
-import { validateTableData } from '../utils/dataValidation';
+import { validateTableData, validateTableCreatorData } from '../utils/dataValidation';
 import { TableTemplateService, type TableTemplateDTO, type TableCellDTO } from '@/services/TableTemplateService';
+import { TableTemplateImportReviewService, type TableTemplateReviewDTO, type TableCellReviewDTO } from '@/services/TableTemplateImportReviewService';
 import { toast } from '@/components/shared/Toast';
 import { supabase } from '@/lib/supabase';
 
@@ -56,6 +57,8 @@ interface TableCreatorProps {
   correctAnswerData?: TableCreatorData;
   enableAutoSave?: boolean;
   onTemplateSave?: (template: TableTemplateDTO) => void;
+  importSessionId?: string;
+  questionIdentifier?: string;
 }
 
 const TableCreator: React.FC<TableCreatorProps> = ({
@@ -73,7 +76,9 @@ const TableCreator: React.FC<TableCreatorProps> = ({
   showCorrectAnswer = false,
   correctAnswerData,
   enableAutoSave = true,
-  onTemplateSave
+  onTemplateSave,
+  importSessionId,
+  questionIdentifier
 }) => {
   const hotTableRef = useRef<any>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -107,13 +112,23 @@ const TableCreator: React.FC<TableCreatorProps> = ({
     return uuidRegex.test(id);
   };
 
-  // Check if we're in preview mode
+  // Check if we're in import review mode (has session and identifier but not real UUIDs)
+  const isImportReviewMode = !!importSessionId && !!questionIdentifier;
+
+  // Check if we're in preview mode (no UUID, no import session)
   const isPreviewQuestion = !isValidUUID(questionId) || (subQuestionId && !isValidUUID(subQuestionId));
   const isQuestionSaved = questionId && isValidUUID(questionId.trim());
 
   // Check if question exists in database
   useEffect(() => {
     const checkQuestionExistence = async () => {
+      // If in import review mode, set status to unsaved (ready to save to review tables)
+      if (isImportReviewMode) {
+        setQuestionExistsInDB(false);
+        setAutoSaveStatus('unsaved');
+        return;
+      }
+
       if (!isValidUUID(questionId)) {
         setQuestionExistsInDB(false);
         setAutoSaveStatus('preview');
@@ -158,38 +173,72 @@ const TableCreator: React.FC<TableCreatorProps> = ({
     };
 
     checkQuestionExistence();
-  }, [questionId, subQuestionId]);
+  }, [questionId, subQuestionId, isImportReviewMode]);
 
-  // Load existing template from database
+  // Load existing template from database (supports both review and production modes)
   useEffect(() => {
     const loadTemplate = async () => {
-      if (isPreviewQuestion || !questionExistsInDB) return;
+      // Skip loading in pure preview mode
+      if (!isImportReviewMode && (isPreviewQuestion || !questionExistsInDB)) return;
 
       setLoading(true);
       try {
-        const result = await TableTemplateService.loadTemplate(questionId, subQuestionId);
-
-        if (result.success && result.template) {
-          const template = result.template;
-          setRowCount(template.rows);
-          setColCount(template.columns);
-          setHeaders(template.headers || Array.from({ length: template.columns }, (_, i) => `Column ${String.fromCharCode(65 + i)}`));
-          setTitle(template.title || '');
-
-          // Build table data from cells
-          const data: any[][] = Array(template.rows).fill(null).map(() =>
-            Array(template.columns).fill('')
+        // Load from import review tables
+        if (isImportReviewMode && importSessionId && questionIdentifier) {
+          const result = await TableTemplateImportReviewService.loadTemplateForReview(
+            importSessionId,
+            questionIdentifier
           );
 
-          template.cells.forEach(cell => {
-            if (data[cell.rowIndex] && data[cell.rowIndex][cell.colIndex] !== undefined) {
-              data[cell.rowIndex][cell.colIndex] = cell.lockedValue || '';
-            }
-          });
+          if (result.success && result.template) {
+            const template = result.template;
+            setRowCount(template.rows);
+            setColCount(template.columns);
+            setHeaders(template.headers || Array.from({ length: template.columns }, (_, i) => `Column ${String.fromCharCode(65 + i)}`));
+            setTitle(template.title || '');
 
-          setTableData(data);
-          setAutoSaveStatus('saved');
-          setLastSaveTime(new Date());
+            // Build table data from cells
+            const data: any[][] = Array(template.rows).fill(null).map(() =>
+              Array(template.columns).fill('')
+            );
+
+            template.cells.forEach(cell => {
+              if (data[cell.rowIndex] && data[cell.rowIndex][cell.colIndex] !== undefined) {
+                data[cell.rowIndex][cell.colIndex] = cell.lockedValue || '';
+              }
+            });
+
+            setTableData(data);
+            setAutoSaveStatus('saved');
+            setLastSaveTime(new Date());
+          }
+        }
+        // Load from production tables
+        else if (!isPreviewQuestion && questionExistsInDB) {
+          const result = await TableTemplateService.loadTemplate(questionId, subQuestionId);
+
+          if (result.success && result.template) {
+            const template = result.template;
+            setRowCount(template.rows);
+            setColCount(template.columns);
+            setHeaders(template.headers || Array.from({ length: template.columns }, (_, i) => `Column ${String.fromCharCode(65 + i)}`));
+            setTitle(template.title || '');
+
+            // Build table data from cells
+            const data: any[][] = Array(template.rows).fill(null).map(() =>
+              Array(template.columns).fill('')
+            );
+
+            template.cells.forEach(cell => {
+              if (data[cell.rowIndex] && data[cell.rowIndex][cell.colIndex] !== undefined) {
+                data[cell.rowIndex][cell.colIndex] = cell.lockedValue || '';
+              }
+            });
+
+            setTableData(data);
+            setAutoSaveStatus('saved');
+            setLastSaveTime(new Date());
+          }
         }
       } catch (error) {
         console.error('[TableCreator] Error loading template:', error);
@@ -200,18 +249,24 @@ const TableCreator: React.FC<TableCreatorProps> = ({
     };
 
     loadTemplate();
-  }, [questionId, subQuestionId, questionExistsInDB, isPreviewQuestion]);
+  }, [questionId, subQuestionId, questionExistsInDB, isPreviewQuestion, isImportReviewMode, importSessionId, questionIdentifier]);
 
-  // Auto-save function
+  // Auto-save function with dual mode support
   const saveToDatabase = useCallback(async (silent = false) => {
-    if (isPreviewQuestion || !questionExistsInDB || !enableAutoSave) {
-      if (!silent) {
+    // Check if we can save
+    const canSaveToReview = isImportReviewMode && importSessionId && questionIdentifier;
+    const canSaveToProduction = !isPreviewQuestion && questionExistsInDB;
+
+    if (!canSaveToReview && !canSaveToProduction) {
+      if (!silent && !isImportReviewMode) {
         toast.warning('Cannot save', {
           description: 'Please save the question first before saving table templates'
         });
       }
       return;
     }
+
+    if (!enableAutoSave) return;
 
     setAutoSaveStatus('saving');
 
@@ -221,8 +276,8 @@ const TableCreator: React.FC<TableCreatorProps> = ({
 
       const currentData = hot.getData();
 
-      // Build cells array
-      const cells: TableCellDTO[] = [];
+      // Build cells array (common for both modes)
+      const cells: TableCellDTO[] | TableCellReviewDTO[] = [];
       for (let row = 0; row < rowCount; row++) {
         for (let col = 0; col < colCount; col++) {
           const value = currentData[row]?.[col];
@@ -238,30 +293,62 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         }
       }
 
-      const template: TableTemplateDTO = {
-        questionId,
-        subQuestionId: (subQuestionId && isValidUUID(subQuestionId)) ? subQuestionId : undefined,
-        rows: rowCount,
-        columns: colCount,
-        headers,
-        title: title || undefined,
-        cells
-      };
+      // Save to import review tables
+      if (canSaveToReview && importSessionId && questionIdentifier) {
+        const reviewTemplate: TableTemplateReviewDTO = {
+          importSessionId,
+          questionIdentifier,
+          isSubquestion: !!subQuestionId,
+          parentQuestionIdentifier: undefined,
+          rows: rowCount,
+          columns: colCount,
+          headers,
+          title: title || undefined,
+          cells: cells as TableCellReviewDTO[]
+        };
 
-      const result = await TableTemplateService.saveTemplate(template);
+        const result = await TableTemplateImportReviewService.saveTemplateForReview(reviewTemplate);
 
-      if (result.success) {
-        if (!silent) {
-          toast.success('Table saved!', {
-            description: 'Table configuration saved successfully',
-            duration: 2000
-          });
+        if (result.success) {
+          if (!silent) {
+            toast.success('Table saved to review!', {
+              description: 'Table configuration saved to review database',
+              duration: 2000
+            });
+          }
+          setAutoSaveStatus('saved');
+          setLastSaveTime(new Date());
+        } else {
+          throw new Error(result.error || 'Failed to save template to review');
         }
-        onTemplateSave?.(template);
-        setAutoSaveStatus('saved');
-        setLastSaveTime(new Date());
-      } else {
-        throw new Error(result.error || 'Failed to save template');
+      }
+      // Save to production tables
+      else if (canSaveToProduction) {
+        const template: TableTemplateDTO = {
+          questionId,
+          subQuestionId: (subQuestionId && isValidUUID(subQuestionId)) ? subQuestionId : undefined,
+          rows: rowCount,
+          columns: colCount,
+          headers,
+          title: title || undefined,
+          cells: cells as TableCellDTO[]
+        };
+
+        const result = await TableTemplateService.saveTemplate(template);
+
+        if (result.success) {
+          if (!silent) {
+            toast.success('Table saved!', {
+              description: 'Table configuration saved successfully',
+              duration: 2000
+            });
+          }
+          onTemplateSave?.(template);
+          setAutoSaveStatus('saved');
+          setLastSaveTime(new Date());
+        } else {
+          throw new Error(result.error || 'Failed to save template');
+        }
       }
     } catch (error) {
       console.error('[TableCreator] Save error:', error);
@@ -272,11 +359,16 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         });
       }
     }
-  }, [questionId, subQuestionId, rowCount, colCount, headers, title, isPreviewQuestion, questionExistsInDB, enableAutoSave, onTemplateSave]);
+  }, [questionId, subQuestionId, rowCount, colCount, headers, title, isPreviewQuestion, isImportReviewMode, importSessionId, questionIdentifier, questionExistsInDB, enableAutoSave, onTemplateSave]);
 
   // Trigger auto-save when data changes
   useEffect(() => {
-    if (!enableAutoSave || isPreviewQuestion || !questionExistsInDB) return;
+    const canAutoSave = enableAutoSave && (
+      isImportReviewMode ||
+      (!isPreviewQuestion && questionExistsInDB)
+    );
+
+    if (!canAutoSave) return;
 
     if (autoSaveStatus === 'unsaved') {
       // Clear existing timer
@@ -295,7 +387,7 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [autoSaveStatus, enableAutoSave, isPreviewQuestion, questionExistsInDB, saveToDatabase]);
+  }, [autoSaveStatus, enableAutoSave, isPreviewQuestion, isImportReviewMode, questionExistsInDB, saveToDatabase]);
 
   // Update table when data changes
   const handleAfterChange = useCallback((changes: any, source: string) => {
@@ -307,10 +399,16 @@ const TableCreator: React.FC<TableCreatorProps> = ({
     const currentData = hot.getData();
     setTableData(currentData);
     setSaved(false);
-    if (enableAutoSave && !isPreviewQuestion && questionExistsInDB) {
+
+    const canAutoSave = enableAutoSave && (
+      isImportReviewMode ||
+      (!isPreviewQuestion && questionExistsInDB)
+    );
+
+    if (canAutoSave) {
       setAutoSaveStatus('unsaved');
     }
-  }, [enableAutoSave, isPreviewQuestion, questionExistsInDB]);
+  }, [enableAutoSave, isPreviewQuestion, isImportReviewMode, questionExistsInDB]);
 
   // Add row
   const handleAddRow = useCallback(() => {
@@ -414,7 +512,7 @@ const TableCreator: React.FC<TableCreatorProps> = ({
       timestamp: new Date().toISOString()
     };
 
-    const result = validateTableData(tableCreatorData);
+    const result = validateTableCreatorData(tableCreatorData, minRows, minCols);
     setValidation(result);
 
     if (result.isValid) {
@@ -422,12 +520,17 @@ const TableCreator: React.FC<TableCreatorProps> = ({
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
 
-      // Also save to database if enabled
-      if (enableAutoSave && !isPreviewQuestion && questionExistsInDB) {
+      // Also save to database if enabled (support both review and production modes)
+      const canSave = enableAutoSave && (
+        isImportReviewMode ||
+        (!isPreviewQuestion && questionExistsInDB)
+      );
+
+      if (canSave) {
         saveToDatabase(false);
       }
     }
-  }, [headers, rowCount, colCount, title, onChange, enableAutoSave, isPreviewQuestion, questionExistsInDB, saveToDatabase]);
+  }, [headers, rowCount, colCount, title, onChange, enableAutoSave, isPreviewQuestion, isImportReviewMode, questionExistsInDB, saveToDatabase]);
 
   // Export to CSV
   const handleExportCSV = useCallback(() => {
@@ -484,19 +587,44 @@ const TableCreator: React.FC<TableCreatorProps> = ({
       {/* Auto-Save Status Indicator */}
       {enableAutoSave && !disabled && (
         <div className="flex items-center justify-end gap-2 text-sm">
-          {isPreviewQuestion && (
+          {/* Preview Mode - No save capability */}
+          {isPreviewQuestion && !isImportReviewMode && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
               <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
               <span className="text-yellow-700 dark:text-yellow-300">Preview mode - Save question first</span>
             </div>
           )}
-          {!isPreviewQuestion && isQuestionSaved && autoSaveStatus === 'saving' && (
+
+          {/* Import Review Mode Indicators */}
+          {isImportReviewMode && autoSaveStatus === 'saving' && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg">
+              <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
+              <span className="text-blue-700 dark:text-blue-300">Saving to review...</span>
+            </div>
+          )}
+          {isImportReviewMode && autoSaveStatus === 'saved' && lastSaveTime && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg">
+              <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+              <span className="text-green-700 dark:text-green-300">
+                Saved to review {lastSaveTime.toLocaleTimeString()}
+              </span>
+            </div>
+          )}
+          {isImportReviewMode && autoSaveStatus === 'unsaved' && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg">
+              <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-amber-700 dark:text-amber-300">Unsaved changes</span>
+            </div>
+          )}
+
+          {/* Production Mode Indicators */}
+          {!isPreviewQuestion && !isImportReviewMode && isQuestionSaved && autoSaveStatus === 'saving' && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg">
               <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
               <span className="text-blue-700 dark:text-blue-300">Saving...</span>
             </div>
           )}
-          {!isPreviewQuestion && isQuestionSaved && autoSaveStatus === 'saved' && lastSaveTime && (
+          {!isPreviewQuestion && !isImportReviewMode && isQuestionSaved && autoSaveStatus === 'saved' && lastSaveTime && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg">
               <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
               <span className="text-green-700 dark:text-green-300">
@@ -504,13 +632,15 @@ const TableCreator: React.FC<TableCreatorProps> = ({
               </span>
             </div>
           )}
-          {!isPreviewQuestion && isQuestionSaved && autoSaveStatus === 'unsaved' && (
+          {!isPreviewQuestion && !isImportReviewMode && isQuestionSaved && autoSaveStatus === 'unsaved' && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg">
               <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span className="text-amber-700 dark:text-amber-300">Unsaved changes</span>
             </div>
           )}
-          {!isPreviewQuestion && autoSaveStatus === 'error' && (
+
+          {/* Error Indicator (shared by all modes) */}
+          {autoSaveStatus === 'error' && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg">
               <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
               <span className="text-red-700 dark:text-red-300">Save failed</span>
@@ -758,11 +888,14 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         <div className="text-sm text-gray-500 dark:text-gray-400 italic">
           Click on cells to enter data. Use the buttons above to add or remove rows and columns.
           Right-click for more options.
-          {enableAutoSave && !isPreviewQuestion && questionExistsInDB && (
+          {enableAutoSave && isImportReviewMode && (
+            <span className="text-blue-600 dark:text-blue-400 font-medium"> Import review mode: Changes are saved to review database.</span>
+          )}
+          {enableAutoSave && !isPreviewQuestion && !isImportReviewMode && questionExistsInDB && (
             <span className="text-green-600 dark:text-green-400 font-medium"> Auto-save is enabled - your changes are automatically saved.</span>
           )}
           {!enableAutoSave && <span> Don't forget to save your table when complete.</span>}
-          {isPreviewQuestion && <span className="text-yellow-600 dark:text-yellow-400 font-medium"> Preview mode: Save the question to enable auto-save.</span>}
+          {isPreviewQuestion && !isImportReviewMode && <span className="text-yellow-600 dark:text-yellow-400 font-medium"> Preview mode: Save the question to enable auto-save.</span>}
         </div>
       )}
     </div>
