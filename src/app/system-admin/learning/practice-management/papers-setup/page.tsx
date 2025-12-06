@@ -1916,20 +1916,15 @@ export default function PapersSetupPage() {
         >
           <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white/90 p-8 text-center shadow-xl dark:border-gray-700 dark:bg-gray-900/90">
             <div className="flex flex-col items-center gap-4">
-              <div className="relative h-14 w-14">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900/40" />
-                <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {transitionMessage || 'Preparing the next step...'}
-                </p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {activeTabDefinition?.label
-                    ? `Moving to ${activeTabDefinition.label}`
-                    : 'Hang tight while we set things up.'}
-                </p>
-              </div>
+              <LoadingSpinner
+                size="lg"
+                message={transitionMessage || 'Preparing the next step...'}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {activeTabDefinition?.label
+                  ? `Moving to ${activeTabDefinition.label}`
+                  : 'Hang tight while we set things up.'}
+              </p>
               <div className="w-full">
                 <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                   <div className="h-full w-full animate-pulse bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500" />

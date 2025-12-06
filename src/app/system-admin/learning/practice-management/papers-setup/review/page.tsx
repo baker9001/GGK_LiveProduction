@@ -6,6 +6,7 @@ import { QuestionViewer, QuestionData, UserResponse, ValidationReport, UploadedA
 import { supabase } from '../../../../../../lib/supabase';
 import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 import { ArrowLeft, Save, CheckCircle, AlertTriangle, Eye, Menu, X } from 'lucide-react';
 import { cn } from '../../../../../../lib/utils';
 import EnhancedQuestionNavigator, { buildEnhancedNavigationItems, NavigationItem, QuestionStatus, AttachmentStatus } from '../../../../../../components/shared/EnhancedQuestionNavigator';
@@ -405,10 +406,7 @@ export default function PaperSetupReviewPage() {
   if (state.loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading questions for review...</p>
-        </div>
+        <LoadingSpinner size="lg" message="Loading questions for review..." />
       </div>
     );
   }
