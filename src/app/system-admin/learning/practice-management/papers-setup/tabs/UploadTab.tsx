@@ -574,8 +574,8 @@ export function UploadTab({
           >
             {isContinuing ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Preparing next step...
+                <LoadingSpinner size="sm" inline centered={false} />
+                <span className="ml-2">Preparing next step...</span>
               </>
             ) : (
               'Continue to Next Step'

@@ -4982,46 +4982,6 @@ function QuestionsTabInner({
     const metadata = paperMetadata;
     const isEditing = editingMetadata;
     
-    // Calculate question statistics
-    const questionStats = {
-      total: questions.length,
-      mcq: questions.filter(q => q.question_type === 'mcq').length,
-      descriptive: questions.filter(q => q.question_type === 'descriptive').length,
-      complex: questions.filter(q => q.parts && q.parts.length > 0).length,
-      withFigures: questions.filter(q => q.figure_required || (q.parts && q.parts.some((p: any) => p.figure_required))).length,
-      withDynamicAnswers: questions.filter(q =>
-        q.answer_requirement ||
-        (q.parts && q.parts.some((p: any) => p.answer_requirement))
-      ).length,
-      flaggedInSimulation: questions.filter(q => q.simulation_flags?.includes('flagged')).length
-    };
-    
-    // Calculate answer format distribution
-    const answerFormatDistribution: Record<string, number> = {};
-    const answerRequirementDistribution: Record<string, number> = {};
-    
-    questions.forEach(q => {
-      if (q.parts) {
-        q.parts.forEach((p: any) => {
-          const format = p.answer_format || 'single_line';
-          answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
-          
-          if (p.answer_requirement) {
-            answerRequirementDistribution[p.answer_requirement] = 
-              (answerRequirementDistribution[p.answer_requirement] || 0) + 1;
-          }
-        });
-      } else {
-        const format = detectAnswerFormat(q.question_text || '') || 'single_line';
-        answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
-        
-        if (q.answer_requirement) {
-          answerRequirementDistribution[q.answer_requirement] = 
-            (answerRequirementDistribution[q.answer_requirement] || 0) + 1;
-        }
-      }
-    });
-    
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
@@ -5141,127 +5101,11 @@ function QuestionsTabInner({
             <div className="text-gray-600 dark:text-gray-400 text-xs mb-1">Total Questions</div>
             <div className="font-medium text-gray-900 dark:text-white">{questions.length}</div>
           </div>
-          
+
           <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
             <div className="text-gray-600 dark:text-gray-400 text-xs mb-1">Status</div>
             <StatusBadge status={confirmationStatus} />
           </div>
-        </div>
-
-        {/* Question Statistics */}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Question Analysis
-          </h4>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                <Hash className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">MCQ</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.mcq}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Descriptive</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.descriptive}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
-                <BookOpen className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Multi-part</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.complex}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                <Image className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">With Figures</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.withFigures}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/20 flex items-center justify-center">
-                <Target className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Avg Marks</div>
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {questions.length > 0 ? (metadata.total_marks / questions.length).toFixed(1) : '0'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/20 flex items-center justify-center">
-                <Link className="h-4 w-4 text-pink-600 dark:text-pink-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Dynamic</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.withDynamicAnswers}</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Simulation Status */}
-          {simulationResult && (
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/20 flex items-center justify-center">
-                  <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Flagged</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {questionStats.flaggedInSimulation}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
-                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Issues</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.issues?.length || 0}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                  <Target className="h-4 w-4 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Score</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.overallScore ? `${simulationResult.overallScore}%` : '-'}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Time</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.timeSpent ? `${Math.floor(simulationResult.timeSpent / 60)}m` : '-'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {isEditing && (
