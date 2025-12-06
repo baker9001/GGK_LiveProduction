@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 
 export interface TableTemplateReviewDTO {
   id?: string;
-  importSessionId: string; // Maps to review_session_id in question_import_review_sessions table
+  importSessionId: string;
   questionIdentifier: string;
   isSubquestion?: boolean;
   parentQuestionIdentifier?: string;
@@ -68,7 +68,7 @@ export class TableTemplateImportReviewService {
 
       // 1. Upsert template
       const templatePayload: any = {
-        review_session_id: template.importSessionId,
+        import_session_id: template.importSessionId,
         question_identifier: template.questionIdentifier,
         is_subquestion: template.isSubquestion || false,
         parent_question_identifier: template.parentQuestionIdentifier || null,
@@ -87,7 +87,7 @@ export class TableTemplateImportReviewService {
       const { data: templateData, error: templateError } = await supabase
         .from('table_templates_import_review')
         .upsert(templatePayload, {
-          onConflict: 'review_session_id,question_identifier'
+          onConflict: 'import_session_id,question_identifier'
         })
         .select()
         .single();
@@ -184,12 +184,12 @@ export class TableTemplateImportReviewService {
 
       // 1. Fetch template
       console.log('[TableTemplateImportReviewService] 📞 Executing database query for template...');
-      console.log('[TableTemplateImportReviewService] Query: table_templates_import_review WHERE review_session_id =', importSessionId, 'AND question_identifier =', questionIdentifier);
+      console.log('[TableTemplateImportReviewService] Query: table_templates_import_review WHERE import_session_id =', importSessionId, 'AND question_identifier =', questionIdentifier);
 
       const { data: templateData, error: templateError } = await supabase
         .from('table_templates_import_review')
         .select('*')
-        .eq('review_session_id', importSessionId)
+        .eq('import_session_id', importSessionId)
         .eq('question_identifier', questionIdentifier)
         .maybeSingle();
 
@@ -227,7 +227,7 @@ export class TableTemplateImportReviewService {
 
       console.log('[TableTemplateImportReviewService] ✅ Template found:', {
         id: templateData.id,
-        reviewSessionId: templateData.review_session_id,
+        importSessionId: templateData.import_session_id,
         questionIdentifier: templateData.question_identifier,
         rows: templateData.rows,
         columns: templateData.columns,
@@ -280,7 +280,7 @@ export class TableTemplateImportReviewService {
       // 3. Build DTO
       const template: TableTemplateReviewDTO = {
         id: templateData.id,
-        importSessionId: templateData.review_session_id,
+        importSessionId: templateData.import_session_id,
         questionIdentifier: templateData.question_identifier,
         isSubquestion: templateData.is_subquestion,
         parentQuestionIdentifier: templateData.parent_question_identifier,
@@ -336,7 +336,7 @@ export class TableTemplateImportReviewService {
       const { error } = await supabase
         .from('table_templates_import_review')
         .delete()
-        .eq('review_session_id', importSessionId)
+        .eq('import_session_id', importSessionId)
         .eq('question_identifier', questionIdentifier);
 
       if (error) {
@@ -367,7 +367,7 @@ export class TableTemplateImportReviewService {
       const { data } = await supabase
         .from('table_templates_import_review')
         .select('id')
-        .eq('review_session_id', importSessionId)
+        .eq('import_session_id', importSessionId)
         .eq('question_identifier', questionIdentifier)
         .maybeSingle();
 
@@ -395,13 +395,13 @@ export class TableTemplateImportReviewService {
           *,
           cells:table_template_cells_import_review(*)
         `)
-        .eq('review_session_id', importSessionId);
+        .eq('import_session_id', importSessionId);
 
       if (templateError) throw templateError;
 
       const templatesDTO: TableTemplateReviewDTO[] = (templates || []).map(t => ({
         id: t.id,
-        importSessionId: t.review_session_id,
+        importSessionId: t.import_session_id,
         questionIdentifier: t.question_identifier,
         isSubquestion: t.is_subquestion,
         parentQuestionIdentifier: t.parent_question_identifier,
