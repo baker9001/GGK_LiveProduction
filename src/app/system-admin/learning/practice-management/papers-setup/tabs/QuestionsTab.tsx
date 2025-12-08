@@ -379,6 +379,8 @@ interface ProcessedSubpart {
 
 interface ProcessedAnswer {
   answer: string;
+  answer_text?: string;    // For table_completion: stores template JSON data
+  answer_type?: string;    // For identifying answer type (e.g., "table_template")
   marks: number;
   alternative_id: number;
   linked_alternatives?: number[];
@@ -2423,6 +2425,8 @@ function QuestionsTabInner({
 
       let processedAnswer: ProcessedAnswer = {
         answer: answerText,
+        answer_text: ans.answer_text,        // Preserve table_completion template data
+        answer_type: ans.answer_type,        // Preserve answer type (e.g., "table_template")
         marks: parseInt(ans.marks || '1'),
         alternative_id: ans.alternative_id || index + 1,
         linked_alternatives: ans.linked_alternatives,
