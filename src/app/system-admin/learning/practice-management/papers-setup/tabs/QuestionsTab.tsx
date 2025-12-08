@@ -3110,6 +3110,8 @@ function QuestionsTabInner({
           is_contextual_only: Boolean(q.is_contextual_only),
           correct_answers: validQuestionCorrectAnswers.map(ans => ({
             answer: ans.answer,
+            answer_text: (ans as any).answer_text, // For table_completion template data
+            answer_type: (ans as any).answer_type, // For identifying table_template answers
             marks: ans.marks,
             alternative_id: ans.alternative_id,
             linked_alternatives: ans.linked_alternatives,
@@ -3176,6 +3178,8 @@ function QuestionsTabInner({
               is_contextual_only: Boolean(p.is_contextual_only),
               correct_answers: validPartCorrectAnswers.map(ans => ({
                 answer: ans.answer,
+                answer_text: (ans as any).answer_text, // For table_completion template data
+                answer_type: (ans as any).answer_type, // For identifying table_template answers
                 marks: ans.marks,
                 alternative_id: ans.alternative_id,
                 linked_alternatives: ans.linked_alternatives,
@@ -3221,6 +3225,8 @@ function QuestionsTabInner({
                   is_contextual_only: Boolean(sp.is_contextual_only),
                   correct_answers: validSubpartCorrectAnswers.map(ans => ({
                     answer: ans.answer,
+                    answer_text: (ans as any).answer_text, // For table_completion template data
+                    answer_type: (ans as any).answer_type, // For identifying table_template answers
                     marks: ans.marks,
                     alternative_id: ans.alternative_id,
                     linked_alternatives: ans.linked_alternatives,
