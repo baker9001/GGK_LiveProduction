@@ -2207,12 +2207,12 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   }
 
   // ✅ FIX: Prevent render if in review mode and data hasn't loaded yet
-  // In template editor mode, we don't need the template prop (we work from state)
-  // In non-editor mode, we need both data loaded and template prop
+  // In review mode (importSessionId + questionIdentifier), template prop is intentionally NOT passed
+  // Data is loaded from the database and stored in internal state (cellTypes, cellValues, etc.)
+  // So we only need to wait for hasLoadedData - NOT the template prop
   if (importSessionId && questionIdentifier) {
-    const shouldShowLoading = isTemplateEditor
-      ? !hasLoadedData  // Editor mode: only wait for data initialization
-      : (!hasLoadedData || !template);  // Non-editor: wait for both data and template prop
+    // Only check hasLoadedData - template prop is not used in review mode
+    const shouldShowLoading = !hasLoadedData;
 
     if (shouldShowLoading) {
       return (
