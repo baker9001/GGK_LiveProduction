@@ -112,6 +112,8 @@ interface AttachmentAsset {
 
 interface CorrectAnswer {
   answer: string;
+  answer_text?: string;    // For table_completion: stores template JSON data
+  answer_type?: string;    // For identifying answer type (e.g., "table_template")
   marks?: number;
   alternative_id?: number | string;
   linked_alternatives?: Array<number | string>;
