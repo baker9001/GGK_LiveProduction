@@ -49,12 +49,20 @@ export class TableTemplateService {
    * Database uses: "q_123-part-0" (part), "q_123-part-0-sub-2" (subpart)
    */
   private static convertSimulationIdToDatabaseFormat(questionIdentifier: string): string {
+    console.log('[TableTemplateService] 🔄 ID Conversion input:', questionIdentifier);
+
     // Check for subpart pattern: something_pX_sY
     const subpartMatch = questionIdentifier.match(/^(.+)_p(\d+)_s(\d+)$/);
     if (subpartMatch) {
       const [, baseId, partIndex, subpartIndex] = subpartMatch;
       const converted = `${baseId}-part-${partIndex}-sub-${subpartIndex}`;
-      console.log('[TableTemplateService] Converted subpart ID:', questionIdentifier, '→', converted);
+      console.log('[TableTemplateService] ✅ Converted SUBPART ID:', {
+        original: questionIdentifier,
+        baseId,
+        partIndex,
+        subpartIndex,
+        converted
+      });
       return converted;
     }
 
@@ -63,11 +71,17 @@ export class TableTemplateService {
     if (partMatch) {
       const [, baseId, partIndex] = partMatch;
       const converted = `${baseId}-part-${partIndex}`;
-      console.log('[TableTemplateService] Converted part ID:', questionIdentifier, '→', converted);
+      console.log('[TableTemplateService] ✅ Converted PART ID:', {
+        original: questionIdentifier,
+        baseId,
+        partIndex,
+        converted
+      });
       return converted;
     }
 
     // No conversion needed (main question or already in database format)
+    console.log('[TableTemplateService] ℹ️ No conversion needed - ID unchanged:', questionIdentifier);
     return questionIdentifier;
   }
 
@@ -527,10 +541,12 @@ export class TableTemplateService {
       // Simulation uses: "q_123_p0" but database stores: "q_123-part-0"
       const dbQuestionIdentifier = this.convertSimulationIdToDatabaseFormat(questionIdentifier);
 
+      console.log('[TableTemplateService] 🔍 ========== LOADING TEMPLATE ==========');
       console.log('[TableTemplateService] Loading from REVIEW TABLES only (paper setup mode):', {
         reviewSessionId,
         originalQuestionIdentifier: questionIdentifier,
-        convertedQuestionIdentifier: dbQuestionIdentifier
+        convertedQuestionIdentifier: dbQuestionIdentifier,
+        wasConverted: questionIdentifier !== dbQuestionIdentifier
       });
 
       const { TableTemplateImportReviewService } = await import('./TableTemplateImportReviewService');
@@ -540,11 +556,21 @@ export class TableTemplateService {
         dbQuestionIdentifier
       );
 
+      console.log('[TableTemplateService] 📦 Database query result:', {
+        success: reviewResult.success,
+        hasTemplate: !!reviewResult.template,
+        error: reviewResult.error
+      });
+
       if (reviewResult.success && reviewResult.template) {
-        console.log('[TableTemplateService] ✅ Template found in review tables:', {
+        console.log('[TableTemplateService] ✅ Template FOUND in review tables:', {
+          id: reviewResult.template.id,
           rows: reviewResult.template.rows,
           columns: reviewResult.template.columns,
-          cellsCount: reviewResult.template.cells.length
+          headers: reviewResult.template.headers,
+          cellsCount: reviewResult.template.cells.length,
+          lockedCells: reviewResult.template.cells.filter(c => c.cellType === 'locked').length,
+          editableCells: reviewResult.template.cells.filter(c => c.cellType === 'editable').length
         });
 
         // Convert review DTO to production DTO format
@@ -577,7 +603,16 @@ export class TableTemplateService {
         };
       } else {
         // No template in review tables - return success with no template
-        console.log('[TableTemplateService] No template found in review tables (first-time setup)');
+        console.log('[TableTemplateService] ⚠️ NO TEMPLATE found in review tables');
+        console.log('[TableTemplateService] This could mean:');
+        console.log('  1. Template was never saved for this question');
+        console.log('  2. The questionIdentifier does not match saved data');
+        console.log('  3. The importSessionId does not match');
+        console.log('[TableTemplateService] Query params were:', {
+          reviewSessionId,
+          originalQuestionIdentifier: questionIdentifier,
+          convertedQuestionIdentifier: dbQuestionIdentifier
+        });
         return {
           success: true,
           template: undefined,
