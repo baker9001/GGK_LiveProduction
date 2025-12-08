@@ -1280,7 +1280,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   ]);
 
   const checkAnswer = (row: number, col: number, studentValue: any): boolean => {
-    if (!template.correctAnswers || !autoGrade) return true;
+    if (!template || !template.correctAnswers || !autoGrade) return true;
 
     const correctCell = template.correctAnswers.find(c => c.row === row && c.col === col);
     if (!correctCell) return true;
