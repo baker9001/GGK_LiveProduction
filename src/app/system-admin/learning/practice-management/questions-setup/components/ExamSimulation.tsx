@@ -184,6 +184,7 @@ interface SubPart {
   requires_manual_marking?: boolean;
   marking_criteria?: string;
   type?: 'mcq' | 'tf' | 'descriptive';
+  preview_data?: string;
 }
 
 interface SubQuestion {
@@ -209,6 +210,7 @@ interface SubQuestion {
   requires_manual_marking?: boolean;
   marking_criteria?: string;
   subparts?: SubPart[];
+  preview_data?: string;
 }
 
 interface Question {
@@ -232,6 +234,7 @@ interface Question {
   requires_manual_marking?: boolean;
   marking_criteria?: string;
   attachments?: AttachmentAsset[];
+  preview_data?: string;
 }
 
 interface SimulationPaper {
@@ -475,12 +478,152 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
   );
 };
 
+interface TableCellAnswer {
+  cellKey: string;
+  row: number;
+  col: number;
+  expectedAnswer: string;
+  marks?: number;
+  alternativeAnswers?: string[];
+  caseSensitive?: boolean;
+  acceptsEquivalentPhrasing?: boolean;
+}
+
+/**
+ * Parse table completion answer data to extract editable cells with expected answers
+ */
+const parseTableCompletionAnswer = (answer: string): TableCellAnswer[] | null => {
+  try {
+    const parsed = JSON.parse(answer);
+
+    // Check if this is a table template structure (has cells array)
+    if (parsed.cells && Array.isArray(parsed.cells)) {
+      // Filter to only editable cells and extract their expected answers
+      return parsed.cells
+        .filter((cell: any) => cell.cellType === 'editable' && cell.expectedAnswer)
+        .map((cell: any) => ({
+          cellKey: `${cell.rowIndex}-${cell.colIndex}`,
+          row: cell.rowIndex,
+          col: cell.colIndex,
+          expectedAnswer: cell.expectedAnswer || '',
+          marks: cell.marks,
+          alternativeAnswers: cell.alternativeAnswers || [],
+          caseSensitive: cell.caseSensitive,
+          acceptsEquivalentPhrasing: cell.acceptsEquivalentPhrasing
+        }))
+        .sort((a: TableCellAnswer, b: TableCellAnswer) => {
+          if (a.row !== b.row) return a.row - b.row;
+          return a.col - b.col;
+        });
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Display component for table completion expected answers
+ */
+const TableCompletionAnswerDisplay: React.FC<{
+  cells: TableCellAnswer[];
+  totalMarks?: number;
+}> = ({ cells, totalMarks }) => {
+  const totalCellMarks = cells.reduce((sum, cell) => sum + (cell.marks || 1), 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
+          {cells.length} editable cell{cells.length !== 1 ? 's' : ''} requiring answers
+        </span>
+        {totalMarks !== undefined && (
+          <span className="text-xs text-amber-700 dark:text-amber-200">
+            Total: {totalMarks || totalCellMarks} mark{(totalMarks || totalCellMarks) !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-amber-100/50 dark:bg-amber-900/40">
+              <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100 border border-amber-200 dark:border-amber-700">
+                Cell
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100 border border-amber-200 dark:border-amber-700">
+                Expected Answer
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-amber-900 dark:text-amber-100 border border-amber-200 dark:border-amber-700">
+                Alternatives
+              </th>
+              <th className="px-3 py-2 text-center font-medium text-amber-900 dark:text-amber-100 border border-amber-200 dark:border-amber-700 w-16">
+                Marks
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {cells.map((cell) => (
+              <tr key={cell.cellKey} className="bg-white/60 dark:bg-amber-900/20 hover:bg-amber-50 dark:hover:bg-amber-900/30">
+                <td className="px-3 py-2 border border-amber-200 dark:border-amber-700">
+                  <span className="font-mono text-xs bg-amber-100 dark:bg-amber-800/60 px-1.5 py-0.5 rounded">
+                    Row {cell.row + 1}, Col {cell.col + 1}
+                  </span>
+                </td>
+                <td className="px-3 py-2 border border-amber-200 dark:border-amber-700">
+                  <span className="font-medium text-amber-900 dark:text-amber-50">
+                    {cell.expectedAnswer}
+                  </span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {cell.caseSensitive && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded">
+                        Case sensitive
+                      </span>
+                    )}
+                    {cell.acceptsEquivalentPhrasing && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">
+                        Flexible phrasing
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-3 py-2 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-200">
+                  {cell.alternativeAnswers && cell.alternativeAnswers.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {cell.alternativeAnswers.map((alt, idx) => (
+                        <span key={idx} className="inline-block px-2 py-0.5 bg-amber-100 dark:bg-amber-800/40 rounded text-xs">
+                          {alt}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-amber-500 dark:text-amber-400 text-xs italic">None</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 border border-amber-200 dark:border-amber-700 text-center">
+                  <span className="font-medium text-amber-700 dark:text-amber-200">
+                    {cell.marks || 1}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 interface TeacherInsightsProps {
   correctAnswers?: CorrectAnswer[];
   answerRequirement?: string;
   markingCriteria?: string | string[] | Record<string, unknown>;
   requiresManualMarking?: boolean;
   label?: string;
+  answerFormat?: string;
+  totalMarks?: number;
+  previewData?: string;
 }
 
 const TeacherInsights: React.FC<TeacherInsightsProps> = ({
@@ -488,11 +631,40 @@ const TeacherInsights: React.FC<TeacherInsightsProps> = ({
   answerRequirement,
   markingCriteria,
   requiresManualMarking,
-  label
+  label,
+  answerFormat,
+  totalMarks,
+  previewData
 }) => {
   const hasAnswers = (correctAnswers?.length || 0) > 0;
   const requirementText = formatAnswerRequirement(answerRequirement);
   const hasRequirement = Boolean(requirementText);
+
+  // Check if this is a table_completion format and try to parse the answer
+  const isTableCompletion = answerFormat === 'table_completion';
+  const tableCompletionCells = React.useMemo(() => {
+    if (!isTableCompletion) {
+      return null;
+    }
+
+    // Try parsing from correct_answers first
+    if (hasAnswers && correctAnswers?.[0]?.answer) {
+      const result = parseTableCompletionAnswer(correctAnswers[0].answer);
+      if (result && result.length > 0) {
+        return result;
+      }
+    }
+
+    // Try parsing from preview_data (may contain template data)
+    if (previewData) {
+      const result = parseTableCompletionAnswer(previewData);
+      if (result && result.length > 0) {
+        return result;
+      }
+    }
+
+    return null;
+  }, [isTableCompletion, hasAnswers, correctAnswers, previewData]);
 
   const normalisedCriteria = (() => {
     if (!markingCriteria) return [] as string[];
@@ -514,8 +686,8 @@ const TeacherInsights: React.FC<TeacherInsightsProps> = ({
   return (
     <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
       <div className="flex items-start space-x-3">
-        <GraduationCap className="h-5 w-5 text-amber-600 dark:text-amber-300 mt-0.5" />
-        <div className="space-y-3">
+        <GraduationCap className="h-5 w-5 text-amber-600 dark:text-amber-300 mt-0.5 flex-shrink-0" />
+        <div className="space-y-3 flex-1 min-w-0">
           <div>
             <h4 className="font-semibold text-amber-900 dark:text-amber-100">
               {label ? `${label} • ` : ''}IGCSE Teacher Review
@@ -527,14 +699,26 @@ const TeacherInsights: React.FC<TeacherInsightsProps> = ({
 
           {hasRequirement && (
             <div className="flex items-start space-x-2 text-sm text-amber-800 dark:text-amber-100">
-              <Target className="h-4 w-4 mt-0.5" />
+              <Target className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <span>
                 <span className="font-medium">Answer expectation:</span> {requirementText}
               </span>
             </div>
           )}
 
-          {hasAnswers && (
+          {/* Table Completion: Show specialized display for editable cells */}
+          {hasAnswers && isTableCompletion && tableCompletionCells && tableCompletionCells.length > 0 && (
+            <div>
+              <div className="flex items-center space-x-2 text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                <ListChecks className="h-4 w-4" />
+                <span>Expected cell answers & mark allocation</span>
+              </div>
+              <TableCompletionAnswerDisplay cells={tableCompletionCells} totalMarks={totalMarks} />
+            </div>
+          )}
+
+          {/* Standard answer display (non-table_completion or fallback) */}
+          {hasAnswers && (!isTableCompletion || !tableCompletionCells || tableCompletionCells.length === 0) && (
             <div>
               <div className="flex items-center space-x-2 text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
                 <ListChecks className="h-4 w-4" />
@@ -553,7 +737,7 @@ const TeacherInsights: React.FC<TeacherInsightsProps> = ({
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-amber-900 dark:text-amber-50">
+                    <p className="mt-1 text-sm text-amber-900 dark:text-amber-50 break-words">
                       {answer.answer || '—'}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-amber-700 dark:text-amber-200">
@@ -1601,6 +1785,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                         markingCriteria={currentQuestion.marking_criteria}
                         requiresManualMarking={currentQuestion.requires_manual_marking}
                         label="Main question"
+                        answerFormat={currentQuestion.answer_format}
+                        totalMarks={currentQuestion.marks}
+                        previewData={currentQuestion.preview_data}
                       />
                     )}
 
@@ -1674,6 +1861,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                   markingCriteria={part.marking_criteria}
                                   requiresManualMarking={part.requires_manual_marking}
                                   label={partLabel}
+                                  answerFormat={part.answer_format}
+                                  totalMarks={part.marks}
+                                  previewData={part.preview_data}
                                 />
                               )}
 
@@ -1735,6 +1925,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                               markingCriteria={subpart.marking_criteria}
                                               requiresManualMarking={subpart.requires_manual_marking}
                                               label={`${partLabel} ${subpartLabel}`}
+                                              answerFormat={subpart.answer_format}
+                                              totalMarks={subpart.marks}
+                                              previewData={subpart.preview_data}
                                             />
                                           )}
 
