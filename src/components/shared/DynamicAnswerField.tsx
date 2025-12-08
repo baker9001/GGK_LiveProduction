@@ -823,11 +823,12 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       let templateProp: TableTemplate | undefined;
       let valueProp: TableCompletionData | null = null;
 
-      // 1. Load template structure from correct_answers[0].answer_text
-      // Template should be in answer_text field, NOT in value prop
+      // 1. Load template structure from correct_answers[0].answer_text or correct_answers[0].answer
+      // Template can be in answer_text field OR answer field depending on the data source
       if (question.correct_answers && question.correct_answers.length > 0) {
         const firstAnswer = question.correct_answers[0];
-        const templateSource = (firstAnswer as any).answer_text || null;
+        // Check answer_text first (preferred), then fall back to answer field
+        const templateSource = (firstAnswer as any).answer_text || firstAnswer.answer || null;
 
         if (templateSource && typeof templateSource === 'string') {
           try {
@@ -837,7 +838,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             if (parsed && Array.isArray(parsed.cells) && parsed.cells.length > 0 &&
                 'rowIndex' in parsed.cells[0] && 'colIndex' in parsed.cells[0]) {
               // This is a TableTemplateDTO - convert it to TableTemplate
-              console.log('[DynamicAnswerField] ✅ Loaded template from correct_answers[0].answer_text');
+              console.log('[DynamicAnswerField] ✅ Loaded template from correct_answers[0] (answer_text or answer field)');
               templateProp = convertTableTemplateDTOToTemplate(parsed as TableTemplateDTO);
               console.log('[DynamicAnswerField] Converted template:', {
                 rows: templateProp.rows,
