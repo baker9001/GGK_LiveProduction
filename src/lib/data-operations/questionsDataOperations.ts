@@ -1,6 +1,7 @@
 // Path: src/lib/data-operations/questionsDataOperations.ts
 
 import { supabase } from '@/lib/supabase';
+import { TableTemplateService } from '@/services/TableTemplateService';
 // REMOVED: import { toast } from '@/components/shared/Toast';
 // Toast import caused "Cannot access 'Rt' before initialization" error
 // All toast notifications moved to UI layer (QuestionsTab.tsx)
@@ -1089,30 +1090,49 @@ export const fetchDataStructureInfo = async (dataStructureId: string) => {
 
 export const fetchImportedQuestions = async (importSessionId: string) => {
   try {
+    console.log('[fetchImportedQuestions] Fetching session data for:', importSessionId);
+
     const { data, error } = await supabase
       .from('past_paper_import_sessions')
       .select('*')
       .eq('id', importSessionId)
       .single();
-    
+
     if (error) throw error;
-    
-    if (data?.raw_json) {
+
+    // Prioritize working_json (edited data) over raw_json (original data)
+    if (data?.working_json) {
+      console.log('✅ [fetchImportedQuestions] Loading from working_json (edited data)');
+      console.log('[fetchImportedQuestions] Data structure:', {
+        hasQuestions: !!data.working_json.questions,
+        questionCount: data.working_json.questions?.length,
+        hasMetadata: !!data.working_json.metadata,
+        lastSynced: data.last_synced_at
+      });
+      return data.working_json;
+    } else if (data?.raw_json) {
+      console.log('⚠️ [fetchImportedQuestions] Loading from raw_json (original data) - no edits yet');
+      console.log('[fetchImportedQuestions] Data structure:', {
+        hasQuestions: !!data.raw_json.questions,
+        questionCount: data.raw_json.questions?.length,
+        hasMetadata: !!data.raw_json.metadata
+      });
       return data.raw_json;
     } else if (data?.json_file_name) {
+      console.log('📁 [fetchImportedQuestions] Loading from storage file:', data.json_file_name);
       const { data: fileData, error: fileError } = await supabase.storage
         .from('past-paper-imports')
         .download(data.json_file_name);
-      
+
       if (fileError) throw fileError;
-      
+
       const text = await fileData.text();
       return JSON.parse(text);
     }
-    
+
     throw new Error('No data found for this import session');
   } catch (error) {
-    console.error('Error fetching imported questions:', error);
+    console.error('❌ [fetchImportedQuestions] Error fetching imported questions:', error);
     throw error;
   }
 };
@@ -1625,7 +1645,9 @@ export const insertSubQuestion = async (
         unit: ca.unit || null,
         context_type: ca.context?.type || null,
         context_value: ca.context?.value || null,
-        context_label: ca.context?.label || null
+        context_label: ca.context?.label || null,
+        answer_text: ca.answer_text || null,
+        answer_type: ca.answer_type || null
       }));
 
       const { error: caError } = await supabase
@@ -1634,6 +1656,35 @@ export const insertSubQuestion = async (
 
       if (caError) {
         console.error('Error inserting sub-question correct answers:', caError);
+      }
+
+      // ✅ NEW: Persist table completion templates for sub-questions
+      const tableTemplateAnswer = part.correct_answers.find(
+        (ca: any) => ca.answer_type === 'table_template' && ca.answer_text
+      );
+
+      if (tableTemplateAnswer?.answer_text) {
+        try {
+          const parsedTemplate = JSON.parse(tableTemplateAnswer.answer_text);
+
+          if (parsedTemplate?.rows && parsedTemplate?.columns && Array.isArray(parsedTemplate?.cells)) {
+            const templateResult = await TableTemplateService.saveTemplate({
+              ...(parsedTemplate || {}),
+              questionId: undefined,
+              subQuestionId: subQuestionRecord.id
+            });
+
+            if (templateResult.success) {
+              console.log('✅ Table template saved for sub-question', subQuestionRecord.id);
+            } else {
+              console.error('❌ Failed to persist table template for sub-question', subQuestionRecord.id, templateResult.error);
+            }
+          } else {
+            console.warn('⚠️ Skipping table template save for sub-question: Parsed template missing required structure');
+          }
+        } catch (templateError) {
+          console.error('❌ Failed to parse/save table template for sub-question', subQuestionRecord.id, templateError);
+        }
       }
     }
 
@@ -2479,7 +2530,9 @@ export const importQuestions = async (params: {
             unit: ca.unit || null,
             context_type: ca.context?.type || null,
             context_value: ca.context?.value || null,
-            context_label: ca.context?.label || null
+            context_label: ca.context?.label || null,
+            answer_text: ca.answer_text || null,
+            answer_type: ca.answer_type || null
           }));
 
           const { data: insertedAnswers, error: caError } = await supabase
@@ -2492,6 +2545,36 @@ export const importQuestions = async (params: {
             console.error('   Error details:', JSON.stringify(caError, null, 2));
           } else {
             console.log('✅ Correct answers inserted:', insertedAnswers?.length || 0);
+          }
+
+          // ✅ NEW: Persist table completion templates to normalized tables
+          const tableTemplateAnswer = question.correct_answers.find(
+            (ca: any) => ca.answer_type === 'table_template' && ca.answer_text
+          );
+
+          if (tableTemplateAnswer?.answer_text) {
+            try {
+              const parsedTemplate = JSON.parse(tableTemplateAnswer.answer_text);
+
+              // Validate minimal structure before attempting save
+              if (parsedTemplate?.rows && parsedTemplate?.columns && Array.isArray(parsedTemplate?.cells)) {
+                const templateResult = await TableTemplateService.saveTemplate({
+                  ...(parsedTemplate || {}),
+                  questionId: insertedQuestion.id,
+                  subQuestionId: undefined
+                });
+
+                if (templateResult.success) {
+                  console.log('✅ Table template saved to table_templates for question', insertedQuestion.id);
+                } else {
+                  console.error('❌ Failed to persist table template for question', insertedQuestion.id, templateResult.error);
+                }
+              } else {
+                console.warn('⚠️ Skipping table template save: Parsed template missing required structure');
+              }
+            } catch (templateError) {
+              console.error('❌ Failed to parse/save table template for question', insertedQuestion.id, templateError);
+            }
           }
         } else if (ensureString(question.correct_answer)) {
           const normalizedCorrectAnswer = ensureString(question.correct_answer);

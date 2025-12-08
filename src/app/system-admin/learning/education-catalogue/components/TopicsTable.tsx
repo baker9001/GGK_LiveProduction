@@ -551,7 +551,7 @@ export default function TopicsTable() {
       />
 
       <SlideInForm
-        key={editingTopic?.id || 'new'}
+        key={editingTopic?.id || `new-${Date.now()}`}
         title={editingTopic ? 'Edit Topic' : 'Create Topic'}
         isOpen={isFormOpen}
         onClose={() => {

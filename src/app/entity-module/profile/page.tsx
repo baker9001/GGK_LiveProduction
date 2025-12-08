@@ -84,13 +84,13 @@ export default function EntityProfilePage() {
   const userContext = getUserContext();
 
   // Fetch entity user profile data
-  const {
-    data: profile,
-    isLoading,
-    error
-  } = useQuery({
-    queryKey: ['entity-profile', user?.id],
-    queryFn: async () => {
+  const { 
+    data: profile, 
+    isLoading, 
+    error 
+  } = useQuery(
+    ['entity-profile', user?.id],
+    async () => {
       if (!user?.id) throw new Error('User not authenticated');
 
       const { data, error } = await supabase
@@ -123,9 +123,11 @@ export default function EntityProfilePage() {
         metadata: data.metadata || {}
       } as EntityUserProfile;
     },
-    enabled: !!user?.id,
-    staleTime: 2 * 60 * 1000,
-  });
+    {
+      enabled: !!user?.id,
+      staleTime: 2 * 60 * 1000,
+    }
+  );
 
   // Initialize form data when profile loads
   useEffect(() => {
@@ -154,8 +156,8 @@ export default function EntityProfilePage() {
   }, [profile]);
 
   // Update profile mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async (updates: Partial<EntityUserProfile>) => {
+  const updateProfileMutation = useMutation(
+    async (updates: Partial<EntityUserProfile>) => {
       if (!user?.id || !profile?.id) throw new Error('User not authenticated');
 
       const { error } = await supabase
@@ -175,17 +177,19 @@ export default function EntityProfilePage() {
       if (error) throw error;
       return updates;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entity-profile'] });
-      refreshUser();
-      setIsEditing(false);
-      toast.success('Profile updated successfully');
-    },
-    onError: (error) => {
-      console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['entity-profile']);
+        refreshUser();
+        setIsEditing(false);
+        toast.success('Profile updated successfully');
+      },
+      onError: (error) => {
+        console.error('Error updating profile:', error);
+        toast.error('Failed to update profile');
+      }
     }
-  });
+  );
 
   // Handle form submission
   const handleSubmit = () => {

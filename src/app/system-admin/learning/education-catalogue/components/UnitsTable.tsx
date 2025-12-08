@@ -387,7 +387,7 @@ export default function UnitsTable() {
       />
 
       <SlideInForm
-        key={editingUnit?.id || 'new'}
+        key={editingUnit?.id || `new-${Date.now()}`}
         title={editingUnit ? 'Edit Unit' : 'Create Unit'}
         isOpen={isFormOpen}
         onClose={() => {

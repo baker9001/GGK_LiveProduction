@@ -17,11 +17,12 @@ import {
   AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X,
   ChevronDown, ChevronRight, FileText, Image, Upload, Scissors,
   Trash2, Eye, Link, BarChart3, Paperclip, Clock, Hash, Database,
-  Loader2, Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
+  Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
   Calculator, PenTool, Table, Code, Mic, LineChart, FileUp,
   HelpCircle, BookOpen, Lightbulb, Target, Award, PlayCircle,
-  Flag, CheckSquare, FileCheck, ShieldCheck, MinusCircle
+  Flag, CheckSquare, FileCheck, ShieldCheck, MinusCircle, Menu
 } from 'lucide-react';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 
 // Import shared components
 import { Button } from '../../../../../../components/shared/Button';
@@ -32,6 +33,7 @@ import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { DataTableSkeleton } from '../../../../../../components/shared/DataTableSkeleton';
 import { Select } from '../../../../../../components/shared/Select';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
+import { SimpleQuestionNavigator } from '../../../../../../components/shared/SimpleQuestionNavigator';
 
 // Import UnifiedTestSimulation component
 import { UnifiedTestSimulation } from '../../../../../../components/shared/UnifiedTestSimulation';
@@ -267,6 +269,7 @@ interface QuestionsTabProps {
   extractionRules?: ExtractionRules;
   updateStagedAttachments?: (questionId: string, attachments: any[]) => void;
   stagedAttachments?: Record<string, any[]>;
+  onDataSync?: (updatedData: any) => void;
 }
 
 interface ProcessedQuestion {
@@ -311,6 +314,8 @@ interface ProcessedQuestion {
   // Simulation tracking
   simulation_flags?: string[];
   simulation_notes?: string;
+  // Table completion preview data (student answers for testing)
+  preview_data?: string;
 }
 
 interface ProcessedPart {
@@ -340,6 +345,8 @@ interface ProcessedPart {
   conditional_marking?: any;
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
+  // Table completion preview data (student answers for testing)
+  preview_data?: string;
 }
 
 interface ProcessedSubpart {
@@ -366,6 +373,8 @@ interface ProcessedSubpart {
   conditional_marking?: any;
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
+  // Table completion preview data (student answers for testing)
+  preview_data?: string;
 }
 
 interface ProcessedAnswer {
@@ -623,7 +632,8 @@ function QuestionsTabInner({
   onContinue,
   extractionRules,
   updateStagedAttachments,
-  stagedAttachments = {}
+  stagedAttachments = {},
+  onDataSync
 }: QuestionsTabProps) {
   // Critical data validation - prevent rendering with invalid state
   const [initializationError, setInitializationError] = useState<string | null>(null);
@@ -658,6 +668,8 @@ function QuestionsTabInner({
   }));
   const [attachments, setAttachments] = useState<Record<string, any[]>>({});
   const [deleteAttachmentConfirm, setDeleteAttachmentConfirm] = useState<any>(null);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | undefined>();
+  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [showValidation, setShowValidation] = useState(false);
   
   // Data structure states
@@ -1362,17 +1374,24 @@ function QuestionsTabInner({
           throw new Error('Missing data_structure_id in savedPaperDetails');
         }
 
-        if (parsedData) {
+        // CRITICAL FIX: Always fetch fresh data from database if session exists
+        // This ensures we get the latest working_json with all user edits
+        if (importSession?.id) {
+          console.log('[QuestionsTab Init] Fetching fresh data from database for session:', importSession.id);
+          if (isMounted) {
+            await loadImportedQuestions();
+          }
+        } else if (parsedData) {
+          // Fallback to parsedData prop only if no session (shouldn't happen in normal flow)
+          console.log('[QuestionsTab Init] Using parsedData prop (no session available)');
           if (!parsedData.questions || !Array.isArray(parsedData.questions)) {
             throw new Error('Invalid parsedData: questions array is missing or malformed');
           }
           if (isMounted) {
             await initializeFromParsedData(parsedData);
           }
-        } else if (importSession?.id) {
-          if (isMounted) {
-            await loadImportedQuestions();
-          }
+        } else {
+          throw new Error('No data source available (neither importSession nor parsedData)');
         }
 
         if (isMounted) {
@@ -1394,7 +1413,7 @@ function QuestionsTabInner({
     return () => {
       isMounted = false;
     };
-  }, [importSession, parsedData, existingPaperId, savedPaperDetails]);
+  }, [importSession?.id, existingPaperId, savedPaperDetails?.data_structure_id]);
 
   // Check existing questions after questions are loaded
   useEffect(() => {
@@ -1722,8 +1741,17 @@ function QuestionsTabInner({
         question.parts.forEach((part: any, partIdx: number) => {
           if (!part || typeof part !== 'object') {
             errors.push(`Part ${partIdx + 1} is invalid`);
-          } else if (!part.marks && part.marks !== 0) {
-            errors.push(`Part ${partIdx + 1} is missing marks`);
+          } else {
+            // FIXED: Only require marks if part expects an answer (not contextual-only)
+            const isContextualOnly = part.is_contextual_only === true;
+            const hasDirectAnswer = part.has_direct_answer !== false;
+            const marksValue = part.marks;
+            const marksIsMissing = marksValue === undefined || marksValue === null;
+
+            // Only flag as error if marks is missing AND part expects an answer
+            if (marksIsMissing && !isContextualOnly && hasDirectAnswer) {
+              errors.push(`Part ${partIdx + 1} needs marks value (found: ${marksValue}, is_contextual_only: ${isContextualOnly})`);
+            }
           }
 
           // Check subparts if they exist
@@ -1731,8 +1759,17 @@ function QuestionsTabInner({
             part.subparts.forEach((subpart: any, subIdx: number) => {
               if (!subpart || typeof subpart !== 'object') {
                 errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is invalid`);
-              } else if (!subpart.marks && subpart.marks !== 0) {
-                errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} is missing marks`);
+              } else {
+                // FIXED: Only require marks if subpart expects an answer (not contextual-only)
+                const isContextualOnly = subpart.is_contextual_only === true;
+                const hasDirectAnswer = subpart.has_direct_answer !== false;
+                const marksValue = subpart.marks;
+                const marksIsMissing = marksValue === undefined || marksValue === null;
+
+                // Only flag as error if marks is missing AND subpart expects an answer
+                if (marksIsMissing && !isContextualOnly && hasDirectAnswer) {
+                  errors.push(`Part ${partIdx + 1}, Subpart ${subIdx + 1} needs marks value (found: ${marksValue}, is_contextual_only: ${isContextualOnly})`);
+                }
               }
             });
           }
@@ -1757,7 +1794,7 @@ function QuestionsTabInner({
     const processedQuestions: ProcessedQuestion[] = [];
     const validationWarnings: Array<{ question: number; errors: string[] }> = [];
 
-    // Pre-validate all questions
+    // Pre-validate all questions - but be smart about contextual parts
     console.log(`\n[Pre-Validation] Checking question structures...`);
     rawQuestions.forEach((q, idx) => {
       const validation = validateQuestionStructure(q, idx);
@@ -1768,10 +1805,22 @@ function QuestionsTabInner({
       }
     });
 
+    // FIXED: Only show error toast for genuine structural issues
+    // Don't show warnings on every navigation - these are likely false positives from stored data
     if (validationWarnings.length > 0) {
-      console.warn(`[Pre-Validation] Found ${validationWarnings.length} questions with structural issues`);
-      console.warn(`[Pre-Validation] Detailed warnings:`, validationWarnings);
-      toast.error(`Warning: ${validationWarnings.length} question(s) have structural issues. Check console for details.`, { duration: 6000 });
+      console.warn(`[Pre-Validation] Found ${validationWarnings.length} questions with validation notes`);
+      console.warn(`[Pre-Validation] Detailed notes:`, validationWarnings);
+
+      // Only show toast if there are significant issues (not just missing marks on contextual parts)
+      const significantErrors = validationWarnings.filter(w =>
+        w.errors.some(e => !e.includes('is_contextual_only') && !e.includes('needs marks value'))
+      );
+
+      if (significantErrors.length > 0) {
+        toast.error(`Warning: ${significantErrors.length} question(s) have structural issues. Check console for details.`, { duration: 6000 });
+      } else {
+        console.log(`[Pre-Validation] All warnings are related to contextual parts - likely false positives`);
+      }
     } else {
       console.log(`[Pre-Validation] All questions passed structural validation`);
     }
@@ -1959,8 +2008,15 @@ function QuestionsTabInner({
           original_unit: rawUnit,
           // Initialize simulation tracking
           simulation_flags: [],
-          simulation_notes: ''
+          simulation_notes: '',
+          // CRITICAL FIX: Preserve preview_data from database (table completion student answers)
+          preview_data: q.preview_data
         };
+
+        // Log preview_data preservation for debugging
+        if (q.preview_data) {
+          console.log(`[Question ${questionNumber}] ✅ Preserved preview_data:`, q.preview_data.substring(0, 100) + '...');
+        }
 
         console.log(`Processing question ${index + 1}:`, {
           topic: processedQuestion.topic,
@@ -2102,7 +2158,7 @@ function QuestionsTabInner({
     // CRITICAL FIX: Detect empty/contextual parts BEFORE answer expectation logic
     // If part has no question text, no answers, and 0 marks, it's contextual-only
     const hasCorrectAnswers = part.correct_answers && Array.isArray(part.correct_answers) && part.correct_answers.length > 0;
-    const marks = parseInt(part.marks || '0');
+    const marks = parseInt(String(part.marks ?? '0'));  // FIXED: Explicitly handle undefined/null
     const isEmpty = !questionText.trim() && !hasCorrectAnswers && marks === 0;
 
     let hasDirectAnswer = part.has_direct_answer !== false;
@@ -2137,7 +2193,7 @@ function QuestionsTabInner({
       id: partId,
       part: partLabel,
       question_text: questionText || '',
-      marks: parseInt(part.marks || '0'),
+      marks: parseInt(String(part.marks ?? '0')),  // FIXED: Explicitly handle undefined/null
       answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
       answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       figure: partFigureFlag,
@@ -2161,8 +2217,15 @@ function QuestionsTabInner({
       partial_marking: part.partial_marking,
       conditional_marking: part.conditional_marking || part.marking_conditions,
       has_direct_answer: expectsAnswer,
-      is_contextual_only: isContextualOnly
+      is_contextual_only: isContextualOnly,
+      // CRITICAL FIX: Preserve preview_data from database (table completion student answers)
+      preview_data: part.preview_data
     };
+
+    // Log preview_data preservation for debugging
+    if (part.preview_data) {
+      console.log(`  [Part ${partLabel}] ✅ Preserved preview_data:`, part.preview_data.substring(0, 100) + '...');
+    }
 
     if (part.subparts && Array.isArray(part.subparts)) {
       console.log(`  [Part ${partLabel}] Processing ${part.subparts.length} subparts...`);
@@ -2228,7 +2291,7 @@ function QuestionsTabInner({
 
     // CRITICAL FIX: Detect empty/contextual subparts BEFORE answer expectation logic
     const hasCorrectAnswers = subpart.correct_answers && Array.isArray(subpart.correct_answers) && subpart.correct_answers.length > 0;
-    const marks = parseInt(subpart.marks || '0');
+    const marks = parseInt(String(subpart.marks ?? '0'));  // FIXED: Explicitly handle undefined/null
     const isEmpty = !questionText.trim() && !hasCorrectAnswers && marks === 0;
 
     let hasDirectAnswer = subpart.has_direct_answer !== false;
@@ -2241,17 +2304,49 @@ function QuestionsTabInner({
       console.log(`  [Subpart ${subpartLabel}] Auto-detected as contextual-only (empty subpart)`);
     }
 
-    let answerRequirement = subpart.answer_requirement ||
-      (hasCorrectAnswers
-        ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks)
-        : undefined);
+    // CRITICAL FIX: Derive answerRequirement from actual answer data
+    let answerRequirement = subpart.answer_requirement;
+
+    // If no explicit answer_requirement but we have correct_answers, derive it
+    if (!answerRequirement && hasCorrectAnswers) {
+      answerRequirement = parseAnswerRequirement(
+        JSON.stringify(subpart.correct_answers),
+        subpart.marks
+      );
+    }
+
+    // If STILL undefined but we have correct_answers, derive a sensible default
+    if (!answerRequirement && hasCorrectAnswers) {
+      console.log(`  [Subpart ${subpartLabel}] Deriving answerRequirement from ${subpart.correct_answers.length} answers`);
+
+      if (subpart.correct_answers.length === 1) {
+        answerRequirement = 'single_choice';
+      } else {
+        // Check alternative_type from answers
+        const altType = subpart.correct_answers[0]?.alternative_type;
+        if (altType === 'one_required') {
+          answerRequirement = 'any_one_from';
+        } else if (altType === 'all_required') {
+          answerRequirement = 'all_required';
+        } else {
+          answerRequirement = 'multiple_alternatives';
+        }
+      }
+
+      console.log(`  [Subpart ${subpartLabel}] Derived answerRequirement: ${answerRequirement}`);
+    }
+
     if (typeof answerRequirement === 'string' && answerRequirement.toLowerCase() === 'not applicable') {
       answerRequirement = 'not_applicable';
     }
 
-    // FIX: Treat undefined answerRequirement as not applicable for expectsAnswer check
-    const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable' && answerRequirement !== undefined;
-    if (!expectsAnswer) {
+    // CRITICAL FIX: Data-driven answer expectation
+    // If we have correct_answers data, we EXPECT an answer regardless of metadata flags
+    const expectsAnswer = hasCorrectAnswers ||
+                          (hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable');
+
+    // Only override format/requirement if we truly have no answer data
+    if (!expectsAnswer && !hasCorrectAnswers) {
       answerFormat = 'not_applicable';
       answerRequirement = 'not_applicable';
     }
@@ -2263,11 +2358,11 @@ function QuestionsTabInner({
       id: subpartId,
       subpart: subpartLabel,
       question_text: questionText || '',
-      marks: parseInt(subpart.marks || '0'),
+      marks: parseInt(String(subpart.marks ?? '0')),  // FIXED: Explicitly handle undefined/null
       answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
       answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       attachments: ensureArray(subpart.attachments),
-      correct_answers: expectsAnswer && subpart.correct_answers
+      correct_answers: hasCorrectAnswers
         ? processAnswers(subpart.correct_answers, answerRequirement)
         : [],
       options: expectsAnswer && subpart.options
@@ -2286,8 +2381,15 @@ function QuestionsTabInner({
       partial_marking: subpart.partial_marking,
       conditional_marking: subpart.conditional_marking || subpart.marking_conditions,
       has_direct_answer: expectsAnswer,
-      is_contextual_only: isContextualOnly
+      is_contextual_only: isContextualOnly,
+      // CRITICAL FIX: Preserve preview_data from database (table completion student answers)
+      preview_data: subpart.preview_data
     };
+
+    // Log preview_data preservation for debugging
+    if (subpart.preview_data) {
+      console.log(`  [Subpart ${subpartLabel}] ✅ Preserved preview_data:`, subpart.preview_data.substring(0, 100) + '...');
+    }
 
     return processedSubpart;
   };
@@ -2491,6 +2593,15 @@ function QuestionsTabInner({
       setLoading(true);
       const data = await fetchImportedQuestions(importSession.id);
       initializeFromParsedData(data);
+
+      // Sync loaded data back to parent component
+      // Note: This sync is optional since we now always fetch fresh data from DB
+      // It keeps parent state in sync but doesn't affect the child's operation
+      if (onDataSync) {
+        console.log('[QuestionsTab] Syncing loaded data to parent component');
+        // Use setTimeout to break the synchronous update chain and prevent loops
+        setTimeout(() => onDataSync(data), 0);
+      }
     } catch (error) {
       console.error('Error loading questions:', error);
       toast.error('Failed to load questions. Please try again.');
@@ -2999,6 +3110,8 @@ function QuestionsTabInner({
           is_contextual_only: Boolean(q.is_contextual_only),
           correct_answers: validQuestionCorrectAnswers.map(ans => ({
             answer: ans.answer,
+            answer_text: (ans as any).answer_text, // For table_completion template data
+            answer_type: (ans as any).answer_type, // For identifying table_template answers
             marks: ans.marks,
             alternative_id: ans.alternative_id,
             linked_alternatives: ans.linked_alternatives,
@@ -3065,6 +3178,8 @@ function QuestionsTabInner({
               is_contextual_only: Boolean(p.is_contextual_only),
               correct_answers: validPartCorrectAnswers.map(ans => ({
                 answer: ans.answer,
+                answer_text: (ans as any).answer_text, // For table_completion template data
+                answer_type: (ans as any).answer_type, // For identifying table_template answers
                 marks: ans.marks,
                 alternative_id: ans.alternative_id,
                 linked_alternatives: ans.linked_alternatives,
@@ -3110,6 +3225,8 @@ function QuestionsTabInner({
                   is_contextual_only: Boolean(sp.is_contextual_only),
                   correct_answers: validSubpartCorrectAnswers.map(ans => ({
                     answer: ans.answer,
+                    answer_text: (ans as any).answer_text, // For table_completion template data
+                    answer_type: (ans as any).answer_type, // For identifying table_template answers
                     marks: ans.marks,
                     alternative_id: ans.alternative_id,
                     linked_alternatives: ans.linked_alternatives,
@@ -4224,6 +4341,72 @@ function QuestionsTabInner({
     });
   };
 
+  // Auto-save functionality for question updates (including table templates)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveQuestionsToDatabase = useCallback(async (updatedQuestions: ProcessedQuestion[]) => {
+    // Clear any existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce the save by 1.5 seconds
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        if (!importSession?.id) {
+          console.warn('[Auto-Save QuestionsTab] No import session ID');
+          return;
+        }
+
+        console.log('[Auto-Save QuestionsTab] Saving', updatedQuestions.length, 'questions to database');
+
+        // Fetch current session data
+        const { data: session, error: fetchError } = await supabase
+          .from('past_paper_import_sessions')
+          .select('working_json, raw_json')
+          .eq('id', importSession.id)
+          .single();
+
+        if (fetchError) {
+          console.error('[Auto-Save QuestionsTab] Failed to fetch session:', fetchError);
+          throw fetchError;
+        }
+
+        // Get base JSON structure (preserve metadata)
+        const baseJson = session.working_json || session.raw_json || {};
+
+        // Build updated working_json with latest question data
+        const workingJson = {
+          ...baseJson,
+          questions: updatedQuestions.map(q => ({
+            ...q,
+            last_updated: new Date().toISOString()
+          }))
+        };
+
+        // Save to database
+        const { error: updateError } = await supabase
+          .from('past_paper_import_sessions')
+          .update({
+            working_json: workingJson,
+            last_synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', importSession.id);
+
+        if (updateError) {
+          console.error('[Auto-Save QuestionsTab] Failed to save:', updateError);
+          throw updateError;
+        }
+
+        console.log('✅ [Auto-Save QuestionsTab] Successfully saved', updatedQuestions.length, 'questions');
+        toast.success('Changes saved successfully', { duration: 2000 });
+      } catch (error) {
+        console.error('❌ [Auto-Save QuestionsTab] Error:', error);
+        toast.error('Failed to save changes automatically. Please try again.');
+      }
+    }, 1500); // 1.5 second debounce
+  }, [importSession?.id]);
+
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
@@ -4232,55 +4415,83 @@ function QuestionsTabInner({
       const reader = new FileReader();
       reader.onload = (event) => {
         setPdfDataUrl(event.target?.result as string);
+
+        // Auto-open snipping tool after successful PDF load
+        setShowSnippingTool(true);
+
+        toast.success(
+          <div className="flex items-center">
+            <FileCheck className="h-4 w-4 mr-2" />
+            <span>PDF loaded! Draw rectangles to capture figures.</span>
+          </div>
+        );
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleAddAttachment = (questionId: string, partIndex?: number, subpartIndex?: number) => {
+    // Set the attachment target first so it's ready when PDF loads
+    setAttachmentTarget({ questionId, partIndex, subpartIndex });
+
     if (!pdfDataUrl) {
+      // Trigger file picker - snipping tool will auto-open after PDF loads
       fileInputRef.current?.click();
       return;
     }
 
-    setAttachmentTarget({ questionId, partIndex, subpartIndex });
+    // PDF already loaded, open snipping tool immediately
     setShowSnippingTool(true);
   };
 
   const handleQuestionUpdateFromReview = (questionId: string, updates: Partial<QuestionDisplayData>) => {
-    setQuestions(prev => prev.map(q => {
-      if (q.id !== questionId) {
-        return q;
+    console.log('[QuestionsTab] Question update received:', { questionId, updates: Object.keys(updates) });
+
+    setQuestions(prev => {
+      const updatedQuestions = prev.map(q => {
+        if (q.id !== questionId) {
+          return q;
+        }
+
+        return {
+          ...q,
+          question_text: updates.question_text ?? q.question_text,
+          marks: updates.marks ?? q.marks,
+          unit: updates.unit ?? q.unit,
+          unit_id: updates.unit_id ?? q.unit_id,
+          difficulty: updates.difficulty ?? q.difficulty,
+          topic: updates.topic ?? q.topic,
+          topic_id: updates.topic_id ?? q.topic_id,
+          subtopic: updates.subtopic ?? q.subtopic,
+          subtopic_id: updates.subtopic_id ?? q.subtopic_id,
+          answer_format: updates.answer_format ?? q.answer_format,
+          answer_requirement: updates.answer_requirement ?? q.answer_requirement,
+          hint: updates.hint ?? q.hint,
+          explanation: updates.explanation ?? q.explanation,
+          correct_answers: updates.correct_answers ?? q.correct_answers,
+          options: updates.options ?? q.options,
+          requires_manual_marking: updates.requires_manual_marking ?? q.requires_manual_marking,
+          marking_criteria: updates.marking_criteria ?? q.marking_criteria,
+          parts: updates.parts ?? q.parts,
+          figure_required: updates.figure_required ?? q.figure_required,
+          figure: updates.figure ?? q.figure,
+          preview_data: updates.preview_data ?? q.preview_data, // Store table completion student data
+        };
+      });
+
+      // CRITICAL FIX: Trigger auto-save to database after state update
+      // This ensures table template changes are persisted
+      if (importSession?.id) {
+        console.log('[QuestionsTab] Triggering auto-save for updated questions');
+        saveQuestionsToDatabase(updatedQuestions);
       }
 
-      return {
-        ...q,
-        question_text: updates.question_text ?? q.question_text,
-        marks: updates.marks ?? q.marks,
-        unit: updates.unit ?? q.unit,
-        unit_id: updates.unit_id ?? q.unit_id,
-        difficulty: updates.difficulty ?? q.difficulty,
-        topic: updates.topic ?? q.topic,
-        topic_id: updates.topic_id ?? q.topic_id,
-        subtopic: updates.subtopic ?? q.subtopic,
-        subtopic_id: updates.subtopic_id ?? q.subtopic_id,
-        answer_format: updates.answer_format ?? q.answer_format,
-        answer_requirement: updates.answer_requirement ?? q.answer_requirement,
-        hint: updates.hint ?? q.hint,
-        explanation: updates.explanation ?? q.explanation,
-        correct_answers: updates.correct_answers ?? q.correct_answers,
-        options: updates.options ?? q.options,
-        requires_manual_marking: updates.requires_manual_marking ?? q.requires_manual_marking,
-        marking_criteria: updates.marking_criteria ?? q.marking_criteria,
-        parts: updates.parts ?? q.parts,
-        figure_required: updates.figure_required ?? q.figure_required,
-        figure: updates.figure ?? q.figure,
-      };
-    }));
+      return updatedQuestions;
+    });
   };
 
-  const handleRequestSnippingTool = (questionId: string) => {
-    handleAddAttachment(questionId);
+  const handleRequestSnippingTool = (questionId: string, context?: { partIndex?: number; subpartIndex?: number }) => {
+    handleAddAttachment(questionId, context?.partIndex, context?.subpartIndex);
   };
 
   const handleAttachmentUpload = (questionId: string, partPath: string[]) => {
@@ -4338,11 +4549,85 @@ function QuestionsTabInner({
     toast.success('Metadata updated');
   };
 
+  /**
+   * Helper function to map parts and subparts with their attachments from the attachments state.
+   * This ensures that attachments stored with composite keys are properly retrieved and attached
+   * to their corresponding part/subpart objects for display in the review workflow.
+   */
+  const mapPartsWithAttachments = (
+    parts: ProcessedPart[] | undefined,
+    questionId: string,
+    attachmentsState: Record<string, any[]>
+  ): ProcessedPart[] => {
+    if (!Array.isArray(parts) || parts.length === 0) {
+      return [];
+    }
+
+    return parts.map((part, partIndex) => {
+      // Generate attachment key for this part
+      const partAttachmentKey = generateAttachmentKey(questionId, partIndex);
+      const partAttachments = (attachmentsState[partAttachmentKey] || []).map(att => ({
+        ...att,
+        canDelete: true,
+        attachmentKey: partAttachmentKey,
+        originalId: att.originalId || att.id
+      }));
+
+      if (partAttachments.length > 0) {
+        console.log(`🔗 Mapping ${partAttachments.length} attachment(s) to part ${partIndex} of question ${questionId}`);
+      }
+
+      // Map subparts with their attachments
+      const mappedSubparts = Array.isArray(part.subparts)
+        ? part.subparts.map((subpart, subpartIndex) => {
+            // Generate attachment key for this subpart
+            const subpartAttachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
+            const subpartAttachments = (attachmentsState[subpartAttachmentKey] || []).map(att => ({
+              ...att,
+              canDelete: true,
+              attachmentKey: subpartAttachmentKey,
+              originalId: att.originalId || att.id
+            }));
+
+            if (subpartAttachments.length > 0) {
+              console.log(`🔗 Mapping ${subpartAttachments.length} attachment(s) to subpart ${subpartIndex} of part ${partIndex} in question ${questionId}`);
+            }
+
+            return {
+              ...subpart,
+              attachments: subpartAttachments
+            };
+          })
+        : [];
+
+      return {
+        ...part,
+        attachments: partAttachments,
+        subparts: mappedSubparts
+      };
+    });
+  };
+
   const handleSnippingComplete = (snippedData: any) => {
     if (!attachmentTarget) return;
 
     const { questionId, partIndex, subpartIndex } = attachmentTarget;
     const attachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
+
+    // Determine context for logging and feedback
+    let contextLabel = 'question';
+    if (partIndex !== undefined && subpartIndex !== undefined) {
+      contextLabel = `part ${partIndex}, subpart ${subpartIndex}`;
+    } else if (partIndex !== undefined) {
+      contextLabel = `part ${partIndex}`;
+    }
+
+    console.log(`📎 Adding attachment to ${contextLabel}:`, {
+      attachmentKey,
+      questionId,
+      partIndex,
+      subpartIndex
+    });
 
     const newAttachment = {
       id: `att_${Date.now()}`,
@@ -4359,20 +4644,25 @@ function QuestionsTabInner({
       attachmentKey: attachmentKey,
       originalId: `att_${Date.now()}`
     };
-    
+
     // Store with primary key
     setAttachments(prev => {
       const updated = {
         ...prev,
         [attachmentKey]: [...(prev[attachmentKey] || []), newAttachment]
       };
-      
+
+      console.log(`✅ Attachment stored with key: ${attachmentKey}`, {
+        totalAttachmentsForKey: updated[attachmentKey].length,
+        allKeys: Object.keys(updated)
+      });
+
       // Also store with alternative keys for compatibility
       if (partIndex !== undefined) {
         const question = questions.find(q => q.id === questionId);
         if (question && question.parts && question.parts[partIndex]) {
           const part = question.parts[partIndex];
-          
+
           if (subpartIndex !== undefined && part.subparts && part.subparts[subpartIndex]) {
             const subpart = part.subparts[subpartIndex];
             // Store with alternative key formats
@@ -4381,18 +4671,18 @@ function QuestionsTabInner({
           }
         }
       }
-      
+
       return updated;
     });
-    
+
     // Update staged attachments if callback is provided
     if (updateStagedAttachments) {
       updateStagedAttachments(attachmentKey, [...(attachments[attachmentKey] || []), newAttachment]);
     }
-    
+
     setShowSnippingTool(false);
     setAttachmentTarget(null);
-    toast.success('Attachment added');
+    toast.success(`Attachment added to ${contextLabel}`);
   };
 
   const handleSnippingViewStateChange = useCallback((state: { page: number; scale: number }) => {
@@ -4405,30 +4695,65 @@ function QuestionsTabInner({
   }, []);
 
   const handleDeleteAttachment = (attachmentKey: string, attachmentId: string) => {
-    console.log('🗑️ Deleting attachment:', { attachmentKey, attachmentId });
+    console.log('🗑️ [handleDeleteAttachment] Called with:', { attachmentKey, attachmentId });
 
     // Safety check: ensure attachmentKey exists
     if (!attachments[attachmentKey]) {
-      console.error('❌ Attachment key not found:', attachmentKey);
+      console.error('❌ [handleDeleteAttachment] Attachment key not found:', attachmentKey);
       console.error('Available keys:', Object.keys(attachments));
       toast.error('Failed to delete attachment: Invalid attachment key');
-      return;
+      return false;
     }
 
-    // Find the attachment to confirm it exists
-    const attachmentToDelete = attachments[attachmentKey].find(att => att.id === attachmentId);
+    console.log('🔍 [handleDeleteAttachment] Searching for attachment in key:', {
+      attachmentKey,
+      attachmentId,
+      attachmentsInKey: attachments[attachmentKey].map(a => ({
+        id: a.id,
+        originalId: a.originalId,
+        fileName: a.file_name
+      }))
+    });
+
+    // Find the attachment by id OR originalId
+    const attachmentToDelete = attachments[attachmentKey].find(
+      att => att.id === attachmentId || att.originalId === attachmentId
+    );
+
     if (!attachmentToDelete) {
-      console.error('❌ Attachment not found:', { attachmentId, availableIds: attachments[attachmentKey].map(a => a.id) });
+      console.error('❌ [handleDeleteAttachment] Attachment not found:', {
+        attachmentId,
+        availableIds: attachments[attachmentKey].map(a => ({ id: a.id, originalId: a.originalId }))
+      });
       toast.error('Failed to delete attachment: Attachment not found');
-      return;
+      return false;
     }
 
-    console.log('✅ Found attachment to delete:', attachmentToDelete);
+    console.log('✅ [handleDeleteAttachment] Found attachment to delete:', {
+      id: attachmentToDelete.id,
+      originalId: attachmentToDelete.originalId,
+      fileName: attachmentToDelete.file_name
+    });
 
+    console.log('✅ [handleDeleteAttachment] Found attachment to delete (duplicate log):', attachmentToDelete);
+
+    // Filter the attachments immediately to avoid stale closure
+    // Match by BOTH id and originalId to handle all cases
+    const filteredAttachments = attachments[attachmentKey].filter(
+      att => att.id !== attachmentId && att.originalId !== attachmentId
+    );
+
+    console.log('🔍 [handleDeleteAttachment] Filtering attachments:', {
+      before: attachments[attachmentKey].length,
+      after: filteredAttachments.length,
+      removed: attachments[attachmentKey].length - filteredAttachments.length
+    });
+
+    // Update main attachments state
     setAttachments(prev => {
       const updated = {
         ...prev,
-        [attachmentKey]: (prev[attachmentKey] || []).filter(att => att.id !== attachmentId)
+        [attachmentKey]: filteredAttachments
       };
       console.log('📦 Updated attachments state:', {
         key: attachmentKey,
@@ -4438,14 +4763,14 @@ function QuestionsTabInner({
       return updated;
     });
 
-    // Update staged attachments
+    // Update staged attachments using the same filtered result
     if (updateStagedAttachments) {
-      const filteredAttachments = attachments[attachmentKey].filter(att => att.id !== attachmentId);
       updateStagedAttachments(attachmentKey, filteredAttachments);
       console.log('📤 Updated staged attachments');
     }
 
     toast.success('Attachment deleted successfully');
+    return true;
   };
 
   // FIXED: Scroll to question function
@@ -4663,46 +4988,6 @@ function QuestionsTabInner({
     const metadata = paperMetadata;
     const isEditing = editingMetadata;
     
-    // Calculate question statistics
-    const questionStats = {
-      total: questions.length,
-      mcq: questions.filter(q => q.question_type === 'mcq').length,
-      descriptive: questions.filter(q => q.question_type === 'descriptive').length,
-      complex: questions.filter(q => q.parts && q.parts.length > 0).length,
-      withFigures: questions.filter(q => q.figure_required || (q.parts && q.parts.some((p: any) => p.figure_required))).length,
-      withDynamicAnswers: questions.filter(q =>
-        q.answer_requirement ||
-        (q.parts && q.parts.some((p: any) => p.answer_requirement))
-      ).length,
-      flaggedInSimulation: questions.filter(q => q.simulation_flags?.includes('flagged')).length
-    };
-    
-    // Calculate answer format distribution
-    const answerFormatDistribution: Record<string, number> = {};
-    const answerRequirementDistribution: Record<string, number> = {};
-    
-    questions.forEach(q => {
-      if (q.parts) {
-        q.parts.forEach((p: any) => {
-          const format = p.answer_format || 'single_line';
-          answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
-          
-          if (p.answer_requirement) {
-            answerRequirementDistribution[p.answer_requirement] = 
-              (answerRequirementDistribution[p.answer_requirement] || 0) + 1;
-          }
-        });
-      } else {
-        const format = detectAnswerFormat(q.question_text || '') || 'single_line';
-        answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
-        
-        if (q.answer_requirement) {
-          answerRequirementDistribution[q.answer_requirement] = 
-            (answerRequirementDistribution[q.answer_requirement] || 0) + 1;
-        }
-      }
-    });
-    
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
@@ -4822,127 +5107,11 @@ function QuestionsTabInner({
             <div className="text-gray-600 dark:text-gray-400 text-xs mb-1">Total Questions</div>
             <div className="font-medium text-gray-900 dark:text-white">{questions.length}</div>
           </div>
-          
+
           <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
             <div className="text-gray-600 dark:text-gray-400 text-xs mb-1">Status</div>
             <StatusBadge status={confirmationStatus} />
           </div>
-        </div>
-
-        {/* Question Statistics */}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Question Analysis
-          </h4>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                <Hash className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">MCQ</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.mcq}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Descriptive</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.descriptive}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
-                <BookOpen className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Multi-part</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.complex}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                <Image className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">With Figures</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.withFigures}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/20 flex items-center justify-center">
-                <Target className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Avg Marks</div>
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {questions.length > 0 ? (metadata.total_marks / questions.length).toFixed(1) : '0'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/20 flex items-center justify-center">
-                <Link className="h-4 w-4 text-pink-600 dark:text-pink-400" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Dynamic</div>
-                <div className="font-medium text-gray-900 dark:text-white">{questionStats.withDynamicAnswers}</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Simulation Status */}
-          {simulationResult && (
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/20 flex items-center justify-center">
-                  <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Flagged</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {questionStats.flaggedInSimulation}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
-                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Issues</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.issues?.length || 0}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                  <Target className="h-4 w-4 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Score</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.overallScore ? `${simulationResult.overallScore}%` : '-'}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Time</div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {simulationResult.timeSpent ? `${Math.floor(simulationResult.timeSpent / 60)}m` : '-'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {isEditing && (
@@ -5019,12 +5188,10 @@ function QuestionsTabInner({
   if (loading || !isInitialized) {
     return (
       <div className="flex flex-col justify-center items-center min-h-[400px] gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <div className="text-center">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {!academicStructureLoaded ? 'Loading academic structure...' : 'Initializing questions...'}
-          </p>
-        </div>
+        <LoadingSpinner
+          size="lg"
+          message={!academicStructureLoaded ? 'Loading academic structure...' : 'Initializing questions...'}
+        />
       </div>
     );
   }
@@ -5043,6 +5210,7 @@ function QuestionsTabInner({
           // Handle paper status changes during simulation
           console.log('Paper status changed to:', newStatus);
         }}
+        onAttachmentRemove={handleDeleteAttachment}
       />
     );
   }
@@ -5120,7 +5288,7 @@ function QuestionsTabInner({
           >
             {autoMappingInProgress ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoadingSpinner size="sm" inline centered={false} />
                 Mapping...
               </>
             ) : (
@@ -5214,6 +5382,41 @@ function QuestionsTabInner({
         </div>
       )}
 
+      {/* Simple Question Navigator - Left Sidebar */}
+      {questions.length > 0 && (
+        <SimpleQuestionNavigator
+          questions={questions.map((question) => {
+            const hasError = !question.topic_id || !question.difficulty;
+            const needsAttachment = (question.figure || question.figure_required) && (!attachments[question.id] || attachments[question.id].length === 0);
+            const hasAttachment = attachments[question.id]?.length > 0;
+            const isComplete = !hasError && (!needsAttachment || hasAttachment);
+
+            return {
+              id: question.id,
+              question_number: question.question_number,
+              hasError,
+              isComplete,
+              needsAttachment,
+              hasAttachment
+            };
+          })}
+          currentQuestionId={currentQuestionId}
+          onNavigate={(questionId) => {
+            setCurrentQuestionId(questionId);
+            const element = document.getElementById(`question-${questionId}`);
+            if (element) {
+              const offset = 100;
+              const elementPosition = element.getBoundingClientRect().top;
+              const offsetPosition = elementPosition + window.pageYOffset - offset;
+              window.scrollTo({
+                top: offsetPosition,
+                behavior: 'smooth'
+              });
+            }
+          }}
+        />
+      )}
+
       {/* Questions Review Section */}
       <QuestionImportReviewWorkflow
         questions={(questions || []).map((q): QuestionDisplayData => ({
@@ -5233,12 +5436,17 @@ function QuestionsTabInner({
           answer_requirement: q.answer_requirement,
           correct_answers: Array.isArray(q.correct_answers) ? q.correct_answers : (q.correct_answers ? [q.correct_answers] : []),
           options: Array.isArray(q.options) ? q.options : [],
-          attachments: attachments[q.id] || [],
+          attachments: (attachments[q.id] || []).map(att => ({
+            ...att,
+            canDelete: true,
+            attachmentKey: q.id,
+            originalId: att.originalId || att.id
+          })),
           hint: q.hint,
           explanation: q.explanation,
           requires_manual_marking: q.requires_manual_marking,
           marking_criteria: q.marking_criteria,
-          parts: Array.isArray(q.parts) ? q.parts : [],
+          parts: mapPartsWithAttachments(q.parts, q.id, attachments),
           figure_required: typeof q.figure_required === 'boolean' ? q.figure_required : (q.figure ?? false),
           figure: q.figure
         }))}
@@ -5251,8 +5459,21 @@ function QuestionsTabInner({
         onQuestionUpdate={handleQuestionUpdateFromReview}
         onRequestSnippingTool={handleRequestSnippingTool}
         onRequestAttachmentDelete={(attachmentKey, attachmentId) => {
+          console.log('📞 [onRequestAttachmentDelete Called]', {
+            attachmentKey,
+            attachmentId,
+            hasKey: !!attachmentKey,
+            hasId: !!attachmentId
+          });
+
           if (attachmentKey && attachmentId) {
+            console.log('✅ [Setting delete confirmation state]', { attachmentKey, attachmentId });
             setDeleteAttachmentConfirm({ key: attachmentKey, attachmentId });
+          } else {
+            console.error('❌ [Missing attachmentKey or attachmentId]', {
+              attachmentKey,
+              attachmentId
+            });
           }
         }}
         onRequestSimulation={handleStartSimulation}
@@ -5490,23 +5711,41 @@ function QuestionsTabInner({
 
       {/* Delete Attachment Confirmation */}
       {deleteAttachmentConfirm && (
-        <ConfirmationDialog
-          open={true}
-          onClose={() => setDeleteAttachmentConfirm(null)}
-          onConfirm={() => {
-            if (deleteAttachmentConfirm) {
-              handleDeleteAttachment(
-                deleteAttachmentConfirm.key,
-                deleteAttachmentConfirm.attachmentId
-              );
+        <>
+          {console.log('🔔 [Rendering Delete Confirmation Dialog]', deleteAttachmentConfirm)}
+          <ConfirmationDialog
+            isOpen={true}
+            onCancel={() => {
+              console.log('❌ [Dialog Closed]');
               setDeleteAttachmentConfirm(null);
-            }
-          }}
-          title="Delete Attachment"
-          message="Are you sure you want to delete this attachment?"
-          confirmText="Delete"
-          confirmVariant="danger"
-        />
+            }}
+            onConfirm={() => {
+              console.log('✅ [Dialog Confirmed]', deleteAttachmentConfirm);
+              if (deleteAttachmentConfirm) {
+                const success = handleDeleteAttachment(
+                  deleteAttachmentConfirm.key,
+                  deleteAttachmentConfirm.attachmentId
+                );
+
+                console.log('🔍 [Delete Result]', { success });
+
+                // Close dialog after state updates have been scheduled
+                // Use setTimeout to ensure React processes the state update
+                if (success) {
+                  setTimeout(() => {
+                    setDeleteAttachmentConfirm(null);
+                  }, 0);
+                } else {
+                  setDeleteAttachmentConfirm(null);
+                }
+              }
+            }}
+            title="Delete Attachment"
+            message="Are you sure you want to delete this attachment?"
+            confirmText="Delete"
+            confirmVariant="destructive"
+          />
+        </>
       )}
 
       {/* Validation Modal */}
@@ -5597,7 +5836,7 @@ function QuestionsTabInner({
             />
             {reviewWorkflowLoading && (
               <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoadingSpinner size="sm" inline centered={false} />
                 Syncing review data…
               </div>
             )}
@@ -5663,7 +5902,7 @@ function QuestionsTabInner({
             >
               {isImporting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <LoadingSpinner size="sm" inline centered={false} />
                   Importing...
                 </>
               ) : (

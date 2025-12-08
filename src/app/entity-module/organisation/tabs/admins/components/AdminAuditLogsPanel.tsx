@@ -75,14 +75,14 @@ export function AdminAuditLogsPanel({
   const [rowsPerPage, setRowsPerPage] = useState(20);
 
   // Fetch audit logs with React Query
-  const {
-    data: queryResult,
-    isLoading,
+  const { 
+    data: queryResult, 
+    isLoading, 
     isFetching,
-    error
-  } = useQuery({
-    queryKey: ['adminAuditLogs', companyId, filters, page, rowsPerPage],
-    queryFn: async () => {
+    error 
+  } = useQuery(
+    ['adminAuditLogs', companyId, filters, page, rowsPerPage],
+    async () => {
       // Build filter object for auditService
       const serviceFilters: any = {
         company_id: companyId,
@@ -115,10 +115,12 @@ export function AdminAuditLogsPanel({
       
       return { logs: logs, total: total };
     },
-    placeholderData: (previousData) => previousData,
-    staleTime: 30 * 1000, // 30 seconds
-    enabled: !!companyId
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 30 * 1000, // 30 seconds
+      enabled: !!companyId
+    }
+  );
 
   // Extract logs and total from query result
   const auditLogs = queryResult?.logs || [];
@@ -220,10 +222,73 @@ export function AdminAuditLogsPanel({
     setPage(1);
   };
 
-  // TODO: Export to CSV functionality
+  // Helper function to escape CSV values
+  const escapeCSVValue = (value: string | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    const stringValue = String(value);
+    // If value contains comma, quote, or newline, wrap in quotes and escape existing quotes
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  // Export to CSV functionality
   const handleExportCSV = () => {
-    console.log('TODO: Export audit logs to CSV');
-    // Implementation would convert auditLogs to CSV format and trigger download
+    if (auditLogs.length === 0) {
+      return; // Nothing to export
+    }
+
+    // Define CSV headers
+    const headers = [
+      'Date',
+      'Time',
+      'Action Type',
+      'Actor ID',
+      'Target ID',
+      'Target Type',
+      'Summary',
+      'IP Address',
+      'Changes',
+      'Metadata'
+    ];
+
+    // Convert audit logs to CSV rows
+    const rows = auditLogs.map(log => {
+      const date = new Date(log.created_at);
+      return [
+        escapeCSVValue(date.toLocaleDateString()),
+        escapeCSVValue(date.toLocaleTimeString()),
+        escapeCSVValue(formatActionType(log.action_type)),
+        escapeCSVValue(log.actor_id || 'System'),
+        escapeCSVValue(log.target_id),
+        escapeCSVValue(log.target_type),
+        escapeCSVValue(generateSummary(log)),
+        escapeCSVValue(log.ip_address),
+        escapeCSVValue(log.changes ? JSON.stringify(log.changes) : ''),
+        escapeCSVValue(log.metadata ? JSON.stringify(log.metadata) : '')
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    // Generate filename with current date
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `admin_audit_logs_${today}.csv`;
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Define table columns
@@ -395,7 +460,6 @@ export function AdminAuditLogsPanel({
         </div>
         
         <div className="flex items-center gap-2">
-          {/* TODO: Export functionality */}
           <Button
             variant="outline"
             size="sm"

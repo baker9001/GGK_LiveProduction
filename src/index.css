@@ -1,466 +1,18 @@
-@import "tailwindcss";
-
-@theme {
-  --color-*: initial;
-  --font-*: initial;
-}
-
-@plugin "tailwind-scrollbar";
-
-@config "../tailwind.config.js";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
-  color-scheme: light dark;
-
-  /* Brand Colors - Go Green Knowledge Palette */
-  --brand-primary: #99c93b;
-  --brand-primary-dark: #5d7e23;
-  --brand-primary-light: #b2d965;
-  --brand-secondary: #b2cace;
-  --brand-accent: #8CC63F;
-  --brand-accent-strong: #5d7e23;
+  --brand-accent: #7dc242;
+  --brand-accent-strong: #4f8c1f;
   --brand-accent-soft: #e8f5dc;
   --brand-accent-contrast: #ffffff;
   --brand-accent-muted-contrast: #123116;
-
-  /* Background Colors - Modern Solid Color System */
-  --color-bg-page: 250 251 252;
-  --color-bg-surface: 255 255 255;
-  --color-bg-subtle: 245 250 247;
-  --color-bg-muted: 232 245 220;
-  --color-section-primary: 255 255 255;
-  --color-section-secondary: 245 252 243;
-
-  /* Card & Component Backgrounds */
-  --color-card-bg: 255 255 255;
-  --color-card-elevated: 252 254 251;
-  --color-card-hover: 248 252 245;
-  --color-filter-bg: 248 252 245;
-  --color-filter-border: 226 240 208;
-
-  /* Table Backgrounds */
-  --color-table-header: 248 252 245;
-  --color-table-row: 255 255 255;
-  --color-table-row-alt: 252 254 251;
-  --color-table-row-hover: 245 250 240;
-  --color-table-row-selected: 240 247 232;
-
-  /* Invitation & Panel Backgrounds */
-  --color-panel-bg: 250 253 248;
-  --color-panel-border: 226 240 208;
-  --color-invitation-card: 255 255 255;
-  --color-invitation-hover: 248 252 245;
-
-  /* Text Colors */
-  --color-text-primary: 31 41 55;
-  --color-text-secondary: 93 126 35;
-  --color-text-muted: 107 114 128;
-  --color-text-inverse: 255 255 255;
-
-  /* Border Colors - Minimal borders */
-  --color-border: rgba(229, 231, 235, 1);
-  --color-border-muted: rgba(243, 244, 246, 1);
-  --color-border-strong: rgba(209, 213, 219, 1);
-
-  /* Action Colors */
-  --color-action-primary: #8CC63F;
-  --color-action-primary-hover: #7AB635;
-  --color-action-primary-active: #6AA52D;
-  --color-action-primary-soft: rgba(140, 198, 63, 0.15);
-  --color-action-contrast: #ffffff;
-  --color-action-primary-focus: rgba(140, 198, 63, 0.3);
-
-  /* Input Colors - Always solid backgrounds */
-  --color-input-bg: #ffffff;
-  --color-input-border: rgba(140, 198, 63, 0.25);
-  --color-input-placeholder: rgba(107, 114, 128, 0.6);
-  --color-input-disabled-bg: #f3f4f6;
-  --color-input-focus-ring: rgba(140, 198, 63, 0.3);
-
-  /* Dropdown Colors - Solid backgrounds for clear visibility */
-  --dropdown-bg: #ffffff;
-  --dropdown-hover: #e8f5dc;
-  --dropdown-selected: #d4edc4;
-  --dropdown-border: rgba(229, 231, 235, 1);
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(93, 126, 35, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(93, 126, 35, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(93, 126, 35, 0.15);
-  --shadow-elevated: 0 20px 25px -5px rgba(93, 126, 35, 0.15), 0 8px 10px -6px rgba(93, 126, 35, 0.1);
-  --shadow-popover: 0 20px 30px -10px rgba(93, 126, 35, 0.25);
-
-  /* Transitions */
-  --transition-theme: background-color 220ms ease, color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, fill 220ms ease, stroke 220ms ease;
-  --transition-fast: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* Status Colors */
-  --color-success: #8CC63F;
-  --color-success-soft: #e8f5dc;
-  --color-info: #3b82f6;
-  --color-info-soft: #dbeafe;
-  --color-warning: #f59e0b;
-  --color-warning-soft: #fef3c7;
-  --color-danger: #ef4444;
-  --color-danger-soft: #fee2e2;
 }
 
 .dark {
-  --color-bg-page: 15 23 42;
-  --color-bg-surface: 31 41 55;
-  --color-bg-subtle: 17 24 39;
-  --color-bg-muted: 30 41 59;
-  --color-section-primary: 26 35 50;
-  --color-section-secondary: 17 24 39;
-
-  /* Card & Component Backgrounds - Dark Mode */
-  --color-card-bg: 31 41 55;
-  --color-card-elevated: 37 47 63;
-  --color-card-hover: 42 52 70;
-  --color-filter-bg: 26 35 50;
-  --color-filter-border: 55 75 85;
-
-  /* Table Backgrounds - Dark Mode */
-  --color-table-header: 26 35 50;
-  --color-table-row: 31 41 55;
-  --color-table-row-alt: 35 45 60;
-  --color-table-row-hover: 42 52 70;
-  --color-table-row-selected: 40 58 65;
-
-  /* Invitation & Panel Backgrounds - Dark Mode */
-  --color-panel-bg: 26 35 50;
-  --color-panel-border: 55 75 85;
-  --color-invitation-card: 35 45 60;
-  --color-invitation-hover: 42 52 70;
-
-  --color-text-primary: 248 250 252;
-  --color-text-secondary: 203 213 225;
-  --color-text-muted: 148 163 184;
-  --color-text-inverse: 248 250 252;
-  --color-border: rgba(148, 163, 184, 0.32);
-  --color-border-muted: rgba(94, 109, 128, 0.45);
-  --color-border-strong: rgba(148, 163, 184, 0.45);
-  --color-action-primary: #9ed050;
-  --color-action-primary-hover: #8cc63f;
-  --color-action-primary-active: #79b22e;
-  --color-action-primary-soft: rgba(158, 208, 80, 0.22);
-  --color-action-contrast: #0f172a;
-  --color-action-primary-focus: rgba(158, 208, 80, 0.38);
-  --color-input-bg: rgb(31, 41, 55);
-  --color-input-border: rgba(148, 163, 184, 0.35);
-  --color-input-placeholder: rgba(148, 163, 184, 0.7);
-  --color-input-disabled-bg: rgb(55, 65, 81);
-  --color-input-focus-ring: rgba(158, 208, 80, 0.38);
-
-  /* Dropdown Colors - Dark Mode - Solid backgrounds */
-  --dropdown-bg: rgb(31, 41, 55);
-  --dropdown-hover: rgba(140, 198, 63, 0.2);
-  --dropdown-selected: rgba(140, 198, 63, 0.3);
-  --dropdown-border: rgba(148, 163, 184, 0.32);
-
-  --shadow-elevated: 0 22px 40px -25px rgba(8, 15, 29, 0.65);
-  --shadow-popover: 0 22px 40px -25px rgba(8, 15, 29, 0.75);
   --brand-accent-contrast: #f4faef;
   --brand-accent-muted-contrast: #dbead0;
-}
-
-body {
-  background: linear-gradient(135deg, rgb(var(--color-bg-page)) 0%, rgb(var(--color-bg-subtle)) 100%);
-  min-height: 100vh;
-  color: rgb(var(--color-text-primary));
-  transition: var(--transition-theme);
-}
-
-/* Brand Color Utilities */
-.bg-brand-primary {
-  background-color: var(--brand-primary);
-}
-
-.bg-brand-gradient {
-  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-primary-dark) 100%);
-}
-
-.bg-brand-soft {
-  background-color: var(--brand-accent-soft);
-}
-
-.text-brand-primary {
-  color: var(--brand-primary);
-}
-
-.text-brand-dark {
-  color: var(--brand-primary-dark);
-}
-
-.border-brand {
-  border-color: var(--brand-accent);
-}
-
-/* Status Utilities */
-.bg-success {
-  background-color: var(--color-success);
-}
-
-.bg-success-soft {
-  background-color: var(--color-success-soft);
-}
-
-.bg-info-soft {
-  background-color: var(--color-info-soft);
-}
-
-.bg-warning-soft {
-  background-color: var(--color-warning-soft);
-}
-
-.bg-danger-soft {
-  background-color: var(--color-danger-soft);
-}
-
-.text-success {
-  color: var(--color-success);
-}
-
-.text-info {
-  color: var(--color-info);
-}
-
-.text-warning {
-  color: var(--color-warning);
-}
-
-.text-danger {
-  color: var(--color-danger);
-}
-
-/* Shadow Utilities */
-.shadow-sm {
-  box-shadow: var(--shadow-sm);
-}
-
-.shadow-md {
-  box-shadow: var(--shadow-md);
-}
-
-.shadow-lg {
-  box-shadow: var(--shadow-lg);
-}
-
-.bg-theme-page {
-  background-color: rgb(var(--color-bg-page));
-}
-
-.bg-theme-surface {
-  background-color: rgb(var(--color-bg-surface));
-}
-
-.bg-theme-subtle {
-  background-color: rgb(var(--color-bg-subtle));
-}
-
-.bg-theme-muted {
-  background-color: rgb(var(--color-bg-muted));
-}
-
-.bg-section-primary {
-  background-color: rgb(var(--color-section-primary));
-}
-
-.bg-section-secondary {
-  background-color: rgb(var(--color-section-secondary));
-}
-
-.bg-action-primary {
-  background-color: var(--color-action-primary);
-}
-
-.bg-action-primary-hover {
-  background-color: var(--color-action-primary-hover);
-}
-
-.bg-action-primary-active {
-  background-color: var(--color-action-primary-active);
-}
-
-.bg-action-contrast {
-  background-color: var(--color-action-contrast);
-}
-
-.text-theme-primary {
-  color: rgb(var(--color-text-primary));
-}
-
-.text-theme-secondary {
-  color: rgb(var(--color-text-secondary));
-}
-
-.text-theme-muted {
-  color: rgb(var(--color-text-muted));
-}
-
-.text-action-contrast {
-  color: var(--color-action-contrast);
-}
-
-.border-theme {
-  border-color: var(--color-border);
-}
-
-.border-theme-muted {
-  border-color: var(--color-border-muted);
-}
-
-.border-theme-strong {
-  border-color: var(--color-border-strong);
-}
-
-/* Card & Component Background Utilities */
-.bg-card {
-  background-color: rgb(var(--color-card-bg));
-}
-
-.bg-card-elevated {
-  background-color: rgb(var(--color-card-elevated));
-}
-
-.bg-card-hover {
-  background-color: rgb(var(--color-card-hover));
-}
-
-.bg-filter {
-  background-color: rgb(var(--color-filter-bg));
-}
-
-.border-filter {
-  border-color: rgb(var(--color-filter-border));
-}
-
-/* Table Background Utilities */
-.bg-table-header {
-  background-color: rgb(var(--color-table-header));
-}
-
-.bg-table-row {
-  background-color: rgb(var(--color-table-row));
-}
-
-.bg-table-row-alt {
-  background-color: rgb(var(--color-table-row-alt));
-}
-
-.bg-table-row-hover {
-  background-color: rgb(var(--color-table-row-hover));
-}
-
-.bg-table-row-selected {
-  background-color: rgb(var(--color-table-row-selected));
-}
-
-/* Panel & Invitation Background Utilities */
-.bg-panel {
-  background-color: rgb(var(--color-panel-bg));
-}
-
-.border-panel {
-  border-color: rgb(var(--color-panel-border));
-}
-
-.bg-invitation-card {
-  background-color: rgb(var(--color-invitation-card));
-}
-
-.hover\:bg-invitation-hover:hover {
-  background-color: rgb(var(--color-invitation-hover));
-}
-
-.shadow-theme-elevated {
-  box-shadow: var(--shadow-elevated);
-}
-
-.shadow-theme-popover {
-  box-shadow: var(--shadow-popover);
-}
-
-.transition-theme {
-  transition: var(--transition-theme);
-}
-
-.hover\:bg-theme-subtle:hover {
-  background-color: rgb(var(--color-bg-subtle));
-}
-
-.hover\:bg-theme-muted:hover {
-  background-color: rgb(var(--color-bg-muted));
-}
-
-.hover\:text-theme-primary:hover {
-  color: rgb(var(--color-text-primary));
-}
-
-.hover\:text-theme-secondary:hover {
-  color: rgb(var(--color-text-secondary));
-}
-
-.hover\:bg-action-primary-hover:hover {
-  background-color: var(--color-action-primary-hover);
-}
-
-.active\:bg-action-primary-active:active {
-  background-color: var(--color-action-primary-active);
-}
-
-.hover\:border-theme-muted:hover {
-  border-color: var(--color-border-muted);
-}
-
-input,
-textarea,
-select {
-  background-color: var(--color-input-bg, #ffffff) !important;
-  border-color: var(--color-input-border, rgba(140, 198, 63, 0.25));
-  color: rgb(var(--color-text-primary, 31 41 55));
-  transition: var(--transition-theme);
-}
-
-.dark input,
-.dark textarea,
-.dark select {
-  background-color: rgb(31, 41, 55) !important;
-  color: rgb(248, 250, 252);
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--color-input-placeholder);
-  opacity: 1;
-}
-
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: 2px solid var(--color-action-primary);
-  outline-offset: 2px;
-  border-color: var(--color-action-primary);
-  box-shadow: 0 0 0 4px var(--color-action-primary-focus);
-}
-
-.sectioned-layout > section {
-  position: relative;
-  isolation: isolate;
-  transition: var(--transition-theme);
-}
-
-.sectioned-layout > section::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: rgb(var(--color-section-primary));
-  transition: var(--transition-theme);
-}
-
-.sectioned-layout > section:nth-of-type(even)::before {
-  background: rgb(var(--color-section-secondary));
 }
 
 .brand-select {
@@ -574,39 +126,6 @@ body.hc-mode {
 body.font-dyslexic {
   font-family: 'Atkinson Hyperlegible', 'OpenDyslexic', 'Verdana', sans-serif;
   letter-spacing: 0.0125em;
-}
-
-/* Global Checkbox Styling - Green Theme */
-input[type="checkbox"] {
-  accent-color: #8CC63F;
-  cursor: pointer;
-}
-
-input[type="checkbox"]:focus {
-  outline: 2px solid #8CC63F;
-  outline-offset: 2px;
-}
-
-input[type="checkbox"]:hover:not(:disabled) {
-  border-color: #8CC63F;
-}
-
-input[type="checkbox"]:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-/* Dark mode checkbox support */
-.dark input[type="checkbox"] {
-  accent-color: #9ed050;
-}
-
-.dark input[type="checkbox"]:focus {
-  outline-color: #9ed050;
-}
-
-.dark input[type="checkbox"]:hover:not(:disabled) {
-  border-color: #9ed050;
 }
 
 .brand-pagination-icon-button:disabled {
@@ -843,98 +362,354 @@ input[type="checkbox"]:disabled {
   font-size: 0.8em;
 }
 
-/* Utility classes for enforcing solid backgrounds */
-.bg-solid-white {
-  background-color: #ffffff !important;
-  opacity: 1 !important;
+/* Heading styles */
+.rich-text-display h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 2.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: rgb(17 24 39 / 1);
 }
 
-.bg-solid-gray-50 {
-  background-color: #f9fafb !important;
-  opacity: 1 !important;
+.dark .rich-text-display h1 {
+  color: rgb(243 244 246 / 1);
 }
 
-.bg-solid-gray-100 {
-  background-color: #f3f4f6 !important;
-  opacity: 1 !important;
+.rich-text-display h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 2rem;
+  margin-top: 1rem;
+  margin-bottom: 0.625rem;
+  color: rgb(31 41 55 / 1);
 }
 
-.dark .bg-solid-white {
-  background-color: rgb(31, 41, 55) !important;
-  opacity: 1 !important;
+.dark .rich-text-display h2 {
+  color: rgb(229 231 235 / 1);
 }
 
-.dark .bg-solid-gray-50 {
-  background-color: rgb(26, 35, 50) !important;
-  opacity: 1 !important;
+.rich-text-display h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+  margin-top: 0.875rem;
+  margin-bottom: 0.5rem;
+  color: rgb(55 65 81 / 1);
 }
 
-.dark .bg-solid-gray-100 {
-  background-color: rgb(55, 65, 81) !important;
-  opacity: 1 !important;
+.dark .rich-text-display h3 {
+  color: rgb(209 213 219 / 1);
 }
 
-/* Navigation solid background enforcement */
-nav[class*="sticky"] {
-  background-color: inherit !important;
-  opacity: 1 !important;
+.rich-text-display h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+  color: rgb(75 85 99 / 1);
 }
 
-nav.bg-white {
-  background-color: #ffffff !important;
+.dark .rich-text-display h4 {
+  color: rgb(209 213 219 / 1);
 }
 
-nav.bg-slate-900 {
-  background-color: #0f172a !important;
+/* Strikethrough styles */
+.rich-text-display s,
+.rich-text-display strike,
+.rich-text-display del {
+  text-decoration: line-through;
+  opacity: 0.7;
 }
 
-.dark nav.bg-gray-900 {
-  background-color: rgb(17, 24, 39) !important;
+/* Highlight styles */
+.rt-highlight-yellow,
+.rich-text-display .rt-highlight-yellow {
+  background-color: rgb(254 240 138 / 0.5);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
 }
 
-/* Enforce solid backgrounds for form controls */
-input:not([type="checkbox"]):not([type="radio"]),
-textarea,
-select,
-[role="combobox"],
-[role="listbox"] {
-  background-color: var(--color-input-bg, #ffffff) !important;
+.dark .rt-highlight-yellow,
+.dark .rich-text-display .rt-highlight-yellow {
+  background-color: rgb(202 138 4 / 0.3);
 }
 
-.dark input:not([type="checkbox"]):not([type="radio"]),
-.dark textarea,
-.dark select,
-.dark [role="combobox"],
-.dark [role="listbox"] {
-  background-color: rgb(31, 41, 55) !important;
+.rt-highlight-green,
+.rich-text-display .rt-highlight-green {
+  background-color: rgb(187 247 208 / 0.5);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
 }
 
-/* Dropdown menu solid backgrounds */
-[role="menu"],
-[role="listbox"],
-.dropdown-menu,
-.select-dropdown {
-  background-color: var(--dropdown-bg, #ffffff) !important;
+.dark .rt-highlight-green,
+.dark .rich-text-display .rt-highlight-green {
+  background-color: rgb(21 128 61 / 0.3);
 }
 
-.dark [role="menu"],
-.dark [role="listbox"],
-.dark .dropdown-menu,
-.dark .select-dropdown {
-  background-color: rgb(31, 41, 55) !important;
+.rt-highlight-pink,
+.rich-text-display .rt-highlight-pink {
+  background-color: rgb(252 231 243 / 0.7);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
 }
 
-/* Modal and dialog solid backgrounds */
-[role="dialog"],
-[role="alertdialog"],
-.modal,
-.dialog {
-  background-color: #ffffff !important;
+.dark .rt-highlight-pink,
+.dark .rich-text-display .rt-highlight-pink {
+  background-color: rgb(157 23 77 / 0.3);
 }
 
-.dark [role="dialog"],
-.dark [role="alertdialog"],
-.dark .modal,
-.dark .dialog {
-  background-color: rgb(31, 41, 55) !important;
+.rt-highlight-blue,
+.rich-text-display .rt-highlight-blue {
+  background-color: rgb(191 219 254 / 0.6);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.dark .rt-highlight-blue,
+.dark .rich-text-display .rt-highlight-blue {
+  background-color: rgb(29 78 216 / 0.3);
+}
+
+/* Horizontal rule */
+.rich-text-display hr {
+  border: 0;
+  border-top: 2px solid rgb(229 231 235 / 1);
+  margin: 1rem 0;
+}
+
+.dark .rich-text-display hr {
+  border-top-color: rgb(55 65 81 / 1);
+}
+
+/* Link styles */
+.rich-text-display a {
+  color: rgb(37 99 235 / 1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text-display a:hover {
+  color: rgb(29 78 216 / 1);
+}
+
+.dark .rich-text-display a {
+  color: rgb(96 165 250 / 1);
+}
+
+.dark .rich-text-display a:hover {
+  color: rgb(147 197 253 / 1);
+}
+
+/* Text alignment */
+.rich-text-display .text-left {
+  text-align: left;
+}
+
+.rich-text-display .text-center {
+  text-align: center;
+}
+
+.rich-text-display .text-right {
+  text-align: right;
+}
+
+.rich-text-display .text-justify {
+  text-align: justify;
+}
+
+/* Font sizes */
+.rich-text-display .text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.rich-text-display .text-base {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.rich-text-display .text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+/* Loading Spinner Animations */
+@keyframes spin-pulse {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(90deg) scale(1.05);
+  }
+  50% {
+    transform: rotate(180deg) scale(1);
+  }
+  75% {
+    transform: rotate(270deg) scale(1.05);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-spin-pulse {
+  animation: spin-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-in;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-spin-pulse,
+  .animate-pulse,
+  .animate-bounce {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Handsontable Dark Mode Styles */
+.dark .handsontable {
+  background-color: rgb(17 24 39 / 1) !important;
+  color: rgb(229 231 235 / 1) !important;
+}
+
+.dark .handsontable td,
+.dark .handsontable th {
+  background-color: rgb(31 41 55 / 1) !important;
+  color: rgb(229 231 235 / 1) !important;
+  border-color: rgb(55 65 81 / 1) !important;
+}
+
+.dark .handsontable thead th {
+  background-color: rgb(17 24 39 / 1) !important;
+  color: rgb(209 213 219 / 1) !important;
+  border-color: rgb(55 65 81 / 1) !important;
+  font-weight: 600;
+}
+
+.dark .handsontable tbody th {
+  background-color: rgb(17 24 39 / 1) !important;
+  color: rgb(156 163 175 / 1) !important;
+  border-color: rgb(55 65 81 / 1) !important;
+}
+
+.dark .handsontable td.area,
+.dark .handsontable th.area {
+  background-color: rgb(55 65 81 / 0.5) !important;
+}
+
+.dark .handsontable td.current,
+.dark .handsontable th.current {
+  background-color: rgb(59 130 246 / 0.3) !important;
+}
+
+.dark .handsontable td.htDimmed {
+  color: rgb(107 114 128 / 1) !important;
+}
+
+.dark .handsontable .htCore tbody tr th.ht__highlight,
+.dark .handsontable .htCore thead tr th.ht__highlight {
+  background-color: rgb(59 130 246 / 0.2) !important;
+}
+
+.dark .handsontable .wtBorder {
+  background-color: rgb(59 130 246 / 1) !important;
+}
+
+.dark .handsontable .wtBorder.corner {
+  background-color: rgb(59 130 246 / 1) !important;
+  border-color: rgb(59 130 246 / 1) !important;
+}
+
+.dark .handsontable .htContextMenu {
+  background-color: rgb(31 41 55 / 1) !important;
+  border-color: rgb(55 65 81 / 1) !important;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3);
+}
+
+.dark .handsontable .htContextMenu tbody tr td {
+  background-color: rgb(31 41 55 / 1) !important;
+  color: rgb(229 231 235 / 1) !important;
+  border-color: rgb(55 65 81 / 1) !important;
+}
+
+.dark .handsontable .htContextMenu tbody tr td:hover {
+  background-color: rgb(55 65 81 / 1) !important;
+}
+
+.dark .handsontable .htContextMenu tbody tr td.htDisabled {
+  color: rgb(107 114 128 / 1) !important;
+}
+
+.dark .handsontable .htContextMenu tbody tr td.htDisabled:hover {
+  background-color: rgb(31 41 55 / 1) !important;
+}
+
+.dark .handsontable input,
+.dark .handsontable textarea {
+  background-color: rgb(17 24 39 / 1) !important;
+  color: rgb(229 231 235 / 1) !important;
+  border-color: rgb(55 65 81 / 1) !important;
+}
+
+.dark .handsontable .htCommentCell::after {
+  border-color: transparent transparent rgb(239 68 68 / 1) transparent !important;
+}
+
+.dark .handsontable .htAutocompleteArrow {
+  color: rgb(156 163 175 / 1) !important;
+}
+
+.dark .handsontable .listbox {
+  background-color: rgb(31 41 55 / 1) !important;
+  border-color: rgb(55 65 81 / 1) !important;
+}
+
+.dark .handsontable .listbox .ht_master tbody tr td {
+  background-color: rgb(31 41 55 / 1) !important;
+  color: rgb(229 231 235 / 1) !important;
+}
+
+.dark .handsontable .listbox .ht_master tbody tr td:hover {
+  background-color: rgb(55 65 81 / 1) !important;
+}
+
+/* Custom cell type styling for TableCompletion in dark mode */
+.dark .handsontable td.locked-cell {
+  background-color: rgb(55 65 81 / 0.6) !important;
+  color: rgb(156 163 175 / 1) !important;
+}
+
+.dark .handsontable td.editable-cell {
+  background-color: rgb(17 24 39 / 1) !important;
+  color: rgb(229 231 235 / 1) !important;
+  border: 2px solid rgb(125 194 66 / 0.4) !important;
+}
+
+.dark .handsontable td.correct-cell {
+  background-color: rgb(34 197 94 / 0.2) !important;
+  border-color: rgb(34 197 94 / 0.6) !important;
+}
+
+.dark .handsontable td.incorrect-cell {
+  background-color: rgb(239 68 68 / 0.2) !important;
+  border-color: rgb(239 68 68 / 0.6) !important;
+}
+
+.dark .handsontable td.selected-cell {
+  background-color: rgb(59 130 246 / 0.3) !important;
+  border: 2px solid rgb(59 130 246 / 1) !important;
 }

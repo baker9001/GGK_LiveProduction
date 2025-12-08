@@ -280,7 +280,7 @@ export function SearchableMultiSelect({
     const dropdownContent = (
       <div
         ref={dropdownRef}
-        className="z-[150] rounded-lg border-2 border-theme shadow-xl overflow-hidden bg-card"
+        className="z-[150] rounded-md border border-gray-200 dark:border-gray-600 shadow-lg dark:shadow-gray-900/20 overflow-hidden bg-white dark:bg-gray-800"
         style={usePortal ? {
           position: 'absolute',
           top: `${position.top}px`,
@@ -289,8 +289,7 @@ export function SearchableMultiSelect({
           maxHeight: '400px',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 150,
-          backgroundColor: 'var(--dropdown-bg, #ffffff)',
+          zIndex: 150
         } : {
           position: 'absolute',
           top: position.openUpward ? 'auto' : '100%',
@@ -302,26 +301,24 @@ export function SearchableMultiSelect({
           flexDirection: 'column',
           zIndex: 150,
           marginTop: position.openUpward ? '0' : '4px',
-          marginBottom: position.openUpward ? '4px' : '0',
-          backgroundColor: 'var(--dropdown-bg, #ffffff)',
+          marginBottom: position.openUpward ? '4px' : '0'
         }}
         onKeyDown={handleKeyDown}
         role="listbox"
         aria-multiselectable={isMulti}
       >
         {isSearchable && (
-          <div className="p-3 border-b border-theme bg-card-elevated">
+          <div className="p-2 border-b border-gray-100 dark:border-gray-600">
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <input
                 ref={searchInputRef}
                 type="text"
                 className={cn(
-                  "w-full pl-9 pr-3 py-2 text-sm border border-theme rounded-md bg-theme-surface text-theme-primary placeholder-gray-400 dark:placeholder-gray-500",
-                  isGreenTheme
+                  "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+                  isGreenTheme 
                     ? "focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                    : "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
-                  "transition-all duration-200"
+                    : "focus:outline-none focus:ring-2 focus:ring-blue-500"
                 )}
                 placeholder="Search..."
                 value={searchTerm}
@@ -332,10 +329,10 @@ export function SearchableMultiSelect({
             </div>
           </div>
         )}
-
-        <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent bg-card">
+        
+        <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
           {filteredOptions.length > 0 || shouldShowCreateOption ? (
-            <div className="py-1 bg-card">
+            <div className="py-1">
               {filteredOptions.map((option) => (
                 <button
                   key={option.value}
@@ -343,23 +340,21 @@ export function SearchableMultiSelect({
                   role="option"
                   aria-selected={safeSelectedValues.includes(option.value)}
                   className={cn(
-                    'w-full px-4 py-2.5 text-left text-sm transition-all duration-200 ease-in-out',
-                    'hover:bg-[#e8f5dc] dark:hover:bg-[#8CC63F]/20 hover:text-gray-900 dark:hover:text-white',
-                    safeSelectedValues.includes(option.value)
-                      ? isGreenTheme
-                        ? 'bg-[#d4edc4] dark:bg-[#8CC63F]/30 border-l-4 border-[#8CC63F]'
-                        : 'bg-blue-100 dark:bg-blue-900/40 border-l-4 border-blue-500'
-                      : 'bg-white dark:bg-gray-800'
+                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                    safeSelectedValues.includes(option.value) && (
+                      isGreenTheme 
+                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20'
+                        : 'bg-blue-50 dark:bg-blue-900/30'
+                    )
                   )}
                   onClick={() => handleSelect(option.value)}
                 >
                   <span className={cn(
-                    'block transition-colors duration-200',
-                    safeSelectedValues.includes(option.value)
+                    safeSelectedValues.includes(option.value) 
                       ? isGreenTheme
-                        ? "text-[#5d7e23] dark:text-[#9ed050] font-semibold"
-                        : "text-blue-700 dark:text-blue-300 font-semibold"
-                      : "text-gray-900 dark:text-gray-100"
+                        ? "text-[#7AB635] font-medium" // Darker green for better contrast
+                        : "text-blue-600 dark:text-blue-400 font-medium"
+                      : "text-gray-900 dark:text-white"
                   )}>
                     {option.label}
                   </span>
@@ -370,7 +365,7 @@ export function SearchableMultiSelect({
               {shouldShowCreateOption && (
                 <button
                   type="button"
-                  className="w-full px-4 py-2.5 text-left text-sm text-green-700 dark:text-green-400 font-medium flex items-center transition-all duration-200 ease-in-out hover:bg-green-50 dark:hover:bg-green-900/30 bg-card border-t border-theme"
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 font-medium flex items-center transition-colors"
                   onClick={handleCreateNew}
                   disabled={isCreating}
                 >
@@ -380,12 +375,12 @@ export function SearchableMultiSelect({
               )}
             </div>
           ) : (
-            <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 bg-card">
+            <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
               No options found
               {onCreateNew && searchTerm.trim() && (
                 <button
                   type="button"
-                  className="w-full mt-2 px-3 py-2 text-center bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium rounded-md transition-all duration-200 ease-in-out hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center justify-center"
+                  className="w-full mt-2 px-3 py-1.5 text-center bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 font-medium rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 flex items-center justify-center transition-colors"
                   onClick={handleCreateNew}
                   disabled={isCreating}
                 >
@@ -417,10 +412,10 @@ export function SearchableMultiSelect({
           ref={triggerRef}
           className={cn(
             'min-h-[38px] w-full rounded-md border px-3 py-2 text-sm transition-colors duration-200',
-            isGreenTheme
+            isGreenTheme 
               ? 'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]'
               : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-            'bg-theme-surface text-theme-primary',
+            'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
             disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-60',
             error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
             isOpen && (

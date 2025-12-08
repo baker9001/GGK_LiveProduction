@@ -149,20 +149,9 @@ const PracticePage: React.FC = () => {
   const [highContrast, setHighContrast] = useState(false);
   const [dyslexiaFriendly, setDyslexiaFriendly] = useState(() => getDyslexiaPreference());
 
-  const practiceSetsQuery = useQuery({
-    queryKey: ['practice-sets'],
-    queryFn: loadPracticeSets
-  });
-  const practiceProgressQuery = useQuery({
-    queryKey: ['practice-progress', studentId],
-    queryFn: () => loadPracticeProgress(studentId),
-    enabled: !!studentId
-  });
-  const gamificationQuery = useQuery({
-    queryKey: ['practice-gamification', studentId],
-    queryFn: () => loadActiveGamification(studentId),
-    enabled: !!studentId
-  });
+  const practiceSetsQuery = useQuery(['practice-sets'], loadPracticeSets);
+  const practiceProgressQuery = useQuery(['practice-progress', studentId], () => loadPracticeProgress(studentId), { enabled: !!studentId });
+  const gamificationQuery = useQuery(['practice-gamification', studentId], () => loadActiveGamification(studentId), { enabled: !!studentId });
 
   const createSessionMutation = useMutation<PracticeSessionCreationResponse, Error, PracticeSetWithMeta>({
     mutationFn: async (practiceSet) => {
@@ -191,40 +180,43 @@ const PracticePage: React.FC = () => {
     }
   });
 
-  const submitAnswerMutation = useMutation<PracticeAnswerResponse, Error, { payload: AnswerSubmissionPayload; item: PracticeSetItem }>({
-    mutationFn: async ({ payload, item }) =>
-      submitAnswer({ sessionId: sessionState!.sessionId, itemId: item.id, rawAnswer: payload }),
-    onSuccess: (data, { item }) => {
-      setSessionState((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        return {
-          ...prev,
-          answers: {
-            ...prev.answers,
-            [item.id]: data
+  const submitAnswerMutation = useMutation<PracticeAnswerResponse, Error, { payload: AnswerSubmissionPayload; item: PracticeSetItem }>(
+    async ({ payload, item }) => submitAnswer({ sessionId: sessionState!.sessionId, itemId: item.id, rawAnswer: payload }),
+    {
+      onSuccess: (data, { item }) => {
+        setSessionState((prev) => {
+          if (!prev) {
+            return prev;
           }
-        };
-      });
-    },
-    onError: (error) => {
-      console.error('Failed to submit answer:', error);
-      alert(`Error submitting answer: ${error.message}`);
+          return {
+            ...prev,
+            answers: {
+              ...prev.answers,
+              [item.id]: data
+            }
+          };
+        });
+      },
+      onError: (error) => {
+        console.error('Failed to submit answer:', error);
+        alert(`Error submitting answer: ${error.message}`);
+      }
     }
-  });
+  );
 
-  const finishSessionMutation = useMutation<SessionSummary, Error, void>({
-    mutationFn: async () => finishSession(sessionState!.sessionId),
-    onSuccess: async (summary) => {
-      setSessionSummary(summary);
-      const overview = await getReport(summary.sessionId);
-      setReport(overview);
-      await queryClient.invalidateQueries({ queryKey: ['practice-progress', studentId] });
-      await queryClient.invalidateQueries({ queryKey: ['practice-gamification', studentId] });
-      setMode('results');
+  const finishSessionMutation = useMutation<SessionSummary, Error, void>(
+    async () => finishSession(sessionState!.sessionId),
+    {
+      onSuccess: async (summary) => {
+        setSessionSummary(summary);
+        const overview = await getReport(summary.sessionId);
+        setReport(overview);
+        await queryClient.invalidateQueries(['practice-progress', studentId]);
+        await queryClient.invalidateQueries(['practice-gamification', studentId]);
+        setMode('results');
+      }
     }
-  });
+  );
 
   const leaderboardQuery = useQuery({
     queryKey: ['practice-leaderboard'],

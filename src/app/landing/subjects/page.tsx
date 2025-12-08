@@ -204,127 +204,123 @@ export default function SubjectsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-theme-page text-theme-primary transition-colors duration-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16 sectioned-layout">
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Enhanced Header with SEO-friendly content */}
-        <section className="py-16">
-          <div className="text-center">
-            <div className="flex justify-center mb-8">
-              <div className="w-24 h-24 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center shadow-xl">
-                <BookOpen className="w-12 h-12 text-white" />
-              </div>
-            </div>
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 dark:text-white mb-8">
-              IGCSE, O-Level & A-Level Subjects
-            </h1>
-            <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 max-w-4xl mx-auto leading-relaxed">
-              Complete Cambridge International (CIE) and Pearson Edexcel curriculum coverage with
-              10+ years of past papers, video lessons, and exam-specific resources
-            </p>
-
-            {/* Trust Badges */}
-            <div className="flex items-center justify-center gap-8 mt-8 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-[#8CC63F]" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Official Syllabus Coverage
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-[#8CC63F]" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  95% Pass Rate
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-[#8CC63F]" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  50,000+ Students
-                </span>
-              </div>
+        <div className="text-center mb-16">
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center shadow-lg">
+              <BookOpen className="w-10 h-10 text-white" />
             </div>
           </div>
-        </section>
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+            IGCSE, O-Level & A-Level Subjects
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-4xl mx-auto mb-4">
+            Complete Cambridge International (CIE) and Pearson Edexcel curriculum coverage with 
+            10+ years of past papers, video lessons, and exam-specific resources
+          </p>
+          
+          {/* Trust Badges */}
+          <div className="flex items-center justify-center gap-8 mt-8">
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-[#8CC63F]" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Official Syllabus Coverage
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-[#8CC63F]" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                95% Pass Rate
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-[#8CC63F]" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                50,000+ Students
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* Enhanced Search and Filter Bar */}
-        <section className="py-16">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search subjects, codes, or topics..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              {/* Exam Board Filter */}
-              <select
-                value={selectedBoard}
-                onChange={(e) => setSelectedBoard(e.target.value)}
-                className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="all">All Exam Boards</option>
-                <option value="Cambridge">Cambridge International</option>
-                <option value="Edexcel">Pearson Edexcel</option>
-                <option value="AQA">AQA</option>
-                <option value="OCR">OCR</option>
-              </select>
-
-              {/* Level Filter */}
-              <select
-                value={selectedLevel}
-                onChange={(e) => setSelectedLevel(e.target.value)}
-                className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="igcse">IGCSE</option>
-                <option value="olevel">O-Level</option>
-                <option value="alevel">A-Level</option>
-                <option value="as">AS Level</option>
-              </select>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search subjects, codes, or topics..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
             </div>
+            
+            {/* Exam Board Filter */}
+            <select
+              value={selectedBoard}
+              onChange={(e) => setSelectedBoard(e.target.value)}
+              className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="all">All Exam Boards</option>
+              <option value="Cambridge">Cambridge International</option>
+              <option value="Edexcel">Pearson Edexcel</option>
+              <option value="AQA">AQA</option>
+              <option value="OCR">OCR</option>
+            </select>
+            
+            {/* Level Filter */}
+            <select
+              value={selectedLevel}
+              onChange={(e) => setSelectedLevel(e.target.value)}
+              className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="igcse">IGCSE</option>
+              <option value="olevel">O-Level</option>
+              <option value="alevel">A-Level</option>
+              <option value="as">AS Level</option>
+            </select>
           </div>
-        </section>
+        </div>
 
         {/* IGCSE Subjects Grid with Enhanced Cards */}
-        <section className="py-12">
+        <div className="mb-16">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
             IGCSE Core Subjects
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredSubjects.map((subject) => {
               const IconComponent = subject.icon;
               const isExpanded = expandedSubjects.includes(subject.id);
-
+              
               return (
                 <div
                   key={subject.id}
-                  className={`${subject.bgColor} ${subject.borderColor} border rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}
+                  className={`${subject.bgColor} ${subject.borderColor} border rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1`}
                 >
                   {/* Card Header */}
-                  <div className="p-8">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className={`w-14 h-14 bg-gradient-to-br ${subject.color} rounded-xl flex items-center justify-center`}>
-                        <IconComponent className="w-7 h-7 text-white" />
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`w-12 h-12 bg-gradient-to-br ${subject.color} rounded-lg flex items-center justify-center`}>
+                        <IconComponent className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="bg-[#8CC63F] text-white text-sm px-3 py-1.5 rounded-full font-semibold">
+                        <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-semibold">
                           {subject.passRate} Pass
                         </span>
                       </div>
                     </div>
                     
-                    <h3 className={`text-2xl font-bold ${subject.textColor} mb-3`}>
+                    <h3 className={`text-xl font-semibold ${subject.textColor} mb-2`}>
                       {subject.name}
                     </h3>
-
-                    <p className="text-base text-gray-600 dark:text-gray-400 mb-5 leading-relaxed">
+                    
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                       {subject.description}
                     </p>
                     
@@ -424,10 +420,10 @@ export default function SubjectsPage() {
               );
             })}
           </div>
-        </section>
+        </div>
 
         {/* A-Level Section */}
-        <section className="py-12">
+        <div className="mb-16">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
             A-Level Advanced Subjects
           </h2>
@@ -460,94 +456,90 @@ export default function SubjectsPage() {
               ))}
             </div>
           </div>
-        </section>
+        </div>
 
         {/* Features Section */}
-        <section className="py-12">
-          <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-2xl p-8 text-white shadow-lg">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold mb-4">
-                Why Choose GGK for IGCSE & A-Level?
-              </h2>
-              <p className="text-xl opacity-90 max-w-2xl mx-auto">
-                Comprehensive exam preparation aligned with official Cambridge and Edexcel specifications
+        <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-2xl p-8 mb-16 text-white">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold mb-4">
+              Why Choose GGK for IGCSE & A-Level?
+            </h2>
+            <p className="text-xl opacity-90 max-w-2xl mx-auto">
+              Comprehensive exam preparation aligned with official Cambridge and Edexcel specifications
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="font-semibold mb-2">15,000+ Past Papers</h3>
+              <p className="text-sm opacity-90">
+                Complete database from 2010-2024 with mark schemes
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                  <FileText className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-semibold mb-2">15,000+ Past Papers</h3>
-                <p className="text-sm opacity-90">
-                  Complete database from 2010-2024 with mark schemes
-                </p>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Video className="w-6 h-6 text-white" />
               </div>
+              <h3 className="font-semibold mb-2">3,000+ Video Lessons</h3>
+              <p className="text-sm opacity-90">
+                Animated explanations for every topic
+              </p>
+            </div>
 
-              <div className="text-center">
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                  <Video className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-semibold mb-2">3,000+ Video Lessons</h3>
-                <p className="text-sm opacity-90">
-                  Animated explanations for every topic
-                </p>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Target className="w-6 h-6 text-white" />
               </div>
+              <h3 className="font-semibold mb-2">Mock Exams</h3>
+              <p className="text-sm opacity-90">
+                AI-powered exam simulations with instant feedback
+              </p>
+            </div>
 
-              <div className="text-center">
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                  <Target className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-semibold mb-2">Mock Exams</h3>
-                <p className="text-sm opacity-90">
-                  AI-powered exam simulations with instant feedback
-                </p>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Users className="w-6 h-6 text-white" />
               </div>
-
-              <div className="text-center">
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                  <Users className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-semibold mb-2">Expert Teachers</h3>
-                <p className="text-sm opacity-90">
-                  24/7 support from qualified IGCSE teachers
-                </p>
-              </div>
+              <h3 className="font-semibold mb-2">Expert Teachers</h3>
+              <p className="text-sm opacity-90">
+                24/7 support from qualified IGCSE teachers
+              </p>
             </div>
           </div>
-        </section>
+        </div>
 
         {/* Call to Action */}
-        <section className="py-12">
-          <div className="text-center">
-            <div className="bg-gray-900 rounded-2xl p-8 text-white shadow-lg">
-              <h2 className="text-3xl font-bold mb-4">
-                Ready to Excel in Your IGCSE & A-Level Exams?
-              </h2>
-              <p className="text-xl mb-6 opacity-90 max-w-2xl mx-auto">
-                Join 50,000+ students achieving top grades with our comprehensive resources
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/signin"
-                  className="inline-flex items-center px-8 py-3 bg-[#8CC63F] hover:bg-[#7AB635] text-white font-semibold rounded-lg transition-colors duration-200"
-                >
-                  Start Free Trial
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Link>
-                <Link
-                  to="/demo"
-                  className="inline-flex items-center px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-gray-900 transition-colors duration-200"
-                >
-                  Request Demo
-                  <Zap className="w-5 h-5 ml-2" />
-                </Link>
-              </div>
+        <div className="text-center">
+          <div className="bg-gray-900 rounded-2xl p-8 text-white">
+            <h2 className="text-3xl font-bold mb-4">
+              Ready to Excel in Your IGCSE & A-Level Exams?
+            </h2>
+            <p className="text-xl mb-6 opacity-90 max-w-2xl mx-auto">
+              Join 50,000+ students achieving top grades with our comprehensive resources
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                to="/signin"
+                className="inline-flex items-center px-8 py-3 bg-[#8CC63F] hover:bg-[#7AB635] text-white font-semibold rounded-lg transition-colors duration-200"
+              >
+                Start Free Trial
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Link>
+              <Link
+                to="/demo"
+                className="inline-flex items-center px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-gray-900 transition-colors duration-200"
+              >
+                Request Demo
+                <Zap className="w-5 h-5 ml-2" />
+              </Link>
             </div>
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
     </div>
   );
 }

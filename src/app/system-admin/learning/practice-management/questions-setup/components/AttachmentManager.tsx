@@ -8,7 +8,6 @@ import {
   Upload, 
   Eye, 
   Download,
-  Loader2,
   X,
   Scissors,
   ChevronUp,
@@ -25,6 +24,7 @@ import { cn } from '../../../../../../lib/utils';
 import { useQuestionMutations } from '../hooks/useQuestionMutations';
 import { Attachment } from '../page';
 import { toast } from '../../../../../../components/shared/Toast';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 
 interface AttachmentManagerProps {
   attachments: Attachment[];
@@ -33,6 +33,7 @@ interface AttachmentManagerProps {
   onUpdate: () => void;
   readOnly?: boolean;
   questionDescription?: string; // To detect if figures are mentioned
+  contextLabel?: string; // Label to display in snipping tool (e.g., "Question 2", "Part (a)", "Subpart i")
 }
 
 // Global PDF storage to share across all attachment managers
@@ -51,7 +52,8 @@ export function AttachmentManager({
   subQuestionId,
   onUpdate,
   readOnly = false,
-  questionDescription = ''
+  questionDescription = '',
+  contextLabel
 }: AttachmentManagerProps) {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -436,7 +438,13 @@ export function AttachmentManager({
               data-snip-button
               leftIcon={
                 loadingPdf ? 
-                <Loader2 className="h-3 w-3 animate-spin" /> : 
+                <LoadingSpinner
+                  size="xs"
+                  inline
+                  centered={false}
+                  showLogo={false}
+                  className="!gap-0"
+                /> :
                 showSnippingTool ? 
                 <ChevronUp className="h-3 w-3" /> :
                 <Scissors className="h-3 w-3" />
@@ -472,7 +480,19 @@ export function AttachmentManager({
               variant="outline"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingFile}
-              leftIcon={uploadingFile ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+              leftIcon={
+                uploadingFile ? (
+                  <LoadingSpinner
+                    size="xs"
+                    inline
+                    centered={false}
+                    showLogo={false}
+                    className="!gap-0"
+                  />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )
+              }
               className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               {uploadingFile ? 'Uploading...' : 'Upload'}
@@ -568,6 +588,19 @@ export function AttachmentManager({
               <span>Click and drag to select areas. Use zoom controls for precision. Multiple snips allowed.</span>
             </div>
 
+            {/* Context Label Display */}
+            {contextLabel && (
+              <div className="mt-2 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700 rounded-md px-3 py-2">
+                <p className="text-xs font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                  <Scissors className="h-3 w-3" />
+                  Snipping for: {contextLabel}
+                </p>
+                <p className="text-[10px] text-blue-600 dark:text-blue-300 mt-0.5">
+                  All captured images will be attached to this location
+                </p>
+              </div>
+            )}
+
             {recentSnips.length > 0 && (
               <div className="mt-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-2">
                 <div className="flex items-center justify-between mb-2">
@@ -605,6 +638,7 @@ export function AttachmentManager({
               initialPage={snippingViewState.page}
               initialScale={snippingViewState.scale}
               onViewStateChange={handleSnippingViewStateChange}
+              questionLabel={contextLabel}
             />
           </div>
         </div>
@@ -686,42 +720,58 @@ export function AttachmentManager({
               <span>Open all</span>
             </button>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3">
             {attachments
               .filter(a => a.file_type.startsWith('image/'))
               .map((attachment) => (
                 <div key={attachment.id} className="relative group">
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden p-2">
-                    <img 
-                      src={attachment.file_url} 
-                      alt={attachment.file_name}
-                      className="w-full h-32 object-contain cursor-pointer"
-                      onClick={() => handlePreview(attachment)}
-                      loading="lazy"
-                    />
-                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* White background card with centered image */}
+                  <div className="bg-white dark:bg-white border-2 border-gray-200 dark:border-gray-300 rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-all">
+                    {/* Image container with proper centering */}
+                    <div className="flex items-center justify-center p-3 min-h-[140px] cursor-pointer" onClick={() => handlePreview(attachment)}>
+                      <img
+                        src={attachment.file_url}
+                        alt={attachment.file_name}
+                        className="max-w-full h-auto object-contain"
+                        style={{ maxHeight: '200px' }}
+                        loading="lazy"
+                      />
+                    </div>
+
+                    {/* Action buttons overlay */}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => handlePreview(attachment)}
-                        className="p-1 bg-white dark:bg-gray-800 rounded shadow hover:bg-gray-100 dark:hover:bg-gray-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreview(attachment);
+                        }}
+                        className="p-1.5 bg-white dark:bg-white rounded-full shadow-md hover:bg-blue-50 dark:hover:bg-blue-100 text-blue-600 hover:text-blue-700"
                         title="View Full Size"
                       >
-                        <Eye size={14} />
+                        <Eye size={16} />
                       </button>
                       {!readOnly && (
                         <button
-                          onClick={() => handleDelete(attachment)}
-                          className="p-1 bg-white dark:bg-gray-800 rounded shadow hover:bg-red-100 dark:hover:bg-red-900/20"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(attachment);
+                          }}
+                          className="p-1.5 bg-white dark:bg-white rounded-full shadow-md hover:bg-red-50 dark:hover:bg-red-100 text-red-600 hover:text-red-700"
                           title="Delete"
                         >
-                          <Trash2 size={14} className="text-red-600" />
+                          <Trash2 size={16} />
                         </button>
                       )}
                     </div>
+
+                    {/* File name footer */}
+                    <div className="bg-gray-50 dark:bg-gray-100 border-t border-gray-200 dark:border-gray-300 px-2 py-1.5">
+                      <p className="text-xs text-gray-700 dark:text-gray-800 truncate font-medium">
+                        {attachment.file_name}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
-                    {attachment.file_name}
-                  </p>
                 </div>
               ))}
           </div>

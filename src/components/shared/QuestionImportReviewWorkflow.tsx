@@ -18,7 +18,9 @@ import {
   Paperclip,
   Scissors,
   ZoomIn,
-  FileText
+  FileText,
+  Loader2,
+  Save
 } from 'lucide-react';
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
@@ -28,6 +30,7 @@ import { toast } from './Toast';
 import { cn } from '../../lib/utils';
 import { FormField, Input, Select } from './FormField';
 import { RichTextEditor } from './RichTextEditor';
+import { TableTemplateImportReviewService } from '../../services/TableTemplateImportReviewService';
 import {
   deriveAnswerRequirement as deriveAnswerRequirementLegacy,
   getAnswerRequirementExplanation,
@@ -39,6 +42,8 @@ import {
   deriveAnswerFormat,
   deriveAnswerRequirement
 } from '../../lib/constants/answerOptions';
+import EnhancedAnswerFormatSelector from './EnhancedAnswerFormatSelector';
+import DynamicAnswerField from './DynamicAnswerField';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -154,7 +159,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
   const simulationResults = externalSimulationResults;
   const simulationCompleted = externalSimulationCompleted;
-  const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
+  // Note: This state is deprecated and should be removed - use importSessionId prop directly
+  const [localSessionId, setLocalSessionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -165,6 +171,12 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(false);
   const taxonomyErrorNotifiedRef = useRef(false);
   const [isBulkReviewing, setIsBulkReviewing] = useState(false);
+  // Template storage for complex answer formats (table_completion, etc.)
+  const [questionTemplates, setQuestionTemplates] = useState<Record<string, any>>({});
+  // Auto-save state
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSaveRef = useRef<number>(Date.now());
 
   const isInitializedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -264,15 +276,102 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     };
   }, [subjectId]);
 
+  // Save question updates to database (debounced)
+  const debouncedSaveToDatabase = useCallback(
+    async (updatedQuestions: QuestionDisplayData[]) => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      setSaveStatus('saving');
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          if (!importSessionId) {
+            console.warn('[Auto-Save] No import session ID, skipping save');
+            setSaveStatus('idle');
+            return;
+          }
+
+          // Fetch current session data
+          const { data: session, error: fetchError } = await supabase
+            .from('past_paper_import_sessions')
+            .select('working_json, raw_json')
+            .eq('id', importSessionId)
+            .single();
+
+          if (fetchError) {
+            console.error('[Auto-Save] Failed to fetch session:', fetchError);
+            throw fetchError;
+          }
+
+          // Get base JSON structure (preserve metadata)
+          const baseJson = session.working_json || session.raw_json || {};
+
+          // Build updated working_json with latest question data
+          const workingJson = {
+            ...baseJson,
+            questions: updatedQuestions.map(q => ({
+              ...q,
+              last_updated: new Date().toISOString()
+            }))
+          };
+
+          // Save to database
+          const { error: updateError } = await supabase
+            .from('past_paper_import_sessions')
+            .update({
+              working_json: workingJson,
+              last_synced_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', importSessionId);
+
+          if (updateError) {
+            console.error('[Auto-Save] Failed to save:', updateError);
+            throw updateError;
+          }
+
+          console.log(`[Auto-Save] Saved ${updatedQuestions.length} questions to working_json`);
+          lastSaveRef.current = Date.now();
+          setSaveStatus('saved');
+
+          // Reset to idle after showing saved status
+          setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (error) {
+          console.error('[Auto-Save] Error:', error);
+          setSaveStatus('error');
+          toast.error('Failed to save changes automatically. Please try refreshing.');
+
+          // Retry once after error
+          setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+      }, 1500); // 1.5 second debounce
+    },
+    [importSessionId]
+  );
+
   const commitQuestionUpdate = useCallback(
     (question: QuestionDisplayData, updates: Partial<QuestionDisplayData>) => {
+      // Update parent state (optimistic update)
       if (onQuestionUpdate) {
         onQuestionUpdate(question.id, updates);
       } else {
         console.warn('Question update attempted without handler', { questionId: question.id, updates });
       }
+
+      // Trigger debounced save to database
+      // We pass the entire questions array which will be updated by parent
+      // The save will happen after debounce delay
+      if (questions && questions.length > 0) {
+        // Find and update the question in the array
+        const updatedQuestions = questions.map(q =>
+          q.id === question.id ? { ...q, ...updates } : q
+        );
+        debouncedSaveToDatabase(updatedQuestions);
+      }
     },
-    [onQuestionUpdate]
+    [onQuestionUpdate, questions, debouncedSaveToDatabase]
   );
 
   const normalizeName = useCallback((value?: string | null) => value?.trim().toLowerCase() ?? '', []);
@@ -526,9 +625,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
+    // Formats that require specialized components (should NOT trigger auto-fill)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const isComplexFormat = question.answer_format && complexFormats.includes(question.answer_format);
+
     // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    // Skip auto-fill for complex formats that have their own specialized editors
     const questionType = question.question_type || 'descriptive';
-    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf' && !isComplexFormat;
 
     if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
@@ -547,9 +655,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
+    // Formats that require specialized components (should NOT trigger auto-fill)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const isComplexFormat = question.answer_format && complexFormats.includes(question.answer_format);
+
     // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    // Skip auto-fill for complex formats that have their own specialized editors
     const questionType = question.question_type || 'descriptive';
-    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf' && !isComplexFormat;
 
     if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
@@ -568,9 +685,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
     const questionUpdates: Partial<QuestionDisplayData> = { correct_answers: answers };
 
+    // Formats that require specialized components (should NOT trigger auto-fill)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const isComplexFormat = question.answer_format && complexFormats.includes(question.answer_format);
+
     // Auto-fill answer fields if not set (only for descriptive/complex questions)
+    // Skip auto-fill for complex formats that have their own specialized editors
     const questionType = question.question_type || 'descriptive';
-    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf';
+    const shouldAutoFill = questionType !== 'mcq' && questionType !== 'tf' && !isComplexFormat;
 
     if (shouldAutoFill && (!question.answer_format || !question.answer_requirement)) {
       const autoFilled = autoFillAnswerFields({
@@ -875,6 +1001,157 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     );
   };
 
+  // Handle template saves for complex answer formats
+  const handleTemplateSave = useCallback(async (questionId: string, template: any) => {
+    console.log('[Template Save] ========== TEMPLATE SAVE STARTED ==========');
+    console.log('[Template Save] Question ID:', questionId);
+    console.log('[Template Save] importSessionId:', importSessionId);
+    console.log('[Template Save] Template data:', template);
+    console.log('[Template Save] Template headers:', template.headers);
+    console.log('[Template Save] Template rows/cols:', template.rows, '/', template.columns);
+    console.log('[Template Save] Template cells count:', template.cells?.length);
+
+    // Store in local state for immediate access
+    setQuestionTemplates(prev => ({
+      ...prev,
+      [questionId]: template
+    }));
+
+    // ✅ SOLUTION 2: Direct database save to review tables
+    if (importSessionId && template.rows && template.columns && Array.isArray(template.cells)) {
+      console.log('[Template Save] ✅ Attempting DIRECT save to review tables');
+
+      try {
+        const result = await TableTemplateImportReviewService.saveTemplateForReview({
+          importSessionId: importSessionId,
+          questionIdentifier: questionId,
+          isSubquestion: false,
+          rows: template.rows,
+          columns: template.columns,
+          headers: template.headers || [],
+          title: template.title,
+          description: template.description,
+          cells: template.cells
+        });
+
+        if (result.success) {
+          console.log('[Template Save] ✅ SUCCESS! Saved to review database, template ID:', result.templateId);
+          toast.success('✅ Template saved to database!', {
+            description: 'Changes are persisted and will migrate on import approval',
+            duration: 3000
+          });
+        } else {
+          console.error('[Template Save] ❌ Failed to save to review database:', result.error);
+          toast.error('Failed to save template to database', {
+            description: result.error,
+            duration: 5000
+          });
+        }
+      } catch (error) {
+        console.error('[Template Save] ❌ Exception during save:', error);
+        toast.error('Error saving template', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+          duration: 5000
+        });
+      }
+    } else {
+      console.warn('[Template Save] ⚠️ Cannot save to review tables:', {
+        hasReviewSessionId: !!importSessionId,
+        hasRows: !!template.rows,
+        hasColumns: !!template.columns,
+        hasCells: Array.isArray(template.cells)
+      });
+    }
+
+    // Find the question in the current questions array
+    const question = questions.find(q => q.id === questionId);
+    if (!question) {
+      console.error('[Template Save] ❌ Question not found:', questionId);
+      return;
+    }
+
+    console.log('[Template Save] Found question:', question.id, question.question_number);
+
+    // Convert template to correct_answers format
+    // For table_completion, store the entire template as a JSON string in correct_answers
+    const templateAnswer = {
+      answer_text: JSON.stringify(template),
+      marks: template.cells?.filter((c: any) => c.cellType === 'editable').length || 1,
+      answer_type: 'table_template'
+    };
+
+    // Update the question's correct_answers
+    const updatedAnswers = [templateAnswer];
+
+    console.log('[Template Save] Created answer object:', {
+      answer_type: templateAnswer.answer_type,
+      marks: templateAnswer.marks,
+      answer_text_length: templateAnswer.answer_text.length,
+      answer_text_preview: templateAnswer.answer_text.substring(0, 200)
+    });
+
+    console.log('[Template Save] Calling commitQuestionUpdate with correct_answers');
+
+    // Trigger the question update which will auto-save
+    commitQuestionUpdate(question, { correct_answers: updatedAnswers });
+
+    console.log('[Template Save] ========== TEMPLATE SAVE COMPLETE ==========');
+  }, [questions, commitQuestionUpdate, importSessionId]);
+
+  // Save all questions to database immediately
+  const saveAllQuestionsToDatabase = useCallback(async () => {
+    if (!importSessionId) {
+      console.warn('[Save All] No import session ID');
+      return;
+    }
+
+    try {
+      setSaveStatus('saving');
+      console.log('[Save All] Saving all questions...');
+
+      // Fetch current session
+      const { data: session, error: fetchError } = await supabase
+        .from('past_paper_import_sessions')
+        .select('working_json, raw_json')
+        .eq('id', importSessionId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const baseJson = session.working_json || session.raw_json || {};
+
+      const workingJson = {
+        ...baseJson,
+        questions: questions.map(q => ({
+          ...q,
+          last_updated: new Date().toISOString()
+        }))
+      };
+
+      const { error: updateError } = await supabase
+        .from('past_paper_import_sessions')
+        .update({
+          working_json: workingJson,
+          last_synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', importSessionId);
+
+      if (updateError) throw updateError;
+
+      console.log(`[Save All] Successfully saved ${questions.length} questions`);
+      lastSaveRef.current = Date.now();
+      setSaveStatus('saved');
+      toast.success('All changes saved successfully');
+
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('[Save All] Failed to save:', error);
+      setSaveStatus('error');
+      toast.error('Failed to save all changes');
+    }
+  }, [importSessionId, questions]);
+
   const renderAnswerEditorList = (
     answers: EditableCorrectAnswer[] | undefined,
     config: {
@@ -884,10 +1161,158 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       title: string;
       emptyLabel: string;
       keyPrefix: string;
+    },
+    questionContext?: {
+      id: string;
+      question_type?: string;
+      answer_format?: string | null;
+      answer_requirement?: string | null;
+      marks?: number;
+      subject?: string;
     }
   ) => {
     const list = Array.isArray(answers) ? answers : [];
 
+    // Formats that require specialized components (should use DynamicAnswerField)
+    const complexFormats = [
+      'code', 'audio', 'file_upload', 'table', 'table_completion',
+      'diagram', 'graph', 'structural_diagram', 'chemical_structure'
+    ];
+
+    const useComplexInput = questionContext?.answer_format &&
+      complexFormats.includes(questionContext.answer_format);
+
+    // If format requires specialized component, use DynamicAnswerField
+    if (useComplexInput && questionContext) {
+      // For table_completion format, extract template from correct_answers if it exists
+      let initialValue: string | undefined;
+      if (questionContext.answer_format === 'table_completion' && list.length > 0) {
+        console.log('[Template Load] ========== TEMPLATE LOAD STARTED ==========');
+        console.log('[Template Load] Question ID:', questionContext.id);
+        console.log('[Template Load] Answer format:', questionContext.answer_format);
+        console.log('[Template Load] correct_answers list:', list);
+        console.log('[Template Load] correct_answers count:', list.length);
+
+        const templateAnswer = list.find(
+          (ans: any) => ans.answer_type === 'table_template' || ans.answer_text
+        );
+
+        console.log('[Template Load] Found template answer:', templateAnswer);
+
+        if (templateAnswer?.answer_text) {
+          initialValue = templateAnswer.answer_text;
+          console.log('[Template Load] ✅ Template data found');
+          console.log('[Template Load] Template length:', initialValue.length);
+          console.log('[Template Load] Template preview:', initialValue.substring(0, 200));
+
+          // Try to parse and log the template structure
+          try {
+            const parsed = JSON.parse(initialValue);
+            console.log('[Template Load] Parsed template:', {
+              headers: parsed.headers,
+              rows: parsed.rows,
+              columns: parsed.columns,
+              cellsCount: parsed.cells?.length
+            });
+          } catch (e) {
+            console.error('[Template Load] ❌ Failed to parse template:', e);
+          }
+        } else {
+          console.warn('[Template Load] ⚠️ No template data found in correct_answers');
+        }
+
+        // NOTE: preview_data (student answers) is loaded separately by DynamicAnswerField
+        // via question.preview_data prop (line 1213). Do NOT overwrite initialValue here!
+        // initialValue contains the template structure from correct_answers
+        // preview_data contains student/test data and is passed via question prop
+        console.log('[Template Load] Template structure loaded. Preview data will be loaded from question.preview_data prop.');
+        console.log('[Template Load] ========== TEMPLATE LOAD COMPLETE ==========');
+      }
+
+      return (
+        <div className="space-y-3">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-sm text-blue-800 dark:text-blue-200">
+                <p className="font-medium mb-1">Using specialized input for "{questionContext.answer_format}" format</p>
+                <p className="text-blue-700 dark:text-blue-300">
+                  The answer field below uses the same component students will see, allowing you to preview and test the question format.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Diagnostic info - remove after debugging */}
+          {!importSessionId && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-800 text-sm">
+                <span className="font-semibold">⚠️ Debug:</span>
+                <span>Review session not initialized yet (importSessionId is null)</span>
+              </div>
+            </div>
+          )}
+
+          <DynamicAnswerField
+            key={`${questionContext.id}-${importSessionId || 'loading'}`}
+            question={{
+              id: questionContext.id,
+              type: questionContext.question_type || 'descriptive',
+              subject: questionContext.subject || subjectId,
+              answer_format: questionContext.answer_format,
+              answer_requirement: questionContext.answer_requirement,
+              marks: questionContext.marks,
+              correct_answers: list,
+              // CRITICAL FIX: Pass preview_data for table completion student answers
+              preview_data: (questions.find(q => q.id === questionContext.id) as any)?.preview_data
+            }}
+            value={initialValue}
+            mode="admin"
+            forceTemplateEditor={true}
+            importSessionId={importSessionId}
+            questionIdentifier={questionContext.id}
+            onTemplateSave={(template) => handleTemplateSave(questionContext.id, template)}
+            onChange={(newAnswers) => {
+              console.log('[QuestionImportReviewWorkflow] onChange received:', typeof newAnswers, newAnswers);
+
+              // Handle table_completion student data (preview/test data)
+              if (questionContext.answer_format === 'table_completion' && typeof newAnswers === 'string') {
+                try {
+                  const parsed = JSON.parse(newAnswers);
+                  console.log('[QuestionImportReviewWorkflow] Parsed table completion data:', parsed);
+
+                  // Store student/preview data separately from template structure
+                  if (parsed && 'studentAnswers' in parsed) {
+                    console.log('[QuestionImportReviewWorkflow] Storing table preview data');
+                    const question = questions.find(q => q.id === questionContext.id);
+                    if (question) {
+                      commitQuestionUpdate(question, {
+                        preview_data: newAnswers // Store as JSON string
+                      });
+                    }
+                    return;
+                  }
+                } catch (e) {
+                  console.warn('[QuestionImportReviewWorkflow] Failed to parse table completion data:', e);
+                }
+              }
+
+              // Handle array-based answers (normal flow)
+              if (Array.isArray(newAnswers) && newAnswers.length > 0) {
+                // Update each answer
+                newAnswers.forEach((newAnswer, index) => {
+                  if (index < list.length) {
+                    config.onChange(index, newAnswer);
+                  }
+                });
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    // For simple formats, use the existing RichTextEditor approach
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -1242,7 +1667,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   // Initialize review session
   useEffect(() => {
     // Prevent duplicate initialization
-    if (isInitializedRef.current && reviewSessionId) {
+    if (isInitializedRef.current && importSessionId) {
       return;
     }
 
@@ -1322,7 +1747,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const initializeReviewSession = useCallback(async () => {
     // Check if already initialized
-    if (isInitializedRef.current && reviewSessionId) {
+    if (isInitializedRef.current && importSessionId) {
       console.log('Review session already initialized, skipping...');
       return;
     }
@@ -1357,7 +1782,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
 
       // Check if there's an existing review session
-      let sessionId = reviewSessionId;
+      let sessionId = importSessionId;
 
       if (!sessionId && importSessionId) {
         try {
@@ -1377,7 +1802,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           if (existingSession) {
             console.log('Found existing review session:', existingSession.id);
             sessionId = existingSession.id;
-            setReviewSessionId(sessionId);
+            setLocalSessionId(sessionId);
 
             // Load existing review statuses
             const { data: existingStatuses, error: statusError } = await supabase
@@ -1464,7 +1889,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
         }
 
         sessionId = newSession.id;
-        setReviewSessionId(sessionId);
+        setLocalSessionId(sessionId);
         console.log('Created new review session:', sessionId);
 
         // Initialize review statuses for all questions
@@ -1515,10 +1940,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     } finally {
       setIsInitializing(false);
     }
-  }, [importSessionId, memoizedQuestions.length, paperTitle, paperDuration, totalMarks, requireSimulation, reviewSessionId]);
+  }, [importSessionId, memoizedQuestions.length, paperTitle, paperDuration, totalMarks, requireSimulation, importSessionId]);
 
   const handleToggleReview = async (questionId: string) => {
-    if (!reviewSessionId) return;
+    if (!importSessionId) return;
 
     const currentStatus = reviewStatuses[questionId];
     const newReviewedState = !currentStatus?.isReviewed;
@@ -1532,7 +1957,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: newReviewedState ? new Date().toISOString() : null,
           reviewed_by: newReviewedState ? (await supabase.auth.getUser()).data.user?.id : null
         })
-        .eq('review_session_id', reviewSessionId)
+        .eq('review_session_id', importSessionId)
         .eq('question_identifier', questionId);
 
       if (error) throw error;
@@ -1563,7 +1988,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   };
 
   const handleMarkAllReviewed = useCallback(async () => {
-    if (!reviewSessionId) {
+    if (!importSessionId) {
       return;
     }
 
@@ -1592,7 +2017,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: now,
           reviewed_by: reviewerId,
         })
-        .eq('review_session_id', reviewSessionId)
+        .eq('review_session_id', importSessionId)
         .in('question_identifier', unreviewedQuestionIds);
 
       if (error) {
@@ -1624,7 +2049,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     } finally {
       setIsBulkReviewing(false);
     }
-  }, [memoizedQuestions, reviewSessionId, reviewStatuses]);
+  }, [memoizedQuestions, importSessionId, reviewStatuses]);
 
   const handleStartSimulation = () => {
     // Validate questions before requesting simulation from parent
@@ -1656,13 +2081,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const handleRetrySync = () => {
     isInitializedRef.current = false;
-    setReviewSessionId(null);
+    setLocalSessionId(null);
     setSyncError(null);
     initializeReviewSession();
   };
 
   const handleSimulationComplete = async (results: SimulationResults) => {
-    if (!reviewSessionId) return;
+    if (!importSessionId) return;
 
     try {
       // Get current user
@@ -1673,7 +2098,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       const { error } = await supabase
         .from('question_import_simulation_results')
         .insert({
-          review_session_id: reviewSessionId,
+          review_session_id: importSessionId,
           user_id: user.id,
           simulation_completed_at: new Date().toISOString(),
           total_questions: results.totalQuestions,
@@ -1700,7 +2125,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           simulation_passed: results.percentage >= 70,
           updated_at: new Date().toISOString()
         })
-        .eq('id', reviewSessionId);
+        .eq('id', importSessionId);
 
       setSimulationResults(results);
       toast.success('Simulation completed successfully');
@@ -2302,47 +2727,32 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         />
                       </FormField>
 
-                      <FormField
-                        id={`${question.id}-answer-format`}
-                        label="Answer format"
-                        className="mb-0"
-                      >
-                        <Select
-                          id={`${question.id}-answer-format`}
-                          value={answerFormatValue}
-                          onChange={(value) =>
+                      {/* Enhanced Answer Format and Requirement Selector with Validation */}
+                      <div className="mb-4 md:col-span-2 lg:col-span-3">
+                        <EnhancedAnswerFormatSelector
+                          answerFormat={question.answer_format || null}
+                          answerRequirement={question.answer_requirement || null}
+                          onFormatChange={(value) =>
                             handleQuestionFieldChange(
                               question,
                               'answer_format',
                               (value || null) as QuestionDisplayData['answer_format']
                             )
                           }
-                          options={answerFormatSelectOptions}
-                          placeholder="Select answer format"
-                          usePortal={false}
-                        />
-                      </FormField>
-
-                      <FormField
-                        id={`${question.id}-answer-requirement`}
-                        label="Answer requirement"
-                        className="mb-0"
-                      >
-                        <Select
-                          id={`${question.id}-answer-requirement`}
-                          value={answerRequirementValue}
-                          onChange={(value) =>
+                          onRequirementChange={(value) =>
                             handleQuestionFieldChange(
                               question,
                               'answer_requirement',
                               (value || null) as QuestionDisplayData['answer_requirement']
                             )
                           }
-                          options={answerRequirementSelectOptions}
-                          placeholder="Select requirement"
-                          usePortal={false}
+                          questionType={question.question_type || 'descriptive'}
+                          correctAnswersCount={question.correct_answers?.length || 0}
+                          showValidation={true}
+                          disabled={false}
+                          className="w-full"
                         />
-                      </FormField>
+                      </div>
 
                       <FormField
                         id={`${question.id}-hint`}
@@ -2379,24 +2789,47 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         />
                       </FormField>
 
-                      <div className="md:col-span-2 lg:col-span-3 flex flex-wrap items-center gap-3">
-                        <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                          <input
-                            type="checkbox"
-                            checked={requiresFigure}
-                            onChange={(event) =>
-                              commitQuestionUpdate(question, {
-                                figure_required: event.target.checked,
-                                figure: event.target.checked
-                              })
-                            }
-                            className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                          />
-                          Figure attachment required
-                        </label>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          Toggle off if the question no longer needs an accompanying image.
-                        </span>
+                      <div className="md:col-span-2 lg:col-span-3">
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800/40">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-lg ${requiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-400'} transition-colors`}>
+                                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">Figure Requirement</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                  {requiresFigure
+                                    ? 'Students must reference a diagram or figure'
+                                    : 'No diagram or figure needed for this question'}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                commitQuestionUpdate(question, {
+                                  figure_required: !requiresFigure,
+                                  figure: !requiresFigure
+                                })
+                              }
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-2 ${
+                                requiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
+                              role="switch"
+                              aria-checked={requiresFigure}
+                              aria-label="Toggle figure requirement"
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                                  requiresFigure ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -2422,6 +2855,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                       title: 'Correct answers & mark scheme',
                       emptyLabel: 'No correct answers defined. Add mark scheme entries so the system can validate responses.',
                       keyPrefix: `question-${question.id}`
+                    }, {
+                      id: question.id,
+                      question_type: question.question_type,
+                      answer_format: question.answer_format,
+                      answer_requirement: question.answer_requirement,
+                      marks: question.marks,
+                      subject: subjectId
                     })}
                   </section>
 
@@ -2430,7 +2870,9 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                       <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Parts & subparts</h4>
                       {question.parts.map((part, partIndex) => {
                         const partRequiresFigure = Boolean(part.figure_required ?? part.figure);
-                        const partHasAttachments = Array.isArray(part.attachments) ? part.attachments.length > 0 : false;
+                        const partHasAttachments = Array.isArray(part.attachments)
+                          ? part.attachments.some(att => att.file_url?.startsWith('data:'))
+                          : false;
                         const partAnswerFormatValue = part.answer_format ?? '';
                         const partAnswerFormatOptions = [...answerFormatOptions];
                         if (
@@ -2575,39 +3017,23 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                               />
                               {renderInlineAttachments(part.attachments, `Part ${part.part_label || part.part || String.fromCharCode(97 + partIndex)}`)}
                             </FormField>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <FormField
-                                id={`question-${question.id}-part-${partIndex}-format`}
-                                label="Answer format"
-                                className="mb-0"
-                              >
-                                <Select
-                                  id={`question-${question.id}-part-${partIndex}-format`}
-                                  value={partAnswerFormatValue}
-                                  onChange={(value) =>
-                                    handlePartFieldChange(question, partIndex, { answer_format: value || null })
-                                  }
-                                  options={partAnswerFormatOptions}
-                                  placeholder="Select answer format"
-                                  usePortal={false}
-                                />
-                              </FormField>
-                              <FormField
-                                id={`question-${question.id}-part-${partIndex}-requirement`}
-                                label="Answer requirement"
-                                className="mb-0"
-                              >
-                                <Select
-                                  id={`question-${question.id}-part-${partIndex}-requirement`}
-                                  value={partAnswerRequirementValue}
-                                  onChange={(value) =>
-                                    handlePartFieldChange(question, partIndex, { answer_requirement: value || null })
-                                  }
-                                  options={partAnswerRequirementOptions}
-                                  placeholder="Select requirement"
-                                  usePortal={false}
-                                />
-                              </FormField>
+                            {/* Enhanced Answer Format and Requirement for Part */}
+                            <div className="mb-3">
+                              <EnhancedAnswerFormatSelector
+                                answerFormat={part.answer_format || null}
+                                answerRequirement={part.answer_requirement || null}
+                                onFormatChange={(value) =>
+                                  handlePartFieldChange(question, partIndex, { answer_format: value || null })
+                                }
+                                onRequirementChange={(value) =>
+                                  handlePartFieldChange(question, partIndex, { answer_requirement: value || null })
+                                }
+                                questionType={question.question_type || 'descriptive'}
+                                correctAnswersCount={part.correct_answers?.length || 0}
+                                showValidation={true}
+                                disabled={false}
+                                className="w-full"
+                              />
                             </div>
                             <div className="grid gap-3 md:grid-cols-2">
                               <FormField
@@ -2638,16 +3064,40 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 />
                               </FormField>
                             </div>
-                            <div className="flex flex-wrap items-center gap-3">
-                              <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                                <input
-                                  type="checkbox"
-                                  checked={partRequiresFigure}
-                                  onChange={(event) => handlePartFieldChange(question, partIndex, { figure_required: event.target.checked })}
-                                  className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                                />
-                                Figure required for this part
-                              </label>
+                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800/40">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg ${partRequiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-400'} transition-colors`}>
+                                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">Figure Requirement</p>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                      {partRequiresFigure
+                                        ? 'Students must reference a diagram or figure'
+                                        : 'No diagram or figure needed for this part'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePartFieldChange(question, partIndex, { figure_required: !partRequiresFigure })}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-2 ${
+                                    partRequiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-300 dark:bg-gray-600'
+                                  }`}
+                                  role="switch"
+                                  aria-checked={partRequiresFigure}
+                                  aria-label="Toggle figure requirement"
+                                >
+                                  <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                                      partRequiresFigure ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
                             </div>
 
                             {renderAnswerEditorList(part.correct_answers, {
@@ -2657,6 +3107,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                               title: 'Correct answers',
                               emptyLabel: 'Provide the expected answer for this part.',
                               keyPrefix: `question-${question.id}-part-${partIndex}`
+                            }, {
+                              id: `${question.id}-part-${partIndex}`,
+                              question_type: question.question_type,
+                              answer_format: part.answer_format,
+                              answer_requirement: part.answer_requirement,
+                              marks: part.marks,
+                              subject: subjectId
                             })}
 
                             {Array.isArray(part.options) && part.options.length > 0 && (
@@ -2677,7 +3134,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                   // BUT distinguish between "figure required" (from JSON) vs "figure attached" (has actual attachments)
                                   const subRequiresFigure = Boolean(subpart.figure_required ?? subpart.figure);
                                   const subHasAttachments = Array.isArray(subpart.attachments)
-                                    ? subpart.attachments.length > 0
+                                    ? subpart.attachments.some(att => att.file_url?.startsWith('data:'))
                                     : false;
                                   const subAnswerFormatValue = subpart.answer_format ?? '';
                                   const subAnswerFormatOptions = [...answerFormatOptions];
@@ -2832,43 +3289,92 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                           return (subpart.subpart_label || romanNumerals[subIndex] || String(subIndex + 1)).toUpperCase();
                                         })()}`)}
                                       </FormField>
+                                      {/* Enhanced Answer Format and Requirement for Subpart */}
+                                      <div className="mb-3">
+                                        <EnhancedAnswerFormatSelector
+                                          answerFormat={subpart.answer_format || null}
+                                          answerRequirement={subpart.answer_requirement || null}
+                                          onFormatChange={(value) =>
+                                            handleSubpartFieldChange(question, partIndex, subIndex, {
+                                              answer_format: value || null
+                                            })
+                                          }
+                                          onRequirementChange={(value) =>
+                                            handleSubpartFieldChange(question, partIndex, subIndex, {
+                                              answer_requirement: value || null
+                                            })
+                                          }
+                                          questionType={question.question_type || 'descriptive'}
+                                          correctAnswersCount={subpart.correct_answers?.length || 0}
+                                          showValidation={true}
+                                          disabled={false}
+                                          className="w-full"
+                                        />
+                                      </div>
                                       <div className="grid gap-3 md:grid-cols-2">
                                         <FormField
-                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-format`}
-                                          label="Answer format"
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-hint`}
+                                          label="Hint"
                                           className="mb-0"
                                         >
-                                          <Select
-                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-format`}
-                                            value={subAnswerFormatValue}
-                                            onChange={(value) =>
-                                              handleSubpartFieldChange(question, partIndex, subIndex, {
-                                                answer_format: value || null
-                                              })
-                                            }
-                                            options={subAnswerFormatOptions}
-                                            placeholder="Select answer format"
-                                            usePortal={false}
+                                          <RichTextEditor
+                                            value={subpart.hint ?? ''}
+                                            onChange={(content) => handleSubpartFieldChange(question, partIndex, subIndex, { hint: content })}
+                                            placeholder="Optional hint for this subpart"
+                                            ariaLabel="Subpart hint editor"
+                                            className="min-h-[140px]"
                                           />
                                         </FormField>
                                         <FormField
-                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-requirement`}
-                                          label="Answer requirement"
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-explanation`}
+                                          label="Explanation"
                                           className="mb-0"
                                         >
-                                          <Select
-                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-requirement`}
-                                            value={subAnswerRequirementValue}
-                                            onChange={(value) =>
-                                              handleSubpartFieldChange(question, partIndex, subIndex, {
-                                                answer_requirement: value || null
-                                              })
+                                          <RichTextEditor
+                                            value={subpart.explanation ?? ''}
+                                            onChange={(content) =>
+                                              handleSubpartFieldChange(question, partIndex, subIndex, { explanation: content })
                                             }
-                                            options={subAnswerRequirementOptions}
-                                            placeholder="Select requirement"
-                                            usePortal={false}
+                                            placeholder="Explain the answer expectations for this subpart"
+                                            ariaLabel="Subpart explanation editor"
+                                            className="min-h-[140px]"
                                           />
                                         </FormField>
+                                      </div>
+                                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800/40">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${subRequiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-400'} transition-colors`}>
+                                              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium text-gray-900 dark:text-white">Figure Requirement</p>
+                                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                                                {subRequiresFigure
+                                                  ? 'Students must reference a diagram or figure'
+                                                  : 'No diagram or figure needed for this subpart'}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSubpartFieldChange(question, partIndex, subIndex, { figure_required: !subRequiresFigure })}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-2 ${
+                                              subRequiresFigure ? 'bg-[#8CC63F]' : 'bg-gray-300 dark:bg-gray-600'
+                                            }`}
+                                            role="switch"
+                                            aria-checked={subRequiresFigure}
+                                            aria-label="Toggle figure requirement"
+                                          >
+                                            <span
+                                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                                                subRequiresFigure ? 'translate-x-6' : 'translate-x-1'
+                                              }`}
+                                            />
+                                          </button>
+                                        </div>
                                       </div>
 
                                       {renderAnswerEditorList(subpart.correct_answers, {
@@ -2880,6 +3386,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                         title: 'Correct answers',
                                         emptyLabel: 'Define the expected responses for this subpart.',
                                         keyPrefix: `question-${question.id}-part-${partIndex}-sub-${subIndex}`
+                                      }, {
+                                        id: `${question.id}-part-${partIndex}-sub-${subIndex}`,
+                                        question_type: question.question_type,
+                                        answer_format: subpart.answer_format,
+                                        answer_requirement: subpart.answer_requirement,
+                                        marks: subpart.marks,
+                                        subject: subjectId
                                       })}
 
                                       {Array.isArray(subpart.options) && subpart.options.length > 0 && (
@@ -2908,6 +3421,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                   <section className="space-y-3">
                     <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Preview</h4>
                     <EnhancedQuestionDisplay
+                      key={`${question.id}-${question.answer_format || 'default'}`}
                       question={question}
                       showAnswers={true}
                       showHints={true}
@@ -2947,6 +3461,31 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                 </Button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Save Status Indicator */}
+      {saveStatus === 'saving' && (
+        <div className="fixed bottom-4 right-4 bg-blue-100 dark:bg-blue-900/90 text-blue-800 dark:text-blue-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 border border-blue-200 dark:border-blue-700">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="font-medium">Saving changes...</span>
+        </div>
+      )}
+
+      {saveStatus === 'saved' && (
+        <div className="fixed bottom-4 right-4 bg-green-100 dark:bg-green-900/90 text-green-800 dark:text-green-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 border border-green-200 dark:border-green-700">
+          <CheckCircle className="h-5 w-5" />
+          <span className="font-medium">All changes saved</span>
+        </div>
+      )}
+
+      {saveStatus === 'error' && (
+        <div className="fixed bottom-4 right-4 bg-red-100 dark:bg-red-900/90 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 border border-red-200 dark:border-red-700">
+          <AlertCircle className="h-5 w-5" />
+          <div>
+            <p className="font-medium">Failed to save changes</p>
+            <p className="text-xs mt-1">Changes are saved locally. Refresh to retry.</p>
           </div>
         </div>
       )}

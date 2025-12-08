@@ -11,6 +11,9 @@ export interface SelectOption {
   value: string;
   label: string;
   description?: string;
+  component?: string; // Component to render for this format
+  requiresStorage?: boolean; // Whether this format needs file storage
+  isVisual?: boolean; // Whether this is a visual/interactive format
 }
 
 // Answer Format Options
@@ -58,47 +61,74 @@ export const ANSWER_FORMAT_OPTIONS: SelectOption[] = [
   {
     value: 'chemical_structure',
     label: 'Chemical Structure',
-    description: 'Chemical structure diagram or formula'
+    description: 'Chemical structure diagram or formula',
+    component: 'ChemicalStructureEditor',
+    requiresStorage: false,
+    isVisual: true
   },
   {
     value: 'structural_diagram',
     label: 'Structural Diagram',
-    description: 'Labeled diagram (e.g., biological structure, apparatus)'
+    description: 'Labeled diagram (e.g., biological structure, apparatus)',
+    component: 'StructuralDiagram',
+    requiresStorage: false,
+    isVisual: true
   },
   {
     value: 'diagram',
     label: 'Diagram',
-    description: 'General diagram or drawing'
+    description: 'General diagram or drawing',
+    component: 'DiagramCanvas',
+    requiresStorage: false,
+    isVisual: true
   },
   {
     value: 'table',
     label: 'Table',
-    description: 'Data presented in table format'
+    description: 'Data presented in table format',
+    component: 'TableCreator',
+    requiresStorage: false,
+    isVisual: true
   },
   {
     value: 'table_completion',
     label: 'Table Completion',
-    description: 'Fill in missing cells in a provided table'
+    description: 'Fill in missing cells in a provided table',
+    component: 'TableCompletion',
+    requiresStorage: false,
+    isVisual: true
   },
   {
     value: 'graph',
     label: 'Graph',
-    description: 'Graph or chart'
+    description: 'Graph or chart',
+    component: 'GraphPlotter',
+    requiresStorage: false,
+    isVisual: true
   },
   {
     value: 'code',
     label: 'Code',
-    description: 'Programming code snippet'
+    description: 'Programming code snippet',
+    component: 'CodeEditor',
+    requiresStorage: false,
+    isVisual: false
   },
   {
     value: 'audio',
     label: 'Audio',
-    description: 'Audio recording response'
+    description: 'Audio recording response',
+    component: 'AudioRecorder',
+    requiresStorage: true,
+    isVisual: false
   },
   {
     value: 'file_upload',
     label: 'File Upload',
-    description: 'File attachment required'
+    description: 'File attachment required',
+    component: 'FileUploader',
+    requiresStorage: true,
+    isVisual: false
   },
   {
     value: 'not_applicable',
@@ -169,6 +199,27 @@ export function getAnswerRequirementLabel(value: string | null | undefined): str
   return option?.label || value;
 }
 
+// Helper function to get component name from format value
+export function getAnswerFormatComponent(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const option = ANSWER_FORMAT_OPTIONS.find(opt => opt.value === value);
+  return option?.component || null;
+}
+
+// Helper function to check if format requires storage
+export function doesFormatRequireStorage(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const option = ANSWER_FORMAT_OPTIONS.find(opt => opt.value === value);
+  return option?.requiresStorage || false;
+}
+
+// Helper function to check if format is visual/interactive
+export function isVisualFormat(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const option = ANSWER_FORMAT_OPTIONS.find(opt => opt.value === value);
+  return option?.isVisual || false;
+}
+
 // Auto-populate logic based on question characteristics
 export function deriveAnswerFormat(question: {
   type: string;
@@ -177,7 +228,7 @@ export function deriveAnswerFormat(question: {
   has_direct_answer?: boolean;
   is_contextual_only?: boolean;
 }): string | null {
-  const { type, question_description = '', correct_answers = [], has_direct_answer, is_contextual_only } = question;
+  const { type, question_description = '', correct_answers = [] } = question;
   const desc = question_description.toLowerCase();
 
   // CRITICAL SAFEGUARD: If there are valid correct_answers, NEVER return 'not_applicable'
@@ -186,15 +237,24 @@ export function deriveAnswerFormat(question: {
   );
   const hasValidAnswers = validAnswers.length > 0;
 
-  // Contextual-only questions should be marked as 'not_applicable'
-  // BUT only if they truly have no answers
-  if ((is_contextual_only === true || has_direct_answer === false) && !hasValidAnswers) {
-    return 'not_applicable';
+  // SAFEGUARD: If we have valid answers, override conflicting flags
+  // The presence of actual answer data takes precedence over metadata flags
+  // Use local variables to avoid reassignment of const parameters
+  let isContextualOnly = question.is_contextual_only;
+  let hasDirectAnswer = question.has_direct_answer;
+
+  if (hasValidAnswers) {
+    if (isContextualOnly === true || hasDirectAnswer === false) {
+      console.warn('[deriveAnswerFormat] Flags indicate no answer but correct_answers exist - correcting flags');
+      isContextualOnly = false;
+      hasDirectAnswer = true;
+    }
   }
 
-  // If we have valid answers but flags say no answer, the flags are wrong - ignore them
-  if (hasValidAnswers && (is_contextual_only === true || has_direct_answer === false)) {
-    console.warn('Answer format derivation: has_direct_answer/is_contextual_only flags conflict with correct_answers data - prioritizing data');
+  // Contextual-only questions should be marked as 'not_applicable'
+  // BUT ONLY if they truly have NO answers
+  if ((isContextualOnly === true || hasDirectAnswer === false) && !hasValidAnswers) {
+    return 'not_applicable';
   }
 
   // MCQ/TF questions don't need a specific format - return null to prevent auto-fill
@@ -284,12 +344,13 @@ export function deriveAnswerRequirement(question: {
   const hasValidAnswers = validAnswers.length > 0;
 
   // If we have valid answers but flags say no answer, override the flags
+  // The presence of actual answer data takes precedence over metadata flags
   let hasDirectAnswer = question.has_direct_answer;
   let isContextualOnly = question.is_contextual_only;
 
   if (hasValidAnswers) {
     if (isContextualOnly === true || hasDirectAnswer === false) {
-      console.warn('Answer requirement derivation: has_direct_answer/is_contextual_only flags conflict with correct_answers data - prioritizing data');
+      console.warn('[deriveAnswerRequirement] Flags indicate no answer but correct_answers exist - correcting flags');
       hasDirectAnswer = true;
       isContextualOnly = false;
     }

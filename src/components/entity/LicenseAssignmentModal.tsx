@@ -91,9 +91,9 @@ export function LicenseAssignmentModal({
   }, [isOpen]);
 
   // Fetch available students for assignment
-  const { data: availableStudents = [], isLoading: isLoadingStudents } = useQuery({
-    queryKey: ['available-students', companyId, scopeFilters, searchTerm, filterGrade, filterSchool],
-    queryFn: async () => {
+  const { data: availableStudents = [], isLoading: isLoadingStudents } = useQuery(
+    ['available-students', companyId, scopeFilters, searchTerm, filterGrade, filterSchool],
+    async () => {
       if (!license || !isOpen) return [];
 
       return await EntityLicenseService.getAvailableStudents(
@@ -105,14 +105,16 @@ export function LicenseAssignmentModal({
         }
       );
     },
-    enabled: !!license && !!companyId && isOpen && activeTab === 'assign',
-    staleTime: 2 * 60 * 1000
-  });
+    {
+      enabled: !!license && !!companyId && isOpen && activeTab === 'assign',
+      staleTime: 2 * 60 * 1000
+    }
+  );
 
   // Fetch currently assigned students
-  const { data: assignedStudents = [], isLoading: isLoadingAssigned } = useQuery({
-    queryKey: ['assigned-students', license?.id, companyId],
-    queryFn: async () => {
+  const { data: assignedStudents = [], isLoading: isLoadingAssigned } = useQuery(
+    ['assigned-students', license?.id, companyId],
+    async () => {
       if (!license) return [];
 
       return await EntityLicenseService.getStudentsForLicense(
@@ -121,14 +123,16 @@ export function LicenseAssignmentModal({
         scopeFilters
       );
     },
-    enabled: !!license && !!companyId && isOpen,
-    staleTime: 30 * 1000
-  });
+    {
+      enabled: !!license && !!companyId && isOpen,
+      staleTime: 30 * 1000
+    }
+  );
 
   // Get available schools for filter
-  const { data: availableSchools = [] } = useQuery({
-    queryKey: ['schools-for-license-filter', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: availableSchools = [] } = useQuery(
+    ['schools-for-license-filter', companyId, scopeFilters],
+    async () => {
       if (!scopeFilters.school_ids || scopeFilters.school_ids.length === 0) return [];
 
       const { data, error } = await supabase
@@ -141,9 +145,11 @@ export function LicenseAssignmentModal({
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId && isOpen,
-    staleTime: 5 * 60 * 1000
-  });
+    {
+      enabled: !!companyId && isOpen,
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // Get unique grade levels from available students
   const availableGrades = useMemo(() => {
@@ -167,8 +173,8 @@ export function LicenseAssignmentModal({
   }, [availableStudents, assignedStudents, filterSchool]);
 
   // Assignment mutation
-  const assignMutation = useMutation({
-    mutationFn: async (studentIds: string[]) => {
+  const assignMutation = useMutation(
+    async (studentIds: string[]) => {
       if (!license || !user?.id) throw new Error('Missing license or user information');
 
       const results = await EntityLicenseService.bulkAssignLicenses(
@@ -179,34 +185,36 @@ export function LicenseAssignmentModal({
 
       return results;
     },
-    onSuccess: (results) => {
-      queryClient.invalidateQueries({ queryKey: ['available-students'] });
-      queryClient.invalidateQueries({ queryKey: ['assigned-students'] });
-      queryClient.invalidateQueries({ queryKey: ['entity-licenses'] });
+    {
+      onSuccess: (results) => {
+        queryClient.invalidateQueries(['available-students']);
+        queryClient.invalidateQueries(['assigned-students']);
+        queryClient.invalidateQueries(['entity-licenses']);
+        
+        if (results.successful > 0) {
+          toast.success(`Successfully assigned license to ${results.successful} student(s)`);
+        }
+        
+        if (results.failed > 0) {
+          toast.warning(`Failed to assign to ${results.failed} student(s). Check individual errors.`);
+          results.errors.forEach(error => {
+            console.warn('Assignment error:', error);
+          });
+        }
 
-      if (results.successful > 0) {
-        toast.success(`Successfully assigned license to ${results.successful} student(s)`);
+        setSelectedStudents([]);
+        onSuccess?.();
+      },
+      onError: (error) => {
+        console.error('Bulk assignment error:', error);
+        toast.error('Failed to assign licenses. Please try again.');
       }
-
-      if (results.failed > 0) {
-        toast.warning(`Failed to assign to ${results.failed} student(s). Check individual errors.`);
-        results.errors.forEach(error => {
-          console.warn('Assignment error:', error);
-        });
-      }
-
-      setSelectedStudents([]);
-      onSuccess?.();
-    },
-    onError: (error) => {
-      console.error('Bulk assignment error:', error);
-      toast.error('Failed to assign licenses. Please try again.');
     }
-  });
+  );
 
   // Revocation mutation
-  const revokeMutation = useMutation({
-    mutationFn: async (assignments: StudentLicenseAssignment[]) => {
+  const revokeMutation = useMutation(
+    async (assignments: StudentLicenseAssignment[]) => {
       if (!license) throw new Error('Missing license information');
 
       const results = {
@@ -236,30 +244,32 @@ export function LicenseAssignmentModal({
 
       return results;
     },
-    onSuccess: (results) => {
-      queryClient.invalidateQueries({ queryKey: ['available-students'] });
-      queryClient.invalidateQueries({ queryKey: ['assigned-students'] });
-      queryClient.invalidateQueries({ queryKey: ['entity-licenses'] });
+    {
+      onSuccess: (results) => {
+        queryClient.invalidateQueries(['available-students']);
+        queryClient.invalidateQueries(['assigned-students']);
+        queryClient.invalidateQueries(['entity-licenses']);
+        
+        if (results.successful > 0) {
+          toast.success(`Successfully revoked license from ${results.successful} student(s)`);
+        }
+        
+        if (results.failed > 0) {
+          toast.warning(`Failed to revoke from ${results.failed} student(s). Check individual errors.`);
+        }
 
-      if (results.successful > 0) {
-        toast.success(`Successfully revoked license from ${results.successful} student(s)`);
+        setShowConfirmDialog(false);
+        setStudentsToRevoke([]);
+        onSuccess?.();
+      },
+      onError: (error) => {
+        console.error('Bulk revocation error:', error);
+        toast.error('Failed to revoke licenses. Please try again.');
+        setShowConfirmDialog(false);
+        setStudentsToRevoke([]);
       }
-
-      if (results.failed > 0) {
-        toast.warning(`Failed to revoke from ${results.failed} student(s). Check individual errors.`);
-      }
-
-      setShowConfirmDialog(false);
-      setStudentsToRevoke([]);
-      onSuccess?.();
-    },
-    onError: (error) => {
-      console.error('Bulk revocation error:', error);
-      toast.error('Failed to revoke licenses. Please try again.');
-      setShowConfirmDialog(false);
-      setStudentsToRevoke([]);
     }
-  });
+  );
 
   // Handle assignment
   const handleAssignLicenses = () => {

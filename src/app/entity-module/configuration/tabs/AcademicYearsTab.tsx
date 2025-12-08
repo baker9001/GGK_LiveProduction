@@ -187,9 +187,9 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // Fetch schools for dropdown
-  const { data: schools = [] } = useQuery({
-    queryKey: ['schools-for-years', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: schools = [] } = useQuery(
+    ['schools-for-years', companyId, scopeFilters],
+    async () => {
       if (!companyId) return [];
 
       let query = supabase
@@ -207,9 +207,11 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Apply template to form
   const applyTemplate = (template: typeof YEAR_TEMPLATES[0]) => {
@@ -285,9 +287,9 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
     data: academicYears = [], 
     isLoading, 
     isFetching 
-  } = useQuery({
-    queryKey: ['academic-years', companyId, filters, scopeFilters],
-    queryFn: async () => {
+  } = useQuery(
+    ['academic-years', companyId, filters, scopeFilters],
+    async () => {
       if (!companyId) return [];
 
       let query = supabase
@@ -361,10 +363,10 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
           .from('academic_year_schools')
           .select('school_id, schools(name)')
           .eq('academic_year_id', year.id);
-
+        
         const schoolIds = associations?.map(a => a.school_id) || [year.school_id];
         const schoolNames = associations?.map(a => a.schools?.name).filter(Boolean) || [year.schools?.name];
-
+        
         return {
           ...year,
           school_name: year.schools?.name || 'Unknown School',
@@ -375,14 +377,16 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
 
       return enhancedData;
     },
-    enabled: !!companyId,
-    placeholderData: (previousData) => previousData,
-    staleTime: 2 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId,
+      keepPreviousData: true,
+      staleTime: 2 * 60 * 1000,
+    }
+  );
 
   // Create/update mutation with enhanced validation
-  const yearMutation = useMutation({
-    mutationFn: async (data: FormState) => {
+  const yearMutation = useMutation(
+    async (data: FormState) => {
       const validatedData = academicYearSchema.parse({
         ...data,
         total_terms: data.total_terms || null,
@@ -483,37 +487,39 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
         return newYear;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
-      setIsFormOpen(false);
-      setEditingYear(null);
-      setFormErrors({});
-      setSelectedRows([]);
-      toast.success(`Academic year ${editingYear ? 'updated' : 'created'} successfully`);
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0]] = err.message;
-          }
-        });
-        setFormErrors(errors);
-      } else if (error instanceof Error) {
-        setFormErrors({ form: error.message });
-        toast.error(error.message);
-      } else {
-        console.error('Error saving academic year:', error);
-        setFormErrors({ form: 'Failed to save academic year. Please try again.' });
-        toast.error('Failed to save academic year');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['academic-years']);
+        setIsFormOpen(false);
+        setEditingYear(null);
+        setFormErrors({});
+        setSelectedRows([]);
+        toast.success(`Academic year ${editingYear ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else if (error instanceof Error) {
+          setFormErrors({ form: error.message });
+          toast.error(error.message);
+        } else {
+          console.error('Error saving academic year:', error);
+          setFormErrors({ form: 'Failed to save academic year. Please try again.' });
+          toast.error('Failed to save academic year');
+        }
       }
     }
-  });
+  );
 
   // Delete mutation with enhanced feedback
-  const deleteMutation = useMutation({
-    mutationFn: async (years: AcademicYear[]) => {
+  const deleteMutation = useMutation(
+    async (years: AcademicYear[]) => {
       const { error } = await supabase
         .from('academic_years')
         .delete()
@@ -522,20 +528,22 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
       if (error) throw error;
       return years;
     },
-    onSuccess: (deletedYears) => {
-      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
-      setIsConfirmDialogOpen(false);
-      setYearsToDelete([]);
-      setSelectedRows([]);
-      toast.success(`${deletedYears.length} academic year(s) deleted successfully`);
-    },
-    onError: (error) => {
-      console.error('Error deleting academic years:', error);
-      toast.error('Failed to delete academic year(s). They may have associated data.');
-      setIsConfirmDialogOpen(false);
-      setYearsToDelete([]);
+    {
+      onSuccess: (deletedYears) => {
+        queryClient.invalidateQueries(['academic-years']);
+        setIsConfirmDialogOpen(false);
+        setYearsToDelete([]);
+        setSelectedRows([]);
+        toast.success(`${deletedYears.length} academic year(s) deleted successfully`);
+      },
+      onError: (error) => {
+        console.error('Error deleting academic years:', error);
+        toast.error('Failed to delete academic year(s). They may have associated data.');
+        setIsConfirmDialogOpen(false);
+        setYearsToDelete([]);
+      }
     }
-  });
+  );
 
   // Duplicate academic year functionality
   const duplicateYear = (year: AcademicYear) => {

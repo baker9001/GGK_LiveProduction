@@ -140,6 +140,9 @@ export interface QuestionMasterAdmin {
   updated_at: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
+
+  // Review phase data (not stored in DB table, only in working_json during import review)
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 export interface SubQuestion {
@@ -190,6 +193,9 @@ export interface SubQuestion {
   updated_at: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
+
+  // Review phase data (not stored in DB table, only in working_json during import review)
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 export interface PaperSetup {
@@ -271,6 +277,8 @@ export interface QuestionCorrectAnswer {
   accepts_reverse_argument?: boolean;
   error_carried_forward?: boolean;
   acceptable_variations?: string[];
+  answer_text?: string; // For complex formats like table_completion template structure
+  answer_type?: string; // Type identifier (e.g., 'table_template')
   marking_flags?: {
     accepts_reverse_argument?: boolean;
     accepts_equivalent_phrasing?: boolean;
@@ -530,6 +538,7 @@ export interface ComplexQuestionPart {
   subparts?: ComplexQuestionSubpart[];
   figure?: boolean;
   context_metadata?: Record<string, any>;
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 export interface ComplexQuestionSubpart {
@@ -546,6 +555,7 @@ export interface ComplexQuestionSubpart {
   explanation?: string;
   figure?: boolean;
   context_metadata?: Record<string, any>;
+  preview_data?: string; // For storing student/test data during review (e.g., table completion preview)
 }
 
 export interface ComplexQuestionDisplay extends QuestionDisplay {

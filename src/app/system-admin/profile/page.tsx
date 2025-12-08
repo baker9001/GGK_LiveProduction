@@ -29,6 +29,7 @@ import { FormField, Input, Textarea } from '../../../components/shared/FormField
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { ToggleSwitch } from '../../../components/shared/ToggleSwitch';
 import { Tooltip } from '../../../components/shared/Tooltip';
+import { LoadingSpinner } from '../../../components/shared/LoadingSpinner';
 import {
   User as UserIcon,
   Mail,
@@ -38,7 +39,6 @@ import {
   Edit,
   Lock,
   AlertCircle,
-  Loader2,
   Shield,
   Phone,
   Info,
@@ -107,9 +107,9 @@ interface ActivityLog {
 
 // Custom hooks for enhanced functionality
 const useProfileStats = (userId: string) => {
-  return useQuery({
-    queryKey: ['profileStats', userId],
-    queryFn: async () => {
+  return useQuery(
+    ['profileStats', userId],
+    async () => {
       // Mock data for demonstration - replace with actual queries
       return {
         totalLogins: 247,
@@ -119,8 +119,8 @@ const useProfileStats = (userId: string) => {
         activeSessionsCount: 3
       };
     },
-    enabled: !!userId
-  });
+    { enabled: !!userId }
+  );
 };
 
 export default function SystemAdminProfilePage() {
@@ -264,8 +264,8 @@ export default function SystemAdminProfilePage() {
   );
 
   // Enhanced update mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async (updates: Partial<UserProfile>) => {
+  const updateProfileMutation = useMutation(
+    async (updates: Partial<UserProfile>) => {
       if (!currentUser?.id) throw new Error('User not authenticated');
 
       // Fetch current metadata
@@ -334,18 +334,20 @@ export default function SystemAdminProfilePage() {
         }
       }
     },
-    onSuccess: (_data, _variables) => {
-      queryClient.invalidateQueries({ queryKey: ['systemAdminProfile', currentUser?.id] });
-      queryClient.invalidateQueries({ queryKey: ['userSidebarProfile', currentUser?.id] });
-      toast.success('Profile updated successfully!');
-      setIsEditingProfile(false);
-      setIsEditingSecurity(false);
-    },
-    onError: (err: any) => {
-      console.error('Error updating profile:', err);
-      toast.error(err.message || 'Failed to update profile');
+    {
+      onSuccess: (_data, _variables) => {
+        queryClient.invalidateQueries(['systemAdminProfile', currentUser?.id]);
+        queryClient.invalidateQueries(['userSidebarProfile', currentUser?.id]);
+        toast.success('Profile updated successfully!');
+        setIsEditingProfile(false);
+        setIsEditingSecurity(false);
+      },
+      onError: (err: any) => {
+        console.error('Error updating profile:', err);
+        toast.error(err.message || 'Failed to update profile');
+      },
     }
-  });
+  );
 
   // Handle avatar upload
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -683,13 +685,19 @@ export default function SystemAdminProfilePage() {
                   
                   {/* Upload button */}
                   <Tooltip content="Upload new profile picture">
-                    <button 
+                    <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploadingAvatar}
                       className="absolute bottom-2 right-2 w-8 h-8 bg-[#8CC63F] hover:bg-[#7AB635] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110"
                     >
                       {isUploadingAvatar ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <LoadingSpinner
+                          size="xs"
+                          inline
+                          centered={false}
+                          showLogo={false}
+                          className="!gap-0"
+                        />
                       ) : (
                         <Camera className="h-4 w-4" />
                       )}
@@ -1425,12 +1433,12 @@ export default function SystemAdminProfilePage() {
         {updateProfileMutation.isPending && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl">
-              <div className="flex items-center gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-[#8CC63F]" />
-                <span className="text-gray-900 dark:text-white font-medium">
-                  Updating profile...
-                </span>
-              </div>
+              <LoadingSpinner
+                size="sm"
+                message="Updating profile..."
+                showLogo={false}
+                className="!min-h-0"
+              />
             </div>
           </div>
         )}

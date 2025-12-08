@@ -1,7 +1,8 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/UploadTab.tsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, Loader2, FileJson } from 'lucide-react';
+import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, FileJson } from 'lucide-react';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 import { supabase } from '../../../../../../lib/supabase';
 import { FileUploader } from '../../../../../../components/shared/FileUploader';
 import { ScrollNavigator } from '../../../../../../components/shared/ScrollNavigator';
@@ -57,34 +58,112 @@ export function UploadTab({
 
     setIsDeleting(true);
     try {
+      // STEP 1: Signal critical operation to prevent session checker interference
+      try {
+        sessionStorage.setItem('ggk_critical_operation', 'delete_session');
+        console.log('[UploadTab] Critical operation flag set');
+      } catch (storageError) {
+        console.warn('[UploadTab] Failed to set critical operation flag:', storageError);
+      }
+
+      // STEP 2: Validate and refresh session FIRST
+      console.log('[UploadTab] Validating session before delete operation');
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        console.error('[UploadTab] Session invalid before delete:', sessionError);
+        toast.error('Your session has expired. Please refresh the page and sign in again.');
+        sessionStorage.removeItem('ggk_critical_operation');
+        return;
+      }
+
+      // Check if session is expiring soon (< 5 minutes)
+      const sessionExpiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+      const timeUntilExpiry = sessionExpiresAt - Date.now();
+      const minutesUntilExpiry = timeUntilExpiry / 60000;
+
+      if (minutesUntilExpiry < 5) {
+        console.log(`[UploadTab] Session expiring in ${minutesUntilExpiry.toFixed(1)} minutes, refreshing...`);
+        const { data: { session: refreshedSession }, error: refreshError } =
+          await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshedSession) {
+          console.error('[UploadTab] Failed to refresh session:', refreshError);
+          toast.error('Unable to refresh your session. Please sign in again.');
+          sessionStorage.removeItem('ggk_critical_operation');
+          return;
+        }
+
+        console.log('[UploadTab] Session refreshed successfully');
+      } else {
+        console.log(`[UploadTab] Session valid for ${minutesUntilExpiry.toFixed(1)} minutes`);
+      }
+
+      // STEP 3: Set reload markers BEFORE any database operations
+      const reloadTime = Date.now();
+      const reloadId = `reload_${reloadTime}_${Math.random().toString(36).substr(2, 9)}`;
+
+      try {
+        localStorage.setItem('ggk_deliberate_reload', reloadTime.toString());
+        localStorage.setItem('ggk_reload_reason', 'start_new_import');
+        localStorage.setItem('ggk_reload_id', reloadId);
+
+        // Verify markers were written successfully
+        const verification = localStorage.getItem('ggk_reload_id');
+        if (verification !== reloadId) {
+          throw new Error('Failed to verify reload markers');
+        }
+
+        console.log('[UploadTab] Reload markers set and verified successfully');
+      } catch (storageError) {
+        console.error('[UploadTab] Failed to set reload markers:', storageError);
+        toast.error('Unable to prepare for reload. Please try again.');
+        sessionStorage.removeItem('ggk_critical_operation');
+        return;
+      }
+
+      // STEP 4: Record activity
+      recordUserActivity();
+
+      // STEP 5: Now safe to perform database operation with fresh session
+      console.log('[UploadTab] Performing database operation with validated session');
       const { error } = await supabase
         .from('past_paper_import_sessions')
         .update({ status: 'failed' })
         .eq('id', importSession.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[UploadTab] Database operation failed:', error);
+        sessionStorage.removeItem('ggk_critical_operation');
+        throw error;
+      }
 
-      // Clear URL parameters before reload to ensure fresh start
+      // STEP 6: Clear URL parameters before reload
       const cleanUrl = window.location.pathname;
       window.history.replaceState(null, '', cleanUrl);
 
-      // CRITICAL FIX: Set reload marker BEFORE page reload to prevent session expiry
-      const reloadTime = Date.now();
-      localStorage.setItem('ggk_deliberate_reload', reloadTime.toString());
-      localStorage.setItem('ggk_reload_reason', 'start_new_import');
+      // STEP 7: Ensure persistence with longer delay
+      console.log('[UploadTab] Waiting for persistence before reload');
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Record user activity before page reload
-      recordUserActivity();
-      console.log('[UploadTab] Activity recorded and reload marker set before page reload');
+      // STEP 7.5: Clear any stale session expired flags from ALL storages before reload
+      // CRITICAL: Clear both localStorage AND sessionStorage to prevent false positives
+      try {
+        localStorage.removeItem('ggk_session_expired_notice');
+        sessionStorage.removeItem('ggk_session_expired_notice');
+        console.log('[UploadTab] Cleared session expired flags from all storages before reload');
+      } catch (e) {
+        console.warn('[UploadTab] Could not clear session flags:', e);
+      }
 
-      // Small delay to ensure localStorage writes complete
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      // Reload page to start fresh
+      // STEP 8: Reload page
+      console.log('[UploadTab] Initiating page reload with session protection');
       window.location.reload();
     } catch (err) {
-      console.error('Error deleting session:', err);
-      toast.error('Failed to delete session');
+      console.error('[UploadTab] Error in delete session flow:', err);
+      toast.error('Failed to delete session. Please try again.');
+      sessionStorage.removeItem('ggk_critical_operation');
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -132,19 +211,94 @@ export function UploadTab({
 
   // Refresh session data
   const handleRefreshSession = async () => {
-    // CRITICAL FIX: Set reload marker BEFORE page reload to prevent session expiry
-    const reloadTime = Date.now();
-    localStorage.setItem('ggk_deliberate_reload', reloadTime.toString());
-    localStorage.setItem('ggk_reload_reason', 'refresh_session');
+    try {
+      // STEP 1: Signal critical operation
+      try {
+        sessionStorage.setItem('ggk_critical_operation', 'refresh_session');
+        console.log('[UploadTab] Critical operation flag set for refresh');
+      } catch (storageError) {
+        console.warn('[UploadTab] Failed to set critical operation flag:', storageError);
+      }
 
-    // Record user activity before page reload
-    recordUserActivity();
-    console.log('[UploadTab] Activity recorded and reload marker set before page reload');
+      // STEP 2: Validate session first
+      console.log('[UploadTab] Validating session before refresh');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-    // Small delay to ensure localStorage writes complete
-    await new Promise(resolve => setTimeout(resolve, 50));
+      if (sessionError || !session) {
+        console.error('[UploadTab] Session invalid before refresh:', sessionError);
+        toast.error('Your session has expired. Please sign in again.');
+        sessionStorage.removeItem('ggk_critical_operation');
+        window.location.href = '/signin';
+        return;
+      }
 
-    window.location.reload();
+      // Check if session is expiring soon and refresh if needed
+      const sessionExpiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+      const minutesUntilExpiry = (sessionExpiresAt - Date.now()) / 60000;
+
+      if (minutesUntilExpiry < 5) {
+        console.log(`[UploadTab] Session expiring in ${minutesUntilExpiry.toFixed(1)} minutes, refreshing...`);
+        const { error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError) {
+          console.error('[UploadTab] Failed to refresh session:', refreshError);
+          toast.error('Unable to refresh your session. Please sign in again.');
+          sessionStorage.removeItem('ggk_critical_operation');
+          return;
+        }
+
+        console.log('[UploadTab] Session refreshed successfully');
+      } else {
+        console.log(`[UploadTab] Session valid for ${minutesUntilExpiry.toFixed(1)} minutes`);
+      }
+
+      // STEP 3: Set reload markers
+      const reloadTime = Date.now();
+      const reloadId = `reload_${reloadTime}_${Math.random().toString(36).substr(2, 9)}`;
+
+      try {
+        localStorage.setItem('ggk_deliberate_reload', reloadTime.toString());
+        localStorage.setItem('ggk_reload_reason', 'refresh_session');
+        localStorage.setItem('ggk_reload_id', reloadId);
+
+        // Verify markers were written
+        const verification = localStorage.getItem('ggk_reload_id');
+        if (verification !== reloadId) {
+          throw new Error('Failed to verify reload markers');
+        }
+
+        console.log('[UploadTab] Reload markers set and verified successfully');
+      } catch (storageError) {
+        console.warn('[UploadTab] Failed to set reload markers (will use standard grace period):', storageError);
+        // Continue anyway - worst case is standard 60s grace period
+      }
+
+      // STEP 4: Record activity
+      recordUserActivity();
+      console.log('[UploadTab] Activity recorded before reload');
+
+      // STEP 5: Wait for persistence
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // STEP 5.5: Clear any stale session expired flags from ALL storages before reload
+      // CRITICAL: Clear both localStorage AND sessionStorage to prevent false positives
+      try {
+        localStorage.removeItem('ggk_session_expired_notice');
+        sessionStorage.removeItem('ggk_session_expired_notice');
+        console.log('[UploadTab] Cleared session expired flags from all storages before reload');
+      } catch (e) {
+        console.warn('[UploadTab] Could not clear session flags:', e);
+      }
+
+      // STEP 6: Reload
+      console.log('[UploadTab] Initiating page reload with session protection');
+      window.location.reload();
+
+    } catch (err) {
+      console.error('[UploadTab] Error refreshing session:', err);
+      toast.error('Failed to refresh. Please try signing in again.');
+      sessionStorage.removeItem('ggk_critical_operation');
+    }
   };
 
   useEffect(() => {
@@ -196,7 +350,7 @@ export function UploadTab({
                 >
                   {isContinuing ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <LoadingSpinner size="sm" inline centered={false} />
                       Resuming...
                     </>
                   ) : (
@@ -248,7 +402,7 @@ export function UploadTab({
                 >
                   {isDeleting ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <LoadingSpinner size="sm" inline centered={false} />
                       Deleting...
                     </>
                   ) : (
@@ -420,8 +574,8 @@ export function UploadTab({
           >
             {isContinuing ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Preparing next step...
+                <LoadingSpinner size="sm" inline centered={false} />
+                <span className="ml-2">Preparing next step...</span>
               </>
             ) : (
               'Continue to Next Step'

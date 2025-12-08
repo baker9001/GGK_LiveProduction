@@ -80,9 +80,9 @@ export default function AboutPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-theme-page text-theme-primary transition-colors duration-200">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       <Navigation />
-
+      
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-[#8CC63F]/95 to-[#7AB635]/95 py-20">
         <div className="absolute inset-0 z-0">
@@ -131,9 +131,8 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <main className="sectioned-layout">
-        {/* Mission & Vision */}
-        <section className="py-20">
+      {/* Mission & Vision */}
+      <section className="py-20 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-lg">
@@ -209,34 +208,36 @@ export default function AboutPage() {
       </section>
 
       {/* Achievements */}
-      <section className="py-20">
+      <section className="py-20 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-3xl p-12 text-white shadow-lg">
-            <div className="text-center mb-10">
-              <h2 className="text-3xl font-bold mb-4">Our Impact in Numbers</h2>
-              <p className="text-xl text-white/90">Measurable success across all metrics</p>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-              {achievements.map((stat, index) => {
-                const IconComponent = stat.icon;
-                return (
-                  <div key={index} className="text-center">
-                    <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                      <IconComponent className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="text-3xl font-bold text-white mb-1">{stat.number}</div>
-                    <div className="text-sm text-white/90">{stat.label}</div>
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Our Impact in Numbers
+            </h2>
+            <p className="text-xl text-white/90">
+              Measurable success across all metrics
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            {achievements.map((stat, index) => {
+              const IconComponent = stat.icon;
+              return (
+                <div key={index} className="text-center">
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <IconComponent className="w-6 h-6 text-white" />
                   </div>
-                );
-              })}
-            </div>
+                  <div className="text-3xl font-bold text-white mb-1">{stat.number}</div>
+                  <div className="text-sm text-white/90">{stat.label}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* Team Section */}
-      <section className="py-20">
+      <section className="py-20 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -312,7 +313,6 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
-      </main>
     </div>
   );
 }

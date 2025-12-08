@@ -83,9 +83,9 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
   }, [getScopeFilters]);
 
   // Fetch administrators for hierarchy view
-  const { data: admins = [], isLoading: isLoadingAdmins } = useQuery({
-    queryKey: ['admins', companyId],
-    queryFn: async () => {
+  const { data: admins = [], isLoading: isLoadingAdmins } = useQuery(
+    ['admins', companyId],
+    async () => {
       try {
         if (!companyId) {
           console.warn('No companyId provided for admin query');
@@ -119,9 +119,11 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         return [];
       }
     },
-    enabled: !!companyId && activeTab === 'hierarchy',
-    staleTime: 2 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId && activeTab === 'hierarchy',
+      staleTime: 2 * 60 * 1000,
+    }
+  );
 
   // FIXED: Correct permission check for creating admins
   const canCreateAdmin = React.useMemo(() => {
@@ -227,7 +229,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       setShowCreateAdminModal(false);
       setEditingAdmin(null);
       // Optionally refresh the admin list
-      // queryClient.invalidateQueries({ queryKey: ['admins', companyId] });
+      // queryClient.invalidateQueries(['admins', companyId]);
     } catch (error) {
       console.error('Error in handleAdminSuccess:', error);
       setShowCreateAdminModal(false);

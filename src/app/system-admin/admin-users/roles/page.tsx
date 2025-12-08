@@ -38,49 +38,49 @@ export default function RolesPage() {
   const [rolesToDelete, setRolesToDelete] = useState<Role[]>([]);
 
   // Fetch roles with React Query
-  const {
-    data: roles = [],
-    isLoading,
-    isFetching
-  } = useQuery({
-    queryKey: ['roles'],
-    queryFn: async () => {
+  const { 
+    data: roles = [], 
+    isLoading, 
+    isFetching 
+  } = useQuery(
+    ['roles'],
+    async () => {
       const { data, error } = await supabase
         .from('roles')
         .select('*')
         .order('created_at', { ascending: false });
-
+    
       if (error) throw error;
       return data || [];
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+    {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
 
   // Fetch role permissions when editing role changes
-  const { data: fetchedRolePermissions } = useQuery({
-    queryKey: ['rolePermissions', editingRole?.id],
-    queryFn: async () => {
+  const { data: fetchedRolePermissions } = useQuery(
+    ['rolePermissions', editingRole?.id],
+    async () => {
       const { data, error } = await supabase
         .from('role_permissions')
         .select('*')
         .eq('role_id', editingRole!.id);
-
+    
       if (error) throw error;
       return data || [];
     },
-    enabled: !!editingRole?.id // Only run query when editing a role
-  });
-
-  // Handle side effect when data changes
-  React.useEffect(() => {
-    if (fetchedRolePermissions) {
-      setRolePermissions(fetchedRolePermissions);
+    {
+      enabled: !!editingRole?.id, // Only run query when editing a role
+      onSuccess: (data) => {
+        setRolePermissions(data);
+      }
     }
-  }, [fetchedRolePermissions]);
+  );
 
   // Create/update role mutation
-  const roleMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+  const roleMutation = useMutation(
+    async (formData: FormData) => {
       const data = {
         name: formData.get('name') as string,
         description: formData.get('description') as string
@@ -110,71 +110,73 @@ export default function RolesPage() {
         return newRole;
       }
     },
-    onSuccess: async (data) => {
-      // Get current permissions from the matrix
-      const newPermissions = permissionsMatrixRef.current?.getPermissions() || [];
-
-      try {
-        // Delete existing permissions for this role
-        const { error: deleteError } = await supabase
-          .from('role_permissions')
-          .delete()
-          .eq('role_id', data.id);
-
-        if (deleteError) throw deleteError;
-
-        // Insert new permissions if any exist
-        if (newPermissions.length > 0) {
-          const { error: insertError } = await supabase
+    {
+      onSuccess: async (data) => {
+        // Get current permissions from the matrix
+        const newPermissions = permissionsMatrixRef.current?.getPermissions() || [];
+        
+        try {
+          // Delete existing permissions for this role
+          const { error: deleteError } = await supabase
             .from('role_permissions')
-            .insert(
-              newPermissions.map(p => ({
-                role_id: data.id,
-                path: p.path,
-                can_access: p.can_access,
-                can_view: p.can_view,
-                can_create: p.can_create,
-                can_edit: p.can_edit,
-                can_delete: p.can_delete
-              }))
-            );
+            .delete()
+            .eq('role_id', data.id);
 
-          if (insertError) throw insertError;
-        }
+          if (deleteError) throw deleteError;
 
-        // Invalidate queries to refetch data
-        queryClient.invalidateQueries({ queryKey: ['roles'] });
-        queryClient.invalidateQueries({ queryKey: ['rolePermissions'] });
+          // Insert new permissions if any exist
+          if (newPermissions.length > 0) {
+            const { error: insertError } = await supabase
+              .from('role_permissions')
+              .insert(
+                newPermissions.map(p => ({
+                  role_id: data.id,
+                  path: p.path,
+                  can_access: p.can_access,
+                  can_view: p.can_view,
+                  can_create: p.can_create,
+                  can_edit: p.can_edit,
+                  can_delete: p.can_delete
+                }))
+              );
 
-        setIsFormOpen(false);
-        setEditingRole(null);
-        setFormErrors({});
-        toast.success(`Role ${editingRole ? 'updated' : 'created'} successfully`);
-      } catch (error) {
-        console.error('Error saving permissions:', error);
-        toast.error('Failed to save permissions');
-      }
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0]] = err.message;
+            if (insertError) throw insertError;
           }
-        });
-        setFormErrors(errors);
-      } else {
-        console.error('Error saving role:', error);
-        setFormErrors({ form: 'Failed to save role. Please try again.' });
-        toast.error('Failed to save role');
+
+          // Invalidate queries to refetch data
+          queryClient.invalidateQueries(['roles']);
+          queryClient.invalidateQueries(['rolePermissions']);
+          
+          setIsFormOpen(false);
+          setEditingRole(null);
+          setFormErrors({});
+          toast.success(`Role ${editingRole ? 'updated' : 'created'} successfully`);
+        } catch (error) {
+          console.error('Error saving permissions:', error);
+          toast.error('Failed to save permissions');
+        }
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving role:', error);
+          setFormErrors({ form: 'Failed to save role. Please try again.' });
+          toast.error('Failed to save role');
+        }
       }
     }
-  });
+  );
 
   // Delete roles mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (roles: Role[]) => {
+  const deleteMutation = useMutation(
+    async (roles: Role[]) => {
       const { error } = await supabase
         .from('roles')
         .delete()
@@ -183,19 +185,21 @@ export default function RolesPage() {
       if (error) throw error;
       return roles;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['roles'] });
-      setIsConfirmDialogOpen(false);
-      setRolesToDelete([]);
-      toast.success('Role(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting roles:', error);
-      toast.error('Failed to delete role(s)');
-      setIsConfirmDialogOpen(false);
-      setRolesToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['roles']);
+        setIsConfirmDialogOpen(false);
+        setRolesToDelete([]);
+        toast.success('Role(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting roles:', error);
+        toast.error('Failed to delete role(s)');
+        setIsConfirmDialogOpen(false);
+        setRolesToDelete([]);
+      }
     }
-  });
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

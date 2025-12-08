@@ -26,7 +26,6 @@ const TEST_USER_KEY = 'test_mode_user';
 const AUTH_TOKEN_KEY = 'ggk_auth_token';
 const REMEMBER_SESSION_KEY = 'ggk_remember_session';
 const SESSION_EXPIRED_NOTICE_KEY = 'ggk_session_expired_notice';
-const SESSION_EXPIRED_NOTICE_SUPPRESS_KEY = 'ggk_session_notice_suppress';
 const SUPABASE_SESSION_STORAGE_KEY = 'supabase.auth.token';
 const SUPABASE_SESSION_REQUIRED_KEY = 'ggk_supabase_session_required';
 const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
@@ -122,7 +121,9 @@ export function getAuthenticatedUser(): User | null {
   }
 
   // Ensure the Supabase auth session is still valid when required
-  if (isSupabaseSessionRequired() && !isSupabaseSessionActive()) {
+  // CRITICAL FIX: Skip Supabase validation if within grace period after page reload
+  // This prevents false "session expired" warnings when clicking refresh/start new import
+  if (isSupabaseSessionRequired() && !isWithinGracePeriod() && !isSupabaseSessionActive(30000)) {
     console.warn('[Auth] Supabase session is missing or expired. Clearing local auth state.');
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -192,7 +193,6 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(SUPABASE_SESSION_REQUIRED_KEY);
   localStorage.removeItem(LAST_LOGIN_TIME_KEY);
   localStorage.removeItem(LAST_PAGE_LOAD_TIME_KEY);
-  localStorage.removeItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY);
 
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
@@ -224,9 +224,55 @@ export function markUserLogout(): void {
 
 // Mark that the session expired so the UI can show a friendly inline notice
 export function markSessionExpired(message: string = 'Your session has expired. Please sign in again to continue.'): void {
+  // CRITICAL FIX: Don't mark session as expired during deliberate reloads
+  // Check if deliberate reload is in progress
   try {
-    localStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+    const deliberateReload = localStorage.getItem('ggk_deliberate_reload');
+    if (deliberateReload) {
+      const reloadTime = parseInt(deliberateReload, 10);
+      const timeSinceReload = Date.now() - reloadTime;
 
+      // If deliberate reload marker is fresh (< 5 seconds), skip marking expired
+      if (!isNaN(reloadTime) && timeSinceReload < 5000) {
+        console.log('[Auth] Skipping session expired mark - deliberate reload in progress');
+        return;
+      }
+    }
+
+    // Also check for extended grace period (indicates deliberate reload happened)
+    const extendedGrace = localStorage.getItem('ggk_extended_grace_period');
+    if (extendedGrace) {
+      const graceTime = parseInt(extendedGrace, 10);
+      const timeSinceGrace = Date.now() - graceTime;
+
+      // If extended grace was recently activated (< 10 seconds), skip
+      if (!isNaN(graceTime) && timeSinceGrace < 10000) {
+        console.log('[Auth] Skipping session expired mark - extended grace period active');
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn('[Auth] Error checking deliberate reload status:', error);
+    // Continue with normal flow if check fails
+  }
+
+  console.log('[Auth] Marking session as expired:', message);
+
+  try {
+    // CRITICAL FIX: Store in BOTH localStorage AND sessionStorage for redundancy
+    // This ensures message persists even if one storage mechanism fails
+    localStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+    sessionStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+
+    // Verify storage write succeeded
+    const verified = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+    if (verified) {
+      console.log('[Auth] Session expired message stored successfully');
+    } else {
+      console.warn('[Auth] WARNING: localStorage write may have failed');
+    }
+
+    // Dispatch event for same-page listeners (though redirect will likely prevent this from being useful)
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       const sessionExpiredEvent = new CustomEvent<{ message: string }>(SESSION_EXPIRED_EVENT, {
         detail: { message }
@@ -234,46 +280,15 @@ export function markSessionExpired(message: string = 'Your session has expired. 
       window.dispatchEvent(sessionExpiredEvent);
     }
   } catch (error) {
-    console.warn('[Auth] Unable to persist session expiration notice:', error);
-  }
-}
-
-export function suppressSessionExpiredNoticeOnce(): void {
-  try {
-    const payload = {
-      timestamp: Date.now()
-    };
-    localStorage.setItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY, JSON.stringify(payload));
-  } catch (error) {
-    console.warn('[Auth] Unable to set session notice suppression flag:', error);
-  }
-}
-
-export function consumeSessionExpiredNoticeSuppression(): boolean {
-  try {
-    const rawValue = localStorage.getItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY);
-    if (!rawValue) {
-      return false;
-    }
-
-    localStorage.removeItem(SESSION_EXPIRED_NOTICE_SUPPRESS_KEY);
-
+    console.error('[Auth] Failed to persist session expiration notice:', error);
+    // Try sessionStorage only as absolute fallback
     try {
-      const parsed = JSON.parse(rawValue) as { timestamp?: number };
-      if (parsed && typeof parsed.timestamp === 'number') {
-        const elapsed = Date.now() - parsed.timestamp;
-        // Only suppress if the flag was set within the last 10 seconds
-        if (elapsed >= 0 && elapsed <= 10_000) {
-          return true;
-        }
-      }
-    } catch {
-      // If parsing fails, fall through and do not suppress
+      sessionStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+      console.log('[Auth] Fallback: Message stored in sessionStorage only');
+    } catch (fallbackError) {
+      console.error('[Auth] CRITICAL: Both storage mechanisms failed:', fallbackError);
     }
-  } catch (error) {
-    console.warn('[Auth] Unable to read session notice suppression flag:', error);
   }
-  return false;
 }
 
 // Determine if Supabase session validation is required for the current user
@@ -381,14 +396,69 @@ export function isSupabaseSessionActive(gracePeriodMs = 0): boolean {
 
 // Consume (read and clear) the stored session expiration notice
 export function consumeSessionExpiredNotice(): string | null {
+  console.log('[Auth] Checking for session expired notice...');
+
+  // CRITICAL FIX: Don't consume message if deliberate reload just happened
+  // This prevents showing "session expired" on legitimate user-initiated reloads
   try {
-    const message = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
-    if (message) {
-      localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
-      return message;
+    const extendedGrace = localStorage.getItem('ggk_extended_grace_period');
+    if (extendedGrace) {
+      const graceTime = parseInt(extendedGrace, 10);
+      const timeSinceGrace = Date.now() - graceTime;
+
+      // If extended grace was just activated (< 5 seconds), this is likely a deliberate reload
+      if (!isNaN(graceTime) && timeSinceGrace < 5000) {
+        console.log('[Auth] Skipping session expired notice - extended grace period just activated (deliberate reload)');
+        // Clear the messages to prevent them from appearing later
+        localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        return null;
+      }
+    }
+
+    // Also check for deliberate reload marker directly
+    const deliberateReload = localStorage.getItem('ggk_deliberate_reload');
+    if (deliberateReload) {
+      const reloadTime = parseInt(deliberateReload, 10);
+      const timeSinceReload = Date.now() - reloadTime;
+
+      if (!isNaN(reloadTime) && timeSinceReload < 5000) {
+        console.log('[Auth] Skipping session expired notice - deliberate reload marker found');
+        localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+        return null;
+      }
     }
   } catch (error) {
-    console.warn('[Auth] Unable to read session expiration notice:', error);
+    console.warn('[Auth] Error checking grace period/reload status:', error);
+    // Continue with normal flow if check fails
+  }
+
+  try {
+    // CRITICAL FIX: Check BOTH localStorage AND sessionStorage for redundancy
+    let message = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+
+    // Fallback to sessionStorage if localStorage doesn't have it
+    if (!message) {
+      message = sessionStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+      if (message) {
+        console.log('[Auth] Session expired notice found in sessionStorage (fallback)');
+      }
+    } else {
+      console.log('[Auth] Session expired notice found in localStorage');
+    }
+
+    if (message) {
+      // Clear from both storage locations
+      localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+      sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+      console.log('[Auth] Session expired notice consumed:', message);
+      return message;
+    }
+
+    console.log('[Auth] No session expired notice found');
+  } catch (error) {
+    console.error('[Auth] Error reading session expiration notice:', error);
   }
   return null;
 }
@@ -396,7 +466,10 @@ export function consumeSessionExpiredNotice(): string | null {
 // Explicitly clear any stored session expiration notice (used on manual logout)
 export function clearSessionExpiredNotice(): void {
   try {
+    // Clear from both storage locations
     localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+    console.log('[Auth] Session expired notice cleared');
   } catch (error) {
     console.warn('[Auth] Unable to clear session expiration notice:', error);
   }
@@ -659,6 +732,60 @@ if (typeof window !== 'undefined') {
     }
   } catch (error) {
     console.warn('[Auth] Failed to check reload marker:', error);
+  }
+}
+
+/**
+ * Check if we're within grace period after page load/reload
+ * Grace period prevents false session expiration warnings during deliberate reloads
+ * EXPORTED: Used by supabase.ts auth listener to prevent false positives
+ */
+export function isWithinGracePeriod(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    // Get page load time
+    const pageLoadTimeStr = localStorage.getItem(LAST_PAGE_LOAD_TIME_KEY);
+    if (!pageLoadTimeStr) return false;
+
+    const pageLoadTime = parseInt(pageLoadTimeStr, 10);
+    const timeSincePageLoad = Date.now() - pageLoadTime;
+
+    // Default grace period: 60 seconds
+    let gracePeriodMs = 60000;
+
+    // Check for extended grace period based on reload reason
+    const extendedGracePeriodStr = localStorage.getItem(EXTENDED_GRACE_PERIOD_KEY);
+
+    if (extendedGracePeriodStr) {
+      const extendedGraceTime = parseInt(extendedGracePeriodStr, 10);
+      const timeSinceExtendedGrace = Date.now() - extendedGraceTime;
+
+      // Only use extended grace if it's recent
+      if (timeSinceExtendedGrace < 180000) { // 3 minutes max
+        // Extended grace period: 180 seconds for deliberate reloads
+        gracePeriodMs = 180000;
+
+        if (timeSincePageLoad < gracePeriodMs) {
+          console.log(`[Auth] Within extended grace period (${Math.round(timeSincePageLoad/1000)}s/${Math.round(gracePeriodMs/1000)}s) - skipping Supabase session check`);
+          return true;
+        }
+
+        // Clean up expired extended grace period marker
+        localStorage.removeItem(EXTENDED_GRACE_PERIOD_KEY);
+      }
+    }
+
+    // Check default grace period
+    if (timeSincePageLoad < gracePeriodMs) {
+      console.log(`[Auth] Within grace period (${Math.round(timeSincePageLoad/1000)}s/${Math.round(gracePeriodMs/1000)}s) - skipping Supabase session check`);
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.warn('[Auth] Error checking grace period:', error);
+    return false;
   }
 }
 

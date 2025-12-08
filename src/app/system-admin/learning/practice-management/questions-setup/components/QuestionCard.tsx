@@ -43,6 +43,11 @@ import {
 import { detectAnswerExpectation } from '../../../../../../lib/extraction/answerExpectationDetector';
 import { EnhancedQuestionDisplay } from '../../../../../../components/shared/EnhancedQuestionDisplay';
 import { mapQuestionToDisplayData } from '../utils/questionMappers';
+import EnhancedAnswerFormatSelector from '../../../../../../components/shared/EnhancedAnswerFormatSelector';
+import { useAnswerFormatSync } from '../../../../../../hooks/useAnswerFormatSync';
+import { FormatChangeDialog } from '../../../../../../components/shared/FormatChangeDialog';
+import { RequirementChangeDialog } from '../../../../../../components/shared/RequirementChangeDialog';
+import { InlineAnswerAdaptor } from '../../../../../../components/shared/InlineAnswerAdaptor';
 
 interface QuestionCardProps {
   question: Question;
@@ -80,6 +85,37 @@ export function QuestionCard({
 
   const reviewDisplayData = useMemo(() => mapQuestionToDisplayData(question), [question]);
   const canEdit = !readOnly;
+
+  const formatSyncHook = useAnswerFormatSync({
+    currentFormat: question.answer_format || null,
+    currentRequirement: question.answer_requirement || null,
+    currentAnswers: question.correct_answers || [],
+    onFormatChange: async (format) => {
+      await updateField.mutateAsync({
+        questionId: question.id,
+        field: 'answer_format',
+        value: format,
+        isSubQuestion: false
+      });
+    },
+    onRequirementChange: async (requirement) => {
+      await updateField.mutateAsync({
+        questionId: question.id,
+        field: 'answer_requirement',
+        value: requirement,
+        isSubQuestion: false
+      });
+    },
+    onAnswersUpdate: async (answers) => {
+      await updateCorrectAnswers.mutateAsync({
+        questionId: question.id,
+        isSubQuestion: false,
+        correctAnswers: answers
+      });
+    },
+    autoAdapt: false,
+    enabled: canEdit
+  });
 
   // Compute suggested answer fields if missing
   const suggestedAnswerFields = useMemo(() => {
@@ -436,16 +472,43 @@ export function QuestionCard({
   };
   
   return (
-    <div
-      id={`question-${question.id}`}
-      className={cn(
-        'rounded-2xl border overflow-hidden bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
-        needsAttachmentWarning && showQAActions
-          ? 'border-amber-300/80 dark:border-amber-500/70 ring-1 ring-amber-200/60 dark:ring-amber-500/30'
-          : 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
+    <>
+      {/* Format Change Dialog */}
+      {formatSyncHook.state.showFormatDialog && formatSyncHook.state.pendingFormatChange && (
+        <FormatChangeDialog
+          isOpen={formatSyncHook.state.showFormatDialog}
+          oldFormat={formatSyncHook.state.pendingFormatChange.oldFormat}
+          newFormat={formatSyncHook.state.pendingFormatChange.newFormat}
+          compatibility={formatSyncHook.state.pendingFormatChange.compatibility}
+          currentAnswerCount={question.correct_answers?.length || 0}
+          onConfirm={formatSyncHook.confirmFormatChange}
+          onCancel={formatSyncHook.cancelFormatChange}
+        />
       )}
-    >
-      {/* Question Header - Clickable to expand/collapse */}
+
+      {/* Requirement Change Dialog */}
+      {formatSyncHook.state.showRequirementDialog && formatSyncHook.state.pendingRequirementChange && (
+        <RequirementChangeDialog
+          isOpen={formatSyncHook.state.showRequirementDialog}
+          oldRequirement={formatSyncHook.state.pendingRequirementChange.oldRequirement}
+          newRequirement={formatSyncHook.state.pendingRequirementChange.newRequirement}
+          compatibility={formatSyncHook.state.pendingRequirementChange.compatibility}
+          currentAnswers={question.correct_answers || []}
+          onConfirm={formatSyncHook.confirmRequirementChange}
+          onCancel={formatSyncHook.cancelRequirementChange}
+        />
+      )}
+
+      <div
+        id={`question-${question.id}`}
+        className={cn(
+          'rounded-2xl border overflow-hidden bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
+          needsAttachmentWarning && showQAActions
+            ? 'border-amber-300/80 dark:border-amber-500/70 ring-1 ring-amber-200/60 dark:ring-amber-500/30'
+            : 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
+        )}
+      >
+        {/* Question Header - Clickable to expand/collapse */}
       <div
         className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -627,6 +690,16 @@ export function QuestionCard({
 
       {isExpanded && (
         <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          {/* Inline Answer Adaptor */}
+          <InlineAnswerAdaptor
+            isVisible={formatSyncHook.state.showInlineAdaptor}
+            formatChange={formatSyncHook.state.pendingFormatChange}
+            requirementChange={formatSyncHook.state.pendingRequirementChange}
+            canUndo={formatSyncHook.state.canUndo}
+            onDismiss={formatSyncHook.dismissInlineAdaptor}
+            onUndo={formatSyncHook.undo}
+          />
+
           <EnhancedQuestionDisplay
             question={reviewDisplayData}
             showAttachments
@@ -756,109 +829,19 @@ export function QuestionCard({
           </div>
         </div>
 
-        {/* Answer Format and Requirement Section */}
+        {/* Answer Format and Requirement Section with Enhanced Validation */}
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Answer Format */}
-            <div className="bg-white dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600 shadow-sm">
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                Answer Format
-              </label>
-              {question.type === 'descriptive' ? (
-                <>
-                  <EditableField
-                    value={question.answer_format || ''}
-                    onSave={(value) => handleFieldUpdate('answer_format', value)}
-                    type="select"
-                    options={ANSWER_FORMAT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                    displayValue={
-                      <span className="text-base font-medium text-gray-900 dark:text-white">
-                        {getAnswerFormatLabel(question.answer_format)}
-                      </span>
-                    }
-                    placeholder="Select answer format..."
-                    disabled={readOnly}
-                    className="text-base text-gray-900 dark:text-white"
-                  />
-                  {!question.answer_format && suggestedAnswerFields.answerFormat && !readOnly && (
-                    <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
-                            💡 Suggested: {getAnswerFormatLabel(suggestedAnswerFields.answerFormat)}
-                          </p>
-                          <p className="text-xs text-blue-600 dark:text-blue-300">
-                            {suggestedAnswerFields.reason}
-                          </p>
-                        </div>
-                        <Button
-                          size="xs"
-                          variant="primary"
-                          onClick={() => handleApplySuggestion('answer_format')}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <span className="block text-base font-medium text-gray-500 dark:text-gray-400 italic">
-                  Not applicable for {question.type.toUpperCase()} questions
-                </span>
-              )}
-            </div>
-
-            {/* Answer Requirement */}
-            <div className="bg-white dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600 shadow-sm">
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                Answer Requirement
-              </label>
-              {question.type === 'descriptive' || (question.correct_answers && question.correct_answers.length > 1) ? (
-                <>
-                  <EditableField
-                    value={question.answer_requirement || ''}
-                    onSave={(value) => handleFieldUpdate('answer_requirement', value)}
-                    type="select"
-                    options={ANSWER_REQUIREMENT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                    displayValue={
-                      <span className="text-base font-medium text-gray-900 dark:text-white">
-                        {getAnswerRequirementLabel(question.answer_requirement)}
-                      </span>
-                    }
-                    placeholder="Select answer requirement..."
-                    disabled={readOnly}
-                    className="text-base text-gray-900 dark:text-white"
-                  />
-                  {!question.answer_requirement && suggestedAnswerFields.answerRequirement && !readOnly && (
-                    <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
-                            💡 Suggested: {getAnswerRequirementLabel(suggestedAnswerFields.answerRequirement)}
-                          </p>
-                          <p className="text-xs text-blue-600 dark:text-blue-300">
-                            Based on {question.correct_answers?.length || 0} correct answer(s)
-                          </p>
-                        </div>
-                        <Button
-                          size="xs"
-                          variant="primary"
-                          onClick={() => handleApplySuggestion('answer_requirement')}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <span className="block text-base font-medium text-gray-500 dark:text-gray-400">
-                  {question.type === 'mcq' || question.type === 'tf' ? 'Single choice (automatic)' : 'Not set'}
-                </span>
-              )}
-            </div>
-          </div>
+          <EnhancedAnswerFormatSelector
+            answerFormat={question.answer_format || null}
+            answerRequirement={question.answer_requirement || null}
+            onFormatChange={(value) => handleFieldUpdate('answer_format', value)}
+            onRequirementChange={(value) => handleFieldUpdate('answer_requirement', value)}
+            questionType={question.type}
+            correctAnswersCount={question.correct_answers?.length || 0}
+            showValidation={true}
+            disabled={readOnly}
+            className="w-full"
+          />
         </div>
         
         {/* Subtopics Section */}
@@ -936,7 +919,7 @@ export function QuestionCard({
           </div>
         </div>
         
-        {/* Attachments Manager - Updated without pdfDataUrl and onPdfUpload */}
+        {/* Attachments Manager - Only show attachments for main question (no sub_question_id) */}
         <div className={cn(
           "mb-8 border rounded-xl p-6 bg-gray-50 dark:bg-gray-800/50 shadow-sm",
           needsAttachmentWarning && showQAActions
@@ -945,14 +928,15 @@ export function QuestionCard({
         )}>
           <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
             <FileText className="h-5 w-5 mr-2" />
-            Attachments:
+            Attachments for Main Question:
           </h4>
           <AttachmentManager
-            attachments={question.attachments}
+            attachments={question.attachments?.filter(att => !att.sub_question_id) || []}
             questionId={question.id}
             onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
             readOnly={readOnly}
             questionDescription={question.question_description}
+            contextLabel={`Question ${question.question_number}`}
           />
         </div>
         
@@ -1022,17 +1006,17 @@ export function QuestionCard({
         )}
         
         {/* Hint and Explanation */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 md:items-start">
+          <div className="flex flex-col h-full">
             <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
               <HelpCircle className="h-5 w-5 mr-2" />
               Hint:
             </h4>
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm flex-1">
               <RichTextEditorField
                 value={question.hint || ''}
                 onSave={(value) => handleFieldUpdate('hint', value)}
-                placeholder="Add a hint to help students..."
+                placeholder="Optional hint for this part"
                 minLength={5}
                 required
                 disabled={readOnly}
@@ -1042,17 +1026,17 @@ export function QuestionCard({
               />
             </div>
           </div>
-          
-          <div>
+
+          <div className="flex flex-col h-full">
             <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
               <BookOpen className="h-5 w-5 mr-2" />
               Explanation:
             </h4>
-            <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm flex-1">
               <RichTextEditorField
                 value={question.explanation || ''}
                 onSave={(value) => handleFieldUpdate('explanation', value)}
-                placeholder="Explain the correct answer..."
+                placeholder="Explain the answer expectations for this part"
                 minLength={10}
                 required
                 disabled={readOnly}
@@ -1259,61 +1243,29 @@ export function QuestionCard({
                     </div>
                   </div>
 
-                  {/* Sub-question Answer Format and Requirement */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                        Answer Format
-                      </label>
-                      <div className="bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600">
-                        {subQuestion.type === 'descriptive' ? (
-                          <EditableField
-                            value={subQuestion.answer_format || ''}
-                            onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_format', value)}
-                            type="select"
-                            options={ANSWER_FORMAT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                            displayValue={
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {getAnswerFormatLabel(subQuestion.answer_format)}
-                              </span>
-                            }
-                            placeholder="Select format..."
-                            disabled={readOnly}
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-500 dark:text-gray-400 italic">
-                            N/A for {subQuestion.type}
-                          </span>
-                        )}
-                      </div>
+                  {/* Sub-question Answer Format and Requirement with Enhanced Validation */}
+                  {subQuestion.type === 'descriptive' ? (
+                    <div className="mt-4">
+                      <EnhancedAnswerFormatSelector
+                        answerFormat={subQuestion.answer_format || null}
+                        answerRequirement={subQuestion.answer_requirement || null}
+                        onFormatChange={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_format', value)}
+                        onRequirementChange={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_requirement', value)}
+                        questionType={subQuestion.type}
+                        correctAnswersCount={subQuestion.correct_answers?.length || 0}
+                        showValidation={true}
+                        disabled={readOnly}
+                        className="w-full"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
-                        Answer Requirement
-                      </label>
-                      <div className="bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600">
-                        {subQuestion.type === 'descriptive' ? (
-                          <EditableField
-                            value={subQuestion.answer_requirement || ''}
-                            onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'answer_requirement', value)}
-                            type="select"
-                            options={ANSWER_REQUIREMENT_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-                            displayValue={
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {getAnswerRequirementLabel(subQuestion.answer_requirement)}
-                              </span>
-                            }
-                            placeholder="Select requirement..."
-                            disabled={readOnly}
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-500 dark:text-gray-400">
-                            Single choice
-                          </span>
-                        )}
-                      </div>
+                  ) : (
+                    <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                        Answer format and requirement not applicable for {subQuestion.type.toUpperCase()} questions
+                        {subQuestion.type === 'mcq' || subQuestion.type === 'tf' ? ' (single choice automatic)' : ''}
+                      </p>
                     </div>
-                  </div>
+                  )}
                   
                   {/* Sub-question subtopics */}
                   {subQuestion.topic_id && (
@@ -1433,7 +1385,7 @@ export function QuestionCard({
                     </div>
                   </div>
                   
-                  {/* Sub-question attachments - Updated without pdfDataUrl and onPdfUpload */}
+                  {/* Sub-question attachments - Filter attachments for this specific part */}
                   <div className={cn(
                     "border rounded p-3 bg-gray-50 dark:bg-gray-800/50",
                     subNeedsAttachmentWarning && showQAActions
@@ -1441,12 +1393,17 @@ export function QuestionCard({
                       : "border-gray-200 dark:border-gray-700"
                   )}>
                     <AttachmentManager
-                      attachments={subQuestion.attachments}
+                      attachments={
+                        subQuestion.attachments ||
+                        question.attachments?.filter(att => att.sub_question_id === subQuestion.id) ||
+                        []
+                      }
                       questionId={question.id}
                       subQuestionId={subQuestion.id}
                       onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
                       readOnly={readOnly}
                       questionDescription={subQuestion.question_description}
+                      contextLabel={`${formatPartLabel(subQuestion.part_label)}`}
                     />
                   </div>
                 </div>
@@ -1456,5 +1413,6 @@ export function QuestionCard({
         </div>
       )}
     </div>
+    </>
   );
 }

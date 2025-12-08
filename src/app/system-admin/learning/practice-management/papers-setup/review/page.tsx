@@ -1,14 +1,15 @@
 // src/app/system-admin/learning/practice-management/papers-setup/review/page.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { QuestionViewer, QuestionData, UserResponse, ValidationReport, UploadedAttachment } from '../../../../../../components/shared/questions/QuestionViewer';
 import { supabase } from '../../../../../../lib/supabase';
 import { Button } from '../../../../../../components/shared/Button';
-import { supabase } from '../../../../../../lib/supabase';
 import { toast } from '../../../../../../components/shared/Toast';
-import { ArrowLeft, Save, CheckCircle, AlertTriangle, Eye } from 'lucide-react';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
+import { ArrowLeft, Save, CheckCircle, AlertTriangle, Eye, Menu, X } from 'lucide-react';
 import { cn } from '../../../../../../lib/utils';
+import EnhancedQuestionNavigator, { buildEnhancedNavigationItems, NavigationItem, QuestionStatus, AttachmentStatus } from '../../../../../../components/shared/EnhancedQuestionNavigator';
 
 interface ReviewPageState {
   questions: QuestionData[];
@@ -16,6 +17,8 @@ interface ReviewPageState {
   saving: boolean;
   validationReports: Record<string, ValidationReport>;
   sessionId?: string;
+  currentQuestionId?: string;
+  showNavigator: boolean;
   // Academic structure data for editing
   units: Array<{ id: string; name: string }>;
   chapters: Array<{ id: string; name: string }>;
@@ -35,11 +38,15 @@ export default function PaperSetupReviewPage() {
     saving: false,
     validationReports: {},
     sessionId,
+    currentQuestionId: undefined,
+    showNavigator: true,
     units: [],
     chapters: [],
     topics: [],
     subtopics: []
   });
+
+  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Load questions and academic structure from import session
   useEffect(() => {
@@ -199,7 +206,8 @@ export default function PaperSetupReviewPage() {
       setState(prev => ({
         ...prev,
         questions,
-        loading: false
+        loading: false,
+        currentQuestionId: questions[0]?.id
       }));
     } catch (error) {
       console.error('Error loading questions:', error);
@@ -335,13 +343,70 @@ export default function PaperSetupReviewPage() {
     return { totalErrors, totalWarnings };
   };
 
+  const handleNavigate = (questionId: string) => {
+    setState(prev => ({ ...prev, currentQuestionId: questionId }));
+    const element = questionRefs.current[questionId];
+    if (element) {
+      const offset = 100;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const navigationItems = useMemo(() => {
+    const statusData = new Map<string, QuestionStatus>();
+    const attachmentData = new Map<string, AttachmentStatus>();
+
+    state.questions.forEach((question) => {
+      const report = state.validationReports[question.id!];
+      const hasError = report?.errors && report.errors.length > 0;
+      const isComplete = report?.isValid || false;
+      const needsAttachment = question.attachments?.length === 0 &&
+        (question.question_text?.toLowerCase().includes('figure') ||
+         question.question_text?.toLowerCase().includes('diagram'));
+
+      statusData.set(question.id!, {
+        isComplete,
+        needsAttachment,
+        hasError,
+        inProgress: !isComplete && !hasError,
+        validationIssues: report?.errors || []
+      });
+
+      attachmentData.set(question.id!, {
+        required: needsAttachment ? 1 : 0,
+        uploaded: question.attachments?.length || 0
+      });
+    });
+
+    return buildEnhancedNavigationItems(
+      state.questions.map(q => ({
+        id: q.id!,
+        question_number: q.question_number || '',
+        marks: q.marks,
+        type: q.type,
+        parts: q.parts?.map((p: any) => ({
+          id: `${q.id}-${p.part}`,
+          part_label: p.part,
+          marks: p.marks,
+          question_description: p.question_text,
+          has_direct_answer: true,
+          subparts: p.subparts || []
+        })) || []
+      })),
+      attachmentData,
+      statusData
+    );
+  }, [state.questions, state.validationReports]);
+
   if (state.loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading questions for review...</p>
-        </div>
+        <LoadingSpinner size="lg" message="Loading questions for review..." />
       </div>
     );
   }
@@ -414,31 +479,87 @@ export default function PaperSetupReviewPage() {
         </div>
       </div>
 
-      {/* Questions List */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="space-y-8">
-          {state.questions.map((question, index) => (
-            <div key={question.id} className="relative">
-              <div className="absolute -left-12 top-6 text-2xl font-bold text-gray-300 dark:text-gray-600">
-                {index + 1}
-              </div>
-              <QuestionViewer
-                question={question}
-                mode="review"
-                subject={question.subject}
-                examBoard={question.exam_board}
-                editable={true}
-                showValidation={true}
-                onUpdate={(updated) => handleQuestionUpdate(question.id!, updated)}
-                onValidate={(report) => handleValidation(question.id!, report)}
-                onAttachmentsChange={(attachments) => handleAttachmentsChange(question.id!, attachments)}
-                units={state.units}
-                chapters={state.chapters}
-                topics={state.topics}
-                subtopics={state.subtopics}
+      {/* Main Content with Navigation */}
+      <div className="flex max-w-7xl mx-auto">
+        {/* Navigation Sidebar */}
+        {state.showNavigator && (
+          <div className="hidden lg:block w-80 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-16 h-[calc(100vh-8rem)] overflow-y-auto">
+            <EnhancedQuestionNavigator
+              items={navigationItems}
+              currentId={state.currentQuestionId}
+              onNavigate={handleNavigate}
+              showParts={true}
+              showSubparts={true}
+              showMarks={true}
+              showStatus={true}
+              mode="setup"
+              className="p-4"
+            />
+          </div>
+        )}
+
+        {/* Questions Content */}
+        <div className="flex-1 px-6 py-8">
+          {/* Mobile Navigator Toggle */}
+          <div className="lg:hidden mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setState(prev => ({ ...prev, showNavigator: !prev.showNavigator }))}
+            >
+              {state.showNavigator ? <X className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
+              {state.showNavigator ? 'Hide' : 'Show'} Navigation
+            </Button>
+          </div>
+
+          {/* Mobile Navigator Panel */}
+          {state.showNavigator && (
+            <div className="lg:hidden mb-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-4">
+              <EnhancedQuestionNavigator
+                items={navigationItems}
+                currentId={state.currentQuestionId}
+                onNavigate={handleNavigate}
+                showParts={true}
+                showSubparts={true}
+                showMarks={true}
+                showStatus={true}
+                mode="setup"
+                compact={true}
               />
             </div>
-          ))}
+          )}
+
+          <div className="space-y-8">
+            {state.questions.map((question, index) => (
+              <div
+                key={question.id}
+                ref={el => questionRefs.current[question.id!] = el}
+                className={cn(
+                  "relative transition-all duration-200",
+                  state.currentQuestionId === question.id && "ring-2 ring-blue-500 rounded-lg"
+                )}
+              >
+                <div className="absolute -left-12 top-6 text-2xl font-bold text-gray-300 dark:text-gray-600">
+                  {index + 1}
+                </div>
+                <QuestionViewer
+                  question={question}
+                  mode="review"
+                  subject={question.subject}
+                  examBoard={question.exam_board}
+                  editable={true}
+                  showValidation={true}
+                  onUpdate={(updated) => handleQuestionUpdate(question.id!, updated)}
+                  onValidate={(report) => handleValidation(question.id!, report)}
+                  onAttachmentsChange={(attachments) => handleAttachmentsChange(question.id!, attachments)}
+                  units={state.units}
+                  chapters={state.chapters}
+                  topics={state.topics}
+                  subtopics={state.subtopics}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

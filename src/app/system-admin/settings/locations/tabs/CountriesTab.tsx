@@ -132,8 +132,8 @@ export default function CountriesTab() {
   );
 
   // Create/update country mutation
-  const countryMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+  const countryMutation = useMutation(
+    async (formData: FormData) => {
       const data = {
         name: formData.get('name') as string,
         region_id: formData.get('region_id') as string,
@@ -162,33 +162,35 @@ export default function CountriesTab() {
         return newCountry;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['countries'] });
-      setIsFormOpen(false);
-      setEditingCountry(null);
-      setFormErrors({});
-      toast.success(`Country ${editingCountry ? 'updated' : 'created'} successfully`);
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0]] = err.message;
-          }
-        });
-        setFormErrors(errors);
-      } else {
-        console.error('Error saving country:', error);
-        setFormErrors({ form: 'Failed to save country. Please try again.' });
-        toast.error('Failed to save country');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['countries']);
+        setIsFormOpen(false);
+        setEditingCountry(null);
+        setFormErrors({});
+        toast.success(`Country ${editingCountry ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving country:', error);
+          setFormErrors({ form: 'Failed to save country. Please try again.' });
+          toast.error('Failed to save country');
+        }
       }
     }
-  });
+  );
 
   // Delete country mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (countries: Country[]) => {
+  const deleteMutation = useMutation(
+    async (countries: Country[]) => {
       const { error } = await supabase
         .from('countries')
         .delete()
@@ -197,19 +199,21 @@ export default function CountriesTab() {
       if (error) throw error;
       return countries;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['countries'] });
-      setIsConfirmDialogOpen(false);
-      setCountriesToDelete([]);
-      toast.success('Country(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting countries:', error);
-      toast.error('Failed to delete country(s)');
-      setIsConfirmDialogOpen(false);
-      setCountriesToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['countries']);
+        setIsConfirmDialogOpen(false);
+        setCountriesToDelete([]);
+        toast.success('Country(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting countries:', error);
+        toast.error('Failed to delete country(s)');
+        setIsConfirmDialogOpen(false);
+        setCountriesToDelete([]);
+      }
     }
-  });
+  );
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

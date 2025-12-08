@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense, startTransition } from 'react';
 import {
   X,
   ChevronLeft,
@@ -26,7 +26,8 @@ import {
   AlertTriangle,
   BarChart3,
   TrendingUp,
-  MinusCircle
+  MinusCircle,
+  Trash2
 } from 'lucide-react';
 import { Button } from './Button';
 import { StatusBadge } from './StatusBadge';
@@ -35,6 +36,68 @@ import { ConfirmationDialog } from './ConfirmationDialog';
 import { cn } from '../../lib/utils';
 import { useAnswerValidation } from '../../hooks/useAnswerValidation';
 import DynamicAnswerField from './DynamicAnswerField';
+
+// Memoized wrapper for DynamicAnswerField to prevent unnecessary re-renders
+const MemoizedAnswerField = React.memo(DynamicAnswerField, (prev, next) => {
+  return (
+    prev.question.id === next.question.id &&
+    prev.value === next.value &&
+    prev.disabled === next.disabled &&
+    prev.showHints === next.showHints &&
+    prev.showCorrectAnswer === next.showCorrectAnswer &&
+    prev.mode === next.mode
+  );
+});
+
+// Simple inline snippet attachment component - displays images centered without heavy card styling
+const SnippetAttachmentDisplay: React.FC<{
+  attachments: AttachmentAsset[];
+  label?: string;
+}> = ({ attachments, label }) => {
+  if (!attachments || attachments.length === 0) return null;
+
+  // Filter to only show valid image attachments
+  const validAttachments = attachments.filter(att => {
+    const hasValidUrl = att.file_url && att.file_url.trim() !== '';
+    const isImage = att.file_type?.startsWith('image/');
+    return hasValidUrl && isImage;
+  });
+
+  if (validAttachments.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      {label && (
+        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          {label}
+        </h4>
+      )}
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        <div className="flex flex-col items-center gap-4">
+          {validAttachments.map((attachment, index) => (
+            <div key={attachment.id || index} className="w-full flex flex-col items-center">
+              <img
+                src={attachment.file_url}
+                alt={attachment.file_name || `Attachment ${index + 1}`}
+                className="max-w-full h-auto object-contain rounded"
+                style={{ maxHeight: '500px' }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
+              />
+              {attachment.file_name && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  {attachment.file_name}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 import { EnhancedTestResultsView } from './EnhancedTestResultsView';
 import toast from 'react-hot-toast';
 
@@ -241,6 +304,7 @@ interface UnifiedTestSimulationProps {
   onPaperStatusChange?: (status: string) => void;
   allowPause?: boolean;
   showAnswersOnCompletion?: boolean;
+  onAttachmentRemove?: (attachmentKey: string, attachmentId: string) => void;
 }
 
 const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
@@ -313,14 +377,20 @@ const buildNormalisedCorrectAnswers = (source: AnswerSource): CorrectAnswer[] =>
         return;
       }
 
-      const orderIndex = typeof option.order === 'number' && option.order > 0 ? option.order - 1 : index;
+      // CRITICAL FIX: Use order directly when it's a valid number >= 0
+      // Previous bug: subtracted 1 from order, causing misalignment when order=0
+      const orderIndex = typeof option.order === 'number' && option.order >= 0
+        ? option.order
+        : index;
       const label = deriveOptionLabel(orderIndex);
-      const optionText = option.option_text?.trim() || option.id || `Option ${label}`;
-      const formattedAnswer = `${label}. ${optionText}`.trim();
 
-      if (!normalisedAnswers.some(existing => existing.answer === formattedAnswer)) {
+      // CRITICAL FIX: Store ONLY the label for MCQ validation
+      // The validation logic in useAnswerValidation expects just the label ("A", "B", "C")
+      // NOT the formatted string "A. Option Text"
+      // This mismatch was causing all MCQ answers to fail validation
+      if (!normalisedAnswers.some(existing => existing.answer === label)) {
         normalisedAnswers.push({
-          answer: formattedAnswer,
+          answer: label,  // Just "A", "B", "C", etc. - matches validation expectations
           alternative_id: option.id
         });
       }
@@ -330,7 +400,12 @@ const buildNormalisedCorrectAnswers = (source: AnswerSource): CorrectAnswer[] =>
   return normalisedAnswers;
 };
 
-const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attachments }) => {
+const AttachmentGallery: React.FC<{
+  attachments: AttachmentAsset[];
+  onAttachmentRemove?: (attachmentKey: string, attachmentId: string) => void;
+  attachmentKey?: string;
+  isQAMode?: boolean;
+}> = React.memo(({ attachments, onAttachmentRemove, attachmentKey, isQAMode }) => {
   const [previewAttachment, setPreviewAttachment] = React.useState<AttachmentAsset | null>(null);
 
   if (!attachments || attachments.length === 0) {
@@ -355,6 +430,22 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
 
   const closePreview = () => setPreviewAttachment(null);
 
+  // Debug logging for attachment structure
+  React.useEffect(() => {
+    console.log('🔍 [AttachmentGallery] Rendered with:', {
+      attachmentCount: validAttachments.length,
+      attachmentKey,
+      isQAMode,
+      hasCallback: !!onAttachmentRemove,
+      attachments: validAttachments.map(a => ({
+        id: a.id,
+        file_name: a.file_name,
+        file_type: a.file_type,
+        hasId: !!a.id
+      }))
+    });
+  }, [validAttachments, attachmentKey, isQAMode, onAttachmentRemove]);
+
   return (
     <>
       <div className="space-y-6">
@@ -364,6 +455,17 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
           const isDescriptionOnly = !hasValidUrl && attachment.file_type === 'text/description';
           const isImage = attachment.file_type?.startsWith('image/');
           const id = attachment.id || `attachment-${index}`;
+
+          // Debug: Check if delete button should appear
+          const shouldShowDelete = isQAMode && onAttachmentRemove && attachmentKey && attachment.id;
+          console.log('🔍 [AttachmentGallery] Processing attachment:', {
+            fileName: attachment.file_name,
+            id: attachment.id,
+            attachmentKey,
+            isQAMode,
+            hasCallback: !!onAttachmentRemove,
+            shouldShowDelete
+          });
 
           // Handle description-only attachments (placeholders)
           if (isDescriptionOnly || !hasValidUrl) {
@@ -440,6 +542,27 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
                       />
 
                       <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/60 p-2 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                        {isQAMode && onAttachmentRemove && attachmentKey && attachment.id && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              console.log('🗑️ [AttachmentGallery Image] Delete clicked:', {
+                                attachmentKey,
+                                attachmentId: attachment.id,
+                                fileName: attachment.file_name,
+                                hasCallback: !!onAttachmentRemove
+                              });
+                              onAttachmentRemove(attachmentKey, attachment.id);
+                            }}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-red-400 hover:bg-red-500/80 hover:text-white transition-colors"
+                            aria-label="Remove attachment"
+                            title="Remove attachment"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setPreviewAttachment(attachment)}
@@ -500,6 +623,27 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
 
                 {!isImage && (
                   <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-800">
+                    {isQAMode && onAttachmentRemove && attachmentKey && attachment.id && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          console.log('🗑️ [AttachmentGallery File] Delete clicked:', {
+                            attachmentKey,
+                            attachmentId: attachment.id,
+                            fileName: attachment.file_name,
+                            hasCallback: !!onAttachmentRemove
+                          });
+                          onAttachmentRemove(attachmentKey, attachment.id);
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors"
+                        aria-label="Remove attachment"
+                        title="Remove attachment"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                     <a
                       href={attachment.file_url}
                       target="_blank"
@@ -552,7 +696,7 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
       )}
     </>
   );
-};
+});
 
 interface TeacherInsightsProps {
   correctAnswers?: CorrectAnswer[];
@@ -562,7 +706,7 @@ interface TeacherInsightsProps {
   label?: string;
 }
 
-const TeacherInsights: React.FC<TeacherInsightsProps> = ({
+const TeacherInsights: React.FC<TeacherInsightsProps> = React.memo(({
   correctAnswers,
   answerRequirement,
   markingCriteria,
@@ -689,7 +833,7 @@ const TeacherInsights: React.FC<TeacherInsightsProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export function UnifiedTestSimulation({
   paper,
@@ -697,7 +841,8 @@ export function UnifiedTestSimulation({
   isQAMode = false,
   onPaperStatusChange,
   allowPause = true,
-  showAnswersOnCompletion = true
+  showAnswersOnCompletion = true,
+  onAttachmentRemove
 }: UnifiedTestSimulationProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, UserAnswer>>({});
@@ -706,6 +851,7 @@ export function UnifiedTestSimulation({
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState<SimulationResults | null>(null);
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<string>>(new Set());
+  const [isNavigating, setIsNavigating] = useState(false);
   // Unified simulation features - all toggleable independently
   const [features, setFeatures] = useState<SimulationFeatures>({
     showHints: isQAMode,
@@ -729,10 +875,54 @@ export function UnifiedTestSimulation({
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const exitActionRef = useRef<(() => void) | null>(null);
+  const navigationDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const { validateAnswer } = useAnswerValidation();
+  const normalizedQuestionsRef = useRef<Map<string, Question>>(new Map());
 
-  const currentQuestion = paper.questions[currentQuestionIndex];
-  const totalQuestions = paper.questions.length;
+  const normalizedQuestions = useMemo(() => {
+    const questionMap = new Map<string, Question>();
+    paper.questions.forEach(q => {
+      if (!normalizedQuestionsRef.current.has(q.id)) {
+        const normalizedParts = q.parts.map(part => {
+          const normalizedSubparts = part.subparts?.map(subpart => ({
+            ...subpart,
+            options: subpart.options || [],
+            correct_answers: subpart.correct_answers || [],
+            attachments: subpart.attachments || []
+          })) || [];
+
+          return {
+            ...part,
+            options: part.options || [],
+            correct_answers: part.correct_answers || [],
+            attachments: part.attachments || [],
+            subparts: normalizedSubparts
+          };
+        });
+
+        const normalizedQuestion: Question = {
+          ...q,
+          options: q.options || [],
+          correct_answers: q.correct_answers || [],
+          attachments: q.attachments || [],
+          parts: normalizedParts
+        };
+
+        questionMap.set(q.id, normalizedQuestion);
+        normalizedQuestionsRef.current.set(q.id, normalizedQuestion);
+      } else {
+        questionMap.set(q.id, normalizedQuestionsRef.current.get(q.id)!);
+      }
+    });
+    return questionMap;
+  }, [paper.questions]);
+
+  const currentQuestion = useMemo(() => {
+    const q = paper.questions[currentQuestionIndex];
+    return q ? normalizedQuestions.get(q.id) : undefined;
+  }, [paper.questions, currentQuestionIndex, normalizedQuestions]);
+
+  const totalQuestions = useMemo(() => paper.questions.length, [paper.questions]);
 
   const requiresAnswer = useCallback(
     (item?: { has_direct_answer?: boolean; is_contextual_only?: boolean; answer_requirement?: string; answer_format?: string }) => {
@@ -955,64 +1145,99 @@ export function UnifiedTestSimulation({
     });
   };
 
-  const handleAnswerChange = (
-    questionId: string,
-    partId: string | undefined,
-    subpartId: string | undefined,
-    answer: unknown
-  ) => {
-    const key = subpartId
-      ? `${questionId}-${partId}-${subpartId}`
-      : partId
-        ? `${questionId}-${partId}`
-        : questionId;
-    const startKey = subpartId
-      ? key
-      : partId
-        ? `${questionId}-${partId}`
-        : questionId;
-    const startTime = questionStartTimes[startKey] || Date.now();
-    const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+  const handleAnswerChange = useCallback(
+    (questionId: string, partId: string | undefined, subpartId: string | undefined, answer: unknown) => {
+      const key = subpartId
+        ? `${questionId}-${partId}-${subpartId}`
+        : partId
+          ? `${questionId}-${partId}`
+          : questionId;
+      const startKey = subpartId ? key : partId ? `${questionId}-${partId}` : questionId;
 
-    if (!questionStartTimes[startKey]) {
-      setQuestionStartTimes(prev => ({
-        ...prev,
-        [startKey]: Date.now()
-      }));
-    }
+      const question = normalizedQuestions.get(questionId);
+      if (!question) return;
 
-    const question = paper.questions.find(q => q.id === questionId);
-    if (!question) return;
-
-    let questionToValidate;
-    if (subpartId && partId) {
-      questionToValidate = question.parts
-        .find(p => p.id === partId)?.subparts
-        ?.find(sp => sp.id === subpartId);
-    } else if (partId) {
-      questionToValidate = question.parts.find(p => p.id === partId);
-    } else {
-      questionToValidate = question;
-    }
-
-    if (!questionToValidate) return;
-
-    const validation = validateAnswer(questionToValidate, answer);
-
-    setUserAnswers(prev => ({
-      ...prev,
-      [key]: {
-        questionId,
-        partId,
-        subpartId,
-        answer,
-        isCorrect: validation.isCorrect,
-        marksAwarded: (validation.score || 0) * (questionToValidate.marks || 0),
-        timeSpent,
-        partialCredit: validation.partialCredit
+      let questionToValidate: any;
+      if (subpartId && partId) {
+        const part = question.parts.find(p => p.id === partId);
+        questionToValidate = part?.subparts?.find(sp => sp.id === subpartId);
+        // FIXED: Ensure type is set for subparts (fallback chain)
+        if (questionToValidate && !questionToValidate.type) {
+          questionToValidate = {
+            ...questionToValidate,
+            type: questionToValidate.type || part?.type || question.type || 'descriptive'
+          };
+        }
+      } else if (partId) {
+        questionToValidate = question.parts.find(p => p.id === partId);
+        // FIXED: Ensure type is set for parts (fallback to question type)
+        if (questionToValidate && !questionToValidate.type) {
+          questionToValidate = {
+            ...questionToValidate,
+            type: questionToValidate.type || question.type || 'descriptive'
+          };
+        }
+      } else {
+        questionToValidate = question;
       }
-    }));
-  };
+
+      if (!questionToValidate) return;
+
+      // Add debug logging to diagnose validation issues
+      if (process.env.NODE_ENV === 'development') {
+        console.group(`[UnifiedTest Answer Validation] ${subpartId ? 'Subpart' : partId ? 'Part' : 'Question'} ${questionId}`);
+        console.log('Question Type:', questionToValidate.type);
+        console.log('Answer Format:', questionToValidate.answer_format);
+        console.log('Answer Requirement:', questionToValidate.answer_requirement);
+        console.log('User Answer (raw):', answer);
+        console.log('Correct Answers:', questionToValidate.correct_answers);
+        console.log('Max Marks:', questionToValidate.marks);
+      }
+
+      const validation = validateAnswer(questionToValidate, answer);
+
+      // FIXED: validation.score already contains the marks awarded, don't multiply again!
+      // Before: (validation.score || 0) * (questionToValidate.marks || 0)
+      // After: validation.score || 0
+      const marksAwarded = validation.score || 0;
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Validation Result:', {
+          isCorrect: validation.isCorrect,
+          score: validation.score,
+          marksAwarded,
+          feedback: validation.feedback
+        });
+        console.groupEnd();
+      }
+
+      startTransition(() => {
+        const now = Date.now();
+        const startTime = questionStartTimes[startKey] || now;
+        const timeSpent = Math.floor((now - startTime) / 1000);
+
+        setQuestionStartTimes(prev => {
+          if (prev[startKey]) return prev;
+          return { ...prev, [startKey]: now };
+        });
+
+        setUserAnswers(prev => ({
+          ...prev,
+          [key]: {
+            questionId,
+            partId,
+            subpartId,
+            answer,
+            isCorrect: validation.isCorrect,
+            marksAwarded,  // FIXED: Use calculated marksAwarded directly
+            timeSpent,
+            partialCredit: validation.partialCredit
+          }
+        }));
+      });
+    },
+    [normalizedQuestions, questionStartTimes, validateAnswer]
+  );
 
   const handleSubmitExam = () => {
     setIsRunning(false);
@@ -1246,23 +1471,54 @@ export function UnifiedTestSimulation({
   }, []);
 
   const goToQuestion = useCallback((index: number) => {
-    setCurrentQuestionIndex(prevIndex => {
-      if (index >= 0 && index < totalQuestions) {
-        return index;
+    if (index >= 0 && index < totalQuestions) {
+      if (navigationDebounceRef.current) {
+        clearTimeout(navigationDebounceRef.current);
       }
-      return prevIndex;
-    });
+
+      setIsNavigating(true);
+      navigationDebounceRef.current = setTimeout(() => {
+        startTransition(() => {
+          setCurrentQuestionIndex(index);
+          requestAnimationFrame(() => {
+            setIsNavigating(false);
+          });
+        });
+      }, 50);
+    }
   }, [totalQuestions]);
 
   const goToPreviousQuestion = useCallback(() => {
-    setCurrentQuestionIndex(prevIndex => Math.max(prevIndex - 1, 0));
+    setCurrentQuestionIndex(prevIndex => {
+      const newIndex = Math.max(prevIndex - 1, 0);
+      if (newIndex !== prevIndex) {
+        setIsNavigating(true);
+        startTransition(() => {
+          requestAnimationFrame(() => {
+            setIsNavigating(false);
+          });
+        });
+      }
+      return newIndex;
+    });
   }, []);
 
   const goToNextQuestion = useCallback(() => {
-    setCurrentQuestionIndex(prevIndex => Math.min(prevIndex + 1, totalQuestions - 1));
+    setCurrentQuestionIndex(prevIndex => {
+      const newIndex = Math.min(prevIndex + 1, totalQuestions - 1);
+      if (newIndex !== prevIndex) {
+        setIsNavigating(true);
+        startTransition(() => {
+          requestAnimationFrame(() => {
+            setIsNavigating(false);
+          });
+        });
+      }
+      return newIndex;
+    });
   }, [totalQuestions]);
 
-  const getQuestionStatus = (questionId: string, parts: SubQuestion[]) => {
+  const getQuestionStatus = useCallback((questionId: string, parts: SubQuestion[]) => {
     if (parts.length > 0) {
       let anyAnswered = false;
 
@@ -1296,19 +1552,23 @@ export function UnifiedTestSimulation({
 
     const answer = userAnswers[questionId];
     return answer?.answer !== undefined && answer?.answer !== '' ? 'answered' : 'unanswered';
-  };
+  }, [userAnswers]);
 
-  const getAnsweredCount = () => {
-    return paper.questions.filter(q => {
-      const status = getQuestionStatus(q.id, q.parts);
-      return status === 'answered';
-    }).length;
-  };
+  const questionStatusMap = useMemo(() => {
+    const statusMap = new Map<string, 'answered' | 'partial' | 'unanswered'>();
+    paper.questions.forEach(q => {
+      statusMap.set(q.id, getQuestionStatus(q.id, q.parts));
+    });
+    return statusMap;
+  }, [paper.questions, getQuestionStatus, userAnswers]);
 
-  const calculateProgress = () => {
-    const answeredQuestions = getAnsweredCount();
-    return totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
-  };
+  const getAnsweredCount = useMemo(() => {
+    return Array.from(questionStatusMap.values()).filter(status => status === 'answered').length;
+  }, [questionStatusMap]);
+
+  const calculateProgress = useMemo(() => {
+    return totalQuestions > 0 ? (getAnsweredCount / totalQuestions) * 100 : 0;
+  }, [getAnsweredCount, totalQuestions]);
 
   if (showResults && results) {
     return (
@@ -1377,11 +1637,11 @@ export function UnifiedTestSimulation({
 
                 <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
                   <span>Progress:</span>
-                  <span className="font-medium">{getAnsweredCount()}/{paper.questions.length}</span>
+                  <span className="font-medium">{getAnsweredCount}/{paper.questions.length}</span>
                   <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-blue-500 transition-all duration-300"
-                      style={{ width: `${calculateProgress()}%` }}
+                      style={{ width: `${calculateProgress}%` }}
                     />
                   </div>
                 </div>
@@ -1609,7 +1869,7 @@ export function UnifiedTestSimulation({
                 {navigatorSize === 'compact' ? (
                   <div className="p-2 space-y-1">
                     {paper.questions.map((question, index) => {
-                      const status = getQuestionStatus(question.id, question.parts);
+                      const status = questionStatusMap.get(question.id) || 'unanswered';
                       const isCurrent = index === currentQuestionIndex;
                       const isFlagged = flaggedQuestions.has(question.id);
 
@@ -1638,7 +1898,7 @@ export function UnifiedTestSimulation({
                   <div className="p-4">
                     <div className="grid grid-cols-5 gap-2">
                       {paper.questions.map((question, index) => {
-                        const status = getQuestionStatus(question.id, question.parts);
+                        const status = questionStatusMap.get(question.id) || 'unanswered';
                         const isCurrent = index === currentQuestionIndex;
                         const isFlagged = flaggedQuestions.has(question.id);
 
@@ -1708,7 +1968,14 @@ export function UnifiedTestSimulation({
 
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-4xl mx-auto p-6">
-                {currentQuestion && (
+                {isNavigating && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-pulse text-gray-500 dark:text-gray-400">
+                      Loading question...
+                    </div>
+                  </div>
+                )}
+                {!isNavigating && currentQuestion && (
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     <div className="bg-gray-50 dark:bg-gray-900 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                       <div className="flex items-center justify-between">
@@ -1762,19 +2029,18 @@ export function UnifiedTestSimulation({
                         </p>
                       </div>
 
+                      {/* Display snippet attachments inline */}
                       {currentQuestion.attachments && currentQuestion.attachments.length > 0 && (
-                        <div className="mb-6">
-                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            Reference Materials:
-                          </h4>
-                          <AttachmentGallery attachments={currentQuestion.attachments} />
-                        </div>
+                        <SnippetAttachmentDisplay
+                          attachments={currentQuestion.attachments}
+                          label={`Attached Figure${currentQuestion.attachments.length > 1 ? 's' : ''} for Question ${currentQuestion.question_number || currentQuestionIndex + 1}`}
+                        />
                       )}
 
                       {currentQuestion.parts.length === 0 && (
                         requiresAnswer(currentQuestion) ? (
                           <div className="mb-6">
-                            <DynamicAnswerField
+                            <MemoizedAnswerField
                               question={{
                                 ...currentQuestion,
                                 subject: paper.subject,
@@ -1856,17 +2122,16 @@ export function UnifiedTestSimulation({
                                     </p>
                                   </div>
 
+                                  {/* Display part snippet attachments inline */}
                                   {part.attachments && part.attachments.length > 0 && (
-                                    <div className="mb-4">
-                                      <h5 className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">
-                                        Supporting resources
-                                      </h5>
-                                      <AttachmentGallery attachments={part.attachments} />
-                                    </div>
+                                    <SnippetAttachmentDisplay
+                                      attachments={part.attachments}
+                                      label={`Attached Figure${part.attachments.length > 1 ? 's' : ''} for ${part.part_label || `Part ${String.fromCharCode(97 + partIndex)}`}`}
+                                    />
                                   )}
 
                                   {requiresAnswer(part) ? (
-                                    <DynamicAnswerField
+                                    <MemoizedAnswerField
                                       question={{
                                         ...part,
                                         subject: paper.subject,
@@ -1931,12 +2196,18 @@ export function UnifiedTestSimulation({
                                                 {subpart.question_description}
                                               </p>
 
+                                              {/* Display subpart snippet attachments inline */}
                                               {subpart.attachments && subpart.attachments.length > 0 && (
-                                                <AttachmentGallery attachments={subpart.attachments} />
+                                                <div className="mb-4">
+                                                  <SnippetAttachmentDisplay
+                                                    attachments={subpart.attachments}
+                                                    label={`Attached Figure${subpart.attachments.length > 1 ? 's' : ''} for ${subpart.subpart_label || `Subpart ${['i', 'ii', 'iii', 'iv', 'v'][subIndex] || (subIndex + 1)}`}`}
+                                                  />
+                                                </div>
                                               )}
 
                                               {requiresAnswer(subpart) ? (
-                                                <DynamicAnswerField
+                                                <MemoizedAnswerField
                                                   question={{
                                                     ...subpart,
                                                     id: subpart.id,

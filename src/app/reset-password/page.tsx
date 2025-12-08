@@ -7,7 +7,7 @@ import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, Ar
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { supabase } from '../../lib/supabase';
-import { getCurrentUser, suppressSessionExpiredNoticeOnce } from '../../lib/auth';
+import { getCurrentUser } from '../../lib/auth';
 import { toast } from '../../components/shared/Toast';
 
 interface PasswordStrength {
@@ -337,7 +337,6 @@ export default function ResetPasswordPage() {
         window.history.replaceState(null, '', window.location.pathname);
 
         // Sign out after password reset
-        suppressSessionExpiredNoticeOnce();
         await supabase.auth.signOut();
         
       } else if (legacyTokenData) {
@@ -403,15 +402,14 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen relative flex items-center justify-center">
         <div className="absolute inset-0 z-0">
           <img
-            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
+            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
             alt="Educational background"
-            className="w-full h-full object-cover select-none pointer-events-none blur-sm"
+            className="w-full h-full object-cover select-none pointer-events-none"
             draggable="false"
             onContextMenu={(e) => e.preventDefault()}
             style={{ userSelect: 'none' }}
           />
-          {/* Transparent gray overlay with blur */}
-          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
         </div>
         
         <div className="text-center relative z-10">
@@ -427,15 +425,14 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="absolute inset-0 z-0">
           <img
-            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
+            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
             alt="Educational background"
-            className="w-full h-full object-cover select-none pointer-events-none blur-sm"
+            className="w-full h-full object-cover select-none pointer-events-none"
             draggable="false"
             onContextMenu={(e) => e.preventDefault()}
             style={{ userSelect: 'none' }}
           />
-          {/* Transparent gray overlay with blur */}
-          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
         </div>
         
         <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
@@ -501,15 +498,14 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="absolute inset-0 z-0">
           <img
-            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Singin%20new.jpg"
+            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
             alt="Educational background"
-            className="w-full h-full object-cover select-none pointer-events-none blur-sm"
+            className="w-full h-full object-cover select-none pointer-events-none"
             draggable="false"
             onContextMenu={(e) => e.preventDefault()}
             style={{ userSelect: 'none' }}
           />
-          {/* Transparent gray overlay with blur */}
-          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
         </div>
         
         <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">

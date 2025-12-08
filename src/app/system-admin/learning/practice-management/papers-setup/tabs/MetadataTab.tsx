@@ -11,12 +11,13 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  FileText, Save, ChevronRight, ChevronLeft, Loader2, 
+import {
+  FileText, Save, ChevronRight, ChevronLeft,
   AlertCircle, CheckCircle, Info, Calendar, Clock, Hash,
   Book, Award, Building, MapPin, Search, Sparkles, Plus,
   Check, X, HelpCircle, Database
 } from 'lucide-react';
+import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinner';
 import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
 import { Select } from '../../../../../../components/shared/Select';
@@ -817,7 +818,7 @@ export function MetadataTab({
   if (!metadata) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <LoadingSpinner size="lg" message="Loading metadata..." />
       </div>
     );
   }
@@ -924,7 +925,7 @@ export function MetadataTab({
       {entityIdsStatus === 'loading' && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 animate-spin" />
+            <LoadingSpinner size="sm" inline centered={false} />
             <div className="flex-1">
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
                 Loading Entity IDs from Previous Step...
@@ -1159,7 +1160,7 @@ export function MetadataTab({
         >
           {saving ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <LoadingSpinner size="sm" inline centered={false} />
               Saving...
             </>
           ) : (

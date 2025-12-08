@@ -14,6 +14,8 @@ export interface RawCorrectAnswerRow {
   answer: string;
   marks: number | null;
   alternative_id: number | null;
+  alternative_type?: string | null;
+  linked_alternatives?: number[] | null;
   context_type: string | null;
   context_value: string | null;
   context_label: string | null;
@@ -24,6 +26,8 @@ export interface RawAnswerComponentRow {
   question_id: string | null;
   sub_question_id: string | null;
   alternative_id: number;
+  alternative_type?: string | null;
+  linked_alternatives?: number[] | null;
   answer_text: string;
   marks: number;
   context_type: string;
@@ -126,6 +130,19 @@ export function autoMarkQuestion(context: AutoMarkContext): AutoMarkResult {
   const responseTokens = normalizeStudentResponse(context.rawAnswer, context.subjectArea);
   const evalResult = evaluateMarkingPoints(normalized, responseTokens, context);
 
+  // Enhanced debug logging for complex question marking
+  if (process.env.NODE_ENV === 'development') {
+    console.group(`[Auto-Marking] Question ${context.question.id}`);
+    console.log('Marking Points:', normalized);
+    console.log('Student Response Tokens:', responseTokens);
+    console.log('Evaluation Result:', evalResult);
+    console.log('Total Awarded:', evalResult.totalAwarded, '/', evalResult.totalAvailable);
+    if (evalResult.denied.length > 0) {
+      console.warn('Denied Points:', evalResult.denied);
+    }
+    console.groupEnd();
+  }
+
   return {
     awarded: evalResult.awarded,
     denied: evalResult.denied,
@@ -156,26 +173,39 @@ function buildMarkingPoints(context: AutoMarkContext): MarkingPoint[] {
   }
 
   records.forEach((row, index) => {
-    const id = row.context_label || (row.alternative_id ? `${row.alternative_id}` : `P${index + 1}`);
+    // CRITICAL FIX: Prioritize alternative_id over context_label for proper grouping
+    // This ensures alternatives with same alternative_id are grouped as "any one acceptable"
+    const id = row.alternative_id ? `alt_${row.alternative_id}` : (row.context_label || `P${index + 1}`);
     if (seen.has(id)) {
       return;
     }
     seen.add(id);
 
     const related = records.filter((candidate) => {
-      if ('alternative_id' in candidate && 'alternative_id' in row) {
+      // First priority: group by alternative_id if both have it
+      if ('alternative_id' in candidate && 'alternative_id' in row &&
+          candidate.alternative_id && row.alternative_id) {
         return candidate.alternative_id === row.alternative_id;
       }
+      // Second priority: group by context_label if alternative_id doesn't match
       if (candidate.context_label && row.context_label) {
         return candidate.context_label === row.context_label;
       }
+      // Fallback: only include the exact same row
       return candidate === row;
     });
 
-    const baseMarks = related.reduce((sum, entry) => sum + (entry.marks ?? 0), 0);
+    // Determine requirement type from database field or fallback to text parsing
+    const requirement = determineRequirement(related.map((entry) => entry.answer), related);
+
+    // CRITICAL FIX: For one_required alternatives, don't sum marks - take first alternative's marks
+    // For all_required, sum all marks as before
+    const baseMarks = requirement === 'one_required' && related.length > 1
+      ? (related[0]?.marks ?? 0)
+      : related.reduce((sum, entry) => sum + (entry.marks ?? 0), 0);
+
     const annotations = deriveAnnotations(related.map((entry) => entry.answer));
     const alternatives = related.flatMap((entry) => parseAlternatives(entry.answer));
-    const requirement = determineRequirement(related.map((entry) => entry.answer));
     const dependencies = collectDependencies(related.map((entry) => entry.answer));
 
     points.push({
@@ -233,7 +263,19 @@ function deriveAnnotations(answers: string[]): MarkingAnnotations {
   return annotations;
 }
 
-function determineRequirement(answers: string[]): MarkingPoint['requirement'] {
+function determineRequirement(
+  answers: string[],
+  rows?: (RawCorrectAnswerRow | RawAnswerComponentRow)[]
+): MarkingPoint['requirement'] {
+  // CRITICAL FIX: Check database field first before parsing text
+  if (rows && rows.length > 0) {
+    const explicitType = rows[0].alternative_type;
+    if (explicitType === 'one_required') return 'one_required';
+    if (explicitType === 'all_required') return 'all_required';
+    if (explicitType === 'standalone') return 'one_required';
+  }
+
+  // Fallback: parse from answer text content
   if (answers.some((text) => /\ball\b/i.test(text) || /\bboth\b/i.test(text) || text.includes(' AND '))) {
     return 'all_required';
   }

@@ -1,6 +1,6 @@
 // src/components/shared/DynamicAnswerField.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   AlertCircle,
   Calculator,
@@ -23,9 +23,30 @@ import {
   Link as LinkIcon,
   Target
 } from 'lucide-react';
-import ScientificEditor from './ScientificEditor';
+import { RichTextEditor } from './RichTextEditor';
 import Button from './Button';
 import { cn } from '@/lib/utils';
+import {
+  CodeEditor,
+  FileUploader,
+  AudioRecorder,
+  TableCompletion,
+  DiagramCanvas,
+  GraphPlotter,
+  StructuralDiagram,
+  TableCreator,
+  ChemicalStructureEditor,
+  type UploadedFile,
+  type AudioRecording,
+  type TableCompletionData,
+  type DiagramData,
+  type GraphData,
+  type StructuralDiagramData,
+  type TableCreatorData,
+  type ChemicalStructureData,
+  type TableTemplate
+} from '@/components/answer-formats';
+import { type TableTemplateDTO, type TableCellDTO } from '@/services/TableTemplateService';
 
 // Type definitions
 interface CorrectAnswer {
@@ -138,7 +159,7 @@ interface SubjectSpecificConfig {
 interface AnswerFieldProps {
   question: {
     id: string;
-    type: 'mcq' | 'tf' | 'descriptive';
+    type: 'mcq' | 'tf' | 'descriptive' | 'complex';
     subject?: string;
     answer_format?: string;
     options?: { label: string; text: string; is_correct?: boolean }[];
@@ -149,6 +170,7 @@ interface AnswerFieldProps {
     marks: number;
     figure?: boolean;
     attachments?: string[];
+    preview_data?: string; // For table_completion: stores student/test data separately from template
   };
   value?: AnswerValue;
   onChange: (value: AnswerValue) => void;
@@ -162,7 +184,54 @@ interface AnswerFieldProps {
   contextRequirements?: ContextRequirement[];
   validationMode?: 'strict' | 'flexible' | 'owtte' | 'ora';
   subjectSpecificConfig?: SubjectSpecificConfig;
+  triggerValidation?: boolean;
+  // Force template editor mode for complex formats (e.g., table_completion)
+  forceTemplateEditor?: boolean;
+  // Callback for template saves in preview mode
+  onTemplateSave?: (template: any) => void;
+  // Review mode props (for import review workflow)
+  importSessionId?: string;
+  questionIdentifier?: string;
 }
+
+// Helper function to convert TableTemplateDTO to TableTemplate format
+const convertTableTemplateDTOToTemplate = (dto: TableTemplateDTO): TableTemplate => {
+  const lockedCells: Array<{ row: number; col: number; value: string | number }> = [];
+  const editableCells: Array<{ row: number; col: number }> = [];
+  const correctAnswers: Array<{ row: number; col: number; value: string | number }> = [];
+
+  // Convert cells array to separate arrays by type
+  dto.cells.forEach((cell: TableCellDTO) => {
+    if (cell.cellType === 'locked') {
+      lockedCells.push({
+        row: cell.rowIndex,
+        col: cell.colIndex,
+        value: cell.lockedValue || ''
+      });
+    } else if (cell.cellType === 'editable') {
+      editableCells.push({
+        row: cell.rowIndex,
+        col: cell.colIndex
+      });
+      if (cell.expectedAnswer) {
+        correctAnswers.push({
+          row: cell.rowIndex,
+          col: cell.colIndex,
+          value: cell.expectedAnswer
+        });
+      }
+    }
+  });
+
+  return {
+    rows: dto.rows,
+    columns: dto.columns,
+    headers: dto.headers || Array.from({ length: dto.columns }, (_, i) => `Column ${i + 1}`),
+    lockedCells,
+    editableCells,
+    correctAnswers
+  };
+};
 
 const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   question,
@@ -176,9 +245,26 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   answerComponents,
   contextRequirements,
   validationMode = 'flexible',
-  subjectSpecificConfig
+  subjectSpecificConfig,
+  triggerValidation = false,
+  forceTemplateEditor = false,
+  onTemplateSave,
+  importSessionId,
+  questionIdentifier
 }) => {
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const questionIdRef = useRef(question.id);
+  const isInitializedRef = useRef(false);
+
+  const initialSelectedOptions = useMemo(() => {
+    if (questionIdRef.current !== question.id || !isInitializedRef.current) {
+      questionIdRef.current = question.id;
+      isInitializedRef.current = true;
+      return [];
+    }
+    return [];
+  }, [question.id]);
+
+  const [selectedOptions, setSelectedOptions] = useState<string[]>(initialSelectedOptions);
   const [textAnswers, setTextAnswers] = useState<{ [key: string]: string }>({});
   const [contextAnswers, setContextAnswers] = useState<{ [key: string]: string }>({});
   const [componentAnswers, setComponentAnswers] = useState<Record<string, AnswerPrimitive>>({});
@@ -187,9 +273,24 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   const [showAllCorrectAnswers, setShowAllCorrectAnswers] = useState(false);
   const [measurementUnits, setMeasurementUnits] = useState<{ [key: string]: string }>({});
 
+  // Answer format component states
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [audioRecording, setAudioRecording] = useState<AudioRecording | null>(null);
+  const [codeValue, setCodeValue] = useState<string>('');
+  const [tableData, setTableData] = useState<TableCompletionData | null>(null);
+  const [diagramData, setDiagramData] = useState<DiagramData | null>(null);
+  const [graphData, setGraphData] = useState<GraphData | null>(null);
+  const [structuralDiagramData, setStructuralDiagramData] = useState<StructuralDiagramData | null>(null);
+  const [tableCreatorData, setTableCreatorData] = useState<TableCreatorData | null>(null);
+  const [chemicalStructureData, setChemicalStructureData] = useState<ChemicalStructureData | null>(null);
+
   // Admin mode states
-  const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>([]);
+  const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>(() => question.correct_answers || []);
   const [editingAnswerIndex, setEditingAnswerIndex] = useState<number | null>(null);
+
+  // Refs for cursor position management in text inputs
+  const singleWordInputRef = useRef<HTMLInputElement>(null);
+  const cursorPositionRef = useRef<number>(0);
 
   const getCurrentStructuredValue = useCallback((): StructuredAnswerValue => {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -313,6 +414,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
   // Initialize value from props
   useEffect(() => {
+    if (questionIdRef.current !== question.id) {
+      questionIdRef.current = question.id;
+      setSelectedOptions([]);
+      setTextAnswers({});
+      setContextAnswers({});
+      setComponentAnswers({});
+      setMeasurementUnits({});
+      setHasAnswered(false);
+      setShowAllCorrectAnswers(false);
+    }
+  }, [question.id]);
+
+  useEffect(() => {
     if (mode === 'admin' && question.correct_answers) {
       setAdminCorrectAnswers(question.correct_answers);
       return;
@@ -321,16 +435,25 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     if (question.type === 'mcq') {
       if (Array.isArray(value)) {
         const selections = value.filter((entry): entry is string => typeof entry === 'string');
-        setSelectedOptions(selections);
-        setHasAnswered(selections.length > 0);
+        const currentSelectionsStr = selectedOptions.sort().join(',');
+        const newSelectionsStr = selections.sort().join(',');
+        if (currentSelectionsStr !== newSelectionsStr) {
+          setSelectedOptions(selections);
+          setHasAnswered(selections.length > 0);
+        }
       } else if (typeof value === 'string') {
-        setSelectedOptions(value ? [value] : []);
-        setHasAnswered(Boolean(value));
-      } else {
+        const newSelections = value ? [value] : [];
+        const currentSelectionsStr = selectedOptions.sort().join(',');
+        const newSelectionsStr = newSelections.sort().join(',');
+        if (currentSelectionsStr !== newSelectionsStr) {
+          setSelectedOptions(newSelections);
+          setHasAnswered(Boolean(value));
+        }
+      } else if (selectedOptions.length > 0) {
         setSelectedOptions([]);
         setHasAnswered(false);
       }
-    } else if (question.type === 'descriptive') {
+    } else if ((question.type === 'descriptive' || question.type === 'complex') && value !== undefined) {
       const structuredValue = getCurrentStructuredValue();
       const { main, components, context, units, ...rest } = structuredValue;
 
@@ -344,12 +467,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
         }
       });
 
-      setTextAnswers(nextTextAnswers);
-      setComponentAnswers(components ?? {});
-      setContextAnswers(context ?? {});
-      setMeasurementUnits(units ?? {});
+      const hasTextChanged = JSON.stringify(textAnswers) !== JSON.stringify(nextTextAnswers);
+      const hasComponentsChanged = JSON.stringify(componentAnswers) !== JSON.stringify(components ?? {});
+      const hasContextChanged = JSON.stringify(contextAnswers) !== JSON.stringify(context ?? {});
+      const hasUnitsChanged = JSON.stringify(measurementUnits) !== JSON.stringify(units ?? {});
+
+      if (hasTextChanged || hasComponentsChanged || hasContextChanged || hasUnitsChanged) {
+        setTextAnswers(nextTextAnswers);
+        setComponentAnswers(components ?? {});
+        setContextAnswers(context ?? {});
+        setMeasurementUnits(units ?? {});
+      }
     }
-  }, [getCurrentStructuredValue, mode, question.correct_answers, question.type, value]);
+  }, [getCurrentStructuredValue, mode, question.correct_answers, question.type, value, selectedOptions, textAnswers, componentAnswers, contextAnswers, measurementUnits]);
 
   // Admin mode handlers
   const handleAddCorrectAnswer = () => {
@@ -618,22 +748,247 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     format?: string,
     isEditing: boolean = false
   ) => {
-    const needsScientificEditor = ['equation', 'calculation', 'structural_diagram', 'chemical_structure'].includes(format || '') ||
-      ['math', 'physics', 'chemistry'].some(s => question.subject?.toLowerCase().includes(s));
+    // Helper to safely parse JSON values
+    const parseJsonValue = <T,>(val: string, defaultValue: T): T => {
+      if (!val || val.trim() === '') return defaultValue;
+      try {
+        return JSON.parse(val) as T;
+      } catch {
+        return defaultValue;
+      }
+    };
 
-    if (needsScientificEditor) {
+    // Code Editor format
+    if (format === 'code') {
       return (
-        <ScientificEditor
-          value={value}
-          onChange={onChange}
+        <CodeEditor
+          questionId={question.id}
+          language={question.subject?.toLowerCase().includes('python') ? 'python' : 'javascript'}
+          value={value || ''}
+          onChange={(code) => onChange(code)}
           disabled={disabled && !isEditing}
-          subject={question.subject}
-          format={format}
-          placeholder="Enter answer"
         />
       );
     }
 
+    // File Upload format
+    if (format === 'file_upload') {
+      const parsedFiles = parseJsonValue<UploadedFile[]>(value, []);
+      return (
+        <FileUploader
+          questionId={question.id}
+          value={parsedFiles}
+          onChange={(files) => onChange(JSON.stringify(files))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Audio Recording format
+    if (format === 'audio') {
+      const parsedAudio = parseJsonValue<AudioRecording | null>(value, null);
+      return (
+        <AudioRecorder
+          questionId={question.id}
+          value={parsedAudio}
+          onChange={(recording) => onChange(JSON.stringify(recording))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Table Creator format
+    if (format === 'table' || format === 'table_creator') {
+      const parsedTable = parseJsonValue<TableCreatorData | null>(value, null);
+      return (
+        <TableCreator
+          questionId={question.id}
+          value={parsedTable}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Table Completion format
+    if (format === 'table_completion') {
+      // Determine the correct mode
+      // ✅ FIX: In admin mode, always enable template editing (don't require isEditing flag)
+      const isTemplateEditing = mode === 'admin' || forceTemplateEditor;
+      const isAdminTesting = mode === 'qa_preview';
+      // ✅ FIX: Include 'practice' mode for UnifiedTestSimulation which passes mode='practice'
+      const isStudentTest = (mode === 'exam' || mode === 'practice') && !isEditing;
+
+      // CRITICAL FIX: Load template from correct_answers[0].answer_text and student data from value
+      let templateProp: TableTemplate | undefined;
+      let valueProp: TableCompletionData | null = null;
+
+      // 1. Load template structure from correct_answers[0].answer_text or correct_answers[0].answer
+      // Template can be in answer_text field OR answer field depending on the data source
+      if (question.correct_answers && question.correct_answers.length > 0) {
+        const firstAnswer = question.correct_answers[0];
+        // Check answer_text first (preferred), then fall back to answer field
+        const templateSource = (firstAnswer as any).answer_text || firstAnswer.answer || null;
+
+        if (templateSource && typeof templateSource === 'string') {
+          try {
+            const parsed = JSON.parse(templateSource);
+
+            // Check if it's a TableTemplateDTO (has cells array with rowIndex/colIndex)
+            if (parsed && Array.isArray(parsed.cells) && parsed.cells.length > 0 &&
+                'rowIndex' in parsed.cells[0] && 'colIndex' in parsed.cells[0]) {
+              // This is a TableTemplateDTO - convert it to TableTemplate
+              console.log('[DynamicAnswerField] ✅ Loaded template from correct_answers[0] (answer_text or answer field)');
+              templateProp = convertTableTemplateDTOToTemplate(parsed as TableTemplateDTO);
+              console.log('[DynamicAnswerField] Converted template:', {
+                rows: templateProp.rows,
+                columns: templateProp.columns,
+                headers: templateProp.headers,
+                editableCells: templateProp.editableCells.length
+              });
+            }
+          } catch (e) {
+            console.warn('[DynamicAnswerField] Failed to parse template from answer_text:', e);
+          }
+        }
+      }
+
+      // 2. Load student answer data from value prop (for practice/exam mode)
+      //    OR from preview_data (for review/admin preview mode)
+      if (mode === 'practice' || mode === 'exam') {
+        // In practice/exam mode, value contains student's current answers
+        if (value && typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            if (parsed && 'studentAnswers' in parsed) {
+              valueProp = parsed as TableCompletionData;
+              console.log('[DynamicAnswerField] ✅ Loaded student answers from value prop:', {
+                completedCells: valueProp.completedCells,
+                requiredCells: valueProp.requiredCells
+              });
+            }
+          } catch (e) {
+            console.warn('[DynamicAnswerField] Failed to parse student answer data from value:', e);
+          }
+        }
+      } else if (question.preview_data && typeof question.preview_data === 'string') {
+        // In review/admin mode, load from preview_data
+        try {
+          const parsed = JSON.parse(question.preview_data);
+          if (parsed && 'studentAnswers' in parsed) {
+            valueProp = parsed as TableCompletionData;
+            console.log('[DynamicAnswerField] ✅ Loaded preview data:', valueProp);
+          }
+        } catch (e) {
+          console.warn('[DynamicAnswerField] Failed to parse preview_data:', e);
+        }
+      }
+
+      // ✅ FIX: Don't pass template prop during review mode - let component load from database
+      const shouldPassTemplate = !(importSessionId && questionIdentifier);
+      console.log('[DynamicAnswerField] Table Completion Props:', {
+        importSessionId,
+        questionIdentifier,
+        shouldPassTemplate,
+        templatePropExists: !!templateProp,
+        mode,
+        isTemplateEditing
+      });
+
+      return (
+        <TableCompletion
+          questionId={question.id}
+          template={shouldPassTemplate ? templateProp : undefined}
+          value={valueProp}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+          showCorrectAnswers={showCorrectAnswer}
+          autoGrade={true}
+          isTemplateEditor={isTemplateEditing}
+          isAdminTestMode={isAdminTesting}
+          isStudentTestMode={isStudentTest}
+          showValidationWarnings={triggerValidation && isStudentTest}
+          importSessionId={importSessionId}
+          questionIdentifier={questionIdentifier}
+          onTemplateSave={(templateConfig) => {
+            // ✅ Store template configuration in preview_data for later database save
+            console.log('[DynamicAnswerField] Template save callback (inline) - storing in preview_data:', templateConfig);
+            question.preview_data = JSON.stringify(templateConfig);
+            // Pass up to parent if callback provided
+            onTemplateSave?.(templateConfig);
+          }}
+        />
+      );
+    }
+
+    // Diagram Canvas format
+    if (format === 'diagram') {
+      const parsedDiagram = parseJsonValue<DiagramData | null>(value, null);
+      return (
+        <DiagramCanvas
+          questionId={question.id}
+          value={parsedDiagram}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Graph Plotter format
+    if (format === 'graph') {
+      const parsedGraph = parseJsonValue<GraphData | null>(value, null);
+      return (
+        <GraphPlotter
+          questionId={question.id}
+          value={parsedGraph}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Structural Diagram format
+    if (format === 'structural_diagram') {
+      const parsedStructural = parseJsonValue<StructuralDiagramData | null>(value, null);
+      return (
+        <StructuralDiagram
+          questionId={question.id}
+          value={parsedStructural}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Chemical Structure format
+    if (format === 'chemical_structure') {
+      const parsedChemical = parseJsonValue<ChemicalStructureData | null>(value, null);
+      return (
+        <ChemicalStructureEditor
+          questionId={question.id}
+          value={parsedChemical}
+          onChange={(data) => onChange(JSON.stringify(data))}
+          disabled={disabled && !isEditing}
+        />
+      );
+    }
+
+    // Scientific/Mathematical formats (equation, calculation)
+    const needsScientificEditor = ['equation', 'calculation'].includes(format || '') ||
+      ['math', 'physics', 'chemistry'].some(s => question.subject?.toLowerCase().includes(s));
+
+    if (needsScientificEditor) {
+      return (
+        <RichTextEditor
+          value={value}
+          onChange={onChange}
+          placeholder="Enter answer"
+          className={disabled && !isEditing ? 'opacity-60 pointer-events-none' : ''}
+        />
+      );
+    }
+
+    // Multi-line formats
     if (format === 'multi_line' || format === 'multi_line_labeled') {
       return (
         <textarea
@@ -647,6 +1002,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       );
     }
 
+    // Default: Simple text input for single_word, single_line, etc.
     return (
       <input
         type="text"
@@ -1460,8 +1816,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               </div>
               
               {component.type === 'formula' || needsScientificEditor ? (
-                <ScientificEditor
-                  value={componentAnswers[component.id] || ''}
+                <RichTextEditor
+                  value={String(componentAnswers[component.id] || '')}
                   onChange={(content) => {
                     const newAnswers = { ...componentAnswers, [component.id]: content };
                     setComponentAnswers(newAnswers);
@@ -1469,10 +1825,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     onChange(nextValue);
                     performValidation(nextValue);
                   }}
-                  disabled={disabled}
-                  subject={question.subject}
-                  format={format}
                   placeholder={`Enter ${component.label || component.type}`}
+                  className={disabled ? 'opacity-60 pointer-events-none' : ''}
                 />
               ) : (
                 <input
@@ -1505,21 +1859,37 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       return (
         <div>
           <input
+            ref={format === 'single_word' ? singleWordInputRef : null}
             type="text"
             value={textAnswers.main || ''}
             onChange={(e) => {
+              // Save cursor position for single_word format
+              if (format === 'single_word' && singleWordInputRef.current) {
+                cursorPositionRef.current = singleWordInputRef.current.selectionStart || 0;
+              }
+
               const newAnswers = { ...textAnswers, main: e.target.value };
               setTextAnswers(newAnswers);
               onChange(e.target.value);
               setHasAnswered(true);
               performValidation(e.target.value);
+
+              // Restore cursor position after React updates
+              if (format === 'single_word') {
+                requestAnimationFrame(() => {
+                  if (singleWordInputRef.current) {
+                    const pos = cursorPositionRef.current;
+                    singleWordInputRef.current.setSelectionRange(pos, pos);
+                  }
+                });
+              }
             }}
             disabled={disabled}
             placeholder={format === 'single_word' ? 'Enter one word' : 'Enter your answer'}
             className={cn(
               "w-full px-3 py-2 border rounded-lg",
               disabled ? 'bg-gray-100 dark:bg-gray-900' : 'bg-white dark:bg-gray-800',
-              "focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+              "focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-colors duration-200"
             )}
           />
           {renderCorrectAnswers()}
@@ -1605,7 +1975,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     if (needsScientificEditor) {
       return (
         <div>
-          <ScientificEditor
+          <RichTextEditor
             value={textAnswers.main || ''}
             onChange={(content) => {
               const newAnswers = { ...textAnswers, main: content };
@@ -1614,10 +1984,223 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               setHasAnswered(true);
               performValidation(content);
             }}
+            placeholder="Enter your answer"
+            className={disabled ? 'opacity-60 pointer-events-none' : ''}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Code Editor format
+    if (format === 'code') {
+      return (
+        <div>
+          <CodeEditor
+            questionId={question.id}
+            language={question.subject?.toLowerCase().includes('python') ? 'python' : 'javascript'}
+            value={codeValue || textAnswers.main || ''}
+            onChange={(code) => {
+              setCodeValue(code);
+              const newAnswers = { ...textAnswers, main: code };
+              setTextAnswers(newAnswers);
+              onChange(code);
+              setHasAnswered(true);
+              performValidation(code);
+            }}
             disabled={disabled}
-            subject={question.subject}
-            format={format}
-            placeholder="Enter your answer using the scientific editor"
+            showCorrectAnswer={showCorrectAnswer}
+            correctAnswer={question.correct_answer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // File Upload format
+    if (format === 'file_upload') {
+      return (
+        <div>
+          <FileUploader
+            questionId={question.id}
+            value={uploadedFiles}
+            onChange={(files) => {
+              setUploadedFiles(files);
+              onChange(files);
+              setHasAnswered(files.length > 0);
+              performValidation(files);
+            }}
+            disabled={disabled}
+            maxFiles={3}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Audio Recording format
+    if (format === 'audio') {
+      return (
+        <div>
+          <AudioRecorder
+            questionId={question.id}
+            value={audioRecording}
+            onChange={(recording) => {
+              setAudioRecording(recording);
+              onChange(recording);
+              setHasAnswered(recording !== null);
+              performValidation(recording);
+            }}
+            disabled={disabled}
+            maxDuration={300}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Table Completion format
+    if (format === 'table_completion') {
+      // ✅ FIXED: Determine if we're in template editor mode (admin creating/editing question)
+      const isTemplateEditing = mode === 'admin';
+      const isAdminTesting = mode === 'qa_preview';
+      // ✅ FIX: Include 'practice' mode for UnifiedTestSimulation which passes mode='practice'
+      const isStudentTest = mode === 'exam' || mode === 'practice';
+
+      return (
+        <div>
+          <TableCompletion
+            questionId={question.id}
+            value={tableData}
+            onChange={(data) => {
+              setTableData(data);
+              onChange(data);
+              setHasAnswered(true);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswers={showCorrectAnswer}
+            isTemplateEditor={isTemplateEditing}  // ✅ Enable template editor in admin mode
+            isAdminTestMode={isAdminTesting}
+            isStudentTestMode={isStudentTest}
+            importSessionId={importSessionId}
+            questionIdentifier={questionIdentifier}
+            onTemplateSave={(templateConfig) => {
+              // ✅ Store template configuration in preview_data for later database save
+              console.log('[DynamicAnswerField] Template save callback - storing in preview_data:', templateConfig);
+              question.preview_data = JSON.stringify(templateConfig);
+              // Pass up to parent if callback provided
+              onTemplateSave?.(templateConfig);
+            }}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Diagram Canvas format
+    if (format === 'diagram') {
+      return (
+        <div>
+          <DiagramCanvas
+            questionId={question.id}
+            value={diagramData}
+            onChange={(data) => {
+              setDiagramData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            backgroundImage={question.attachments?.[0]}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Graph Plotter format
+    if (format === 'graph') {
+      return (
+        <div>
+          <GraphPlotter
+            questionId={question.id}
+            value={graphData}
+            onChange={(data) => {
+              setGraphData(data);
+              onChange(data);
+              setHasAnswered(data !== null && data.dataPoints.length > 0);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Structural Diagram format (labeled diagrams)
+    if (format === 'structural_diagram') {
+      return (
+        <div>
+          <StructuralDiagram
+            questionId={question.id}
+            value={structuralDiagramData}
+            onChange={(data) => {
+              setStructuralDiagramData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            backgroundImage={question.attachments?.[0]}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Table Creator format
+    if (format === 'table' || format === 'table_creator') {
+      return (
+        <div>
+          <TableCreator
+            questionId={question.id}
+            value={tableCreatorData}
+            onChange={(data) => {
+              setTableCreatorData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
+          />
+          {renderCorrectAnswers()}
+        </div>
+      );
+    }
+
+    // Chemical Structure format
+    if (format === 'chemical_structure') {
+      return (
+        <div>
+          <ChemicalStructureEditor
+            questionId={question.id}
+            value={chemicalStructureData}
+            onChange={(data) => {
+              setChemicalStructureData(data);
+              onChange(data);
+              setHasAnswered(data !== null);
+              performValidation(data);
+            }}
+            disabled={disabled}
+            showCorrectAnswer={showCorrectAnswer}
           />
           {renderCorrectAnswers()}
         </div>
@@ -1796,7 +2379,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       {/* Answer input based on type */}
       {question.type === 'mcq' && renderMCQ()}
       {question.type === 'tf' && renderTrueFalse()}
-      {question.type === 'descriptive' && renderDescriptive()}
+      {(question.type === 'descriptive' || question.type === 'complex') && renderDescriptive()}
 
       {/* Validation messages */}
       {renderValidation()}

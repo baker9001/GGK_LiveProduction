@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, Loader2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
-import { iconColors } from '../../../lib/constants/iconConfig';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, MoreVertical, ExternalLink, Calendar, RefreshCw, Trash2, History, Edit2, X, ChevronDown, ChevronRight, Building, ArrowUp, ArrowDown } from 'lucide-react';
 import dayjs from 'dayjs';
 import { supabase } from '../../../lib/supabase';
 import { DataTable } from '../../../components/shared/DataTable';
@@ -21,6 +20,7 @@ import { ScrollNavigator } from '../../../components/shared/ScrollNavigator';
 import { toast } from '../../../components/shared/Toast';
 import { useSingleExpansion } from '../../../hooks/useSingleExpansion';
 import { PaginationControls } from '../../../components/shared/PaginationControls';
+import { LoadingSpinner } from '../../../components/shared/LoadingSpinner';
 import { usePagination } from '../../../hooks/usePagination';
 
 interface License {
@@ -110,9 +110,9 @@ export default function LicenseManagementPage() {
   }, []);
 
   // Fetch filter options with React Query
-  const { data: filterOptions } = useQuery({
-    queryKey: ['licenseFilterOptions'],
-    queryFn: async () => {
+  const { data: filterOptions } = useQuery(
+    ['licenseFilterOptions'],
+    async () => {
       const [
         { data: companiesData },
         { data: regionsData },
@@ -135,17 +135,19 @@ export default function LicenseManagementPage() {
         subjects: subjectsData || []
       };
     },
-    staleTime: 10 * 60 * 1000 // 10 minutes
-  });
+    {
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    }
+  );
 
   // Fetch licenses with React Query
-  const {
-    data: rawLicenses = [],
-    isLoading,
-    isFetching
-  } = useQuery<License[]>({
-    queryKey: ['licenses', filters],
-    queryFn: async () => {
+  const { 
+    data: rawLicenses = [], 
+    isLoading, 
+    isFetching 
+  } = useQuery<License[]>(
+    ['licenses', filters],
+    async () => {
       let query = supabase
         .from('licenses')
         .select(`
@@ -220,9 +222,11 @@ export default function LicenseManagementPage() {
 
       return formattedLicenses;
     },
-    placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000 // 5 minutes
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
   
   // Group licenses by company
   const groupedLicenses: CompanyLicenses[] = React.useMemo(() => {
@@ -265,8 +269,8 @@ export default function LicenseManagementPage() {
   } = usePagination(groupedLicenses);
 
   // License action mutation
-  const actionMutation = useMutation({
-    mutationFn: async (payload: any) => {
+  const actionMutation = useMutation(
+    async (payload: any) => {
       try {
         // Fetch the license details
         const { data: license, error: fetchError } = await supabase
@@ -372,38 +376,40 @@ export default function LicenseManagementPage() {
         throw error;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['licenses'] });
-      queryClient.invalidateQueries({ queryKey: ['licenseActions'] });
-      setIsActionFormOpen(false);
-      setSelectedAction(null);
-      setEditingLicense(null);
-      toast.success(`License ${selectedAction?.toLowerCase()}ed successfully`);
-    },
-    onError: (error: any) => {
-      console.error('Error processing license action:', error);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['licenses']);
+        queryClient.invalidateQueries(['licenseActions']);
+        setIsActionFormOpen(false);
+        setSelectedAction(null);
+        setEditingLicense(null);
+        toast.success(`License ${selectedAction?.toLowerCase()}ed successfully`);
+      },
+      onError: (error: any) => {
+        console.error('Error processing license action:', error);
 
-      let errorMessage = 'Failed to process license action. Please try again.';
+        let errorMessage = 'Failed to process license action. Please try again.';
 
-      if (error?.message) {
-        if (error.message.includes('relation') && error.message.includes('does not exist')) {
-          errorMessage = 'Database table missing. Please contact system administrator.';
-        } else if (error.message.includes('permission denied') || error.message.includes('policy')) {
-          errorMessage = 'You do not have permission to perform this action.';
-        } else if (error.message.includes('Failed to record license action')) {
-          errorMessage = 'Failed to record the action history. The license may have been updated.';
-        } else {
-          errorMessage = error.message;
+        if (error?.message) {
+          if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            errorMessage = 'Database table missing. Please contact system administrator.';
+          } else if (error.message.includes('permission denied') || error.message.includes('policy')) {
+            errorMessage = 'You do not have permission to perform this action.';
+          } else if (error.message.includes('Failed to record license action')) {
+            errorMessage = 'Failed to record the action history. The license may have been updated.';
+          } else {
+            errorMessage = error.message;
+          }
         }
-      }
 
-      toast.error(errorMessage);
+        toast.error(errorMessage);
+      }
     }
-  });
+  );
 
   // Delete license mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (licenses: License[]) => {
+  const deleteMutation = useMutation(
+    async (licenses: License[]) => {
       const { error } = await supabase
         .from('licenses')
         .delete()
@@ -412,19 +418,21 @@ export default function LicenseManagementPage() {
       if (error) throw error;
       return licenses;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['licenses'] });
-      setIsConfirmDialogOpen(false);
-      setLicensesToDelete([]);
-      toast.success('License(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting licenses:', error);
-      toast.error('Failed to delete license(s). Please try again.');
-      setIsConfirmDialogOpen(false);
-      setLicensesToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['licenses']);
+        setIsConfirmDialogOpen(false);
+        setLicensesToDelete([]);
+        toast.success('License(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting licenses:', error);
+        toast.error('Failed to delete license(s). Please try again.');
+        setIsConfirmDialogOpen(false);
+        setLicensesToDelete([]);
+      }
     }
-  });
+  );
 
   // Main table columns (company level)
   const companyColumns = [
@@ -561,7 +569,7 @@ export default function LicenseManagementPage() {
             setEditingLicense(row);
             setIsFormOpen(true);
           }}
-          className={`${iconColors.edit.full} ${iconColors.edit.bg} p-1 rounded-full transition-colors`}
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
           title="Edit"
         >
           <Edit2 className="h-4 w-4" />
@@ -919,7 +927,12 @@ export default function LicenseManagementPage() {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-gray-900/20 transition-colors duration-200">
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+            <LoadingSpinner
+              size="md"
+              showLogo={false}
+              animation="hybrid"
+              message="Loading licenses..."
+            />
           </div>
         ) : companiesTotalCount === 0 ? (
           <div className="text-center py-12">
@@ -1002,7 +1015,7 @@ export default function LicenseManagementPage() {
           setEditingLicense(null);
           setSelectedCompanyId(null);
         }}
-        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['licenses'] })}
+        onSuccess={() => queryClient.invalidateQueries(['licenses'])}
         editingLicense={editingLicense}
       />
       

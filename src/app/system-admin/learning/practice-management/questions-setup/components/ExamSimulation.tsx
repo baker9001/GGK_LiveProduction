@@ -88,6 +88,11 @@ interface QAReviewResultPayload {
   visitedQuestions: string[];
 }
 
+/**
+ * Generate consistent alphabetic label for MCQ options
+ * This MUST match the database label format (A, B, C, D, etc.)
+ * Uses the option's order field if available, otherwise array index
+ */
 const deriveOptionLabel = (orderIndex: number): string => {
   const alphabetLength = 26;
   let index = Math.max(orderIndex, 0);
@@ -99,6 +104,22 @@ const deriveOptionLabel = (orderIndex: number): string => {
   } while (index >= 0);
 
   return label;
+};
+
+/**
+ * Normalize option for consistent validation
+ * Ensures label is always alphabetic (A, B, C, D) based on order
+ */
+const normalizeQuestionOption = (opt: QuestionOption, index: number): { label: string; text: string; is_correct: boolean } => {
+  // Use the stored order field if available, otherwise use array index
+  const orderIndex = typeof opt.order === 'number' && opt.order >= 0 ? opt.order : index;
+  const label = deriveOptionLabel(orderIndex);
+
+  return {
+    label: label,
+    text: opt.option_text || '',
+    is_correct: opt.is_correct || false
+  };
 };
 
 type AnswerSource = {
@@ -1021,21 +1042,60 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     const question = paper.questions.find(q => q.id === questionId);
     if (!question) return;
 
-    let questionToValidate;
+    let questionToValidate: any;
     if (subpartId && partId) {
-      questionToValidate = question.parts
-        .find(p => p.id === partId)?.subparts
-        ?.find(sp => sp.id === subpartId);
+      const part = question.parts.find(p => p.id === partId);
+      questionToValidate = part?.subparts?.find(sp => sp.id === subpartId);
+      // FIXED: Ensure type is set for subparts (fallback chain)
+      if (questionToValidate && !questionToValidate.type) {
+        questionToValidate = {
+          ...questionToValidate,
+          type: questionToValidate.type || part?.type || question.type || 'descriptive'
+        };
+      }
     } else if (partId) {
       questionToValidate = question.parts.find(p => p.id === partId);
+      // FIXED: Ensure type is set for parts (fallback to question type)
+      if (questionToValidate && !questionToValidate.type) {
+        questionToValidate = {
+          ...questionToValidate,
+          type: questionToValidate.type || question.type || 'descriptive'
+        };
+      }
     } else {
       questionToValidate = question;
     }
 
     if (!questionToValidate) return;
 
+    // Add debug logging to diagnose validation issues
+    if (process.env.NODE_ENV === 'development') {
+      console.group(`[Answer Validation] ${subpartId ? 'Subpart' : partId ? 'Part' : 'Question'} ${questionId}`);
+      console.log('Question Type:', questionToValidate.type);
+      console.log('Answer Format:', questionToValidate.answer_format);
+      console.log('Answer Requirement:', questionToValidate.answer_requirement);
+      console.log('User Answer (raw):', answer);
+      console.log('Correct Answers:', questionToValidate.correct_answers);
+      console.log('Max Marks:', questionToValidate.marks);
+    }
+
     // Validate the answer
     const validation = validateAnswer(questionToValidate, answer);
+
+    // FIXED: validation.score already contains the marks awarded, don't multiply again!
+    // Before: (validation.score || 0) * (questionToValidate.marks || 0)
+    // After: validation.score || 0
+    const marksAwarded = validation.score || 0;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Validation Result:', {
+        isCorrect: validation.isCorrect,
+        score: validation.score,
+        marksAwarded,
+        feedback: validation.feedback
+      });
+      console.groupEnd();
+    }
 
     setUserAnswers(prev => ({
       ...prev,
@@ -1045,7 +1105,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
         subpartId,
         answer,
         isCorrect: validation.isCorrect,
-        marksAwarded: (validation.score || 0) * (questionToValidate.marks || 0),
+        marksAwarded,  // FIXED: Use calculated marksAwarded directly
         timeSpent,
         partialCredit: validation.partialCredit
       }
@@ -1300,7 +1360,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.enableTimer}
                     onChange={(e) => setFeatures(prev => ({ ...prev, enableTimer: e.target.checked }))}
-                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1309,7 +1369,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.showHints}
                     onChange={(e) => setFeatures(prev => ({ ...prev, showHints: e.target.checked }))}
-                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1318,7 +1378,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.showExplanations}
                     onChange={(e) => setFeatures(prev => ({ ...prev, showExplanations: e.target.checked }))}
-                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1327,7 +1387,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.showCorrectAnswers}
                     onChange={(e) => setFeatures(prev => ({ ...prev, showCorrectAnswers: e.target.checked }))}
-                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                   />
                 </label>
                 <label className="flex items-center justify-between space-x-2 group cursor-pointer">
@@ -1336,7 +1396,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     type="checkbox"
                     checked={features.allowAnswerInput}
                     onChange={(e) => setFeatures(prev => ({ ...prev, allowAnswerInput: e.target.checked }))}
-                    className="rounded cursor-pointer transition-colors border-gray-300 dark:border-gray-600 checked:bg-[#8CC63F] checked:border-[#8CC63F] focus:ring-2 focus:ring-[#8CC63F] focus:ring-offset-0 hover:border-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                   />
                 </label>
               </div>
@@ -1498,15 +1558,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                       </p>
                     </div>
                     
-                    {/* Attachments */}
-                    {currentQuestion.attachments && currentQuestion.attachments.length > 0 && (
-                      <div className="mb-6">
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                          Reference Materials:
-                        </h4>
-                        <AttachmentGallery attachments={currentQuestion.attachments} />
-                      </div>
-                    )}
+                    {/* Attachments removed per user request - snippet attachments handled inline */}
                     
                     {/* Hint */}
                     {features.showHints && currentQuestion.hint && (
@@ -1528,18 +1580,16 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                           question={{
                             ...currentQuestion,
                             subject: paper.subject,
-                            options: currentQuestion.options?.map((opt, optionIndex) => ({
-                              label: String.fromCharCode(65 + optionIndex),
-                              text: opt.option_text,
-                              is_correct: opt.is_correct
-                            }))
+                            options: currentQuestion.options?.map((opt, optionIndex) =>
+                              normalizeQuestionOption(opt, optionIndex)
+                            )
                           }}
                           value={userAnswers[currentQuestion.id]?.answer}
                           onChange={(answer) => handleAnswerChange(currentQuestion.id, undefined, undefined, answer)}
                           disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
                           showHints={features.showHints}
                           showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                          mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                          mode={isQAMode ? 'exam' : (features.showCorrectAnswers ? 'review' : 'practice')}
                         />
                       </div>
                     )}
@@ -1589,14 +1639,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 </p>
                               </div>
 
-                              {part.attachments && part.attachments.length > 0 && (
-                                <div className="mb-4">
-                                  <h5 className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">
-                                    Supporting resources
-                                  </h5>
-                                  <AttachmentGallery attachments={part.attachments} />
-                                </div>
-                              )}
+                              {/* Part attachments removed - snippet attachments handled inline */}
 
                               {/* Part Hint */}
                               {features.showHints && part.hint && (
@@ -1612,18 +1655,16 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 question={{
                                   ...part,
                                   subject: paper.subject,
-                                  options: part.options?.map(opt => ({
-                                    label: opt.option_text || opt.id,
-                                    text: opt.option_text,
-                                    is_correct: opt.is_correct
-                                  }))
+                                  options: part.options?.map((opt, optionIndex) =>
+                                    normalizeQuestionOption(opt, optionIndex)
+                                  )
                                 }}
                                 value={userAnswers[`${currentQuestion.id}-${part.id}`]?.answer}
                                 onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, undefined, answer)}
                                 disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
                                 showHints={features.showHints}
                                 showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                                mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                mode={isQAMode ? 'exam' : (features.showCorrectAnswers ? 'review' : 'practice')}
                               />
 
                               {isQAMode && (
@@ -1658,9 +1699,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                             {subpart.question_description}
                                           </p>
 
-                                          {subpart.attachments && subpart.attachments.length > 0 && (
-                                            <AttachmentGallery attachments={subpart.attachments} />
-                                          )}
+                                          {/* Subpart attachments removed - snippet attachments handled inline */}
 
                                           {features.showHints && subpart.hint && (
                                             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
@@ -1677,18 +1716,16 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                               id: subpart.id,
                                               type: subpart.type || 'descriptive',
                                               subject: paper.subject,
-                                              options: subpart.options?.map((opt, optIndex) => ({
-                                                label: opt?.option_text || opt?.id || String.fromCharCode(65 + optIndex),
-                                                text: opt?.option_text || opt?.label || '',
-                                                is_correct: opt?.is_correct
-                                              }))
+                                              options: subpart.options?.map((opt, optIndex) =>
+                                                normalizeQuestionOption(opt, optIndex)
+                                              )
                                             }}
                                             value={userAnswers[answerKey]?.answer}
                                             onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, subpart.id, answer)}
                                             disabled={!isQAMode && (!isRunning && !features.allowAnswerInput)}
                                             showHints={features.showHints}
                                             showCorrectAnswer={features.showCorrectAnswers || isQAMode}
-                                            mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                            mode={isQAMode ? 'exam' : (features.showCorrectAnswers ? 'review' : 'practice')}
                                           />
 
                                           {isQAMode && (

@@ -26,12 +26,14 @@ import { supabase } from '../../../../../lib/supabase';
 import { toast } from '../../../../../components/shared/Toast';
 import { useUser } from '../../../../../contexts/UserContext';
 import {
-  Loader2, AlertCircle, FileJson, Database,
+  AlertCircle, FileJson, Database,
   FileText, ClipboardList, Shield, Settings, Info, ChevronDown
 } from 'lucide-react';
 import { ScrollNavigator } from '../../../../../components/shared/ScrollNavigator';
 import { Button } from '../../../../../components/shared/Button';
 import { cn } from '../../../../../lib/utils';
+import { LoadingSpinner } from '../../../../../components/shared/LoadingSpinner';
+import { LoadingOverlay } from '../../../../../components/shared/LoadingOverlay';
 import { ExtractionRules, JsonGuidelineSummary } from './types';
 import { JsonGuidelineChecklist } from './components/JsonGuidelineChecklist';
 
@@ -1198,11 +1200,14 @@ export default function PapersSetupPage() {
 
       if (data && !error) {
         setImportSession(data);
-        if (data.raw_json) {
-          setParsedData(data.raw_json);
+        // CRITICAL FIX: Prioritize working_json (edited data) over raw_json (original data)
+        const sessionData = data.working_json || data.raw_json;
+        if (sessionData) {
+          console.log('[Session Load] Using data source:', data.working_json ? 'working_json (edited)' : 'raw_json (original)');
+          setParsedData(sessionData);
           // Create a mock file for UI display
           const mockFile = new File(
-            [JSON.stringify(data.raw_json)], 
+            [JSON.stringify(sessionData)],
             data.json_file_name || 'previous_import.json',
             { type: 'application/json' }
           );
@@ -1349,10 +1354,13 @@ export default function PapersSetupPage() {
         }
 
         setImportSession(data);
-        if (data.raw_json) {
-          setParsedData(data.raw_json);
+        // CRITICAL FIX: Prioritize working_json (edited data) over raw_json (original data)
+        const sessionData = data.working_json || data.raw_json;
+        if (sessionData) {
+          console.log('[Session Load from URL] Using data source:', data.working_json ? 'working_json (edited)' : 'raw_json (original)');
+          setParsedData(sessionData);
           const mockFile = new File(
-            [JSON.stringify(data.raw_json)], 
+            [JSON.stringify(sessionData)],
             data.json_file_name || 'imported_data.json',
             { type: 'application/json' }
           );
@@ -1874,6 +1882,14 @@ export default function PapersSetupPage() {
     }));
   };
 
+  // Handle data sync from QuestionsTab back to parent
+  // This ensures parsedData stays in sync with edits in the database
+  const handleQuestionsDataSync = useCallback((updatedData: any) => {
+    console.log('[Data Sync] Questions data updated from child component');
+    console.log('[Data Sync] Questions count:', updatedData?.questions?.length);
+    setParsedData(updatedData);
+  }, []);
+
   // Scroll navigation sections
   const scrollSections = [
     { id: 'workflow', label: 'Import Workflow' },
@@ -1885,7 +1901,7 @@ export default function PapersSetupPage() {
   if (isLoadingSession && !uploadedFile) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <LoadingSpinner size="lg" message="Loading session..." />
       </div>
     );
   }
@@ -1900,20 +1916,15 @@ export default function PapersSetupPage() {
         >
           <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white/90 p-8 text-center shadow-xl dark:border-gray-700 dark:bg-gray-900/90">
             <div className="flex flex-col items-center gap-4">
-              <div className="relative h-14 w-14">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900/40" />
-                <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {transitionMessage || 'Preparing the next step...'}
-                </p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {activeTabDefinition?.label
-                    ? `Moving to ${activeTabDefinition.label}`
-                    : 'Hang tight while we set things up.'}
-                </p>
-              </div>
+              <LoadingSpinner
+                size="lg"
+                message={transitionMessage || 'Preparing the next step...'}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {activeTabDefinition?.label
+                  ? `Moving to ${activeTabDefinition.label}`
+                  : 'Hang tight while we set things up.'}
+              </p>
               <div className="w-full">
                 <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                   <div className="h-full w-full animate-pulse bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500" />
@@ -2126,10 +2137,11 @@ export default function PapersSetupPage() {
               extractionRules={extractionRules}
               updateStagedAttachments={updateStagedAttachments}
               stagedAttachments={stagedAttachments}
+              onDataSync={handleQuestionsDataSync}
             />
           ) : importSession && parsedData && !existingPaperId ? (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
-              <Loader2 className="h-12 w-12 text-blue-600 mx-auto mb-3 animate-spin" />
+              <LoadingSpinner size="xl" />
               <p className="text-gray-600 dark:text-gray-400">
                 Loading paper data...
               </p>

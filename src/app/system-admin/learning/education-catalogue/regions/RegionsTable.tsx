@@ -293,7 +293,7 @@ export default function RegionsTable() {
       />
 
       <SlideInForm
-        key={editingRegion?.id || 'new'}
+        key={editingRegion?.id || `new-${Date.now()}`}
         title={editingRegion ? 'Edit Region' : 'Create Region'}
         isOpen={isFormOpen}
         onClose={() => {
@@ -323,7 +323,8 @@ export default function RegionsTable() {
               id="name"
               name="name"
               placeholder="Enter region name"
-              defaultValue={editingRegion?.name}
+              defaultValue={editingRegion?.name || ''}
+              key={editingRegion?.id || `name-${Date.now()}`}
             />
           </FormField>
 
@@ -338,6 +339,7 @@ export default function RegionsTable() {
               name="code"
               placeholder="Enter region code"
               defaultValue={editingRegion?.code || ''}
+              key={editingRegion?.id || `code-${Date.now()}`}
             />
           </FormField>
 
@@ -352,6 +354,7 @@ export default function RegionsTable() {
               placeholder="Enter region description"
               defaultValue={editingRegion?.description || ''}
               rows={4}
+              key={editingRegion?.id || `description-${Date.now()}`}
             />
           </FormField>
 
@@ -369,6 +372,7 @@ export default function RegionsTable() {
                 { value: 'inactive', label: 'Inactive' }
               ]}
               defaultValue={editingRegion?.status || 'active'}
+              key={editingRegion?.id || `status-${Date.now()}`}
             />
           </FormField>
         </form>

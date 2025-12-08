@@ -48,11 +48,26 @@ interface UseAnswerValidationReturn {
 export const useAnswerValidation = (): UseAnswerValidationReturn => {
   // Normalize answer for comparison
   const normalizeAnswer = (answer: string): string => {
-    return answer
+    if (!answer) return '';
+
+    let normalized = answer
       .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .replace(/[.,;:!?]/g, '');
+      .toLowerCase();
+
+    // Normalize whitespace (but preserve single spaces between words)
+    normalized = normalized.replace(/\s+/g, ' ');
+
+    // Remove trailing punctuation (but not internal punctuation that might be meaningful)
+    normalized = normalized.replace(/[.,;:!?]+$/g, '');
+
+    // Remove leading/trailing quotes
+    normalized = normalized.replace(/^["']|["']$/g, '');
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Normalize] "${answer}" => "${normalized}"`);
+    }
+
+    return normalized;
   };
 
   // Check if answers match (with some flexibility)
@@ -60,12 +75,21 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
     if (strict) {
       return userAnswer.trim() === correctAnswer.trim();
     }
-    
+
     const normalizedUser = normalizeAnswer(userAnswer);
     const normalizedCorrect = normalizeAnswer(correctAnswer);
-    
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Match Check] User: "${normalizedUser}" vs Correct: "${normalizedCorrect}"`);
+    }
+
     // Exact match
-    if (normalizedUser === normalizedCorrect) return true;
+    if (normalizedUser === normalizedCorrect) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Match Check] EXACT MATCH ✓');
+      }
+      return true;
+    }
     
     // Check for alternative forms (e.g., "2+" vs "2⁺")
     const chemicalVariations: { [key: string]: string[] } = {
@@ -79,10 +103,24 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
     };
     
     for (const [key, variations] of Object.entries(chemicalVariations)) {
-      if (variations.includes(normalizedUser) && normalizedCorrect === key) return true;
-      if (normalizedUser === key && variations.includes(normalizedCorrect)) return true;
+      if (variations.includes(normalizedUser) && normalizedCorrect === key) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Match Check] CHEMICAL VARIATION MATCH ✓');
+        }
+        return true;
+      }
+      if (normalizedUser === key && variations.includes(normalizedCorrect)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Match Check] CHEMICAL VARIATION MATCH (reverse) ✓');
+        }
+        return true;
+      }
     }
-    
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Match Check] NO MATCH ✗');
+    }
+
     return false;
   };
 
@@ -101,8 +139,24 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
 
       correctAnswers.push(...correctOptions);
 
+      // Enhanced debug logging for validation issues
+      if (process.env.NODE_ENV === 'development') {
+        console.group(`[MCQ Validation] Question ${question.id}`);
+        console.log('User Selections:', userSelections);
+        console.log('Correct Options:', correctOptions);
+        console.log('All Options:', question.options.map(o => ({
+          label: o.label,
+          text: o.text,
+          is_correct: o.is_correct
+        })));
+        console.log('Answer Requirement:', question.answer_requirement);
+        console.groupEnd();
+      }
+
       if (correctOptions.length === 0) {
         // No options marked as correct, fallback to other methods
+        console.warn('[MCQ Validation] No options marked as correct for question:', question.id);
+        console.warn('[MCQ Validation] Falling back to correct_answer or correct_answers field');
         // Continue to check correct_answer or correct_answers below
       } else {
         // Check user selections against correct options
@@ -233,6 +287,19 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
     const partialCredit: { earned: number; reason: string }[] = [];
     const correctAnswers: string[] = [];
 
+    // Enhanced debug logging for complex question validation
+    if (process.env.NODE_ENV === 'development') {
+      console.group(`[Descriptive Validation] Question ${question.id}`);
+      console.log('User Answer (raw):', userAnswer);
+      console.log('User Answer Type:', typeof userAnswer);
+      console.log('Answer Format:', question.answer_format);
+      console.log('Answer Requirement:', question.answer_requirement);
+      console.log('Correct Answers Array:', question.correct_answers);
+      console.log('Correct Answer (single):', question.correct_answer);
+      console.log('Question Marks:', question.marks);
+      console.groupEnd();
+    }
+
     // Handle different answer formats
     if (question.answer_format === 'two_items_connected' && typeof userAnswer === 'object') {
       // Check two connected items
@@ -278,45 +345,100 @@ export const useAnswerValidation = (): UseAnswerValidationReturn => {
       }
     } else {
       // Single answer or general descriptive
-      const userAnswerStr = typeof userAnswer === 'object' ? userAnswer.main : userAnswer;
-      
+      // FIXED: Better handling of different answer formats
+      let userAnswerStr: string;
+
+      if (typeof userAnswer === 'string') {
+        // Direct string answer (most common case)
+        userAnswerStr = userAnswer;
+      } else if (typeof userAnswer === 'object' && userAnswer !== null) {
+        // Object answer - try different properties
+        userAnswerStr = userAnswer.main || userAnswer.value || userAnswer.answer || JSON.stringify(userAnswer);
+      } else {
+        // Fallback for other types
+        userAnswerStr = String(userAnswer || '');
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Descriptive] Extracted user answer string:', userAnswerStr);
+      }
+
       if (question.correct_answer) {
-        if (answersMatch(userAnswerStr || '', question.correct_answer)) {
+        const matches = answersMatch(userAnswerStr || '', question.correct_answer);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Descriptive] Checking single correct_answer:', question.correct_answer);
+          console.log('[Descriptive] Match result:', matches);
+        }
+        if (matches) {
           score = question.marks;
           feedback.push('Correct answer!');
         } else {
           feedback.push('Incorrect answer.');
         }
         correctAnswers.push(question.correct_answer);
-      } else if (question.correct_answers) {
+      } else if (question.correct_answers && question.correct_answers.length > 0) {
         // Check if user answer matches any correct answer
         let matched = false;
+        let matchedAnswer: any = null;
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Descriptive] Checking against multiple correct answers:', question.correct_answers.length);
+        }
+
         for (const correctAns of question.correct_answers) {
-          if (answersMatch(userAnswerStr || '', correctAns.answer)) {
-            score = question.marks;
+          const matches = answersMatch(userAnswerStr || '', correctAns.answer);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[Descriptive] Comparing "${userAnswerStr}" with "${correctAns.answer}":`, matches);
+          }
+          if (matches) {
+            // FIXED: Use the specific marks from the correct answer if available, otherwise use question marks
+            score = correctAns.marks !== undefined ? correctAns.marks : question.marks;
             feedback.push('Correct answer!');
             matched = true;
+            matchedAnswer = correctAns;
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[Descriptive] MATCH FOUND! Score awarded:', score);
+            }
             break;
           }
         }
-        
+
+        // FIXED: Handle "any_one_from" requirement explicitly
+        if (matched && (question.answer_requirement === 'any_one_from' || question.answer_requirement?.includes('any_'))) {
+          // For "any one from" questions, matching any single answer awards full marks
+          score = question.marks;
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[Descriptive] any_one_from requirement - full marks awarded');
+          }
+        }
+
         if (!matched && question.answer_requirement === 'both_required') {
           // Check if answer contains all required components
           const components = question.correct_answers.map(ca => ca.answer.toLowerCase());
           const userLower = (userAnswerStr || '').toLowerCase();
           const foundComponents = components.filter(comp => userLower.includes(comp));
-          
+
           if (foundComponents.length > 0) {
             const partialScore = (foundComponents.length / components.length) * question.marks;
             score = Math.round(partialScore * 10) / 10;
-            partialCredit.push({ 
-              earned: score, 
-              reason: `Found ${foundComponents.length} of ${components.length} required components` 
+            partialCredit.push({
+              earned: score,
+              reason: `Found ${foundComponents.length} of ${components.length} required components`
             });
           }
         }
-        
+
+        if (!matched && process.env.NODE_ENV === 'development') {
+          console.log('[Descriptive] NO MATCH FOUND. Score remains 0');
+        }
+
         correctAnswers.push(...question.correct_answers.map(ca => ca.answer));
+      } else {
+        // No correct answers defined
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[Descriptive] No correct answers defined for question');
+        }
+        feedback.push('No correct answers defined for this question.');
       }
     }
 

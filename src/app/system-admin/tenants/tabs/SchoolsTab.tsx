@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ImageOff } from 'lucide-react';
-import { ActionButtons } from '../../../../components/shared/ActionButtons';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -137,9 +136,9 @@ export default function SchoolsTab() {
   };
 
   // Fetch companies with React Query
-  const { data: companies = [] } = useQuery<Company[]>({
-    queryKey: ['companies'],
-    queryFn: async () => {
+  const { data: companies = [] } = useQuery<Company[]>(
+    ['companies'],
+    async () => {
       const { data: companiesData, error } = await supabase
         .from('companies')
         .select(`
@@ -167,17 +166,19 @@ export default function SchoolsTab() {
         status: 'active' as const
       }));
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
-  });
+    {
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    }
+  );
 
   // Fetch schools with React Query
   const {
     data: schools = [],
     isLoading,
     isFetching
-  } = useQuery<School[]>({
-    queryKey: ['schools', filters],
-    queryFn: async () => {
+  } = useQuery<School[]>(
+    ['schools', filters],
+    async () => {
       console.log('=== SCHOOLS QUERY DEBUG START ===');
 
       // Check authentication status
@@ -331,9 +332,10 @@ export default function SchoolsTab() {
       console.log('=== SCHOOLS QUERY DEBUG END ===');
       return enhancedSchools;
     },
-    placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    onError: (error: any) => {
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      onError: (error: any) => {
         console.error('❌ SCHOOLS QUERY FAILED:', error);
         const errorMessage = error?.message || 'Unknown error';
         const errorCode = error?.code || 'N/A';
@@ -350,11 +352,12 @@ export default function SchoolsTab() {
 
         toast.error(`${userMessage} (Code: ${errorCode})`);
       }
-  });
+    }
+  );
 
   // Create/update school mutation
-  const schoolMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+  const schoolMutation = useMutation(
+    async (formData: FormData) => {
       const data = {
         name: formData.get('name') as string,
         code: formData.get('code') as string || undefined,
@@ -387,33 +390,35 @@ export default function SchoolsTab() {
         return newSchool;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['schools'] });
-      setIsFormOpen(false);
-      setEditingSchool(null);
-      setFormErrors({});
-      toast.success(`School ${editingSchool ? 'updated' : 'created'} successfully`);
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0]] = err.message;
-          }
-        });
-        setFormErrors(errors);
-      } else {
-        console.error('Error saving school:', error);
-        setFormErrors({ form: 'Failed to save school. Please try again.' });
-        toast.error('Failed to save school');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['schools']);
+        setIsFormOpen(false);
+        setEditingSchool(null);
+        setFormErrors({});
+        toast.success(`School ${editingSchool ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving school:', error);
+          setFormErrors({ form: 'Failed to save school. Please try again.' });
+          toast.error('Failed to save school');
+        }
       }
     }
-  });
+  );
 
   // CORRECTED Delete school mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (schools: School[]) => {
+  const deleteMutation = useMutation(
+    async (schools: School[]) => {
       // Delete logos from storage
       for (const school of schools) {
         await deleteLogoFromStorage(school.logo);
@@ -428,19 +433,21 @@ export default function SchoolsTab() {
       if (error) throw error;
       return schools;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['schools'] });
-      setIsConfirmDialogOpen(false);
-      setSchoolsToDelete([]);
-      toast.success('School(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting schools:', error);
-      toast.error('Failed to delete school(s)');
-      setIsConfirmDialogOpen(false);
-      setSchoolsToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['schools']);
+        setIsConfirmDialogOpen(false);
+        setSchoolsToDelete([]);
+        toast.success('School(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting schools:', error);
+        toast.error('Failed to delete school(s)');
+        setIsConfirmDialogOpen(false);
+        setSchoolsToDelete([]);
+      }
     }
-  });
+  );
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

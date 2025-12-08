@@ -40,9 +40,9 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
   }
 
   // Fetch all users based on selected type
-  const { data: allUsers = [], isLoading } = useQuery({
-    queryKey: ['all-users-test-mode', searchTerm, selectedUserType],
-    queryFn: async () => {
+  const { data: allUsers = [], isLoading } = useQuery(
+    ['all-users-test-mode', searchTerm, selectedUserType],
+    async () => {
       const users: UserData[] = [];
       const processedEmails = new Set<string>(); // To track and avoid duplicates
       
@@ -229,13 +229,15 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
       }
       
       // Sort by creation date (newest first)
-      return filteredUsers.sort((a, b) =>
+      return filteredUsers.sort((a, b) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
     },
-    enabled: isOpen,
-    placeholderData: (previousData) => previousData
-  });
+    { 
+      enabled: isOpen,
+      keepPreviousData: true 
+    }
+  );
 
   const handleTestClick = (user: UserData) => {
     setConfirmUser(user);

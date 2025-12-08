@@ -251,8 +251,8 @@ const SubjectCard = memo(({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-xl dark:hover:shadow-gray-900/30 transition-all duration-300 group hover:-translate-y-1">
-      <div className="h-56 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200 group">
+      <div className="h-48 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
         {isLoading && (
           <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
         )}
@@ -266,28 +266,28 @@ const SubjectCard = memo(({
           onLoad={handleImageLoad}
           loading="lazy"
         />
-        <div className="absolute top-3 right-3">
-          <span className="bg-[#8CC63F] text-white text-sm px-3 py-1.5 rounded-full font-semibold shadow-lg">
+        <div className="absolute top-2 right-2">
+          <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-medium">
             IGCSE
           </span>
         </div>
       </div>
-      <div className="p-8">
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 leading-relaxed">{description}</p>
+      <div className="p-6">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{description}</p>
         {badges && (
-          <div className="flex flex-wrap gap-2 mb-5">
+          <div className="flex flex-wrap gap-2 mb-4">
             {badges.map((badge, index) => (
-              <span
+              <span 
                 key={index}
-                className="text-sm px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full font-medium"
+                className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full"
               >
                 {badge}
               </span>
             ))}
           </div>
         )}
-
+  
       </div>
     </div>
   );
@@ -296,30 +296,21 @@ const SubjectCard = memo(({
 SubjectCard.displayName = 'SubjectCard';
 
 // Enhanced Feature Card
-const FeatureCard = memo(({ icon, title, description }: {
-  icon: React.ReactNode;
-  title: string;
-  description: string
+const FeatureCard = memo(({ icon, title, description }: { 
+  icon: React.ReactNode; 
+  title: string; 
+  description: string 
 }) => (
-  <div className="bg-white dark:bg-gray-800 p-10 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
-    <div className="h-20 w-20 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-8">
+  <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
+    <div className="h-16 w-16 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-6">
       {icon}
     </div>
     <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
-    <p className="text-base text-gray-600 dark:text-gray-400">{description}</p>
+    <p className="text-gray-600 dark:text-gray-400">{description}</p>
   </div>
 ));
 
 FeatureCard.displayName = 'FeatureCard';
-
-const SectionDivider = memo(() => (
-  <div aria-hidden="true" className="relative w-full py-6 sm:py-8">
-    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-100/80 to-transparent dark:via-gray-800/70 transition-colors duration-200" />
-    <div className="relative mx-auto h-px w-full max-w-5xl bg-gray-200/80 dark:bg-gray-700/80 rounded-full" />
-  </div>
-));
-
-SectionDivider.displayName = 'SectionDivider';
 
 // Main Landing Page Component
 export default function LandingPage() {
@@ -327,36 +318,36 @@ export default function LandingPage() {
   const [showAllSubjects, setShowAllSubjects] = useState(false);
 
   return (
-    <div className="min-h-screen bg-theme-page text-theme-primary transition-colors duration-200">
+    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
       <Navigation />
 
       {/* Hero Section */}
-      <div className="relative h-screen isolate overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden -z-10">
+      <div className="relative h-screen">
+        <div className="absolute inset-0 overflow-hidden">
           <img
             src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=1920"
             alt="IGCSE Cambridge Edexcel Students Learning"
-            className="w-full h-full object-cover blur-sm"
+            className="w-full h-full object-cover"
             loading="eager"
           />
-          {/* Soft translucent overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/30 to-black/40" />
+          <div className="absolute inset-0 bg-black bg-opacity-60" />
         </div>
-        <div className="relative z-10 max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
-          <div className="w-full max-w-6xl mx-auto text-center">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold !text-white leading-tight" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
-              Master IGCSE, O-Level & A-Level Cambridge & Edexcel Excellence
+        <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
+          <div className="text-center w-full">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6">
+              Master IGCSE, O-Level & A-Level
+              <span className="block text-[#8CC63F]">Cambridge & Edexcel Excellence</span>
             </h1>
-            <p className="mt-6 max-w-3xl mx-auto text-lg sm:text-xl md:text-2xl !text-white sm:mt-8 font-medium leading-relaxed" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7)', color: 'white' }}>
-              Complete exam preparation with 10+ years of past papers, animated video lessons,
+            <p className="mt-3 max-w-lg mx-auto text-xl text-gray-100 sm:mt-5">
+              Complete exam preparation with 10+ years of past papers, animated video lessons, 
               mock exams, and AI-powered personalized learning.
             </p>
-            <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-5 sm:gap-8">
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button
                 variant="default"
-                size="xl"
+                size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[220px] text-lg shadow-lg shadow-[#8CC63F]/25 hover:shadow-xl focus-visible:ring-4 focus-visible:ring-[#8CC63F]/30 transition-transform hover:-translate-y-0.5"
+                className="w-full sm:w-auto min-w-[180px]"
                 onClick={() => navigate('/signin')}
                 rightIcon={<ChevronRight />}
               >
@@ -364,275 +355,259 @@ export default function LandingPage() {
               </Button>
               <Button
                 variant="outline"
-                size="xl"
+                size="lg"
                 rounded="full"
-                className="w-full sm:w-auto min-w-[220px] text-lg border-2 border-white text-white hover:bg-white hover:text-gray-900 focus-visible:ring-4 focus-visible:ring-white/30 font-semibold transition-all duration-300"
+                className="w-full sm:w-auto min-w-[180px] !border-white !text-white hover:!bg-white/20"
                 leftIcon={<PlayCircle />}
               >
                 Watch Demo
               </Button>
             </div>
-            {/* Trust badges */}
-            <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-5xl mx-auto">
-              {[{ label: 'Active Students', value: '10,000+' }, { label: 'Pass Rate', value: '95%' }, { label: 'Schools Trust Us', value: '200+' }].map((item) => (
-                <div
-                  key={item.label}
-                  className="px-10 py-8 text-center"
-                  style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
-                >
-                  <div className="text-3xl sm:text-4xl lg:text-5xl font-bold !text-white" style={{ color: 'white' }}>{item.value}</div>
-                  <div className="text-sm sm:text-base font-semibold !text-white mt-2" style={{ color: 'white' }}>{item.label}</div>
-                </div>
-              ))}
+            {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
+            <div className="mt-8 flex items-center justify-center gap-8">
+              <div className="text-white">
+                <div className="text-3xl font-bold">+</div>
+                <div className="text-sm opacity-90">Active Students</div>
+              </div>
+              <div className="text-white">
+                <div className="text-3xl font-bold">%</div>
+                <div className="text-sm opacity-90">Pass Rate</div>
+              </div>
+              <div className="text-white">
+                <div className="text-3xl font-bold">+</div>
+                <div className="text-sm opacity-90">Schools Trust Us</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <main className="sectioned-layout">
-        <SectionDivider />
-
-        {/* Exam Boards Section */}
-        <section className="py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                Official Exam Board Coverage
-              </h2>
-              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400">
-                Complete syllabus coverage for all major examination boards
-              </p>
+      {/* Exam Boards Section */}
+      <div className="py-16 bg-gray-50 dark:bg-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              Official Exam Board Coverage
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              Complete syllabus coverage for all major examination boards
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">Cambridge</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              <div className="bg-white dark:bg-gray-900 p-8 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
-                <Award className="h-16 w-16 text-[#8CC63F] mx-auto mb-4" />
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Cambridge</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">IGCSE & A-Level</p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
-                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-900 dark:text-white">Edexcel</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">International GCSE</p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
-                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-900 dark:text-white">AQA</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center shadow-sm dark:shadow-gray-900/20">
-                <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-900 dark:text-white">OCR</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
-              </div>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">Edexcel</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">International GCSE</p>
+            </div>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">AQA</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
+            </div>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">OCR</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
             </div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <SectionDivider />
-
-        {/* Enhanced Feature Highlights */}
-        <section className="py-24 transition-colors duration-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-20">
-              <h2 className="text-3xl md:text-4xl font-bold text-[#8CC63F] mb-4">
-                Complete IGCSE & A-Level Success Platform
-              </h2>
-              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400">
-                Everything you need to excel in Cambridge and Edexcel examinations
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-              <FeatureCard
-                icon={<FileText className="h-8 w-8" />}
-                title="10+ Years Past Papers"
-                description="Complete database of Cambridge & Edexcel past papers with mark schemes and examiner reports"
-              />
-              <FeatureCard
-                icon={<Video className="h-8 w-8" />}
-                title="Animated Video Lessons"
-                description="3000+ animated videos explaining complex concepts with visual clarity"
-              />
-              <FeatureCard
-                icon={<BarChart3 className="h-8 w-8" />}
-                title="AI-Powered Mock Exams"
-                description="Personalized mock tests that adapt to your learning level with instant feedback"
-              />
-              <FeatureCard
-                icon={<Users className="h-8 w-8" />}
-                title="Expert Teacher Support"
-                description="Direct access to qualified IGCSE & A-Level teachers for doubt resolution"
-              />
-            </div>
+      {/* Enhanced Feature Highlights */}
+      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+              Complete IGCSE & A-Level Success Platform
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              Everything you need to excel in Cambridge and Edexcel examinations
+            </p>
           </div>
-        </section>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+            <FeatureCard
+              icon={<FileText className="h-8 w-8" />}
+              title="10+ Years Past Papers"
+              description="Complete database of Cambridge & Edexcel past papers with mark schemes and examiner reports"
+            />
+            <FeatureCard
+              icon={<Video className="h-8 w-8" />}
+              title="Animated Video Lessons"
+              description="3000+ animated videos explaining complex concepts with visual clarity"
+            />
+            <FeatureCard
+              icon={<BarChart3 className="h-8 w-8" />}
+              title="AI-Powered Mock Exams"
+              description="Personalized mock tests that adapt to your learning level with instant feedback"
+            />
+            <FeatureCard
+              icon={<Users className="h-8 w-8" />}
+              title="Expert Teacher Support"
+              description="Direct access to qualified IGCSE & A-Level teachers for doubt resolution"
+            />
+          </div>
+        </div>
+      </div>
 
-        <SectionDivider />
-
-        {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
-        <section className="py-24 transition-colors duration-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-20">
-              <h2 className="text-3xl md:text-4xl font-bold text-[#8CC63F] mb-4">
-                IGCSE & A-Level Subjects We Offer
-              </h2>
-              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 mb-8">
-                Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
-              </p>
+      {/* ORIGINAL SUBJECTS SECTION - MAINTAINED EXACTLY AS IT WAS */}
+      <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+              IGCSE & A-Level Subjects We Offer
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
+              Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
+            </p>
+            <Button
+              variant="default"
+              size="lg"
+              rounded="full"
+              onClick={() => navigate('/subjects')}
+              rightIcon={<ChevronRight />}
+            >
+              View All Subjects
+            </Button>
+          </div>
+          
+          {/* DISPLAY FIRST 6 SUBJECTS IN GRID, THEN MORE ON CLICK */}
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {(showAllSubjects ? PRIORITY_SUBJECTS : PRIORITY_SUBJECTS.slice(0, 6)).map((subject) => (
+              <SubjectCard 
+                key={subject.title} 
+                {...subject} 
+                priority={true}
+              />
+            ))}
+          </div>
+          
+          {/* Show More/Less Button */}
+          {PRIORITY_SUBJECTS.length > 6 && (
+            <div className="text-center mt-12">
               <Button
-                variant="default"
-                size="xl"
+                variant="outline"
+                size="lg"
                 rounded="full"
-                onClick={() => navigate('/subjects')}
-                rightIcon={<ChevronRight />}
-                className="text-lg"
+                onClick={() => setShowAllSubjects(!showAllSubjects)}
+                rightIcon={showAllSubjects ? <ChevronUp /> : <ChevronDown />}
               >
-                View All Subjects
+                {showAllSubjects ? 'Show Less Subjects' : `View ${PRIORITY_SUBJECTS.length - 6} More Subjects`}
               </Button>
             </div>
+          )}
+        </div>
+      </div>
 
-            {/* DISPLAY FIRST 6 SUBJECTS IN GRID, THEN MORE ON CLICK */}
-            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {(showAllSubjects ? PRIORITY_SUBJECTS : PRIORITY_SUBJECTS.slice(0, 6)).map((subject) => (
-                <SubjectCard
-                  key={subject.title}
-                  {...subject}
-                  priority={true}
-                />
-              ))}
-            </div>
-
-            {/* Show More/Less Button */}
-            {PRIORITY_SUBJECTS.length > 6 && (
-              <div className="text-center mt-16">
-                <Button
-                  variant="outline"
-                  size="xl"
-                  rounded="full"
-                  className="text-lg"
-                  onClick={() => setShowAllSubjects(!showAllSubjects)}
-                  rightIcon={showAllSubjects ? <ChevronUp /> : <ChevronDown />}
-                >
-                  {showAllSubjects ? 'Show Less Subjects' : `View ${PRIORITY_SUBJECTS.length - 6} More Subjects`}
-                </Button>
-              </div>
-            )}
+      {/* Enhanced Testimonials */}
+      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+              Success Stories from IGCSE & A-Level Students
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              Join thousands of students achieving top grades with GGK Learning
+            </p>
           </div>
-        </section>
-
-        <SectionDivider />
-
-        {/* Enhanced Testimonials */}
-        <section className="py-24 transition-colors duration-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-20">
-              <h2 className="text-3xl md:text-4xl font-bold text-[#8CC63F] mb-4">
-                Success Stories from IGCSE & A-Level Students
-              </h2>
-              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400">
-                Join thousands of students achieving top grades with GGK Learning
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {testimonials.map((testimonial, index) => (
-                <div
-                  key={index}
-                  className="bg-gray-50 dark:bg-gray-800 rounded-xl p-10 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
-                >
-                  <div className="flex items-center mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                    ))}
-                    <span className="ml-auto bg-[#8CC63F] text-white text-xs px-3 py-1 rounded-full font-semibold">
-                      {testimonial.results}
-                    </span>
-                  </div>
-
-                  <div className="relative mb-6">
-                    <Quote className="absolute -top-2 -left-2 h-8 w-8 text-[#8CC63F] opacity-20" />
-                    <p className="text-gray-700 dark:text-gray-300 italic pl-6">
-                      "{testimonial.content}"
+          
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {testimonials.map((testimonial, index) => (
+              <div
+                key={index}
+                className="bg-gray-50 dark:bg-gray-800 rounded-xl p-8 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
+              >
+                <div className="flex items-center mb-4">
+                  {[...Array(testimonial.rating)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                  ))}
+                  <span className="ml-auto bg-[#8CC63F] text-white text-xs px-3 py-1 rounded-full font-semibold">
+                    {testimonial.results}
+                  </span>
+                </div>
+                
+                <div className="relative mb-6">
+                  <Quote className="absolute -top-2 -left-2 h-8 w-8 text-[#8CC63F] opacity-20" />
+                  <p className="text-gray-700 dark:text-gray-300 italic pl-6">
+                    "{testimonial.content}"
+                  </p>
+                </div>
+                
+                <div className="flex items-center">
+                  <img
+                    src={testimonial.image}
+                    alt={testimonial.name}
+                    className="h-12 w-12 rounded-full object-cover mr-4"
+                    loading="lazy"
+                  />
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-white">
+                      {testimonial.name}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {testimonial.role}
+                    </p>
+                    <p className="text-xs text-[#8CC63F] font-medium">
+                      {testimonial.subject}
                     </p>
                   </div>
-
-                  <div className="flex items-center">
-                    <img
-                      src={testimonial.image}
-                      alt={testimonial.name}
-                      className="h-12 w-12 rounded-full object-cover mr-4"
-                      loading="lazy"
-                    />
-                    <div>
-                      <h4 className="font-semibold text-gray-900 dark:text-white">
-                        {testimonial.name}
-                      </h4>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {testimonial.role}
-                      </p>
-                      <p className="text-xs text-[#8CC63F] font-medium">
-                        {testimonial.subject}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <SectionDivider />
-
-        {/* Statistics Section - REDUCED PADDING */}
-        <section className="py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-3xl p-12 md:p-16 text-white shadow-2xl">
-              <div className="text-center mb-12">
-                <h2 className="text-3xl md:text-4xl font-bold mb-3 text-white">
-                  Proven Results That Speak for Themselves
-                </h2>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-                <div className="text-center text-white">
-                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">15,000+</div>
-                  <div className="text-sm md:text-base opacity-90 text-white">Past Papers Database</div>
-                </div>
-                <div className="text-center text-white">
-                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">3,000+</div>
-                  <div className="text-sm md:text-base opacity-90 text-white">Video Lessons</div>
-                </div>
-                <div className="text-center text-white">
-                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">500+</div>
-                  <div className="text-sm md:text-base opacity-90 text-white">Mock Exams</div>
-                </div>
-                <div className="text-center text-white">
-                  <div className="text-3xl md:text-4xl font-bold mb-2 text-white">24/7</div>
-                  <div className="text-sm md:text-base opacity-90 text-white">Learning Support</div>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Statistics Section - REDUCED PADDING */}
+      <div className="py-12 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-white mb-2">
+              Proven Results That Speak for Themselves
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="text-center text-white">
+              <div className="text-3xl font-bold mb-1">15,000+</div>
+              <div className="text-xs opacity-90">Past Papers Database</div>
+            </div>
+            <div className="text-center text-white">
+              <div className="text-3xl font-bold mb-1">3,000+</div>
+              <div className="text-xs opacity-90">Video Lessons</div>
+            </div>
+            <div className="text-center text-white">
+              <div className="text-3xl font-bold mb-1">500+</div>
+              <div className="text-xs opacity-90">Mock Exams</div>
+            </div>
+            <div className="text-center text-white">
+              <div className="text-3xl font-bold mb-1">24/7</div>
+              <div className="text-xs opacity-90">Learning Support</div>
             </div>
           </div>
-        </section>
-      </main>
-
-      <SectionDivider />
+        </div>
+      </div>
 
       {/* Footer - REDUCED PADDING */}
       <footer className="bg-gray-900 dark:bg-gray-950 text-white transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Company Info */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center">
-                <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
-                <span className="ml-3 text-xl font-bold">GGK Learning</span>
+                <GraduationCap className="h-7 w-7 text-[#8CC63F]" />
+                <span className="ml-2 text-xl font-bold">GGK Learning</span>
               </div>
-              <p className="text-gray-400 text-sm leading-relaxed">
+              <p className="text-gray-400 text-sm">
                 Your trusted partner for IGCSE, O-Level, and A-Level success. 
                 Official Cambridge and Edexcel exam preparation platform.
               </p>
-              <div className="flex space-x-4">
+              <div className="flex space-x-3">
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Facebook className="h-5 w-5" />
+                  <Facebook className="h-4 w-4" />
                 </a>
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
                   <Twitter className="h-4 w-4" />
@@ -649,7 +624,7 @@ export default function LandingPage() {
             {/* Quick Links */}
             <div>
               <h3 className="text-base font-semibold mb-3">Quick Links</h3>
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 <li>
                   <Link to="/subjects" className="text-gray-400 hover:text-white transition-colors text-sm">
                     IGCSE Subjects
@@ -731,13 +706,13 @@ export default function LandingPage() {
           </div>
 
           {/* Bottom Bar */}
-          <div className="border-t border-gray-800 mt-12 pt-8">
+          <div className="border-t border-gray-800 mt-8 pt-6">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <p className="text-gray-400 text-sm">
+              <p className="text-gray-400 text-xs">
                 © 2025 GGK Learning Platform. Official Cambridge & Edexcel Partner.
               </p>
-              <div className="flex space-x-6 mt-4 md:mt-0">
-                <Link to="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">
+              <div className="flex space-x-4 mt-3 md:mt-0">
+                <Link to="/privacy" className="text-gray-400 hover:text-white text-xs transition-colors">
                   Privacy Policy
                 </Link>
                 <Link to="/terms" className="text-gray-400 hover:text-white text-xs transition-colors">

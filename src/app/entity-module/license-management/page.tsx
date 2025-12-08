@@ -133,9 +133,9 @@ export default function EntityLicenseManagementPage() {
     isLoading: isLoadingLicenses, 
     error: licensesError,
     refetch: refetchLicenses 
-  } = useQuery({
-    queryKey: ['entity-licenses', companyId, scopeFilters],
-    queryFn: async () => {
+  } = useQuery(
+    ['entity-licenses', companyId, scopeFilters],
+    async () => {
       if (!companyId) return [];
 
       return await EntityLicenseService.getLicensesForScope(companyId, {
@@ -143,18 +143,20 @@ export default function EntityLicenseManagementPage() {
         branch_ids: scopeFilters.branch_ids
       });
     },
-    enabled: !!companyId && !isAccessControlLoading && (canViewLicenses || can('view_licenses')),
-    staleTime: 2 * 60 * 1000,
-    retry: (failureCount, error) => {
-      if (error.message.includes('permission')) return false;
-      return failureCount < 2;
+    {
+      enabled: !!companyId && !isAccessControlLoading && (canViewLicenses || can('view_licenses')),
+      staleTime: 2 * 60 * 1000,
+      retry: (failureCount, error) => {
+        if (error.message.includes('permission')) return false;
+        return failureCount < 2;
+      }
     }
-  });
+  );
 
   // Fetch license usage statistics
-  const { data: usageStats } = useQuery({
-    queryKey: ['license-usage-stats', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: usageStats } = useQuery(
+    ['license-usage-stats', companyId, scopeFilters],
+    async () => {
       if (!companyId) return null;
 
       return await EntityLicenseService.getLicenseUsageStats(companyId, {
@@ -162,9 +164,11 @@ export default function EntityLicenseManagementPage() {
         branch_ids: scopeFilters.branch_ids
       });
     },
-    enabled: !!companyId && !isAccessControlLoading && (canViewLicenses || can('view_licenses')),
-    staleTime: 5 * 60 * 1000
-  });
+    {
+      enabled: !!companyId && !isAccessControlLoading && (canViewLicenses || can('view_licenses')),
+      staleTime: 5 * 60 * 1000
+    }
+  );
 
   // Apply client-side filtering
   const filteredLicenses = useMemo(() => {

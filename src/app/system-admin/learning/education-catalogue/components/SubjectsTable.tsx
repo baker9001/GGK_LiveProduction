@@ -82,8 +82,8 @@ export default function SubjectsTable() {
   );
   
   // Mutation for creating/updating subjects
-  const mutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+  const mutation = useMutation(
+    async (formData: FormData) => {
       const data = {
         name: (formData.get('name') as string).trim(),
         code: (formData.get('code') as string).trim(),
@@ -136,35 +136,37 @@ export default function SubjectsTable() {
         return newSubject;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subjects'] });
-      refetch();
-      setIsFormOpen(false);
-      setEditingSubject(null);
-      setFormErrors({});
-      setLogoPath(null);
-      toast.success(`Subject ${editingSubject ? 'updated' : 'created'} successfully`);
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0]] = err.message;
-          }
-        });
-        setFormErrors(errors);
-      } else {
-        console.error('Error saving subject:', error);
-        setFormErrors({ form: 'Failed to save subject. Please try again.' });
-        toast.error('Failed to save subject');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['subjects']);
+        refetch();
+        setIsFormOpen(false);
+        setEditingSubject(null);
+        setFormErrors({});
+        setLogoPath(null);
+        toast.success(`Subject ${editingSubject ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving subject:', error);
+          setFormErrors({ form: 'Failed to save subject. Please try again.' });
+          toast.error('Failed to save subject');
+        }
       }
     }
-  });
+  );
 
   // Delete subject mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (subjects: Subject[]) => {
+  const deleteMutation = useMutation(
+    async (subjects: Subject[]) => {
       // Delete associated logo files from storage using Edge Function
       for (const subject of subjects) {
         if (subject.logo_url) {
@@ -191,20 +193,22 @@ export default function SubjectsTable() {
       if (error) throw error;
       return subjects;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subjects'] });
-      refetch();
-      setIsConfirmDialogOpen(false);
-      setSubjectsToDelete([]);
-      toast.success('Subject(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting subjects:', error);
-      toast.error('Failed to delete subject(s)');
-      setIsConfirmDialogOpen(false);
-      setSubjectsToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['subjects']);
+        refetch();
+        setIsConfirmDialogOpen(false);
+        setSubjectsToDelete([]);
+        toast.success('Subject(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting subjects:', error);
+        toast.error('Failed to delete subject(s)');
+        setIsConfirmDialogOpen(false);
+        setSubjectsToDelete([]);
+      }
     }
-  });
+  );
 
   // Extract subject name without code for display in the form
   const extractSubjectName = (fullName: string): string => {
@@ -405,7 +409,7 @@ export default function SubjectsTable() {
       />
 
       <SlideInForm
-        key={editingSubject?.id || 'new'}
+        key={editingSubject?.id || `new-${Date.now()}`}
         title={editingSubject ? 'Edit Subject' : 'Create Subject'}
         isOpen={isFormOpen}
         onClose={() => {
@@ -439,6 +443,7 @@ export default function SubjectsTable() {
               name="name"
               placeholder="Enter subject name"
               defaultValue={editingSubject ? extractSubjectName(editingSubject.name) : ''}
+              key={editingSubject?.id || `name-${Date.now()}`}
             />
           </FormField>
 
@@ -454,6 +459,7 @@ export default function SubjectsTable() {
               name="code"
               placeholder="Enter subject code"
               defaultValue={editingSubject ? (editingSubject.code || extractSubjectCode(editingSubject.name)) : ''}
+              key={editingSubject?.id || `code-${Date.now()}`}
             />
           </FormField>
 
@@ -489,6 +495,7 @@ export default function SubjectsTable() {
                 { value: 'inactive', label: 'Inactive' }
               ]}
               defaultValue={editingSubject?.status || 'active'}
+              key={editingSubject?.id || `status-${Date.now()}`}
             />
           </FormField>
         </form>

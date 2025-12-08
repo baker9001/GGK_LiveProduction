@@ -37,14 +37,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import {
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
   Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X,
   Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key,
-  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2, RefreshCw,
+  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, RefreshCw,
   AlertTriangle
 } from 'lucide-react';
-import { iconColors } from '../../../../lib/constants/iconConfig';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../../../../lib/supabase';
@@ -59,6 +58,7 @@ import { SearchableMultiSelect } from '../../../../components/shared/SearchableM
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
+import { LoadingSpinner } from '../../../../components/shared/LoadingSpinner';
 import { getAuthenticatedUser } from '../../../../lib/auth';
 
 // ===== VALIDATION SCHEMAS =====
@@ -396,9 +396,9 @@ export default function CompaniesTab() {
   // ===== QUERIES =====
   
   // Fetch regions
-  const { data: regions = [] } = useQuery<Region[]>({
-    queryKey: ['regions'],
-    queryFn: async () => {
+  const { data: regions = [] } = useQuery<Region[]>(
+    ['regions'],
+    async () => {
       const { data, error } = await supabase
         .from('regions')
         .select('id, name, status')
@@ -408,13 +408,15 @@ export default function CompaniesTab() {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 10 * 60 * 1000,
-  });
+    {
+      staleTime: 10 * 60 * 1000,
+    }
+  );
 
   // Fetch countries for filter
-  const { data: filterCountries = [] } = useQuery<Country[]>({
-    queryKey: ['filter-countries', filters.region_ids],
-    queryFn: async () => {
+  const { data: filterCountries = [] } = useQuery<Country[]>(
+    ['filter-countries', filters.region_ids],
+    async () => {
       let query = supabase
         .from('countries')
         .select('id, name, region_id, status')
@@ -427,19 +429,21 @@ export default function CompaniesTab() {
 
       const { data, error } = await query;
       if (error) throw error;
-
+      
       return (data || []).map(country => ({
         ...country,
         status: country.status?.toLowerCase() as 'active' | 'inactive'
       }));
     },
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Fetch countries for form
-  const { data: formCountries = [] } = useQuery<Country[]>({
-    queryKey: ['form-countries', formState.region_id],
-    queryFn: async () => {
+  const { data: formCountries = [] } = useQuery<Country[]>(
+    ['form-countries', formState.region_id],
+    async () => {
       if (!formState.region_id) return [];
 
       const { data, error } = await supabase
@@ -450,15 +454,17 @@ export default function CompaniesTab() {
         .order('name');
 
       if (error) throw error;
-
+      
       return (data || []).map(country => ({
         ...country,
         status: country.status?.toLowerCase() as 'active' | 'inactive'
       }));
     },
-    enabled: !!formState.region_id,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!formState.region_id,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Fetch companies with filters
   const { 
@@ -466,9 +472,9 @@ export default function CompaniesTab() {
     isLoading, 
     isFetching,
     refetch: refetchCompanies
-  } = useQuery<Company[]>({
-    queryKey: ['companies', filters],
-    queryFn: async () => {
+  } = useQuery<Company[]>(
+    ['companies', filters],
+    async () => {
       let query = supabase
         .from('companies')
         .select(`
@@ -543,16 +549,18 @@ export default function CompaniesTab() {
         admin_count: adminCountMap.get(company.id) || 0
       }));
     },
-    placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 30 * 1000
-  });
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000,
+      refetchInterval: 30 * 1000
+    }
+  );
 
   // ===== MUTATIONS =====
   
   // Company mutation
-  const mutation = useMutation({
-    mutationFn: async (formData: FormState) => {
+  const mutation = useMutation(
+    async (formData: FormState) => {
       const data = {
         name: formData.name.trim(),
         code: formData.code.trim() || null,
@@ -585,33 +593,35 @@ export default function CompaniesTab() {
         return newCompany;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-      setIsFormOpen(false);
-      setEditingCompany(null);
-      setFormErrors({});
-      toast.success(`Company ${editingCompany ? 'updated' : 'created'} successfully`);
-    },
-    onError: (error) => {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path.length > 0) {
-            errors[err.path[0] as string] = err.message;
-          }
-        });
-        setFormErrors(errors);
-      } else {
-        console.error('Error saving company:', error);
-        setFormErrors({ form: 'Failed to save company. Please try again.' });
-        toast.error('Failed to save company');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['companies']);
+        setIsFormOpen(false);
+        setEditingCompany(null);
+        setFormErrors({});
+        toast.success(`Company ${editingCompany ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0] as string] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving company:', error);
+          setFormErrors({ form: 'Failed to save company. Please try again.' });
+          toast.error('Failed to save company');
+        }
       }
     }
-  });
+  );
 
   // Tenant admin mutation with proper Supabase Auth integration
-  const tenantAdminMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+  const tenantAdminMutation = useMutation(
+    async (formData: FormData) => {
       try {
         const name = formData.get('name') as string;
         const email = (formData.get('email') as string).toLowerCase().trim();
@@ -1030,65 +1040,67 @@ export default function CompaniesTab() {
         throw error;
       }
     },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-
-      if (result.type === 'created' && result.user?.temporary_password) {
-        // Show password modal for new users with generated password
-        setGeneratedPassword(result.user.temporary_password);
-        toast.success('Admin created successfully. Copy the temporary password!');
-      } else {
-        setIsAdminFormOpen(false);
-        setSelectedCompanyForAdmin(null);
-        setEditingAdmin(null);
-        setAdminFormErrors({});
-        resetAdminForm();
-
-        // Return to View Admins modal if we came from there
-        if (returnToViewAfterAdd && selectedCompanyForView) {
-          const companyId = result.company?.id || selectedCompanyForView.id;
-          fetchCompanyAdmins(companyId);
-          setIsViewAdminsOpen(true);
-          setReturnToViewAfterAdd(false);
-        }
-
-        toast.success(result.message || 'Operation successful');
-
-        // Show additional info about verification for new users
-        if (result.type === 'created' && result.user) {
-          toast.info('User can sign in after verifying their email.', {
-            duration: 5000
-          });
-        }
-      }
-    },
-    onError: (error: any) => {
-      if (error.validationErrors) {
-        const errors: Record<string, string> = {};
-        Object.entries(error.validationErrors).forEach(([key, value]) => {
-          errors[key] = Array.isArray(value) ? value[0] : value as string;
-        });
-        setAdminFormErrors(errors);
-      } else {
-        console.error('Error:', error);
-        const errorMessage = error.message || 'Operation failed';
-
-        if (errorMessage.includes('already exists') || errorMessage.includes('already registered')) {
-          setAdminFormErrors({ email: 'This email is already registered' });
-        } else if (errorMessage.includes('null value in column')) {
-          setAdminFormErrors({ form: 'Missing required fields. Please ensure all fields are filled.' });
+    {
+      onSuccess: (result) => {
+        queryClient.invalidateQueries(['companies']);
+        
+        if (result.type === 'created' && result.user?.temporary_password) {
+          // Show password modal for new users with generated password
+          setGeneratedPassword(result.user.temporary_password);
+          toast.success('Admin created successfully. Copy the temporary password!');
         } else {
-          setAdminFormErrors({ form: errorMessage });
+          setIsAdminFormOpen(false);
+          setSelectedCompanyForAdmin(null);
+          setEditingAdmin(null);
+          setAdminFormErrors({});
+          resetAdminForm();
+          
+          // Return to View Admins modal if we came from there
+          if (returnToViewAfterAdd && selectedCompanyForView) {
+            const companyId = result.company?.id || selectedCompanyForView.id;
+            fetchCompanyAdmins(companyId);
+            setIsViewAdminsOpen(true);
+            setReturnToViewAfterAdd(false);
+          }
+          
+          toast.success(result.message || 'Operation successful');
+          
+          // Show additional info about verification for new users
+          if (result.type === 'created' && result.user) {
+            toast.info('User can sign in after verifying their email.', {
+              duration: 5000
+            });
+          }
         }
-
-        toast.error(errorMessage);
+      },
+      onError: (error: any) => {
+        if (error.validationErrors) {
+          const errors: Record<string, string> = {};
+          Object.entries(error.validationErrors).forEach(([key, value]) => {
+            errors[key] = Array.isArray(value) ? value[0] : value as string;
+          });
+          setAdminFormErrors(errors);
+        } else {
+          console.error('Error:', error);
+          const errorMessage = error.message || 'Operation failed';
+          
+          if (errorMessage.includes('already exists') || errorMessage.includes('already registered')) {
+            setAdminFormErrors({ email: 'This email is already registered' });
+          } else if (errorMessage.includes('null value in column')) {
+            setAdminFormErrors({ form: 'Missing required fields. Please ensure all fields are filled.' });
+          } else {
+            setAdminFormErrors({ form: errorMessage });
+          }
+          
+          toast.error(errorMessage);
+        }
       }
     }
-  });
+  );
 
   // FIXED: Change password mutation with fallback for missing Edge Function or Auth user
-  const changePasswordMutation = useMutation({
-    mutationFn: async (data: { userId: string; password: string; sendEmail: boolean }) => {
+  const changePasswordMutation = useMutation(
+    async (data: { userId: string; password: string; sendEmail: boolean }) => {
       try {
         let authUpdateSuccess = false;
         let authUpdateAttempted = false;
@@ -1236,8 +1248,8 @@ export default function CompaniesTab() {
           });
         }
         
-        return {
-          success: true,
+        return { 
+          success: true, 
           password: data.password,
           isLegacyUser: isLegacyUser,
           authUpdated: authUpdateSuccess
@@ -1247,55 +1259,57 @@ export default function CompaniesTab() {
         throw error;
       }
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-
-      if (data.password) {
-        setGeneratedPassword(data.password);
-
-        // Show appropriate success message based on what happened
-        if (data.authUpdated) {
-          toast.success('Password changed successfully. Copy the new password!');
-        } else if (data.isLegacyUser) {
-          toast.success('Password changed for legacy user. Copy the new password!');
+    {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries(['companies']);
+        
+        if (data.password) {
+          setGeneratedPassword(data.password);
+          
+          // Show appropriate success message based on what happened
+          if (data.authUpdated) {
+            toast.success('Password changed successfully. Copy the new password!');
+          } else if (data.isLegacyUser) {
+            toast.success('Password changed for legacy user. Copy the new password!');
+          } else {
+            toast.success('Password changed. Copy the new password!');
+          }
         } else {
-          toast.success('Password changed. Copy the new password!');
+          setIsPasswordFormOpen(false);
+          setSelectedAdminForPassword(null);
+          toast.success('Password changed successfully');
         }
-      } else {
-        setIsPasswordFormOpen(false);
-        setSelectedAdminForPassword(null);
-        toast.success('Password changed successfully');
-      }
-
-      setFormErrors({});
-    },
-    onError: (error: any) => {
-      console.error('Error changing password:', error);
-      const errorMessage = error.message || 'Failed to change password';
-
-      // Don't show critical error if it's just a legacy user situation
-      if (errorMessage.includes('authentication system') &&
-          !errorMessage.includes('not found in authentication')) {
-        // This is a real Auth error - show critical message
-        setFormErrors({
-          form: 'Failed to update authentication system. The password may not work for login. Please contact support.'
-        });
-        toast.error('Critical: Authentication system update failed. User may not be able to login.', {
-          duration: 10000
-        });
-      } else {
-        // General error
-        setFormErrors({ form: errorMessage });
-        toast.error(errorMessage, {
-          duration: 5000
-        });
+        
+        setFormErrors({});
+      },
+      onError: (error: any) => {
+        console.error('Error changing password:', error);
+        const errorMessage = error.message || 'Failed to change password';
+        
+        // Don't show critical error if it's just a legacy user situation
+        if (errorMessage.includes('authentication system') && 
+            !errorMessage.includes('not found in authentication')) {
+          // This is a real Auth error - show critical message
+          setFormErrors({ 
+            form: 'Failed to update authentication system. The password may not work for login. Please contact support.' 
+          });
+          toast.error('Critical: Authentication system update failed. User may not be able to login.', {
+            duration: 10000
+          });
+        } else {
+          // General error
+          setFormErrors({ form: errorMessage });
+          toast.error(errorMessage, {
+            duration: 5000
+          });
+        }
       }
     }
-  });
+  );
 
   // Delete company mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (companies: Company[]) => {
+  const deleteMutation = useMutation(
+    async (companies: Company[]) => {
       // Delete logos from storage
       for (const company of companies) {
         if (company.logo) {
@@ -1317,23 +1331,25 @@ export default function CompaniesTab() {
       if (error) throw error;
       return companies;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-      setIsConfirmDialogOpen(false);
-      setCompaniesToDelete([]);
-      toast.success('Company(s) deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Error deleting companies:', error);
-      toast.error('Failed to delete company(s)');
-      setIsConfirmDialogOpen(false);
-      setCompaniesToDelete([]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['companies']);
+        setIsConfirmDialogOpen(false);
+        setCompaniesToDelete([]);
+        toast.success('Company(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting companies:', error);
+        toast.error('Failed to delete company(s)');
+        setIsConfirmDialogOpen(false);
+        setCompaniesToDelete([]);
+      }
     }
-  });
+  );
 
   // Remove admin mutation
-  const removeAdminMutation = useMutation({
-    mutationFn: async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
+  const removeAdminMutation = useMutation(
+    async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
       const { error } = await supabase
         .from('entity_users')
         .delete()
@@ -1342,25 +1358,27 @@ export default function CompaniesTab() {
       if (error) throw error;
       return { entityUserId };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-      if (selectedCompanyForView?.id) {
-        fetchCompanyAdmins(selectedCompanyForView.id);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['companies']);
+        if (selectedCompanyForView?.id) {
+          fetchCompanyAdmins(selectedCompanyForView.id);
+        }
+        toast.success('Admin removed successfully');
+      },
+      onError: (error) => {
+        console.error('Error removing admin:', error);
+        toast.error('Failed to remove admin');
       }
-      toast.success('Admin removed successfully');
-    },
-    onError: (error) => {
-      console.error('Error removing admin:', error);
-      toast.error('Failed to remove admin');
     }
-  });
+  );
 
   // Resend verification mutation
-  const resendVerificationMutation = useMutation({
-    mutationFn: async (userId: string) => {
+  const resendVerificationMutation = useMutation(
+    async (userId: string) => {
       // Generate new verification token
       const token = generateVerificationToken();
-
+      
       // Get current user data first
       const { data: currentUser } = await supabase
         .from('users')
@@ -1394,20 +1412,22 @@ export default function CompaniesTab() {
       // TODO: Send actual email
       console.log('Verification email would be sent to:', user.email);
       console.log('Verification token:', token);
-
+      
       return { success: true };
     },
-    onSuccess: () => {
-      toast.success('Verification email sent successfully');
-      if (selectedCompanyForView?.id) {
-        fetchCompanyAdmins(selectedCompanyForView.id);
+    {
+      onSuccess: () => {
+        toast.success('Verification email sent successfully');
+        if (selectedCompanyForView?.id) {
+          fetchCompanyAdmins(selectedCompanyForView.id);
+        }
+      },
+      onError: (error: any) => {
+        console.error('Error:', error);
+        toast.error(error.message || 'Failed to send verification email');
       }
-    },
-    onError: (error: any) => {
-      console.error('Error:', error);
-      toast.error(error.message || 'Failed to send verification email');
     }
-  });
+  );
 
   // ===== HELPER FUNCTIONS =====
   
@@ -1953,7 +1973,7 @@ export default function CompaniesTab() {
                 setEditingCompany(company);
                 setIsFormOpen(true);
               }}
-              className={`p-1.5 ${iconColors.edit.full} ${iconColors.edit.bg} rounded-lg transition-colors`}
+              className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
               title="Edit Company"
             >
               <Edit className="h-4 w-4" />
@@ -1961,7 +1981,7 @@ export default function CompaniesTab() {
             
             <button
               onClick={() => handleDelete([company])}
-              className={`p-1.5 ${iconColors.delete.full} ${iconColors.delete.bg} rounded-lg transition-colors`}
+              className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
               title="Delete Company"
             >
               <Trash2 className="h-4 w-4" />
@@ -2594,11 +2614,17 @@ export default function CompaniesTab() {
                                 <button
                                   onClick={() => resendVerificationMutation.mutate(admin.user_id)}
                                   disabled={resendVerificationMutation.isLoading}
-                                  className={`p-2 ${iconColors.warning.full} ${iconColors.warning.bg} rounded-lg transition-colors disabled:opacity-50`}
+                                  className="p-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/20 rounded-lg transition-colors disabled:opacity-50"
                                   title="Resend verification email"
                                 >
                                   {resendVerificationMutation.isLoading ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                    <LoadingSpinner
+                                      size="xs"
+                                      inline
+                                      centered={false}
+                                      showLogo={false}
+                                      className="!gap-0"
+                                    />
                                   ) : (
                                     <Mail className="h-5 w-5" />
                                   )}
@@ -2633,7 +2659,7 @@ export default function CompaniesTab() {
                                   setIsAdminFormOpen(true);
                                   setReturnToViewAfterAdd(true);
                                 }}
-                                className={`p-2 ${iconColors.edit.full} ${iconColors.edit.bg} rounded-lg transition-colors`}
+                                className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                                 title="Edit Admin"
                               >
                                 <Edit className="h-5 w-5" />
@@ -2650,7 +2676,7 @@ export default function CompaniesTab() {
                                   }
                                 }}
                                 disabled={removeAdminMutation.isLoading}
-                                className={`p-2 ${iconColors.delete.full} ${iconColors.delete.bg} rounded-lg transition-colors disabled:opacity-50`}
+                                className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
                                 title="Remove Admin"
                               >
                                 <Trash2 className="h-5 w-5" />

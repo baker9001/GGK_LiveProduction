@@ -223,7 +223,7 @@ export function Select({
     const dropdownContent = (
       <div
         ref={dropdownRef}
-        className="z-50 rounded-md border border-theme shadow-lg dark:shadow-gray-900/20 overflow-hidden bg-card"
+        className="z-50 rounded-md border border-gray-200 dark:border-gray-600 shadow-lg dark:shadow-gray-900/20 overflow-hidden bg-white dark:bg-gray-800"
         style={usePortal ? {
           position: 'absolute',
           top: `${position.top}px`,
@@ -254,9 +254,9 @@ export function Select({
                 ref={searchInputRef}
                 type="text"
                 className={cn(
-                  "w-full pl-8 pr-2 py-2 text-sm border border-theme rounded-md bg-theme-surface text-theme-primary",
+                  "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
                   "focus:outline-none focus:ring-2",
-                  isGreenTheme
+                  isGreenTheme 
                     ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                     : "focus:ring-blue-500 focus:border-blue-500"
                 )}
@@ -270,7 +270,7 @@ export function Select({
           </div>
         )}
         
-        <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent bg-card">
+        <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
           {filteredOptions.length > 0 ? (
             <div className="py-1">
               {filteredOptions.map((option) => (
@@ -338,7 +338,7 @@ export function Select({
           isGreenTheme
             ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
             : 'focus:ring-blue-500 focus:border-blue-500',
-          'bg-theme-surface text-theme-primary',
+          'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
           disabled && 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
           className
@@ -370,7 +370,7 @@ export function Select({
           isGreenTheme
             ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
             : 'focus:ring-blue-500 focus:border-blue-500',
-          'bg-theme-surface text-theme-primary',
+          'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
           disabled && 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
           isOpen && !disabled && (

@@ -141,9 +141,9 @@ export function StudentForm({
   // ===== DATA FETCHING =====
   
   // Fetch schools
-  const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery({
-    queryKey: ['schools-for-student', companyId, scopeFilters],
-    queryFn: async () => {
+  const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery(
+    ['schools-for-student', companyId, scopeFilters],
+    async () => {
       if (!companyId) return [];
 
       let query = supabase
@@ -161,14 +161,16 @@ export function StudentForm({
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId && isOpen,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId && isOpen,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Fetch branches for selected school
-  const { data: branches = [], isLoading: isLoadingBranches } = useQuery({
-    queryKey: ['branches-for-student', formData.school_id, scopeFilters],
-    queryFn: async () => {
+  const { data: branches = [], isLoading: isLoadingBranches } = useQuery(
+    ['branches-for-student', formData.school_id, scopeFilters],
+    async () => {
       if (!formData.school_id) return [];
 
       let query = supabase
@@ -186,14 +188,16 @@ export function StudentForm({
       if (error) throw error;
       return data || [];
     },
-    enabled: !!formData.school_id && isOpen,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!formData.school_id && isOpen,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Fetch grade levels for selected school
-  const { data: gradelevels = [], isLoading: isLoadingGrades } = useQuery({
-    queryKey: ['grade-levels-for-student', formData.school_id, formData.branch_id],
-    queryFn: async () => {
+  const { data: gradelevels = [], isLoading: isLoadingGrades } = useQuery(
+    ['grade-levels-for-student', formData.school_id, formData.branch_id],
+    async () => {
       // If branch is selected, prioritize branch-level grades
       if (formData.branch_id) {
         const { data, error } = await supabase
@@ -206,7 +210,7 @@ export function StudentForm({
         if (error) throw error;
         return data || [];
       }
-
+      
       // Otherwise, get school-level grades
       if (formData.school_id) {
         const { data, error } = await supabase
@@ -220,12 +224,14 @@ export function StudentForm({
         if (error) throw error;
         return data || [];
       }
-
+      
       return [];
     },
-    enabled: (!!formData.school_id || !!formData.branch_id) && isOpen,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: (!!formData.school_id || !!formData.branch_id) && isOpen,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Get selected grade level ID from grade name
   const selectedGradeLevelId = useMemo(() => {
@@ -235,9 +241,9 @@ export function StudentForm({
   }, [formData.grade_level, gradelevels]);
 
   // Fetch class sections for selected grade level
-  const { data: classSections = [], isLoading: isLoadingSections } = useQuery({
-    queryKey: ['class-sections-for-student', selectedGradeLevelId],
-    queryFn: async () => {
+  const { data: classSections = [], isLoading: isLoadingSections } = useQuery(
+    ['class-sections-for-student', selectedGradeLevelId],
+    async () => {
       if (!selectedGradeLevelId) return [];
 
       const { data, error } = await supabase
@@ -250,14 +256,16 @@ export function StudentForm({
       if (error) throw error;
       return data || [];
     },
-    enabled: !!selectedGradeLevelId && isOpen,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!selectedGradeLevelId && isOpen,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // Fetch available programs
-  const { data: programs = [], isLoading: isLoadingPrograms } = useQuery({
-    queryKey: ['programs-for-student', companyId],
-    queryFn: async () => {
+  const { data: programs = [], isLoading: isLoadingPrograms } = useQuery(
+    ['programs-for-student', companyId],
+    async () => {
       const { data, error } = await supabase
         .from('programs')
         .select('id, name, code')
@@ -267,14 +275,16 @@ export function StudentForm({
       if (error) throw error;
       return data || [];
     },
-    enabled: !!companyId && isOpen,
-    staleTime: 10 * 60 * 1000,
-  });
+    {
+      enabled: !!companyId && isOpen,
+      staleTime: 10 * 60 * 1000,
+    }
+  );
 
   // FIXED: Fetch subjects for selected program
-  const { data: subjects = [], isLoading: isLoadingSubjects } = useQuery({
-    queryKey: ['subjects-for-program', formData.program_id],
-    queryFn: async () => {
+  const { data: subjects = [], isLoading: isLoadingSubjects } = useQuery(
+    ['subjects-for-program', formData.program_id],
+    async () => {
       if (!formData.program_id) return [];
 
       console.log('Fetching subjects for program:', formData.program_id);
@@ -320,9 +330,11 @@ export function StudentForm({
       console.log('Fetched subjects:', subjectsData);
       return subjectsData || [];
     },
-    enabled: !!formData.program_id && isOpen,
-    staleTime: 5 * 60 * 1000,
-  });
+    {
+      enabled: !!formData.program_id && isOpen,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
 
   // ===== FORM INITIALIZATION =====
   useEffect(() => {
@@ -388,8 +400,8 @@ export function StudentForm({
   // ===== MUTATIONS =====
   
   // Create student mutation
-  const createStudentMutation = useMutation({
-    mutationFn: async (data: StudentFormData) => {
+  const createStudentMutation = useMutation(
+    async (data: StudentFormData) => {
       if (!user?.id) throw new Error('User not authenticated');
 
       const result = await userCreationService.createUserWithInvitation({
@@ -417,21 +429,23 @@ export function StudentForm({
 
       return result;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-      toast.success('Student created successfully! Invitation email sent.');
-      onSuccess();
-      onClose();
-    },
-    onError: (error: any) => {
-      console.error('Student creation error:', error);
-      toast.error(error.message || 'Failed to create student');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['students']);
+        toast.success('Student created successfully! Invitation email sent.');
+        onSuccess();
+        onClose();
+      },
+      onError: (error: any) => {
+        console.error('Student creation error:', error);
+        toast.error(error.message || 'Failed to create student');
+      }
     }
-  });
+  );
 
   // Update student mutation
-  const updateStudentMutation = useMutation({
-    mutationFn: async (data: StudentFormData) => {
+  const updateStudentMutation = useMutation(
+    async (data: StudentFormData) => {
       if (!initialData?.user_id) throw new Error('Student user ID not found');
 
       await userCreationService.updateStudent(initialData.user_id, {
@@ -454,17 +468,19 @@ export function StudentForm({
         is_active: data.is_active
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-      toast.success('Student updated successfully!');
-      onSuccess();
-      onClose();
-    },
-    onError: (error: any) => {
-      console.error('Student update error:', error);
-      toast.error(error.message || 'Failed to update student');
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['students']);
+        toast.success('Student updated successfully!');
+        onSuccess();
+        onClose();
+      },
+      onError: (error: any) => {
+        console.error('Student update error:', error);
+        toast.error(error.message || 'Failed to update student');
+      }
     }
-  });
+  );
 
   // ===== VALIDATION =====
   const validateForm = (): boolean => {

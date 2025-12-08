@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
   setAuthenticatedUser,
   clearAuthenticatedUser,
-  suppressSessionExpiredNoticeOnce,
   type User,
   type UserRole,
   getRedirectPathForUser,
   mapUserTypeToRole
 } from '../../../lib/auth';
 import { toast } from '../../../components/shared/Toast';
+import { LoadingSpinner } from '../../../components/shared/LoadingSpinner';
 
 interface StatusState {
   message: string;
@@ -73,7 +73,6 @@ export default function AuthCallbackPage() {
 
         // Clear any previous session data before establishing the new session
         clearAuthenticatedUser();
-        suppressSessionExpiredNoticeOnce();
         await supabase.auth.signOut();
 
         const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
@@ -310,11 +309,8 @@ export default function AuthCallbackPage() {
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/70 backdrop-blur-xl p-10 text-center shadow-2xl">
         {status === 'processing' && (
-          <div className="flex flex-col items-center space-y-4">
-            <div className="relative flex h-16 w-16 items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-2 border-white/10" />
-              <Loader2 className="h-10 w-10 animate-spin text-lime-400" />
-            </div>
+          <div className="flex flex-col items-center space-y-6">
+            <LoadingSpinner size="lg" animation="hybrid" />
             <div>
               <p className="text-lg font-semibold text-white">{statusState.message}</p>
               {statusState.subMessage && (
