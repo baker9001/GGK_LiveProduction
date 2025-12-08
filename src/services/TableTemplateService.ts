@@ -44,6 +44,34 @@ export interface ValidationResult {
 
 export class TableTemplateService {
   /**
+   * Convert simulation questionIdentifier format to database format
+   * Simulation uses: "q_123_p0" (part), "q_123_p0_s2" (subpart)
+   * Database uses: "q_123-part-0" (part), "q_123-part-0-sub-2" (subpart)
+   */
+  private static convertSimulationIdToDatabaseFormat(questionIdentifier: string): string {
+    // Check for subpart pattern: something_pX_sY
+    const subpartMatch = questionIdentifier.match(/^(.+)_p(\d+)_s(\d+)$/);
+    if (subpartMatch) {
+      const [, baseId, partIndex, subpartIndex] = subpartMatch;
+      const converted = `${baseId}-part-${partIndex}-sub-${subpartIndex}`;
+      console.log('[TableTemplateService] Converted subpart ID:', questionIdentifier, '→', converted);
+      return converted;
+    }
+
+    // Check for part pattern: something_pX
+    const partMatch = questionIdentifier.match(/^(.+)_p(\d+)$/);
+    if (partMatch) {
+      const [, baseId, partIndex] = partMatch;
+      const converted = `${baseId}-part-${partIndex}`;
+      console.log('[TableTemplateService] Converted part ID:', questionIdentifier, '→', converted);
+      return converted;
+    }
+
+    // No conversion needed (main question or already in database format)
+    return questionIdentifier;
+  }
+
+  /**
    * Calculate Levenshtein distance between two strings
    * Used for fuzzy matching when acceptsEquivalentPhrasing is enabled
    */
@@ -495,16 +523,21 @@ export class TableTemplateService {
   }> {
     // If review context provided, load ONLY from review tables (paper setup preview mode)
     if (reviewSessionId && questionIdentifier) {
+      // Convert simulation ID format to database format if needed
+      // Simulation uses: "q_123_p0" but database stores: "q_123-part-0"
+      const dbQuestionIdentifier = this.convertSimulationIdToDatabaseFormat(questionIdentifier);
+
       console.log('[TableTemplateService] Loading from REVIEW TABLES only (paper setup mode):', {
         reviewSessionId,
-        questionIdentifier
+        originalQuestionIdentifier: questionIdentifier,
+        convertedQuestionIdentifier: dbQuestionIdentifier
       });
 
       const { TableTemplateImportReviewService } = await import('./TableTemplateImportReviewService');
 
       const reviewResult = await TableTemplateImportReviewService.loadTemplateForReview(
         reviewSessionId,
-        questionIdentifier
+        dbQuestionIdentifier
       );
 
       if (reviewResult.success && reviewResult.template) {
