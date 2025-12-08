@@ -816,7 +816,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       // ✅ FIX: In admin mode, always enable template editing (don't require isEditing flag)
       const isTemplateEditing = mode === 'admin' || forceTemplateEditor;
       const isAdminTesting = mode === 'qa_preview';
-      const isStudentTest = mode === 'exam' && !isEditing;
+      // ✅ FIX: Include 'practice' mode for UnifiedTestSimulation which passes mode='practice'
+      const isStudentTest = (mode === 'exam' || mode === 'practice') && !isEditing;
 
       // CRITICAL FIX: Load template from correct_answers[0].answer_text and student data from value
       let templateProp: TableTemplate | undefined;
@@ -2064,7 +2065,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       // ✅ FIXED: Determine if we're in template editor mode (admin creating/editing question)
       const isTemplateEditing = mode === 'admin';
       const isAdminTesting = mode === 'qa_preview';
-      const isStudentTest = mode === 'exam';
+      // ✅ FIX: Include 'practice' mode for UnifiedTestSimulation which passes mode='practice'
+      const isStudentTest = mode === 'exam' || mode === 'practice';
 
       return (
         <div>
