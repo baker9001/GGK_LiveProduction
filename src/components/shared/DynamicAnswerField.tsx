@@ -825,14 +825,43 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
       // 1. Load template structure from correct_answers[0].answer_text or correct_answers[0].answer
       // Template can be in answer_text field OR answer field depending on the data source
+      console.log('[DynamicAnswerField] 🔍 Table completion template lookup:', {
+        hasCorrectAnswers: !!question.correct_answers,
+        correctAnswersLength: question.correct_answers?.length || 0,
+        mode,
+        isStudentTest
+      });
+
       if (question.correct_answers && question.correct_answers.length > 0) {
         const firstAnswer = question.correct_answers[0];
         // Check answer_text first (preferred), then fall back to answer field
         const templateSource = (firstAnswer as any).answer_text || firstAnswer.answer || null;
 
+        console.log('[DynamicAnswerField] 🔍 First answer inspection:', {
+          hasAnswerText: !!(firstAnswer as any).answer_text,
+          answerTextLength: (firstAnswer as any).answer_text?.length,
+          answerTextPreview: (firstAnswer as any).answer_text?.substring?.(0, 100),
+          hasAnswer: !!firstAnswer.answer,
+          answerLength: typeof firstAnswer.answer === 'string' ? firstAnswer.answer.length : 'N/A',
+          answerPreview: typeof firstAnswer.answer === 'string' ? firstAnswer.answer.substring(0, 100) : firstAnswer.answer,
+          answerType: (firstAnswer as any).answer_type,
+          templateSourceType: typeof templateSource,
+          templateSourceLength: templateSource?.length
+        });
+
         if (templateSource && typeof templateSource === 'string') {
           try {
             const parsed = JSON.parse(templateSource);
+
+            console.log('[DynamicAnswerField] 🔍 Parsed template structure:', {
+              hasCells: Array.isArray(parsed.cells),
+              cellsLength: parsed.cells?.length,
+              hasRowIndex: parsed.cells?.[0] ? 'rowIndex' in parsed.cells[0] : false,
+              hasColIndex: parsed.cells?.[0] ? 'colIndex' in parsed.cells[0] : false,
+              rows: parsed.rows,
+              columns: parsed.columns,
+              headers: parsed.headers
+            });
 
             // Check if it's a TableTemplateDTO (has cells array with rowIndex/colIndex)
             if (parsed && Array.isArray(parsed.cells) && parsed.cells.length > 0 &&
@@ -846,11 +875,21 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 headers: templateProp.headers,
                 editableCells: templateProp.editableCells.length
               });
+            } else {
+              console.warn('[DynamicAnswerField] ⚠️ Parsed data is not a TableTemplateDTO format:', {
+                hasCells: Array.isArray(parsed.cells),
+                hasStudentAnswers: 'studentAnswers' in parsed,
+                keys: Object.keys(parsed)
+              });
             }
           } catch (e) {
             console.warn('[DynamicAnswerField] Failed to parse template from answer_text:', e);
           }
+        } else {
+          console.warn('[DynamicAnswerField] ⚠️ No valid template source found in correct_answers[0]');
         }
+      } else {
+        console.warn('[DynamicAnswerField] ⚠️ No correct_answers available for template lookup');
       }
 
       // 2. Load student answer data from value prop (for practice/exam mode)

@@ -389,15 +389,29 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     if (template && (template.rows > 0 || template.columns > 0)) {
       console.log('[TableCompletion] Using provided template prop with headers:', template.headers);
       loadTemplateFromProp(template);
+      // ✅ FIX: Don't enable editing in student test mode even with template prop
+      if (!isStudentTestMode && !isAdminTestMode) {
+        // Only enable editing if we're in template editor mode
+      }
       return;
     }
 
-    // PRIORITY 3: If in preview mode (question not saved yet), initialize with defaults
+    // PRIORITY 3: If in preview mode (question not saved yet)
+    // ✅ FIX: Don't enable editing mode in student test mode - show clean student view
     if (isPreviewQuestion) {
-      console.log('[TableCompletion] Preview mode - initializing with defaults');
-      initializeDefaultTable();
-      setIsEditingTemplate(true); // Enable editing for preview
-      return;
+      if (isStudentTestMode || isAdminTestMode) {
+        // In test mode with preview question, initialize defaults but DON'T enable editing
+        console.log('[TableCompletion] Preview mode + Test mode - initializing defaults WITHOUT editing');
+        initializeDefaultTable();
+        setIsEditingTemplate(false); // Ensure editing is disabled
+        return;
+      } else {
+        // In edit mode with preview question, enable editing
+        console.log('[TableCompletion] Preview mode - initializing with defaults and enabling editing');
+        initializeDefaultTable();
+        setIsEditingTemplate(true); // Enable editing for preview
+        return;
+      }
     }
 
     // PRIORITY 4: Load template from database for saved questions (production tables)
@@ -675,7 +689,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         });
 
         // Show info message for review mode when no template exists
-        if (importSessionId && questionIdentifier) {
+        if (importSessionId && questionIdentifier && !isStudentTestMode && !isAdminTestMode) {
           toast.info('No saved template found', {
             description: 'Starting with default 5×5 table. Configure cells and save to persist.',
             duration: 4000
@@ -683,8 +697,10 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         }
 
         initializeDefaultTable();
-        // Auto-enable edit mode when no template exists (first-time setup)
-        setIsEditingTemplate(true);
+        // ✅ FIX: Only auto-enable edit mode in template editor mode, not in test modes
+        if (!isStudentTestMode && !isAdminTestMode) {
+          setIsEditingTemplate(true);
+        }
       }
     } catch (error) {
       console.error('[TableCompletion] ❌ ====== ERROR LOADING TEMPLATE ======');
@@ -702,14 +718,19 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         ? error.message
         : (error as any)?.message || JSON.stringify(error) || 'Unknown error occurred';
 
-      toast.error('Failed to load template', {
-        description: `${errorMessage}. Please check console for details.`,
-        duration: 6000
-      });
+      // ✅ FIX: Only show error toast in edit mode, not in test modes
+      if (!isStudentTestMode && !isAdminTestMode) {
+        toast.error('Failed to load template', {
+          description: `${errorMessage}. Please check console for details.`,
+          duration: 6000
+        });
+      }
 
       initializeDefaultTable();
-      // Auto-enable edit mode on error (likely means no template exists)
-      setIsEditingTemplate(true);
+      // ✅ FIX: Only auto-enable edit mode in template editor mode, not in test modes
+      if (!isStudentTestMode && !isAdminTestMode) {
+        setIsEditingTemplate(true);
+      }
     } finally {
       console.log('[TableCompletion] 🏁 Setting loading to false');
       setLoading(false);
