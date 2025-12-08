@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
-import { Plus, Upload, Download, Eye, Trash2, CreditCard as Edit2, FileText } from 'lucide-react';
+import { Plus, Download, Eye, Trash2, CreditCard as Edit2, FileText } from 'lucide-react';
+import { iconColors } from '../../../../lib/constants/iconConfig';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../lib/supabase';
 import { useUser } from '../../../../contexts/UserContext';
@@ -13,7 +14,10 @@ import {
   Material
 } from '../../../../services/materialsService';
 import { DataTable } from '../../../../components/shared/DataTable';
-import { FilterCard } from '../../../../components/shared/FilterCard';
+import { PageHeader } from '../../../../components/shared/PageHeader';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../../../components/shared/Card';
+import { Badge } from '../../../../components/shared/Badge';
+import { FilterPanel } from '../../../../components/shared/FilterPanel';
 import { SlideInForm } from '../../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
 import { StatusBadge } from '../../../../components/shared/StatusBadge';
@@ -430,9 +434,9 @@ export default function TeacherMaterialsPage() {
         <div className="flex items-center gap-2">
           <span className="text-lg">{getTypeIcon(row.type)}</span>
           <div>
-            <div className="font-medium text-gray-900 dark:text-white">{row.title}</div>
+            <div className="font-medium text-ggk-neutral-900 dark:text-ggk-neutral-50">{row.title}</div>
             {row.description && (
-              <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
+              <div className="text-sm text-ggk-neutral-500 dark:text-ggk-neutral-400 truncate max-w-xs">
                 {row.description}
               </div>
             )}
@@ -444,7 +448,7 @@ export default function TeacherMaterialsPage() {
       id: 'subject',
       header: 'Subject',
       cell: (row: Material) => (
-        <span className="text-sm text-gray-900 dark:text-white">
+        <span className="text-sm text-ggk-neutral-900 dark:text-ggk-neutral-50">
           {row.data_structure?.edu_subjects?.name || 'N/A'}
         </span>
       )
@@ -453,7 +457,7 @@ export default function TeacherMaterialsPage() {
       id: 'grade',
       header: 'Grade',
       cell: (row: Material) => (
-        <span className="text-sm text-gray-900 dark:text-white">
+        <span className="text-sm text-ggk-neutral-900 dark:text-ggk-neutral-50">
           {row.grade_levels?.name || '-'}
         </span>
       )
@@ -464,7 +468,7 @@ export default function TeacherMaterialsPage() {
       accessorKey: 'type',
       enableSorting: true,
       cell: (row: Material) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 capitalize">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-ggk-primary-100 text-ggk-primary-700 dark:bg-ggk-primary-900/40 dark:text-ggk-primary-200 capitalize">
           {row.type}
         </span>
       )
@@ -473,7 +477,7 @@ export default function TeacherMaterialsPage() {
       id: 'size',
       header: 'Size',
       cell: (row: Material) => (
-        <span className="text-sm text-gray-600 dark:text-gray-400">
+        <span className="text-sm text-ggk-neutral-600 dark:text-ggk-neutral-400">
           {formatFileSize(row.size)}
         </span>
       )
@@ -489,7 +493,7 @@ export default function TeacherMaterialsPage() {
       accessorKey: 'created_at',
       enableSorting: true,
       cell: (row: Material) => (
-        <span className="text-sm text-gray-600 dark:text-gray-400">
+        <span className="text-sm text-ggk-neutral-600 dark:text-ggk-neutral-400">
           {new Date(row.created_at).toLocaleDateString()}
         </span>
       )
@@ -517,7 +521,7 @@ export default function TeacherMaterialsPage() {
         </a>
       )}
       {row.type === 'video' && (
-        <span className="text-xs text-gray-500 dark:text-gray-400 italic px-2">
+        <span className="text-xs text-ggk-neutral-500 dark:text-ggk-neutral-400 italic px-2">
           Stream only
         </span>
       )}
@@ -552,117 +556,175 @@ export default function TeacherMaterialsPage() {
     </div>
   );
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Learning Materials</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
-          Upload and manage learning materials for your students
-          {teacherInfo?.schoolName && ` at ${teacherInfo.schoolName}`}
-        </p>
-      </div>
+  const totalMaterials = materials.length;
+  const activeMaterialCount = materials.filter(material => material.status === 'active').length;
+  const inactiveMaterialCount = materials.filter(material => material.status === 'inactive').length;
+  const activeFilterCount = (filters.search ? 1 : 0)
+    + (filters.data_structure_ids.length ? 1 : 0)
+    + (filters.types.length ? 1 : 0)
+    + (filters.grade_ids.length ? 1 : 0);
+  const canManageMaterials = !!teacherInfo?.schoolId && !hasError;
+  const subtitle = `Upload and manage learning materials${teacherInfo?.schoolName ? ` for ${teacherInfo.schoolName}` : ''}`;
 
-      {/* Error State */}
-      {hasError && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+  const handleOpenForm = () => {
+    setEditingMaterial(null);
+    setFormState({
+      title: '',
+      description: '',
+      data_structure_id: '',
+      unit_id: '',
+      topic_id: '',
+      subtopic_id: '',
+      grade_id: '',
+      type: 'video',
+      status: 'active'
+    });
+    setUploadedFile(null);
+    setFormErrors({});
+    setIsFormOpen(true);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      search: '',
+      data_structure_ids: [],
+      types: [],
+      status: [],
+      grade_ids: []
+    });
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl px-20 py-20 space-y-24">
+      <PageHeader
+        title="Learning Materials"
+        subtitle={subtitle}
+        actions={(
+          <Button
+            onClick={handleOpenForm}
+            leftIcon={<Plus className="h-4 w-4" />}
+            disabled={!canManageMaterials || isLoading}
+          >
+            Upload material
+          </Button>
+        )}
+      />
+
+      <Card variant="elevated" className="relative overflow-hidden bg-gradient-to-br from-ggk-primary-50 via-ggk-neutral-0 to-ggk-neutral-50">
+        <div className="absolute -right-20 top-8 h-80 w-80 rounded-full bg-ggk-primary-200/50 blur-3xl" aria-hidden="true" />
+        <CardContent className="grid gap-24 md:grid-cols-[1.4fr_1fr] items-start">
+          <div className="space-y-12">
+            <Badge variant="primary" size="sm" className="uppercase tracking-wide">Learning resources hub</Badge>
+            <div className="space-y-6">
+              <h2 className="text-2xl font-semibold text-ggk-neutral-900 dark:text-ggk-neutral-50">Curate engaging digital experiences</h2>
+              <p className="text-sm leading-relaxed text-ggk-neutral-600 dark:text-ggk-neutral-300">
+                The refreshed materials workspace embraces the GGK design system for calm navigation, consistent typography, and streamlined workflows across upload, tagging, and streaming.
+              </p>
+              {teacherInfo?.schoolName && (
+                <Badge variant="outline" size="sm" className="mt-4">{teacherInfo.schoolName}</Badge>
+              )}
             </div>
-            <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error Loading Materials</h3>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
-              <button
+
+            <div className="grid gap-12 sm:grid-cols-3">
+              <div className="rounded-ggk-xl border border-ggk-neutral-200/70 bg-white/80 p-16 shadow-ggk-sm dark:border-ggk-neutral-800/80 dark:bg-ggk-neutral-900/50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ggk-neutral-500">Total resources</p>
+                <p className="mt-4 text-2xl font-semibold text-ggk-neutral-900 dark:text-ggk-neutral-50">{totalMaterials}</p>
+              </div>
+              <div className="rounded-ggk-xl border border-ggk-neutral-200/70 bg-white/80 p-16 shadow-ggk-sm dark:border-ggk-neutral-800/80 dark:bg-ggk-neutral-900/50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ggk-neutral-500">Active</p>
+                <p className="mt-4 text-2xl font-semibold text-emerald-600 dark:text-emerald-300">{activeMaterialCount}</p>
+              </div>
+              <div className="rounded-ggk-xl border border-ggk-neutral-200/70 bg-white/80 p-16 shadow-ggk-sm dark:border-ggk-neutral-800/80 dark:bg-ggk-neutral-900/50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ggk-neutral-500">Archived</p>
+                <p className="mt-4 text-2xl font-semibold text-ggk-neutral-700 dark:text-ggk-neutral-300">{inactiveMaterialCount}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-12 rounded-ggk-2xl border border-ggk-neutral-200/70 bg-white/90 p-20 shadow-ggk-lg dark:border-ggk-neutral-800/80 dark:bg-ggk-neutral-900/60">
+            <div className="flex items-center gap-10">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-ggk-primary-500/10 text-ggk-primary-600">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ggk-neutral-500">What&apos;s improved</p>
+                <h3 className="text-lg font-semibold text-ggk-neutral-900 dark:text-ggk-neutral-50">Consistent authoring surfaces</h3>
+              </div>
+            </div>
+            <ul className="space-y-8 text-sm text-ggk-neutral-600 dark:text-ggk-neutral-300">
+              <li className="flex items-start gap-8">
+                <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-ggk-primary-500" />
+                <span>Slide-in forms, tables, and filters now use shared tokens for predictable interactions.</span>
+              </li>
+              <li className="flex items-start gap-8">
+                <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-ggk-primary-500" />
+                <span>Dark mode receives balanced contrast, helping you review media in low-light settings.</span>
+              </li>
+              <li className="flex items-start gap-8">
+                <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-ggk-primary-500" />
+                <span>Upcoming releases add AI tagging and quick lesson alignment suggestions.</span>
+              </li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+
+      {hasError && (
+        <Card variant="outlined" className="border-red-200 bg-red-50/80 text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+          <div className="flex items-start gap-12">
+            <div className="mt-1 h-10 w-10 flex-shrink-0 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
+              <span className="text-lg font-semibold">!</span>
+            </div>
+            <div className="space-y-6">
+              <h3 className="text-sm font-semibold">Error loading materials</h3>
+              <p className="text-sm leading-relaxed">
+                {errorMessage}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   queryClient.invalidateQueries(['entity-user']);
                   queryClient.invalidateQueries(['teacher-schools']);
                   queryClient.invalidateQueries(['teacher-materials']);
                 }}
-                className="mt-3 text-sm font-medium text-red-800 dark:text-red-200 hover:text-red-900 dark:hover:text-red-100 underline"
               >
-                Try Again
-              </button>
+                Try again
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* No School Assignment State */}
       {!hasError && !isLoading && entityUser && !teacherInfo?.schoolId && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">No School Assignment</h3>
-              <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                You are not currently assigned to any school. Please contact your administrator to assign you to a school before uploading materials.
-              </p>
-            </div>
+        <Card variant="outlined" className="border-amber-200 bg-amber-50/80 text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <div className="space-y-6">
+            <h3 className="text-sm font-semibold">No school assignment</h3>
+            <p className="text-sm leading-relaxed">
+              You are not currently assigned to any school. Please contact your administrator to assign you to a school before uploading materials.
+            </p>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Only show controls when ready */}
-      {!hasError && teacherInfo?.schoolId && (
-        <div className="flex justify-between items-center">
-          <div />
-          <Button
-            onClick={() => {
-              setEditingMaterial(null);
-              setFormState({
-                title: '',
-                description: '',
-                data_structure_id: '',
-                unit_id: '',
-                topic_id: '',
-                subtopic_id: '',
-                grade_id: '',
-                type: 'video',
-                status: 'active'
-              });
-              setIsFormOpen(true);
-            }}
-            leftIcon={<Plus className="h-4 w-4" />}
-            disabled={isLoading}
-          >
-            Upload Material
-          </Button>
-        </div>
-      )}
+      {canManageMaterials && (
+        <FilterPanel
+          title="Refine materials"
+          activeFilterCount={activeFilterCount}
+          onClear={activeFilterCount > 0 ? handleClearFilters : undefined}
+        >
+          <div className="grid grid-cols-1 gap-16 md:grid-cols-2 xl:grid-cols-4">
+            <FormField id="search" label="Search">
+              <Input
+                id="search"
+                placeholder="Search by title..."
+                value={filters.search}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                disabled={isLoading}
+              />
+            </FormField>
 
-      {/* Only show filters and table when ready */}
-      {!hasError && teacherInfo?.schoolId && (
-        <>
-          <FilterCard
-            title="Filters"
-            onApply={() => {}}
-            onClear={() => {
-              setFilters({
-                search: '',
-                data_structure_ids: [],
-                types: [],
-                status: [],
-                grade_ids: []
-              });
-            }}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <FormField id="search" label="Search">
-                <Input
-                  id="search"
-                  placeholder="Search by title..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                  disabled={isLoading}
-                />
-              </FormField>
-
+            <div className="space-y-6">
               <SearchableMultiSelect
                 label="Subject"
                 options={dataStructureOptions.map(ds => ({
@@ -673,7 +735,9 @@ export default function TeacherMaterialsPage() {
                 onChange={(values) => setFilters({ ...filters, data_structure_ids: values })}
                 placeholder="Select subjects..."
               />
+            </div>
 
+            <div className="space-y-6">
               <SearchableMultiSelect
                 label="Grade"
                 options={gradeLevels.map(g => ({
@@ -684,7 +748,9 @@ export default function TeacherMaterialsPage() {
                 onChange={(values) => setFilters({ ...filters, grade_ids: values })}
                 placeholder="Select grades..."
               />
+            </div>
 
+            <div className="space-y-6">
               <SearchableMultiSelect
                 label="Type"
                 options={[
@@ -698,20 +764,23 @@ export default function TeacherMaterialsPage() {
                 placeholder="Select types..."
               />
             </div>
-          </FilterCard>
+          </div>
+        </FilterPanel>
+      )}
 
-          <DataTable
-            data={materials}
-            columns={columns}
-            keyField="id"
-            caption="List of your uploaded learning materials"
-            ariaLabel="Teacher materials table"
-            loading={isLoading}
-            renderActions={renderActions}
-            onDelete={handleDelete}
-            emptyMessage="No materials uploaded yet. Click 'Upload Material' to get started."
-          />
-        </>
+      {canManageMaterials && (
+        <DataTable
+          data={materials}
+          columns={columns}
+          keyField="id"
+          caption="List of your uploaded learning materials"
+          ariaLabel="Teacher materials table"
+          loading={isLoading}
+          renderActions={renderActions}
+          onDelete={handleDelete}
+          emptyMessage="No materials uploaded yet. Click 'Upload material' to get started."
+          className="border border-ggk-neutral-200 shadow-ggk-lg dark:border-ggk-neutral-800"
+        />
       )}
 
       {/* Upload/Edit Form */}
@@ -796,10 +865,10 @@ export default function TeacherMaterialsPage() {
                 id="file"
                 accept={Object.values(ACCEPTED_FILE_TYPES).flat().join(',')}
                 onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 dark:file:bg-emerald-900/30 file:text-emerald-700 dark:file:text-emerald-300 hover:file:bg-emerald-100 dark:hover:file:bg-emerald-900/50"
+                className="block w-full text-sm text-ggk-neutral-600 dark:text-ggk-neutral-300 file:mr-4 file:py-2 file:px-4 file:rounded-ggk-lg file:border-0 file:text-sm file:font-semibold file:bg-ggk-primary-50 file:text-ggk-primary-700 hover:file:bg-ggk-primary-100 dark:file:bg-ggk-primary-900/40 dark:file:text-ggk-primary-200 dark:hover:file:bg-ggk-primary-900/60"
               />
               {uploadedFile && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
+                <p className="mt-2 text-xs text-ggk-primary-600 dark:text-ggk-primary-300">
                   Selected: {uploadedFile.name} ({formatFileSize(uploadedFile.size)})
                 </p>
               )}
