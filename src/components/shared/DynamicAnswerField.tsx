@@ -884,8 +884,15 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
         }
       }
 
-      // ✅ FIX: Don't pass template prop during review mode - let component load from database
-      const shouldPassTemplate = !(importSessionId && questionIdentifier);
+      // ✅ FIX: In simulation/preview modes, prefer template from correct_answers
+      // Database load is only needed for template editing in admin mode
+      // This fixes the issue where questionIdentifier format differs between
+      // review mode (e.g., "q_123-part-0") and simulation mode (e.g., "q_123_p0")
+      const shouldPassTemplate =
+        !(importSessionId && questionIdentifier) ||
+        mode === 'practice' ||
+        mode === 'exam' ||
+        mode === 'qa_preview';
       console.log('[DynamicAnswerField] Table Completion Props:', {
         importSessionId,
         questionIdentifier,
