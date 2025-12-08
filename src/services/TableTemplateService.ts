@@ -391,6 +391,38 @@ export class TableTemplateService {
   }
 
   /**
+   * Convert simulation ID format to database format
+   * Simulation: q_123_p0_s2 → Database: q_123-part-0-sub-2
+   * Simulation: q_123_p0 → Database: q_123-part-0
+   * Main questions (q_123) - return unchanged
+   */
+  private static convertSimulationIdToDatabaseFormat(questionIdentifier: string): string {
+    if (!questionIdentifier) return questionIdentifier;
+
+    // Check for subpart format: q_XXX_pN_sM → q_XXX-part-N-sub-M
+    const subpartMatch = questionIdentifier.match(/^(q_\d+)_p(\d+)_s(\d+)$/);
+    if (subpartMatch) {
+      const [, baseId, partNum, subNum] = subpartMatch;
+      const converted = `${baseId}-part-${partNum}-sub-${subNum}`;
+      console.log(`[TableTemplateService] ✅ Converted SUBPART ID: ${questionIdentifier} → ${converted}`);
+      return converted;
+    }
+
+    // Check for part format: q_XXX_pN → q_XXX-part-N
+    const partMatch = questionIdentifier.match(/^(q_\d+)_p(\d+)$/);
+    if (partMatch) {
+      const [, baseId, partNum] = partMatch;
+      const converted = `${baseId}-part-${partNum}`;
+      console.log(`[TableTemplateService] ✅ Converted PART ID: ${questionIdentifier} → ${converted}`);
+      return converted;
+    }
+
+    // No conversion needed (main question or already in correct format)
+    console.log(`[TableTemplateService] No conversion needed for ID: ${questionIdentifier}`);
+    return questionIdentifier;
+  }
+
+  /**
    * Check if a template exists for a question/subquestion
    */
   static async templateExists(
@@ -495,20 +527,24 @@ export class TableTemplateService {
   }> {
     // If review context provided, load ONLY from review tables (paper setup preview mode)
     if (reviewSessionId && questionIdentifier) {
+      // Convert simulation ID format to database format before querying
+      const convertedIdentifier = this.convertSimulationIdToDatabaseFormat(questionIdentifier);
+
       console.log('[TableTemplateService] Loading from REVIEW TABLES only (paper setup mode):', {
         reviewSessionId,
-        questionIdentifier
+        originalIdentifier: questionIdentifier,
+        convertedIdentifier
       });
 
       const { TableTemplateImportReviewService } = await import('./TableTemplateImportReviewService');
 
       const reviewResult = await TableTemplateImportReviewService.loadTemplateForReview(
         reviewSessionId,
-        questionIdentifier
+        convertedIdentifier
       );
 
       if (reviewResult.success && reviewResult.template) {
-        console.log('[TableTemplateService] ✅ Template found in review tables:', {
+        console.log('[TableTemplateService] ✅ Template FOUND in review tables:', {
           rows: reviewResult.template.rows,
           columns: reviewResult.template.columns,
           cellsCount: reviewResult.template.cells.length
