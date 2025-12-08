@@ -5211,6 +5211,7 @@ function QuestionsTabInner({
           console.log('Paper status changed to:', newStatus);
         }}
         onAttachmentRemove={handleDeleteAttachment}
+        importSessionId={importSession?.id}
       />
     );
   }

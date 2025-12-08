@@ -45,7 +45,9 @@ const MemoizedAnswerField = React.memo(DynamicAnswerField, (prev, next) => {
     prev.disabled === next.disabled &&
     prev.showHints === next.showHints &&
     prev.showCorrectAnswer === next.showCorrectAnswer &&
-    prev.mode === next.mode
+    prev.mode === next.mode &&
+    prev.importSessionId === next.importSessionId &&
+    prev.questionIdentifier === next.questionIdentifier
   );
 });
 
@@ -305,6 +307,8 @@ interface UnifiedTestSimulationProps {
   allowPause?: boolean;
   showAnswersOnCompletion?: boolean;
   onAttachmentRemove?: (attachmentKey: string, attachmentId: string) => void;
+  /** Import session ID for loading table templates from review tables during QA simulation */
+  importSessionId?: string;
 }
 
 const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
@@ -842,7 +846,8 @@ export function UnifiedTestSimulation({
   onPaperStatusChange,
   allowPause = true,
   showAnswersOnCompletion = true,
-  onAttachmentRemove
+  onAttachmentRemove,
+  importSessionId
 }: UnifiedTestSimulationProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, UserAnswer>>({});
@@ -2056,6 +2061,8 @@ export function UnifiedTestSimulation({
                               showHints={features.showHints}
                               showCorrectAnswer={features.showCorrectAnswers || isQAMode}
                               mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                              importSessionId={importSessionId}
+                              questionIdentifier={currentQuestion.id}
                             />
                           </div>
                         ) : (
@@ -2147,6 +2154,8 @@ export function UnifiedTestSimulation({
                                       showHints={features.showHints}
                                       showCorrectAnswer={features.showCorrectAnswers || isQAMode}
                                       mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                      importSessionId={importSessionId}
+                                      questionIdentifier={part.id}
                                     />
                                   ) : (
                                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
@@ -2225,6 +2234,8 @@ export function UnifiedTestSimulation({
                                                   showHints={features.showHints}
                                                   showCorrectAnswer={features.showCorrectAnswers || isQAMode}
                                                   mode={isQAMode ? 'qa_preview' : (features.showCorrectAnswers ? 'review' : 'practice')}
+                                                  importSessionId={importSessionId}
+                                                  questionIdentifier={subpart.id}
                                                 />
                                               ) : (
                                                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
