@@ -61,7 +61,7 @@ export const OptimizedPapersSetupWizard: React.FC<OptimizedPapersSetupWizardProp
 
         try {
           const { data: session, error } = await supabase
-            .from('question_import_sessions')
+            .from('past_paper_import_sessions')
             .select('*')
             .eq('id', storedSessionId)
             .maybeSingle();
