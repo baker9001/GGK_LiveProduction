@@ -1759,6 +1759,26 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
       console.log('Initializing review session...', { importSessionId, questionCount: memoizedQuestions.length });
 
+      // If no importSessionId, initialize with local-only state (review progress won't be persisted)
+      if (!importSessionId) {
+        console.warn('No import session ID provided - review progress will not be persisted to database');
+        // Initialize local state for questions
+        const statusMap: Record<string, ReviewStatus> = {};
+        memoizedQuestions.forEach(q => {
+          statusMap[q.id] = {
+            questionId: q.id,
+            isReviewed: false,
+            hasIssues: false,
+            issueCount: 0,
+            needsAttention: false
+          };
+        });
+        setReviewStatuses(statusMap);
+        isInitializedRef.current = true;
+        console.log('Initialized local-only review state for', memoizedQuestions.length, 'questions');
+        return;
+      }
+
       // Get current user with retry
       let user = null;
       let authRetries = 0;
@@ -1941,7 +1961,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     } finally {
       setIsInitializing(false);
     }
-  }, [importSessionId, memoizedQuestions.length, paperTitle, paperDuration, totalMarks, requireSimulation, importSessionId]);
+  }, [importSessionId, memoizedQuestions, paperTitle, paperDuration, totalMarks, requireSimulation]);
 
   const handleToggleReview = async (questionId: string) => {
     if (!localSessionId) return;
