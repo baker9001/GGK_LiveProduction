@@ -15,12 +15,28 @@ interface PasswordStrength {
   feedback: string[];
 }
 
+// Common passwords to reject (subset of most common)
+const COMMON_PASSWORDS = new Set([
+  'password', 'password1', 'password123', '123456', '12345678', '123456789',
+  'qwerty', 'qwerty123', 'abc123', 'admin', 'admin123', 'letmein', 'welcome',
+  'monkey', 'dragon', 'master', 'login', 'passw0rd', 'hello123', 'test123',
+  'password!', 'p@ssword', 'p@ssw0rd', 'iloveyou', 'sunshine', 'princess'
+]);
+
 function calculatePasswordStrength(password: string): PasswordStrength {
   const feedback: string[] = [];
   let score = 0;
+  const lowerPassword = password.toLowerCase();
 
+  // Length checks
   if (password.length >= 8) score += 1;
   else feedback.push('At least 8 characters');
+
+  // Maximum length check (bcrypt has 72-byte limit, we use 128 for safety)
+  if (password.length > 128) {
+    feedback.push('Maximum 128 characters');
+    score = Math.max(0, score - 1);
+  }
 
   if (/[A-Z]/.test(password)) score += 1;
   else feedback.push('One uppercase letter');
@@ -33,6 +49,18 @@ function calculatePasswordStrength(password: string): PasswordStrength {
 
   if (/[^A-Za-z0-9]/.test(password)) score += 1;
   else feedback.push('One special character');
+
+  // Check for common passwords
+  if (COMMON_PASSWORDS.has(lowerPassword) || COMMON_PASSWORDS.has(password)) {
+    feedback.unshift('Password is too common');
+    score = Math.min(score, 1); // Cap score at 1 for common passwords
+  }
+
+  // Check for sequential patterns
+  if (/^(?:abc|123|qwe|asd|zxc)/i.test(password) || /(.)\1{2,}/.test(password)) {
+    feedback.push('Avoid sequential or repeated characters');
+    score = Math.max(0, score - 1);
+  }
 
   return { score, feedback };
 }
@@ -62,10 +90,8 @@ export default function ResetPasswordPage() {
   // State for first-login password change
   const [isFirstLoginChange, setIsFirstLoginChange] = useState(false);
   const [userIdToProcess, setUserIdToProcess] = useState<string | null>(null);
-  const [userTypeToProcess, setUserTypeToProcess] = useState<string | null>(null);
-  
-  // Legacy token data
-  const [legacyTokenData, setLegacyTokenData] = useState<any>(null);
+
+  // Legacy token (deprecated - will show error message)
   const legacyToken = searchParams.get('token');
   
   const passwordStrength = calculatePasswordStrength(password);
@@ -74,10 +100,10 @@ export default function ResetPasswordPage() {
   // CRITICAL: This effect MUST run first to capture tokens immediately
   useEffect(() => {
     const captureTokens = async () => {
+      // Security: Only log non-sensitive information
       console.log('[ResetPassword] Initializing...');
-      console.log('[ResetPassword] Full URL:', window.location.href);
-      console.log('[ResetPassword] Hash:', window.location.hash);
-      console.log('[ResetPassword] Search:', window.location.search);
+      console.log('[ResetPassword] Has hash:', !!window.location.hash);
+      console.log('[ResetPassword] Has search params:', !!window.location.search);
 
       // PRIORITY 1: Check for hash fragments (Supabase sends tokens here)
       const hash = window.location.hash;
@@ -90,28 +116,32 @@ export default function ResetPasswordPage() {
         const errorDesc = hashParams.get('error_description');
         const validHashTypes = new Set(['recovery', 'invite', 'signup']);
 
-        console.log('[ResetPassword] Hash params found:', {
-          hasAccess: !!access,
-          hasRefresh: !!refresh,
-          type,
-          error: errorCode
+        // Default to 'recovery' if type is missing but access token exists
+        const effectiveType = type || (access ? 'recovery' : null);
+
+        // Security: Only log non-sensitive token metadata
+        console.log('[ResetPassword] Token check:', {
+          hasAccessToken: !!access,
+          hasRefreshToken: !!refresh,
+          type: effectiveType,
+          hasError: !!errorCode
         });
 
         // Check for errors
         if (errorCode || errorDesc) {
-          console.error('[ResetPassword] Error in hash:', errorCode, errorDesc);
+          console.error('[ResetPassword] Token error detected');
           setError(errorDesc || 'Invalid or expired access link');
           setTokenValid(false);
           setCheckingToken(false);
           return;
         }
 
-        // Handle recovery or invitation tokens
-        if (access && type && validHashTypes.has(type)) {
-          console.log('[ResetPassword] Valid tokens found in hash for type:', type);
+        // Handle recovery or invitation tokens (use effectiveType with fallback)
+        if (access && effectiveType && validHashTypes.has(effectiveType)) {
+          console.log('[ResetPassword] Valid tokens found for type:', effectiveType);
           setAccessToken(access);
           setRefreshToken(refresh || '');
-          setLinkType(type);
+          setLinkType(effectiveType);
 
           try {
             // Set Supabase session
@@ -135,29 +165,29 @@ export default function ResetPasswordPage() {
               }
 
               // User exists but session failed - still proceed
-              console.log('[ResetPassword] User found despite session error:', user.id);
+              console.log('[ResetPassword] User verified despite session error');
               setUserIdToProcess(user.id);
               setUserEmail(user.email || '');
               setTokenValid(true);
               setSessionReady(true);
-              setLinkType((current) => current || type);
+              setLinkType((current) => current || effectiveType);
             } else if (sessionData?.user) {
-              console.log('[ResetPassword] Session established for:', sessionData.user.id);
+              console.log('[ResetPassword] Session established successfully');
               setUserIdToProcess(sessionData.user.id);
               setUserEmail(sessionData.user.email || '');
               setTokenValid(true);
               setSessionReady(true);
-              setLinkType((current) => current || type);
+              setLinkType((current) => current || effectiveType);
             } else {
               // Try to get user from session
               const { data: { user } } = await supabase.auth.getUser();
               if (user) {
-                console.log('[ResetPassword] User found in session:', user.id);
+                console.log('[ResetPassword] User found in existing session');
                 setUserIdToProcess(user.id);
                 setUserEmail(user.email || '');
                 setTokenValid(true);
                 setSessionReady(true);
-                setLinkType((current) => current || type);
+                setLinkType((current) => current || effectiveType);
               } else {
                 setError('Unable to verify user session. Please request a new email link.');
                 setTokenValid(false);
@@ -192,7 +222,7 @@ export default function ResetPasswordPage() {
         console.log('[ResetPassword] First login password change');
         setIsFirstLoginChange(true);
         setUserIdToProcess(currentUser.id);
-        setUserTypeToProcess(currentUser.userType || 'user');
+        setUserEmail(currentUser.email || '');
         setTokenValid(true);
         setCheckingToken(false);
         return;
@@ -222,13 +252,28 @@ export default function ResetPasswordPage() {
         setError('Invalid or expired access link. Please request a new one.');
         setTokenValid(false);
       } else {
-        setLegacyTokenData(data);
-        setUserIdToProcess(data.user_id);
-        setUserTypeToProcess(data.user_type);
-        setTokenValid(true);
+        // Legacy tokens are deprecated - direct users to request a new link
+        // The old system couldn't properly update auth.users passwords
+        console.log('[ResetPassword] Legacy token detected - redirecting to modern flow');
+        setError(
+          'This password reset link uses an older format that is no longer supported. ' +
+          'Please request a new password reset email for a secure link.'
+        );
+        setTokenValid(false);
+
+        // Mark the legacy token as used to prevent confusion
+        await supabase
+          .from('password_reset_tokens')
+          .update({
+            used: true,
+            used_at: new Date().toISOString(),
+            metadata: { deprecated_redirect: true }
+          })
+          .eq('id', data.id);
       }
     } catch (err) {
-      setError('Failed to verify access link');
+      console.error('[ResetPassword] Legacy token check failed');
+      setError('Failed to verify access link. Please request a new one.');
       setTokenValid(false);
     } finally {
       setCheckingToken(false);
@@ -339,50 +384,9 @@ export default function ResetPasswordPage() {
         // Sign out after password reset
         await supabase.auth.signOut();
         
-      } else if (legacyTokenData) {
-        // Legacy password update
-        console.log('[ResetPassword] Updating password via legacy method...');
-        
-        // For legacy method, we can't update auth.users, only metadata
-        const { data: currentUser } = await supabase
-          .from('users')
-          .select('raw_user_meta_data')
-          .eq('id', userIdToProcess)
-          .single();
-
-        const updatedMetadata = {
-          ...(currentUser?.raw_user_meta_data || {}),
-          password_updated_at: new Date().toISOString(),
-          requires_password_change: false,
-          legacy_password_reset: true
-        };
-
-        const { error: userUpdateError } = await supabase
-          .from('users')
-          .update({
-            raw_user_meta_data: updatedMetadata,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userIdToProcess);
-
-        if (userUpdateError) {
-          throw new Error(`Failed to update user: ${userUpdateError.message}`);
-        }
-
-        // Mark token as used
-        if (legacyTokenData.id) {
-          await supabase
-            .from('password_reset_tokens')
-            .update({ 
-              used: true, 
-              used_at: new Date().toISOString() 
-            })
-            .eq('id', legacyTokenData.id);
-        }
-        
-        // Clear URL for legacy tokens too
-        window.history.replaceState(null, '', window.location.pathname);
       } else {
+        // Legacy tokens are no longer supported - this case shouldn't be reached
+        // since we now reject legacy tokens in checkLegacyResetToken
         throw new Error('No valid session found. Please request a new email link.');
       }
       
@@ -587,6 +591,11 @@ export default function ResetPasswordPage() {
               ? 'Create a strong password to activate your account'
               : 'Enter your new password below'}
           </p>
+          {userEmail && (
+            <p className="mt-2 text-sm text-gray-400">
+              Account: <span className="text-white font-medium">{userEmail}</span>
+            </p>
+          )}
         </div>
 
         <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
