@@ -159,7 +159,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
   const simulationResults = externalSimulationResults;
   const simulationCompleted = externalSimulationCompleted;
-  // Note: This state is deprecated and should be removed - use importSessionId prop directly
+  // Stores the review session ID (from question_import_review_sessions table)
+  // This is different from importSessionId which is the paper import session ID
   const [localSessionId, setLocalSessionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
@@ -1782,9 +1783,9 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
 
       // Check if there's an existing review session
-      let sessionId = importSessionId;
+      let sessionId: string | null = null;
 
-      if (!sessionId && importSessionId) {
+      if (importSessionId) {
         try {
           const { data: existingSession, error: sessionError } = await supabase
             .from('question_import_review_sessions')
@@ -1943,7 +1944,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   }, [importSessionId, memoizedQuestions.length, paperTitle, paperDuration, totalMarks, requireSimulation, importSessionId]);
 
   const handleToggleReview = async (questionId: string) => {
-    if (!importSessionId) return;
+    if (!localSessionId) return;
 
     const currentStatus = reviewStatuses[questionId];
     const newReviewedState = !currentStatus?.isReviewed;
@@ -1957,7 +1958,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: newReviewedState ? new Date().toISOString() : null,
           reviewed_by: newReviewedState ? (await supabase.auth.getUser()).data.user?.id : null
         })
-        .eq('review_session_id', importSessionId)
+        .eq('review_session_id', localSessionId)
         .eq('question_identifier', questionId);
 
       if (error) throw error;
@@ -1988,7 +1989,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   };
 
   const handleMarkAllReviewed = useCallback(async () => {
-    if (!importSessionId) {
+    if (!localSessionId) {
       return;
     }
 
@@ -2017,7 +2018,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: now,
           reviewed_by: reviewerId,
         })
-        .eq('review_session_id', importSessionId)
+        .eq('review_session_id', localSessionId)
         .in('question_identifier', unreviewedQuestionIds);
 
       if (error) {
@@ -2049,7 +2050,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     } finally {
       setIsBulkReviewing(false);
     }
-  }, [memoizedQuestions, importSessionId, reviewStatuses]);
+  }, [memoizedQuestions, localSessionId, reviewStatuses]);
 
   const handleStartSimulation = () => {
     // Validate questions before requesting simulation from parent
@@ -2087,7 +2088,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   };
 
   const handleSimulationComplete = async (results: SimulationResults) => {
-    if (!importSessionId) return;
+    if (!localSessionId) return;
 
     try {
       // Get current user
@@ -2098,7 +2099,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       const { error } = await supabase
         .from('question_import_simulation_results')
         .insert({
-          review_session_id: importSessionId,
+          review_session_id: localSessionId,
           user_id: user.id,
           simulation_completed_at: new Date().toISOString(),
           total_questions: results.totalQuestions,
@@ -2125,7 +2126,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           simulation_passed: results.percentage >= 70,
           updated_at: new Date().toISOString()
         })
-        .eq('id', importSessionId);
+        .eq('id', localSessionId);
 
       setSimulationResults(results);
       toast.success('Simulation completed successfully');
