@@ -584,8 +584,8 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {/* Auto-Save Status Indicator */}
-      {enableAutoSave && !disabled && (
+      {/* Auto-Save Status Indicator - Hidden in simulation mode (disabled) */}
+      {enableAutoSave && !disabled && !showCorrectAnswer && (
         <div className="flex items-center justify-end gap-2 text-sm">
           {/* Preview Mode - No save capability */}
           {isPreviewQuestion && !isImportReviewMode && (
@@ -649,98 +649,100 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {/* Configuration */}
-      <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Title */}
-          <div className="col-span-full">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Table Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                if (enableAutoSave && !isPreviewQuestion && questionExistsInDB) {
-                  setAutoSaveStatus('unsaved');
-                }
-              }}
-              disabled={disabled}
-              placeholder="Enter table title"
-              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:text-white border-gray-300 dark:border-gray-600"
-            />
-          </div>
+      {/* Configuration - Hidden in simulation mode (disabled with showCorrectAnswer) */}
+      {!disabled && (
+        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Title */}
+            <div className="col-span-full">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Table Title
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (enableAutoSave && !isPreviewQuestion && questionExistsInDB) {
+                    setAutoSaveStatus('unsaved');
+                  }
+                }}
+                disabled={disabled}
+                placeholder="Enter table title"
+                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:text-white border-gray-300 dark:border-gray-600"
+              />
+            </div>
 
-          {/* Dimensions */}
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Rows: {rowCount}
-            </label>
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRemoveRow}
-                disabled={disabled || rowCount <= minRows}
-                title="Remove row"
-              >
-                <Minus className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleAddRow}
-                disabled={disabled || rowCount >= maxRows}
-                title="Add row"
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
+            {/* Dimensions */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Rows: {rowCount}
+              </label>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveRow}
+                  disabled={disabled || rowCount <= minRows}
+                  title="Remove row"
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddRow}
+                  disabled={disabled || rowCount >= maxRows}
+                  title="Add row"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Columns: {colCount}
+              </label>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveColumn}
+                  disabled={disabled || colCount <= minCols}
+                  title="Remove column"
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddColumn}
+                  disabled={disabled || colCount >= maxCols}
+                  title="Add column"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Columns: {colCount}
-            </label>
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRemoveColumn}
-                disabled={disabled || colCount <= minCols}
-                title="Remove column"
-              >
-                <Minus className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleAddColumn}
-                disabled={disabled || colCount >= maxCols}
-                title="Add column"
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
+          {/* Statistics */}
+          <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
+            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-1">
+                <TableIcon className="w-4 h-4" />
+                <span>Cells: {stats.total}</span>
+              </div>
+              <div>Filled: {stats.filled}</div>
+              <div>Empty: {stats.empty}</div>
+              <div>
+                Progress: {stats.total > 0 ? Math.round((stats.filled / stats.total) * 100) : 0}%
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Statistics */}
-        <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
-          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-center gap-1">
-              <TableIcon className="w-4 h-4" />
-              <span>Cells: {stats.total}</span>
-            </div>
-            <div>Filled: {stats.filled}</div>
-            <div>Empty: {stats.empty}</div>
-            <div>
-              Progress: {stats.total > 0 ? Math.round((stats.filled / stats.total) * 100) : 0}%
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Column Headers */}
       {!disabled && (
@@ -800,37 +802,39 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-between gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExportCSV}
-          disabled={disabled || stats.filled === 0}
-        >
-          <Download className="w-4 h-4 mr-1" />
-          Export CSV
-        </Button>
+      {/* Actions - Hidden in simulation mode */}
+      {!disabled && (
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            disabled={disabled || stats.filled === 0}
+          >
+            <Download className="w-4 h-4 mr-1" />
+            Export CSV
+          </Button>
 
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleSave}
-          disabled={disabled}
-        >
-          {saved ? (
-            <>
-              <Check className="w-4 h-4 mr-1 text-green-600" />
-              Saved
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4 mr-1" />
-              Save Table
-            </>
-          )}
-        </Button>
-      </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSave}
+            disabled={disabled}
+          >
+            {saved ? (
+              <>
+                <Check className="w-4 h-4 mr-1 text-green-600" />
+                Saved
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-1" />
+                Save Table
+              </>
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Validation Messages */}
       {!validation.isValid && validation.errors.length > 0 && (

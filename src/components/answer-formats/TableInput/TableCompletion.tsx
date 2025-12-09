@@ -125,8 +125,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   // Determine actual mode: only use explicit isTemplateEditor prop, no fallback
   const isTemplateEditor = isTemplateEditorProp ?? false;
   // isEditingTemplate is separate state that can be toggled in template editor mode
-  // ✅ FIX: Force false when in admin test mode to prevent template editing UI from showing
-  const [isEditingTemplate, setIsEditingTemplate] = useState(isAdminTestMode ? false : isTemplateEditor);
+  // ✅ FIX: Force false when in admin test mode OR student test mode to prevent template editing UI from showing
+  const [isEditingTemplate, setIsEditingTemplate] = useState((isAdminTestMode || isStudentTestMode) ? false : isTemplateEditor);
   const hotRef = useRef<HotTable>(null);
   const [tableData, setTableData] = useState<any[][]>([]);
   const [validation, setValidation] = useState<any>(null);
@@ -278,23 +278,25 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
   const lastLoadedId = useRef<string>(''); // Track last loaded question
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout to reset stuck loading state
 
-  // ✅ FIX: Monitor mode changes and force reset isEditingTemplate when in admin test mode
+  // ✅ FIX: Monitor mode changes and force reset isEditingTemplate when in admin test mode OR student test mode
   useEffect(() => {
     console.log('[TableCompletion] 🎯 Mode change detected:', {
       isAdminTestMode,
+      isStudentTestMode,
       isTemplateEditor,
       currentIsEditingTemplate: isEditingTemplate
     });
 
-    if (isAdminTestMode && isEditingTemplate) {
-      console.log('[TableCompletion] ⚠️ Admin test mode active - forcing isEditingTemplate to false');
+    // Force isEditingTemplate to false when in any test/simulation mode
+    if ((isAdminTestMode || isStudentTestMode) && isEditingTemplate) {
+      console.log('[TableCompletion] ⚠️ Test/simulation mode active - forcing isEditingTemplate to false');
       setIsEditingTemplate(false);
-    } else if (!isAdminTestMode && isTemplateEditor && !isEditingTemplate) {
-      // Restore template editor state when exiting admin test mode
-      console.log('[TableCompletion] ✅ Exiting admin test mode - restoring template editor state');
+    } else if (!isAdminTestMode && !isStudentTestMode && isTemplateEditor && !isEditingTemplate) {
+      // Restore template editor state when exiting test modes
+      console.log('[TableCompletion] ✅ Exiting test mode - restoring template editor state');
       setIsEditingTemplate(isTemplateEditor);
     }
-  }, [isAdminTestMode, isTemplateEditor]);
+  }, [isAdminTestMode, isStudentTestMode, isTemplateEditor]);
 
   useEffect(() => {
     console.log('[TableCompletion] 🔄 useEffect triggered with params:', {
@@ -393,10 +395,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     // PRIORITY 3: If in preview mode (question not saved yet), initialize with defaults
+    // ✅ FIX: Only enable editing if NOT in test/simulation mode
     if (isPreviewQuestion) {
       console.log('[TableCompletion] Preview mode - initializing with defaults');
       initializeDefaultTable();
-      setIsEditingTemplate(true); // Enable editing for preview
+      // Only enable template editing if not in any test/simulation mode
+      if (!isAdminTestMode && !isStudentTestMode) {
+        setIsEditingTemplate(true); // Enable editing for preview
+      }
       return;
     }
 
@@ -1055,8 +1061,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       td.style.borderLeft = '3px solid #9ca3af';
       td.classList.add('locked-cell');
 
-      // Add visual badge for locked cells in admin mode
-      if (isEditingTemplate && !td.querySelector('.cell-badge')) {
+      // Add visual badge for locked cells in admin mode (not in test/simulation modes)
+      if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && !td.querySelector('.cell-badge')) {
         const badge = document.createElement('span');
         badge.className = 'cell-badge';
         badge.innerHTML = '🔒';
@@ -1089,8 +1095,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       td.style.position = 'relative';
       td.classList.add('editable-cell');
 
-      // Add visual badges for editable cells in admin mode
-      if (isEditingTemplate && !td.querySelector('.cell-badges-container')) {
+      // Add visual badges for editable cells in admin mode (not in test/simulation modes)
+      if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && !td.querySelector('.cell-badges-container')) {
         const badgesContainer = document.createElement('div');
         badgesContainer.className = 'cell-badges-container';
         badgesContainer.style.cssText = `
@@ -1197,8 +1203,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         td.appendChild(badgesContainer);
       }
 
-      // Add distinctive border in edit mode
-      if (isEditingTemplate) {
+      // Add distinctive border in edit mode (not in test/simulation modes)
+      if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode) {
         td.style.border = '2px solid #fde047';
       }
     } else {
@@ -1218,8 +1224,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         td.style.fontWeight = '500';
         td.classList.add('locked-cell');
 
-        // Add visual badge for undefined cells in admin mode
-        if (isEditingTemplate && !isLocked && !td.querySelector('.cell-badge')) {
+        // Add visual badge for undefined cells in admin mode (not in test/simulation modes)
+        if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && !isLocked && !td.querySelector('.cell-badge')) {
           const badge = document.createElement('span');
           badge.className = 'cell-badge';
           badge.innerHTML = '🔒';
@@ -1233,7 +1239,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             z-index: 10;
           `;
           td.appendChild(badge);
-        } else if (isEditingTemplate && isLocked && !td.querySelector('.cell-badge')) {
+        } else if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && isLocked && !td.querySelector('.cell-badge')) {
           const badge = document.createElement('span');
           badge.className = 'cell-badge';
           badge.innerHTML = '🔒';
@@ -1251,8 +1257,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
     }
 
-    // Add click handlers for cell selection in edit mode (but not in preview mode)
-    if (isEditingTemplate && !previewMode) {
+    // Add click handlers for cell selection in edit mode (but not in preview mode or test/simulation modes)
+    if (isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
       td.style.cursor = paintModeEnabled ? 'crosshair' : 'pointer';
       td.onclick = () => handleCellClick(row, col);
       td.oncontextmenu = (e: any) => handleCellRightClick(row, col, e);
@@ -2384,8 +2390,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       )}
 
       {/* Template Editor Mode Banner */}
-      {/* ✅ FIX: Hide in admin test mode */}
-      {isEditingTemplate && !isAdminTestMode && (
+      {/* ✅ FIX: Hide in admin test mode and student test mode */}
+      {isEditingTemplate && !isAdminTestMode && !isStudentTestMode && (
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400 rounded-lg">
           <div className="flex items-center gap-2">
             <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -2542,8 +2548,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Preview Question Warning Banner */}
-      {isEditingTemplate && isPreviewQuestion && (
+      {/* Preview Question Warning Banner - Hidden in test/simulation modes */}
+      {isEditingTemplate && isPreviewQuestion && !isAdminTestMode && !isStudentTestMode && (
         <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border-2 border-amber-500 dark:border-amber-400">
           <div className="flex items-center justify-center gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
@@ -2559,8 +2565,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Preview Mode Banner */}
-      {isEditingTemplate && previewMode && !isPreviewQuestion && (
+      {/* Preview Mode Banner - Hidden in test/simulation modes */}
+      {isEditingTemplate && previewMode && !isPreviewQuestion && !isAdminTestMode && !isStudentTestMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-500 dark:border-blue-400">
           <div className="flex items-center justify-center gap-2">
             <TableIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -2571,8 +2577,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Dimension Controls */}
-      {isEditingTemplate && !previewMode && !isAdminTestMode && (
+      {/* Dimension Controls - Hidden in test/simulation modes */}
+      {isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2675,8 +2681,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Header Editor */}
-      {isEditingTemplate && !previewMode && !isAdminTestMode && (
+      {/* Header Editor - Hidden in test/simulation modes */}
+      {isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Column Headers
@@ -2703,8 +2709,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Cell Configuration Panel */}
-      {isEditingTemplate && !previewMode && !isAdminTestMode && (
+      {/* Cell Configuration Panel - Hidden in test/simulation modes */}
+      {isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-300 dark:border-blue-700">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -2943,8 +2949,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Table Metadata Panel */}
-      {isEditingTemplate && !previewMode && !isAdminTestMode && (
+      {/* Table Metadata Panel - Hidden in test/simulation modes */}
+      {isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode && (
         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-300 dark:border-purple-700">
           <div className="flex items-center gap-2 mb-3">
             <TableIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -2987,8 +2993,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Per-Cell Marking Configuration Panel */}
-      {isEditingTemplate && !previewMode && !isAdminTestMode && selectedCells.size > 0 && (
+      {/* Per-Cell Marking Configuration Panel - Hidden in test/simulation modes */}
+      {isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode && selectedCells.size > 0 && (
         <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-300 dark:border-amber-700">
           <div className="flex items-center gap-2 mb-3">
             <Award className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -3220,8 +3226,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Persistent Quick Actions Toolbar */}
-      {isEditingTemplate && selectedCells.size > 0 && (
+      {/* Persistent Quick Actions Toolbar - Hidden in test/simulation modes */}
+      {isEditingTemplate && selectedCells.size > 0 && !isAdminTestMode && !isStudentTestMode && (
         <div className="sticky top-0 z-10 p-3 bg-[#8CC63F] text-white rounded-lg shadow-lg border-2 border-[#7AB62F]">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -3293,8 +3299,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         </div>
       )}
 
-      {/* Template Statistics and Validation */}
-      {isEditingTemplate && !previewMode && (
+      {/* Template Statistics and Validation - Hidden in test/simulation modes */}
+      {isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode && (
         <div className="space-y-2">
           {/* Progress Indicator */}
           <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
@@ -3518,21 +3524,23 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }}
           afterChange={handleAfterChange}
           afterOnCellMouseDown={(event: any, coords: any) => {
-            // Handle column header click (row is -1)
-            if (coords.row === -1 && coords.col >= 0 && isEditingTemplate && !previewMode) {
+            // Handle column header click (row is -1) - Only in template editing mode, not test/simulation
+            if (coords.row === -1 && coords.col >= 0 && isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
               event.stopPropagation();
               handleSelectColumn(coords.col);
             }
           }}
           afterGetRowHeader={(row: number, TH: HTMLTableCellElement) => {
-            if (isEditingTemplate && !previewMode) {
+            // Only enable row selection in template editing mode, not test/simulation
+            if (isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
               TH.style.cursor = 'pointer';
               TH.title = 'Click to select entire row';
               TH.onclick = () => handleSelectRow(row);
             }
           }}
           afterGetColHeader={(col: number, TH: HTMLTableCellElement) => {
-            if (isEditingTemplate && !previewMode) {
+            // Only enable column selection hint in template editing mode, not test/simulation
+            if (isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
               TH.style.cursor = 'pointer';
               TH.title = 'Click to select entire column';
             }
