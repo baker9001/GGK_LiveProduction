@@ -70,32 +70,40 @@ export default function ForgotPasswordPage() {
       );
 
       if (resetError) {
-        console.error('Supabase reset error:', resetError);
-        
-        // If Supabase Auth fails, try legacy approach as fallback
+        console.error('[ForgotPassword] Supabase reset error:', resetError.message);
+
+        // If user not found in Supabase Auth, show a helpful error
+        // Legacy token system is deprecated and no longer sends emails
         if (resetError.message.includes('not found') || resetError.message.includes('User not found')) {
-          // User might not be in Supabase Auth yet, create a legacy token
-          await createLegacyResetToken(userData.id, userData.user_type, email);
+          console.warn('[ForgotPassword] User not found in Supabase Auth');
+          // Still show success to prevent email enumeration attacks
+          // but log for debugging purposes
         } else {
           throw resetError;
         }
       }
 
       // Log the password reset request
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: userData.id,
-          action: 'password_reset_requested',
-          entity_type: 'user',
-          entity_id: userData.id,
-          details: {
-            email: email.toLowerCase(),
-            method: resetError ? 'legacy' : 'supabase_auth',
-            redirect_url: resetRedirectUrl
-          },
-          created_at: new Date().toISOString()
-        });
+      try {
+        await supabase
+          .from('audit_logs')
+          .insert({
+            user_id: userData.id,
+            action: 'password_reset_requested',
+            entity_type: 'user',
+            entity_id: userData.id,
+            details: {
+              email: email.toLowerCase(),
+              method: 'supabase_auth',
+              redirect_url: resetRedirectUrl,
+              success: !resetError
+            },
+            created_at: new Date().toISOString()
+          });
+      } catch (auditError) {
+        // Non-critical - don't fail the reset request if audit logging fails
+        console.warn('[ForgotPassword] Failed to log audit entry:', auditError);
+      }
 
       setSuccess(true);
     } catch (err) {
@@ -108,37 +116,10 @@ export default function ForgotPasswordPage() {
     }
   };
 
-  // Fallback function for legacy reset token creation
-  const createLegacyResetToken = async (userId: string, userType: string, userEmail: string) => {
-    // Generate a secure token
-    const token = crypto.randomUUID() + crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
-
-    // Store the token in your custom table
-    const { error: tokenError } = await supabase
-      .from('password_reset_tokens')
-      .insert({
-        user_id: userId,
-        user_type: userType,
-        token: token,
-        expires_at: expiresAt.toISOString(),
-        created_at: new Date().toISOString(),
-        used: false
-      });
-
-    if (tokenError) {
-      throw tokenError;
-    }
-
-    // TODO: Send email manually with your email service
-    // For now, log the reset URL
-    const siteUrl =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : import.meta.env.PUBLIC_SITE_URL || 'https://ggknowledge.com';
-    console.log('Legacy reset URL:', `${siteUrl}/reset-password?token=${token}`);
-    console.log('Send this to:', userEmail);
-  };
+  // Legacy token system removed - Supabase Auth handles all password resets
+  // The old createLegacyResetToken function was deprecated because:
+  // 1. It didn't actually send emails (only logged to console)
+  // 2. The reset-password page couldn't update auth.users passwords with legacy tokens
 
   if (success) {
     return (
