@@ -159,6 +159,7 @@ interface SubjectSpecificConfig {
 interface AnswerFieldProps {
   question: {
     id: string;
+    sub_question_id?: string; // ✅ Added for table template association with sub-questions
     type: 'mcq' | 'tf' | 'descriptive' | 'complex';
     subject?: string;
     answer_format?: string;
@@ -800,12 +801,48 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     // Table Creator format
     if (format === 'table' || format === 'table_creator') {
       const parsedTable = parseJsonValue<TableCreatorData | null>(value, null);
+
+      // ✅ FIX: Add mode detection similar to table_completion
+      const isTemplateEditing = mode === 'admin' || forceTemplateEditor;
+      const isAdminTesting = mode === 'qa_preview';
+      const isStudentTest = (mode === 'exam' || mode === 'practice') && !isEditing;
+
+      // ✅ FIX: Load template from correct_answers for display during test simulation
+      let correctAnswerData: TableCreatorData | undefined;
+      if (question.correct_answers && question.correct_answers.length > 0) {
+        const firstAnswer = question.correct_answers[0];
+        const templateSource = (firstAnswer as any).answer_text || firstAnswer.answer || null;
+        if (templateSource && typeof templateSource === 'string') {
+          try {
+            const parsed = JSON.parse(templateSource);
+            // Check if it looks like TableCreatorData (has data array)
+            if (parsed && Array.isArray(parsed.data) && parsed.headers) {
+              correctAnswerData = parsed as TableCreatorData;
+              console.log('[DynamicAnswerField] ✅ Loaded table template from correct_answers');
+            }
+          } catch (e) {
+            console.warn('[DynamicAnswerField] Failed to parse table template from correct_answers:', e);
+          }
+        }
+      }
+
       return (
         <TableCreator
           questionId={question.id}
+          subQuestionId={question.sub_question_id}
           value={parsedTable}
           onChange={(data) => onChange(JSON.stringify(data))}
-          disabled={disabled && !isEditing}
+          disabled={(disabled && !isEditing) || isStudentTest}
+          enableAutoSave={true}
+          importSessionId={importSessionId}
+          questionIdentifier={questionIdentifier}
+          showCorrectAnswer={showCorrectAnswer && (isAdminTesting || isStudentTest)}
+          correctAnswerData={correctAnswerData}
+          onTemplateSave={(templateConfig) => {
+            console.log('[DynamicAnswerField] Table template save callback:', templateConfig);
+            question.preview_data = JSON.stringify(templateConfig);
+            onTemplateSave?.(templateConfig);
+          }}
         />
       );
     }
@@ -2174,10 +2211,33 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
     // Table Creator format
     if (format === 'table' || format === 'table_creator') {
+      // ✅ FIX: Add mode detection similar to table_completion
+      const isTemplateEditing = mode === 'admin';
+      const isAdminTesting = mode === 'qa_preview';
+      const isStudentTest = mode === 'exam' || mode === 'practice';
+
+      // ✅ FIX: Load correct answer data from correct_answers for display
+      let correctAnswerData: TableCreatorData | undefined;
+      if (question.correct_answers && question.correct_answers.length > 0) {
+        const firstAnswer = question.correct_answers[0];
+        const templateSource = (firstAnswer as any).answer_text || firstAnswer.answer || null;
+        if (templateSource && typeof templateSource === 'string') {
+          try {
+            const parsed = JSON.parse(templateSource);
+            if (parsed && Array.isArray(parsed.data) && parsed.headers) {
+              correctAnswerData = parsed as TableCreatorData;
+            }
+          } catch (e) {
+            console.warn('[DynamicAnswerField] Failed to parse table from correct_answers:', e);
+          }
+        }
+      }
+
       return (
         <div>
           <TableCreator
             questionId={question.id}
+            subQuestionId={question.sub_question_id}
             value={tableCreatorData}
             onChange={(data) => {
               setTableCreatorData(data);
@@ -2186,7 +2246,16 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               performValidation(data);
             }}
             disabled={disabled}
+            enableAutoSave={true}
+            importSessionId={importSessionId}
+            questionIdentifier={questionIdentifier}
             showCorrectAnswer={showCorrectAnswer}
+            correctAnswerData={correctAnswerData}
+            onTemplateSave={(templateConfig) => {
+              console.log('[DynamicAnswerField] Table template save callback (test sim):', templateConfig);
+              question.preview_data = JSON.stringify(templateConfig);
+              onTemplateSave?.(templateConfig);
+            }}
           />
           {renderCorrectAnswers()}
         </div>
