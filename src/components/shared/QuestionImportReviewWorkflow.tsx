@@ -159,8 +159,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
   const simulationResults = externalSimulationResults;
   const simulationCompleted = externalSimulationCompleted;
-  // Stores the review session ID (from question_import_review_sessions table)
-  // This is different from importSessionId which is the paper import session ID
+  // Stores the import session ID (same as importSessionId - used for review tracking)
   const [localSessionId, setLocalSessionId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
@@ -1802,120 +1801,41 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
         return;
       }
 
-      // Check if there's an existing review session
-      let sessionId: string | null = null;
+      // Use the importSessionId directly (no separate review sessions table)
+      setLocalSessionId(importSessionId);
+      console.log('Using import session for review tracking:', importSessionId);
 
-      if (importSessionId) {
-        try {
-          const { data: existingSession, error: sessionError } = await supabase
-            .from('question_import_review_sessions')
-            .select('*')
-            .eq('paper_import_session_id', importSessionId)
-            .eq('user_id', user.id)
-            .eq('status', 'in_progress')
-            .maybeSingle();
+      // Load existing review statuses for this import session
+      const { data: existingStatuses, error: statusError } = await supabase
+        .from('question_import_review_status')
+        .select('*')
+        .eq('import_session_id', importSessionId);
 
-          if (sessionError) {
-            console.error('Error fetching existing session:', sessionError);
-            throw sessionError;
-          }
-
-          if (existingSession) {
-            console.log('Found existing review session:', existingSession.id);
-            sessionId = existingSession.id;
-            setLocalSessionId(sessionId);
-
-            // Load existing review statuses
-            const { data: existingStatuses, error: statusError } = await supabase
-              .from('question_import_review_status')
-              .select('*')
-              .eq('review_session_id', sessionId);
-
-            if (statusError) {
-              console.error('Error fetching review statuses:', statusError);
-              throw statusError;
-            }
-
-            if (existingStatuses && existingStatuses.length > 0) {
-              const statusMap: Record<string, ReviewStatus> = {};
-              existingStatuses.forEach(status => {
-                statusMap[status.question_identifier] = {
-                  questionId: status.question_identifier,
-                  isReviewed: status.is_reviewed,
-                  reviewedAt: status.reviewed_at,
-                  hasIssues: status.has_issues,
-                  issueCount: status.issue_count,
-                  needsAttention: status.needs_attention
-                };
-              });
-              setReviewStatuses(statusMap);
-              console.log(`Loaded ${existingStatuses.length} existing review statuses`);
-            }
-
-            // Load simulation results if they exist
-            const { data: simResults, error: simError } = await supabase
-              .from('question_import_simulation_results')
-              .select('*')
-              .eq('review_session_id', sessionId)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (simError) {
-              console.warn('Error fetching simulation results (non-critical):', simError);
-            } else if (simResults) {
-              setSimulationResults({
-                totalQuestions: simResults.total_questions,
-                answeredQuestions: simResults.answered_questions,
-                correctAnswers: simResults.correct_answers,
-                partiallyCorrect: simResults.partially_correct,
-                incorrectAnswers: simResults.incorrect_answers,
-                totalMarks: simResults.total_marks,
-                earnedMarks: parseFloat(simResults.earned_marks),
-                percentage: parseFloat(simResults.percentage),
-                timeSpent: simResults.time_spent_seconds,
-                questionResults: simResults.question_results || []
-              });
-              console.log('Loaded simulation results');
-            }
-          }
-        } catch (err) {
-          console.error('Error loading existing session:', err);
-          // Continue to create new session
-        }
+      if (statusError) {
+        console.error('Error fetching review statuses:', statusError);
+        throw statusError;
       }
 
-      // Create new session if needed
-      if (!sessionId && importSessionId) {
-        console.log('Creating new review session...');
-        const { data: newSession, error } = await supabase
-          .from('question_import_review_sessions')
-          .insert({
-            paper_import_session_id: importSessionId,
-            user_id: user.id,
-            total_questions: memoizedQuestions.length,
-            simulation_required: requireSimulation,
-            metadata: {
-              paper_title: paperTitle,
-              paper_duration: paperDuration,
-              total_marks: totalMarks
-            }
-          })
-          .select()
-          .single();
+      if (existingStatuses && existingStatuses.length > 0) {
+        const statusMap: Record<string, ReviewStatus> = {};
+        existingStatuses.forEach(status => {
+          statusMap[status.question_identifier] = {
+            questionId: status.question_identifier,
+            isReviewed: status.is_reviewed,
+            reviewedAt: status.reviewed_at,
+            hasIssues: status.has_issues,
+            issueCount: status.issue_count,
+            needsAttention: status.needs_attention
+          };
+        });
+        setReviewStatuses(statusMap);
+        console.log(`Loaded ${existingStatuses.length} existing review statuses`);
+      } else {
+        // No existing statuses - initialize new ones
+        console.log('Initializing new review statuses for import session...');
 
-        if (error) {
-          console.error('Error creating review session:', error);
-          throw error;
-        }
-
-        sessionId = newSession.id;
-        setLocalSessionId(sessionId);
-        console.log('Created new review session:', sessionId);
-
-        // Initialize review statuses for all questions
         const initialStatuses = memoizedQuestions.map(q => ({
-          review_session_id: sessionId,
+          import_session_id: importSessionId,
           question_identifier: q.id,
           question_number: q.question_number,
           question_data: q,
@@ -1925,13 +1845,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           validation_status: 'pending'
         }));
 
-        const { error: statusError } = await supabase
+        const { error: insertError } = await supabase
           .from('question_import_review_status')
           .insert(initialStatuses);
 
-        if (statusError) {
-          console.error('Error inserting review statuses:', statusError);
-          throw statusError;
+        if (insertError) {
+          console.error('Error inserting review statuses:', insertError);
+          throw insertError;
         }
 
         // Initialize local state
@@ -1947,6 +1867,33 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
         });
         setReviewStatuses(statusMap);
         console.log(`Initialized ${memoizedQuestions.length} review statuses`);
+      }
+
+      // Load simulation results if they exist
+      const { data: simResults, error: simError } = await supabase
+        .from('question_import_simulation_results')
+        .select('*')
+        .eq('import_session_id', importSessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (simError) {
+        console.warn('Error fetching simulation results (non-critical):', simError);
+      } else if (simResults) {
+        setSimulationResults({
+          totalQuestions: simResults.total_questions,
+          answeredQuestions: simResults.answered_questions,
+          correctAnswers: simResults.correct_answers,
+          partiallyCorrect: simResults.partially_correct,
+          incorrectAnswers: simResults.incorrect_answers,
+          totalMarks: simResults.total_marks,
+          earnedMarks: parseFloat(simResults.earned_marks),
+          percentage: parseFloat(simResults.percentage),
+          timeSpent: simResults.time_spent_seconds,
+          questionResults: simResults.question_results || []
+        });
+        console.log('Loaded simulation results');
       }
 
       // Mark as initialized
@@ -1978,7 +1925,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: newReviewedState ? new Date().toISOString() : null,
           reviewed_by: newReviewedState ? (await supabase.auth.getUser()).data.user?.id : null
         })
-        .eq('review_session_id', localSessionId)
+        .eq('import_session_id', localSessionId)
         .eq('question_identifier', questionId);
 
       if (error) throw error;
@@ -2038,7 +1985,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           reviewed_at: now,
           reviewed_by: reviewerId,
         })
-        .eq('review_session_id', localSessionId)
+        .eq('import_session_id', localSessionId)
         .in('question_identifier', unreviewedQuestionIds);
 
       if (error) {
@@ -2119,7 +2066,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       const { error } = await supabase
         .from('question_import_simulation_results')
         .insert({
-          review_session_id: localSessionId,
+          import_session_id: localSessionId,
           user_id: user.id,
           simulation_completed_at: new Date().toISOString(),
           total_questions: results.totalQuestions,
@@ -2138,9 +2085,9 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
       if (error) throw error;
 
-      // Update review session
+      // Update import session with simulation results
       await supabase
-        .from('question_import_review_sessions')
+        .from('past_paper_import_sessions')
         .update({
           simulation_completed: true,
           simulation_passed: results.percentage >= 70,
