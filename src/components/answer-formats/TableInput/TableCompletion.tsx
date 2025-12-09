@@ -395,10 +395,14 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     }
 
     // PRIORITY 3: If in preview mode (question not saved yet), initialize with defaults
+    // ✅ FIX: Only enable editing if NOT in test/simulation mode
     if (isPreviewQuestion) {
       console.log('[TableCompletion] Preview mode - initializing with defaults');
       initializeDefaultTable();
-      setIsEditingTemplate(true); // Enable editing for preview
+      // Only enable template editing if not in any test/simulation mode
+      if (!isAdminTestMode && !isStudentTestMode) {
+        setIsEditingTemplate(true); // Enable editing for preview
+      }
       return;
     }
 
@@ -1057,8 +1061,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       td.style.borderLeft = '3px solid #9ca3af';
       td.classList.add('locked-cell');
 
-      // Add visual badge for locked cells in admin mode
-      if (isEditingTemplate && !td.querySelector('.cell-badge')) {
+      // Add visual badge for locked cells in admin mode (not in test/simulation modes)
+      if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && !td.querySelector('.cell-badge')) {
         const badge = document.createElement('span');
         badge.className = 'cell-badge';
         badge.innerHTML = '🔒';
@@ -1091,8 +1095,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       td.style.position = 'relative';
       td.classList.add('editable-cell');
 
-      // Add visual badges for editable cells in admin mode
-      if (isEditingTemplate && !td.querySelector('.cell-badges-container')) {
+      // Add visual badges for editable cells in admin mode (not in test/simulation modes)
+      if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && !td.querySelector('.cell-badges-container')) {
         const badgesContainer = document.createElement('div');
         badgesContainer.className = 'cell-badges-container';
         badgesContainer.style.cssText = `
@@ -1199,8 +1203,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         td.appendChild(badgesContainer);
       }
 
-      // Add distinctive border in edit mode
-      if (isEditingTemplate) {
+      // Add distinctive border in edit mode (not in test/simulation modes)
+      if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode) {
         td.style.border = '2px solid #fde047';
       }
     } else {
@@ -1220,8 +1224,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
         td.style.fontWeight = '500';
         td.classList.add('locked-cell');
 
-        // Add visual badge for undefined cells in admin mode
-        if (isEditingTemplate && !isLocked && !td.querySelector('.cell-badge')) {
+        // Add visual badge for undefined cells in admin mode (not in test/simulation modes)
+        if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && !isLocked && !td.querySelector('.cell-badge')) {
           const badge = document.createElement('span');
           badge.className = 'cell-badge';
           badge.innerHTML = '🔒';
@@ -1235,7 +1239,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
             z-index: 10;
           `;
           td.appendChild(badge);
-        } else if (isEditingTemplate && isLocked && !td.querySelector('.cell-badge')) {
+        } else if (isEditingTemplate && !isAdminTestMode && !isStudentTestMode && isLocked && !td.querySelector('.cell-badge')) {
           const badge = document.createElement('span');
           badge.className = 'cell-badge';
           badge.innerHTML = '🔒';
@@ -1253,8 +1257,8 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       }
     }
 
-    // Add click handlers for cell selection in edit mode (but not in preview mode)
-    if (isEditingTemplate && !previewMode) {
+    // Add click handlers for cell selection in edit mode (but not in preview mode or test/simulation modes)
+    if (isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
       td.style.cursor = paintModeEnabled ? 'crosshair' : 'pointer';
       td.onclick = () => handleCellClick(row, col);
       td.oncontextmenu = (e: any) => handleCellRightClick(row, col, e);
@@ -3520,21 +3524,23 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
           }}
           afterChange={handleAfterChange}
           afterOnCellMouseDown={(event: any, coords: any) => {
-            // Handle column header click (row is -1)
-            if (coords.row === -1 && coords.col >= 0 && isEditingTemplate && !previewMode) {
+            // Handle column header click (row is -1) - Only in template editing mode, not test/simulation
+            if (coords.row === -1 && coords.col >= 0 && isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
               event.stopPropagation();
               handleSelectColumn(coords.col);
             }
           }}
           afterGetRowHeader={(row: number, TH: HTMLTableCellElement) => {
-            if (isEditingTemplate && !previewMode) {
+            // Only enable row selection in template editing mode, not test/simulation
+            if (isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
               TH.style.cursor = 'pointer';
               TH.title = 'Click to select entire row';
               TH.onclick = () => handleSelectRow(row);
             }
           }}
           afterGetColHeader={(col: number, TH: HTMLTableCellElement) => {
-            if (isEditingTemplate && !previewMode) {
+            // Only enable column selection hint in template editing mode, not test/simulation
+            if (isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
               TH.style.cursor = 'pointer';
               TH.title = 'Click to select entire column';
             }
