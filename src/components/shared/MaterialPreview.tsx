@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Download, ZoomIn, ZoomOut, RotateCw, ChevronLeft, ChevronRight, FileText, Music, Video, Image as ImageIcon, File } from 'lucide-react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { ProtectedVideoPlayer } from './ProtectedVideoPlayer';
 import { WordDocumentViewer } from '../viewers/WordDocumentViewer';
+import { EnhancedDocxViewer } from '../viewers/EnhancedDocxViewer';
+import { ExcelViewer } from '../viewers/ExcelViewer';
 import { EnhancedAudioPlayer } from '../viewers/EnhancedAudioPlayer';
 import { detectFileType } from '../../lib/utils/fileTypeDetector';
+import { MaterialFileService } from '../../services/materialFileService';
 
 // Configure PDF.js worker for version 5.x
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -36,19 +39,58 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
   const [rotation, setRotation] = useState(0);
   const [imageScale, setImageScale] = useState(1);
   const [pdfError, setPdfError] = useState(false);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [urlLoading, setUrlLoading] = useState(false);
 
   if (!isOpen) return null;
 
   // Reset states when modal opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setPageNumber(1);
       setScale(1.0);
       setRotation(0);
       setImageScale(1);
       setPdfError(false);
+      setSignedUrl(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const generateSignedUrl = async () => {
+      if (!isOpen || !fileUrl || fileUrl.startsWith('http')) {
+        setSignedUrl(fileUrl);
+        return;
+      }
+
+      const needsSigned = MaterialFileService.needsSignedUrl(
+        MaterialFileService.getFileTypeFromMimeType(mimeType)
+      );
+
+      if (!needsSigned) {
+        setSignedUrl(fileUrl);
+        return;
+      }
+
+      try {
+        setUrlLoading(true);
+        const result = await MaterialFileService.getSignedUrl(fileUrl);
+        if (!result.error) {
+          setSignedUrl(result.url);
+        } else {
+          console.error('Error generating signed URL:', result.error);
+          setSignedUrl(fileUrl);
+        }
+      } catch (error) {
+        console.error('Exception generating signed URL:', error);
+        setSignedUrl(fileUrl);
+      } finally {
+        setUrlLoading(false);
+      }
+    };
+
+    generateSignedUrl();
+  }, [isOpen, fileUrl, mimeType]);
 
   const getFileIcon = () => {
     if (fileType === 'video' || mimeType?.startsWith('video/')) return <Video className="h-16 w-16" />;
@@ -135,8 +177,8 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
           </div>
           {/* Image Display */}
           <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-gray-100 dark:bg-gray-900">
-            <img 
-              src={fileUrl} 
+            <img
+              src={signedUrl || fileUrl}
               alt={title}
               className="max-w-full max-h-full object-contain transition-transform duration-300"
               style={{
@@ -227,7 +269,7 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
           {/* PDF Display */}
           <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-gray-100 dark:bg-gray-900">
             <Document
-              file={fileUrl}
+              file={signedUrl || fileUrl}
               onLoadSuccess={({ numPages }) => setNumPages(numPages)}
               onLoadError={(error) => {
                 console.error('PDF load error:', error);
@@ -246,8 +288,8 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
               }
               className="flex justify-center"
             >
-              <Page 
-                pageNumber={pageNumber} 
+              <Page
+                pageNumber={pageNumber}
                 scale={scale}
                 rotate={rotation}
                 renderTextLayer={true}
@@ -260,46 +302,62 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       );
     }
 
-    // Word documents - Use enhanced Word viewer
+    // Word documents - Use enhanced DOCX viewer
     if (
       mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       mimeType === 'application/msword' ||
       mimeType === 'application/vnd.oasis.opendocument.text'
     ) {
       return (
-        <WordDocumentViewer
+        <EnhancedDocxViewer
           fileUrl={fileUrl}
           title={title}
-          onError={(error) => console.error('Word viewer error:', error)}
+          onError={(error) => console.error('DOCX viewer error:', error)}
         />
       );
     }
 
-    // Excel and PowerPoint documents - Use Office Online Viewer
+    // Excel documents - Use enhanced Excel viewer
     if (
       mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       mimeType === 'application/vnd.ms-excel' ||
+      mimeType === 'application/vnd.oasis.opendocument.spreadsheet'
+    ) {
+      return (
+        <ExcelViewer
+          fileUrl={fileUrl}
+          title={title}
+          onError={(error) => console.error('Excel viewer error:', error)}
+        />
+      );
+    }
+
+    // PowerPoint documents - Not yet supported with custom viewer
+    if (
       mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
       mimeType === 'application/vnd.ms-powerpoint' ||
-      mimeType === 'application/vnd.oasis.opendocument.spreadsheet' ||
       mimeType === 'application/vnd.oasis.opendocument.presentation'
     ) {
-      const encodedUrl = encodeURIComponent(fileUrl);
       return (
-        <div className="h-full flex flex-col">
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-b dark:border-gray-700">
-            <p className="text-sm text-blue-800 dark:text-blue-300">
-              Document preview powered by Microsoft Office Online
+        <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
+          <div className="text-center p-8 max-w-md">
+            <div className="mb-6 text-gray-400">
+              <FileText className="h-16 w-16 mx-auto" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+              PowerPoint Preview
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              PowerPoint presentations can be downloaded for viewing.
             </p>
+            <button
+              onClick={() => MaterialFileService.downloadFile(fileUrl, title)}
+              className="inline-flex items-center justify-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download Presentation
+            </button>
           </div>
-          <iframe
-            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`}
-            className="flex-1 w-full bg-white"
-            frameBorder="0"
-            title="Office Document Viewer"
-          >
-            This browser does not support Office document preview.
-          </iframe>
         </div>
       );
     }
@@ -358,22 +416,13 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
           {/* Only show download options for non-video content */}
           {fileType !== 'video' && !mimeType?.startsWith('video/') ? (
             <div className="space-y-3">
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Open in New Tab
-              </a>
-              <a
-                href={fileUrl}
-                download
+              <button
+                onClick={() => MaterialFileService.downloadFile(fileUrl, title)}
                 className="inline-flex items-center justify-center w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download File
-              </a>
+              </button>
             </div>
           ) : (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
@@ -410,14 +459,13 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
           <div className="flex items-center space-x-2 ml-4">
             {/* Only show download button for non-video materials */}
             {fileType !== 'video' && !mimeType?.startsWith('video/') && (
-              <a
-                href={fileUrl}
-                download
+              <button
+                onClick={() => MaterialFileService.downloadFile(fileUrl, title)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 title="Download"
               >
                 <Download className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-              </a>
+              </button>
             )}
             <button
               onClick={onClose}

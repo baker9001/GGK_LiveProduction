@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import mammoth from 'mammoth';
 import { FileText, Download, AlertCircle, Loader2 } from 'lucide-react';
+import { fetchWithAuth, AuthenticatedFetchError } from '../../lib/utils/authenticatedFetch';
+import { MaterialFileService } from '../../services/materialFileService';
 
 interface WordDocumentViewerProps {
   fileUrl: string;
@@ -27,12 +29,19 @@ export const WordDocumentViewer: React.FC<WordDocumentViewerProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch(fileUrl);
-      if (!response.ok) {
-        throw new Error('Failed to fetch document');
+      let urlToFetch = fileUrl;
+
+      if (!fileUrl.startsWith('http')) {
+        const signedUrlResult = await MaterialFileService.getDocumentSignedUrl(fileUrl);
+
+        if (signedUrlResult.error) {
+          throw new Error(signedUrlResult.error);
+        }
+
+        urlToFetch = signedUrlResult.url;
       }
 
-      const arrayBuffer = await response.arrayBuffer();
+      const arrayBuffer = await fetchWithAuth(urlToFetch);
 
       const result = await mammoth.convertToHtml(
         { arrayBuffer },
@@ -64,10 +73,19 @@ export const WordDocumentViewer: React.FC<WordDocumentViewerProps> = ({
       setLoading(false);
     } catch (err) {
       console.error('Error loading Word document:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load document';
+
+      let errorMessage = 'Failed to load document';
+
+      if (err instanceof AuthenticatedFetchError) {
+        errorMessage = err.message;
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+
       setError(errorMessage);
-      setUseFallback(true);
+      setUseFallback(false);
       setLoading(false);
+
       if (onError) {
         onError(errorMessage);
       }
@@ -84,36 +102,16 @@ export const WordDocumentViewer: React.FC<WordDocumentViewerProps> = ({
     );
   }
 
-  if (useFallback) {
-    const encodedUrl = encodeURIComponent(fileUrl);
-    return (
-      <div className="h-full flex flex-col">
-        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border-b dark:border-gray-700">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-                Native viewer unavailable
-              </p>
-              <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                Using Microsoft Office Online viewer as fallback
-              </p>
-            </div>
-          </div>
-        </div>
-        <iframe
-          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`}
-          className="flex-1 w-full bg-white"
-          frameBorder="0"
-          title="Word Document Viewer"
-        >
-          This browser does not support document preview.
-        </iframe>
-      </div>
-    );
-  }
 
-  if (error && !useFallback) {
+  if (error) {
+    const handleDownload = async () => {
+      try {
+        await MaterialFileService.downloadFile(fileUrl, title);
+      } catch (error) {
+        console.error('Download failed:', error);
+      }
+    };
+
     return (
       <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-gray-900 p-8">
         <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
@@ -130,14 +128,13 @@ export const WordDocumentViewer: React.FC<WordDocumentViewerProps> = ({
           >
             Try Again
           </button>
-          <a
-            href={fileUrl}
-            download
+          <button
+            onClick={handleDownload}
             className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors inline-flex items-center gap-2"
           >
             <Download className="h-4 w-4" />
             Download
-          </a>
+          </button>
         </div>
       </div>
     );

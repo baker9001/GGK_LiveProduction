@@ -17,6 +17,7 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { FilePreviewModal } from '../../../../components/shared/FilePreviewModal';
 import { toast } from '../../../../components/shared/Toast';
 import { detectFileType, getMimeTypeFromExtension, formatFileSize as utilFormatFileSize, getMaxFileSizeForType } from '../../../../lib/utils/fileTypeDetector';
+import { MaterialFileService } from '../../../../services/materialFileService';
 
 const materialSchema = z.object({
   title: z.string().min(2, 'Title must be at least 2 characters'),
@@ -272,12 +273,6 @@ export default function MaterialManagementPage() {
       if (error) throw error;
 
       const formattedData = data.map(material => {
-        // Generate public URL for each material
-        const { data: urlData } = supabase.storage
-          .from('materials_files')
-          .getPublicUrl(material.file_path);
-
-        // Preserve the storage path while generating a public URL for display purposes
         const thumbnailStoragePath = material.thumbnail_url;
         let thumbnailPublicUrl = null;
         if (thumbnailStoragePath) {
@@ -289,7 +284,7 @@ export default function MaterialManagementPage() {
 
         return {
           ...material,
-          file_url: urlData.publicUrl,
+          file_url: material.file_path,
           thumbnail_public_url: thumbnailPublicUrl,
           thumbnail_url: thumbnailStoragePath,
           data_structure_name: `${material.data_structures?.regions?.name || 'Unknown'} - ${material.data_structures?.programs?.name || 'Unknown'} - ${material.data_structures?.providers?.name || 'Unknown'} - ${material.data_structures?.edu_subjects?.name || 'Unknown'}`,
@@ -482,10 +477,7 @@ export default function MaterialManagementPage() {
         }
 
         filePath = await handleFileUpload(uploadedFile);
-        const { data } = supabase.storage
-          .from('materials_files')
-          .getPublicUrl(filePath);
-        fileUrl = data.publicUrl;
+        fileUrl = filePath;
       }
 
       // Handle thumbnail upload
@@ -660,10 +652,16 @@ export default function MaterialManagementPage() {
   };
 
   const getFileUrl = (filePath: string) => {
-    const { data } = supabase.storage
-      .from('materials_files')
-      .getPublicUrl(filePath); 
-    return data.publicUrl;
+    return filePath;
+  };
+
+  const handleDownload = async (filePath: string, fileName: string) => {
+    try {
+      await MaterialFileService.downloadFile(filePath, fileName);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      toast.error('Failed to download file');
+    }
   };
 
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -884,14 +882,13 @@ export default function MaterialManagementPage() {
       </button>
       {/* Hide download button for videos - security requirement */}
       {row.type !== 'video' && (
-        <a
-          href={getFileUrl(row.file_path)}
-          download
+        <button
+          onClick={() => handleDownload(row.file_path, row.title)}
           className="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 p-1 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors"
           title="Download"
         >
           <Download className="h-4 w-4" />
-        </a>
+        </button>
       )}
       {row.type === 'video' && (
         <span className="text-xs text-gray-500 dark:text-gray-400 italic px-2">
