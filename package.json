@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "test": "node tests/runQuestionsDataOperationsTests.cjs",
     "preview": "vite preview",
-    "seed-test-users": "node scripts/runSeedTestUsers.js"
+    "seed-test-users": "node scripts/runSeedTestUsers.js",
+    "diagnose-email": "node scripts/diagnose-email-issue.mjs",
+    "test-password-reset": "node scripts/test-password-reset-email.mjs"
   },
   "dependencies": {
     "@handsontable/react": "^14.1.0",
