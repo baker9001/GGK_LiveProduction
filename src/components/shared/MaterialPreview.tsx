@@ -4,6 +4,9 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { ProtectedVideoPlayer } from './ProtectedVideoPlayer';
+import { WordDocumentViewer } from '../viewers/WordDocumentViewer';
+import { EnhancedAudioPlayer } from '../viewers/EnhancedAudioPlayer';
+import { detectFileType } from '../../lib/utils/fileTypeDetector';
 
 // Configure PDF.js worker for version 5.x
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -76,33 +79,15 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       );
     }
 
-    // Audio files
+    // Audio files - Use Enhanced Audio Player
     if (fileType === 'audio' || mimeType?.startsWith('audio/')) {
       return (
-        <div className="flex items-center justify-center h-full">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 shadow-xl max-w-md w-full">
-            <div className="mb-6">
-              <div className="w-32 h-32 mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center animate-pulse">
-                <Music className="h-16 w-16 text-white" />
-              </div>
-            </div>
-            <h3 className="text-center text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              {title}
-            </h3>
-            <audio 
-              controls 
-              className="w-full"
-              controlsList="nodownload"
-              autoPlay={false}
-            >
-              <source src={fileUrl} type={mimeType || 'audio/mpeg'} />
-              Your browser does not support audio playback.
-            </audio>
-            <div className="mt-4 flex justify-center">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Audio Player</span>
-            </div>
-          </div>
-        </div>
+        <EnhancedAudioPlayer
+          fileUrl={fileUrl}
+          title={title}
+          mimeType={mimeType}
+          autoPlay={false}
+        />
       );
     }
 
@@ -275,22 +260,36 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       );
     }
 
-    // Microsoft Office documents (Word, Excel, PowerPoint)
+    // Word documents - Use enhanced Word viewer
     if (
       mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       mimeType === 'application/msword' ||
+      mimeType === 'application/vnd.oasis.opendocument.text'
+    ) {
+      return (
+        <WordDocumentViewer
+          fileUrl={fileUrl}
+          title={title}
+          onError={(error) => console.error('Word viewer error:', error)}
+        />
+      );
+    }
+
+    // Excel and PowerPoint documents - Use Office Online Viewer
+    if (
       mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       mimeType === 'application/vnd.ms-excel' ||
       mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-      mimeType === 'application/vnd.ms-powerpoint'
+      mimeType === 'application/vnd.ms-powerpoint' ||
+      mimeType === 'application/vnd.oasis.opendocument.spreadsheet' ||
+      mimeType === 'application/vnd.oasis.opendocument.presentation'
     ) {
-      // Use Microsoft Office Online Viewer
       const encodedUrl = encodeURIComponent(fileUrl);
       return (
         <div className="h-full flex flex-col">
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-b dark:border-gray-700">
             <p className="text-sm text-blue-800 dark:text-blue-300">
-              Microsoft Office document preview powered by Office Online
+              Document preview powered by Microsoft Office Online
             </p>
           </div>
           <iframe

@@ -14,7 +14,9 @@ import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { MaterialPreview } from '../../../../components/shared/MaterialPreview';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
+import { FilePreviewModal } from '../../../../components/shared/FilePreviewModal';
 import { toast } from '../../../../components/shared/Toast';
+import { detectFileType, getMimeTypeFromExtension, formatFileSize as utilFormatFileSize, getMaxFileSizeForType } from '../../../../lib/utils/fileTypeDetector';
 
 const materialSchema = z.object({
   title: z.string().min(2, 'Title must be at least 2 characters'),
@@ -117,6 +119,8 @@ export default function MaterialManagementPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [materialsToDelete, setMaterialsToDelete] = useState<Material[]>([]);
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const [formState, setFormState] = useState<FormState>({
     title: '',
@@ -459,12 +463,15 @@ export default function MaterialManagementPage() {
       let thumbnailPath = editingMaterial?.thumbnail_url || null;
 
       if (uploadedFile) {
-        mimeType = uploadedFile.type || getMimeTypeFromExtension(uploadedFile.name);
+        const fileTypeInfo = detectFileType(uploadedFile.name, uploadedFile.type);
+        mimeType = fileTypeInfo.mimeType;
         fileSize = uploadedFile.size;
 
         console.log('File details before upload:', {
           name: uploadedFile.name,
           type: mimeType,
+          category: fileTypeInfo.category,
+          viewerType: fileTypeInfo.viewerType,
           size: fileSize
         });
 
@@ -659,15 +666,32 @@ export default function MaterialManagementPage() {
     return data.publicUrl;
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+
+    const maxSize = getMaxFileSizeForType(formState.type);
+    if (file.size > maxSize) {
+      toast.error(`File size exceeds maximum allowed (${utilFormatFileSize(maxSize)})`);
+      return;
+    }
+
+    setPendingFile(file);
+    setShowFilePreview(true);
   };
 
-  const getMimeTypeFromExtension = (filename: string): string => {
+  const confirmFileUpload = () => {
+    if (pendingFile) {
+      setUploadedFile(pendingFile);
+      setPendingFile(null);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    return utilFormatFileSize(bytes);
+  };
+
+  const getMimeTypeFromExtensionOld = (filename: string): string => {
     const extension = filename.split('.').pop()?.toLowerCase() || '';
     const mimeTypes: Record<string, string> = {
       // Video
@@ -1145,7 +1169,7 @@ export default function MaterialManagementPage() {
                 type="file"
                 id="file"
                 accept={ALL_ACCEPTED_TYPES}
-                onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
+                onChange={handleFileSelection}
                 className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -1249,6 +1273,18 @@ export default function MaterialManagementPage() {
           onClose={() => setPreviewMaterial(null)}
         />
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        isOpen={showFilePreview}
+        onClose={() => {
+          setShowFilePreview(false);
+          setPendingFile(null);
+        }}
+        file={pendingFile}
+        onConfirm={confirmFileUpload}
+        maxFileSize={getMaxFileSizeForType(formState.type)}
+      />
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog
