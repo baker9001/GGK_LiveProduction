@@ -16,8 +16,13 @@ import { MaterialPreview } from '../../../../components/shared/MaterialPreview';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { FilePreviewModal } from '../../../../components/shared/FilePreviewModal';
 import { toast } from '../../../../components/shared/Toast';
+import { MaterialTypeSelector } from '../../../../components/shared/MaterialTypeSelector';
+import { DragDropFileUpload } from '../../../../components/shared/DragDropFileUpload';
 import { detectFileType, getMimeTypeFromExtension, formatFileSize as utilFormatFileSize, getMaxFileSizeForType } from '../../../../lib/utils/fileTypeDetector';
 import { MaterialFileService } from '../../../../services/materialFileService';
+
+const MATERIAL_TYPES = ['video', 'document', 'ebook', 'audio', 'assignment', 'interactive'] as const;
+type MaterialType = typeof MATERIAL_TYPES[number];
 
 const materialSchema = z.object({
   title: z.string().min(2, 'Title must be at least 2 characters'),
@@ -26,7 +31,7 @@ const materialSchema = z.object({
   unit_id: z.union([z.string().uuid('Please select a valid unit'), z.literal('')]).nullable().optional(),
   topic_id: z.union([z.string().uuid('Please select a valid topic'), z.literal('')]).nullable().optional(),
   subtopic_id: z.union([z.string().uuid('Please select a valid subtopic'), z.literal('')]).nullable().optional(),
-  type: z.enum(['video', 'ebook', 'audio', 'assignment']),
+  type: z.enum(MATERIAL_TYPES),
   status: z.enum(['active', 'inactive'])
 });
 
@@ -36,7 +41,7 @@ type Material = {
   description: string | null;
   data_structure_id: string;
   subtopic_id: string | null;
-  type: 'video' | 'ebook' | 'audio' | 'assignment';
+  type: MaterialType;
   file_path: string;
   file_url: string;
   mime_type: string;
@@ -85,19 +90,19 @@ interface FormState {
   unit_id: string;
   topic_id: string;
   subtopic_id: string;
-  type: 'video' | 'ebook' | 'audio' | 'assignment';
+  type: MaterialType;
   status: 'active' | 'inactive';
 }
 
-// Extended file type support
-const ACCEPTED_FILE_TYPES = {
+const ACCEPTED_FILE_TYPES: Record<string, string[]> = {
   video: ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv'],
   audio: ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.wma', '.flac'],
-  document: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp'],
+  document: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp', '.rtf'],
   image: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'],
   text: ['.txt', '.json', '.csv', '.md', '.xml', '.html', '.css', '.js'],
   ebook: ['.pdf', '.epub', '.mobi', '.azw', '.azw3'],
-  assignment: ['.pdf', '.doc', '.docx', '.txt', '.md']
+  assignment: ['.pdf', '.doc', '.docx', '.txt', '.md', '.xls', '.xlsx'],
+  interactive: ['.html', '.zip', '.json']
 };
 
 const ALL_ACCEPTED_TYPES = Object.values(ACCEPTED_FILE_TYPES).flat().join(',');
@@ -744,24 +749,29 @@ export default function MaterialManagementPage() {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'video': return '🎥';
+      case 'document': return '📄';
       case 'ebook': return '📚';
       case 'audio': return '🎵';
       case 'assignment': return '📝';
+      case 'interactive': return '🎮';
       default: return '📄';
     }
   };
 
-  // Helper function to get file type hints based on selection
   const getFileTypeHints = (type: string) => {
     switch (type) {
       case 'video':
         return 'Supported: MP4, WebM, OGG, MOV, AVI (Max 500MB)';
+      case 'document':
+        return 'Supported: PDF, Word, Excel, PowerPoint, ODT (Max 100MB)';
       case 'audio':
         return 'Supported: MP3, WAV, OGG, M4A, AAC (Max 100MB)';
       case 'ebook':
-        return 'Supported: PDF, EPUB, MOBI, DOC, DOCX (Max 100MB)';
+        return 'Supported: PDF, EPUB, MOBI (Max 100MB)';
       case 'assignment':
         return 'Supported: PDF, DOC, DOCX, TXT, MD, XLS, XLSX (Max 50MB)';
+      case 'interactive':
+        return 'Supported: HTML, ZIP packages, JSON configs (Max 100MB)';
       default:
         return 'Supported: Most common file formats (Max 100MB)';
     }
@@ -975,9 +985,11 @@ export default function MaterialManagementPage() {
             label="Type"
             options={[
               { value: 'video', label: 'Video' },
+              { value: 'document', label: 'Document' },
               { value: 'ebook', label: 'E-book' },
               { value: 'audio', label: 'Audio' },
-              { value: 'assignment', label: 'Assignment' }
+              { value: 'assignment', label: 'Assignment' },
+              { value: 'interactive', label: 'Interactive' }
             ]}
             selectedValues={filters.types}
             onChange={(values) => setFilters({ ...filters, types: values })}
@@ -1135,57 +1147,27 @@ export default function MaterialManagementPage() {
             />
           </FormField>
 
-          <FormField
-            id="type"
-            label="Type"
-            required
+          <MaterialTypeSelector
+            selectedType={formState.type}
+            onTypeChange={(type) => setFormState(prev => ({ ...prev, type }))}
             error={formErrors.type}
-          >
-            <Select
-              id="type"
-              name="type"
-              options={[
-                { value: 'video', label: 'Video' },
-                { value: 'ebook', label: 'E-book' },
-                { value: 'audio', label: 'Audio' },
-                { value: 'assignment', label: 'Assignment' }
-              ]}
-              value={formState.type}
-              onChange={(value) => setFormState(prev => ({ ...prev, type: value as any }))}
-            />
-          </FormField>
+            disabled={uploading}
+          />
 
-          <FormField
-            id="file"
-            label={editingMaterial ? "Replace File (Optional)" : "File"}
-            required={!editingMaterial}
+          <DragDropFileUpload
+            onFileSelect={(file) => {
+              setPendingFile(file);
+              setShowFilePreview(true);
+            }}
+            acceptedTypes={ACCEPTED_FILE_TYPES[formState.type] || []}
+            maxSize={getMaxFileSizeForType(formState.type)}
+            selectedFile={uploadedFile}
+            onClear={() => setUploadedFile(null)}
             error={formErrors.file}
-          >
-            <div className="space-y-2">
-              <input
-                type="file"
-                id="file"
-                accept={ALL_ACCEPTED_TYPES}
-                onChange={handleFileSelection}
-                className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {getFileTypeHints(formState.type)}
-              </p>
-              {editingMaterial && !uploadedFile && (
-                <p className="text-xs text-green-600 dark:text-green-400">
-                  Current file: {editingMaterial.file_path.split('/').pop()}
-                </p>
-              )}
-              {uploadedFile && (
-                <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
-                  <p>Selected: {uploadedFile.name}</p>
-                  <p>Size: {formatFileSize(uploadedFile.size)}</p>
-                  <p>Type: {uploadedFile.type || 'Unknown'}</p>
-                </div>
-              )}
-            </div>
-          </FormField>
+            disabled={uploading}
+            materialType={formState.type}
+            existingFileName={editingMaterial ? editingMaterial.file_path.split('/').pop() : undefined}
+          />
 
           <FormField
             id="thumbnail"

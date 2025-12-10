@@ -8,6 +8,8 @@ import { WordDocumentViewer } from '../viewers/WordDocumentViewer';
 import { EnhancedDocxViewer } from '../viewers/EnhancedDocxViewer';
 import { ExcelViewer } from '../viewers/ExcelViewer';
 import { EnhancedAudioPlayer } from '../viewers/EnhancedAudioPlayer';
+import { PowerPointViewer } from '../viewers/PowerPointViewer';
+import { EpubViewer } from '../viewers/EpubViewer';
 import { detectFileType } from '../../lib/utils/fileTypeDetector';
 import { MaterialFileService } from '../../services/materialFileService';
 
@@ -332,42 +334,46 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       );
     }
 
-    // PowerPoint documents - Not yet supported with custom viewer
+    // PowerPoint documents - Use enhanced PowerPoint viewer
     if (
       mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
       mimeType === 'application/vnd.ms-powerpoint' ||
       mimeType === 'application/vnd.oasis.opendocument.presentation'
     ) {
       return (
-        <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
-          <div className="text-center p-8 max-w-md">
-            <div className="mb-6 text-gray-400">
-              <FileText className="h-16 w-16 mx-auto" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
-              PowerPoint Preview
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              PowerPoint presentations can be downloaded for viewing.
-            </p>
-            <button
-              onClick={() => MaterialFileService.downloadFile(fileUrl, title)}
-              className="inline-flex items-center justify-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download Presentation
-            </button>
-          </div>
-        </div>
+        <PowerPointViewer
+          fileUrl={fileUrl}
+          title={title}
+          onError={(error) => console.error('PowerPoint viewer error:', error)}
+        />
+      );
+    }
+
+    // EPUB/MOBI e-book files
+    if (
+      mimeType === 'application/epub+zip' ||
+      mimeType === 'application/x-mobipocket-ebook' ||
+      mimeType === 'application/vnd.amazon.ebook' ||
+      fileUrl.endsWith('.epub') ||
+      fileUrl.endsWith('.mobi') ||
+      fileUrl.endsWith('.azw') ||
+      fileUrl.endsWith('.azw3')
+    ) {
+      return (
+        <EpubViewer
+          fileUrl={fileUrl}
+          title={title}
+          onError={(error) => console.error('EPUB viewer error:', error)}
+        />
       );
     }
 
     // Text files (txt, json, csv, md, etc.)
-    if (mimeType?.startsWith('text/') || 
-        mimeType === 'application/json' || 
-        fileUrl.endsWith('.txt') || 
-        fileUrl.endsWith('.json') || 
-        fileUrl.endsWith('.csv') || 
+    if (mimeType?.startsWith('text/') ||
+        mimeType === 'application/json' ||
+        fileUrl.endsWith('.txt') ||
+        fileUrl.endsWith('.json') ||
+        fileUrl.endsWith('.csv') ||
         fileUrl.endsWith('.md')) {
       return (
         <div className="h-full bg-white dark:bg-gray-900">

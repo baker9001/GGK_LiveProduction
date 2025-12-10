@@ -287,6 +287,7 @@ export function getMaxFileSizeForType(materialType: string): number {
       return 100 * 1024 * 1024;
     case 'ebook':
     case 'document':
+    case 'interactive':
       return 100 * 1024 * 1024;
     case 'assignment':
       return 50 * 1024 * 1024;
