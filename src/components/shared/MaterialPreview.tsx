@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Download, ZoomIn, ZoomOut, RotateCw, ChevronLeft, ChevronRight, FileText, Music, Video, Image as ImageIcon, File } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Download, ZoomIn, ZoomOut, RotateCw, ChevronLeft, ChevronRight, FileText, Music, Video, Image as ImageIcon, File, BookOpen, Loader2 } from 'lucide-react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -10,7 +10,7 @@ import { ExcelViewer } from '../viewers/ExcelViewer';
 import { EnhancedAudioPlayer } from '../viewers/EnhancedAudioPlayer';
 import { PowerPointViewer } from '../viewers/PowerPointViewer';
 import { EpubViewer } from '../viewers/EpubViewer';
-import { detectFileType } from '../../lib/utils/fileTypeDetector';
+import { detectFileType, getMimeTypeFromExtension } from '../../lib/utils/fileTypeDetector';
 import { MaterialFileService } from '../../services/materialFileService';
 
 // Configure PDF.js worker for version 5.x
@@ -43,10 +43,27 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
   const [pdfError, setPdfError] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  const resolvedMimeType = useMemo(() => {
+    if (mimeType && mimeType !== 'application/octet-stream') {
+      return mimeType;
+    }
+    if (fileUrl) {
+      const detectedMime = getMimeTypeFromExtension(fileUrl);
+      if (detectedMime !== 'application/octet-stream') {
+        return detectedMime;
+      }
+    }
+    if (fileType === 'ebook') return 'application/pdf';
+    if (fileType === 'video') return 'video/mp4';
+    if (fileType === 'audio') return 'audio/mpeg';
+    if (fileType === 'document') return 'application/pdf';
+    return mimeType || 'application/octet-stream';
+  }, [mimeType, fileUrl, fileType]);
 
   if (!isOpen) return null;
 
-  // Reset states when modal opens
   useEffect(() => {
     if (isOpen) {
       setPageNumber(1);
@@ -55,56 +72,115 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       setImageScale(1);
       setPdfError(false);
       setSignedUrl(null);
+      setUrlError(null);
     }
   }, [isOpen]);
 
   useEffect(() => {
     const generateSignedUrl = async () => {
-      if (!isOpen || !fileUrl || fileUrl.startsWith('http')) {
+      if (!isOpen || !fileUrl) {
+        return;
+      }
+
+      if (fileUrl.startsWith('http')) {
         setSignedUrl(fileUrl);
         return;
       }
 
-      const needsSigned = MaterialFileService.needsSignedUrl(
-        MaterialFileService.getFileTypeFromMimeType(mimeType)
-      );
+      const detectedFileType = MaterialFileService.getFileTypeFromMimeType(resolvedMimeType);
+      const needsSigned = MaterialFileService.needsSignedUrl(detectedFileType);
 
-      if (!needsSigned) {
+      const isPdfOrEbook = resolvedMimeType === 'application/pdf' ||
+                          fileType === 'ebook' ||
+                          fileType === 'document' ||
+                          fileUrl.toLowerCase().endsWith('.pdf');
+
+      if (!needsSigned && !isPdfOrEbook) {
         setSignedUrl(fileUrl);
         return;
       }
 
       try {
         setUrlLoading(true);
+        setUrlError(null);
         const result = await MaterialFileService.getSignedUrl(fileUrl);
-        if (!result.error) {
+        if (!result.error && result.url) {
           setSignedUrl(result.url);
         } else {
           console.error('Error generating signed URL:', result.error);
-          setSignedUrl(fileUrl);
+          setUrlError(result.error || 'Failed to generate URL');
+          setSignedUrl(null);
         }
       } catch (error) {
         console.error('Exception generating signed URL:', error);
-        setSignedUrl(fileUrl);
+        setUrlError(error instanceof Error ? error.message : 'Unknown error');
+        setSignedUrl(null);
       } finally {
         setUrlLoading(false);
       }
     };
 
     generateSignedUrl();
-  }, [isOpen, fileUrl, mimeType]);
+  }, [isOpen, fileUrl, resolvedMimeType, fileType]);
 
-  const getFileIcon = () => {
-    if (fileType === 'video' || mimeType?.startsWith('video/')) return <Video className="h-16 w-16" />;
-    if (fileType === 'audio' || mimeType?.startsWith('audio/')) return <Music className="h-16 w-16" />;
-    if (fileType === 'ebook' || mimeType === 'application/pdf') return <FileText className="h-16 w-16" />;
-    if (mimeType?.startsWith('image/')) return <ImageIcon className="h-16 w-16" />;
-    return <File className="h-16 w-16" />;
+  const getFileIcon = (size: 'sm' | 'lg' = 'lg') => {
+    const sizeClass = size === 'sm' ? 'h-5 w-5' : 'h-16 w-16';
+    if (fileType === 'video' || resolvedMimeType?.startsWith('video/')) return <Video className={sizeClass} />;
+    if (fileType === 'audio' || resolvedMimeType?.startsWith('audio/')) return <Music className={sizeClass} />;
+    if (fileType === 'ebook') return <BookOpen className={sizeClass} />;
+    if (resolvedMimeType === 'application/pdf' || fileType === 'document') return <FileText className={sizeClass} />;
+    if (resolvedMimeType?.startsWith('image/')) return <ImageIcon className={sizeClass} />;
+    return <File className={sizeClass} />;
+  };
+
+  const getFileTypeLabel = () => {
+    if (fileType === 'video' || resolvedMimeType?.startsWith('video/')) return 'Video';
+    if (fileType === 'audio' || resolvedMimeType?.startsWith('audio/')) return 'Audio';
+    if (fileType === 'ebook') return 'E-book';
+    if (resolvedMimeType === 'application/pdf') return 'PDF Document';
+    if (fileType === 'document') return 'Document';
+    if (resolvedMimeType?.startsWith('image/')) return 'Image';
+    return 'File';
   };
 
   const renderPreview = () => {
-    // Video files - Use Protected Video Player
-    if (fileType === 'video' || mimeType?.startsWith('video/')) {
+    if (urlLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
+          <Loader2 className="h-12 w-12 animate-spin text-emerald-600 mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading preview...</p>
+        </div>
+      );
+    }
+
+    if (urlError && !signedUrl) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
+          <div className="text-center p-8 max-w-md">
+            <div className="mb-6 text-red-400">
+              {getFileIcon()}
+            </div>
+            <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+              Preview Error
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Unable to load the file preview: {urlError}
+            </p>
+            {fileType !== 'video' && (
+              <button
+                onClick={() => MaterialFileService.downloadFile(fileUrl, title)}
+                className="inline-flex items-center justify-center px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Instead
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (fileType === 'video' || resolvedMimeType?.startsWith('video/')) {
       if (!materialId) {
         return (
           <div className="flex items-center justify-center h-full bg-gray-900 text-white p-8">
@@ -117,26 +193,24 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
         <ProtectedVideoPlayer
           materialId={materialId}
           title={title}
-          mimeType={mimeType}
+          mimeType={resolvedMimeType}
           className="h-full"
         />
       );
     }
 
-    // Audio files - Use Enhanced Audio Player
-    if (fileType === 'audio' || mimeType?.startsWith('audio/')) {
+    if (fileType === 'audio' || resolvedMimeType?.startsWith('audio/')) {
       return (
         <EnhancedAudioPlayer
-          fileUrl={fileUrl}
+          fileUrl={signedUrl || fileUrl}
           title={title}
-          mimeType={mimeType}
+          mimeType={resolvedMimeType}
           autoPlay={false}
         />
       );
     }
 
-    // Image files
-    if (mimeType?.startsWith('image/')) {
+    if (resolvedMimeType?.startsWith('image/')) {
       return (
         <div className="flex flex-col h-full">
           {/* Image Controls */}
@@ -193,13 +267,20 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       );
     }
 
-    // PDF files
-    if (mimeType === 'application/pdf' || fileType === 'ebook') {
+    if (resolvedMimeType === 'application/pdf' || fileType === 'ebook' || fileType === 'document' || fileUrl.toLowerCase().endsWith('.pdf')) {
+      if (!signedUrl) {
+        return (
+          <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
+            <Loader2 className="h-12 w-12 animate-spin text-emerald-600 mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">Preparing document...</p>
+          </div>
+        );
+      }
+
       if (pdfError) {
-        // Fallback to Google Docs Viewer if react-pdf fails
         return (
           <iframe
-            src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
+            src={`https://docs.google.com/viewer?url=${encodeURIComponent(signedUrl)}&embedded=true`}
             className="w-full h-full"
             frameBorder="0"
             title="PDF Viewer"
@@ -271,7 +352,7 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
           {/* PDF Display */}
           <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-gray-100 dark:bg-gray-900">
             <Document
-              file={signedUrl || fileUrl}
+              file={signedUrl}
               onLoadSuccess={({ numPages }) => setNumPages(numPages)}
               onLoadError={(error) => {
                 console.error('PDF load error:', error);
@@ -279,7 +360,7 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
               }}
               loading={
                 <div className="flex flex-col items-center justify-center p-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
                   <p className="mt-4 text-gray-600 dark:text-gray-400">Loading PDF...</p>
                 </div>
               }
@@ -304,56 +385,52 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       );
     }
 
-    // Word documents - Use enhanced DOCX viewer
     if (
-      mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      mimeType === 'application/msword' ||
-      mimeType === 'application/vnd.oasis.opendocument.text'
+      resolvedMimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      resolvedMimeType === 'application/msword' ||
+      resolvedMimeType === 'application/vnd.oasis.opendocument.text'
     ) {
       return (
         <EnhancedDocxViewer
-          fileUrl={fileUrl}
+          fileUrl={signedUrl || fileUrl}
           title={title}
           onError={(error) => console.error('DOCX viewer error:', error)}
         />
       );
     }
 
-    // Excel documents - Use enhanced Excel viewer
     if (
-      mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      mimeType === 'application/vnd.ms-excel' ||
-      mimeType === 'application/vnd.oasis.opendocument.spreadsheet'
+      resolvedMimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      resolvedMimeType === 'application/vnd.ms-excel' ||
+      resolvedMimeType === 'application/vnd.oasis.opendocument.spreadsheet'
     ) {
       return (
         <ExcelViewer
-          fileUrl={fileUrl}
+          fileUrl={signedUrl || fileUrl}
           title={title}
           onError={(error) => console.error('Excel viewer error:', error)}
         />
       );
     }
 
-    // PowerPoint documents - Use enhanced PowerPoint viewer
     if (
-      mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-      mimeType === 'application/vnd.ms-powerpoint' ||
-      mimeType === 'application/vnd.oasis.opendocument.presentation'
+      resolvedMimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      resolvedMimeType === 'application/vnd.ms-powerpoint' ||
+      resolvedMimeType === 'application/vnd.oasis.opendocument.presentation'
     ) {
       return (
         <PowerPointViewer
-          fileUrl={fileUrl}
+          fileUrl={signedUrl || fileUrl}
           title={title}
           onError={(error) => console.error('PowerPoint viewer error:', error)}
         />
       );
     }
 
-    // EPUB/MOBI e-book files
     if (
-      mimeType === 'application/epub+zip' ||
-      mimeType === 'application/x-mobipocket-ebook' ||
-      mimeType === 'application/vnd.amazon.ebook' ||
+      resolvedMimeType === 'application/epub+zip' ||
+      resolvedMimeType === 'application/x-mobipocket-ebook' ||
+      resolvedMimeType === 'application/vnd.amazon.ebook' ||
       fileUrl.endsWith('.epub') ||
       fileUrl.endsWith('.mobi') ||
       fileUrl.endsWith('.azw') ||
@@ -361,16 +438,15 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
     ) {
       return (
         <EpubViewer
-          fileUrl={fileUrl}
+          fileUrl={signedUrl || fileUrl}
           title={title}
           onError={(error) => console.error('EPUB viewer error:', error)}
         />
       );
     }
 
-    // Text files (txt, json, csv, md, etc.)
-    if (mimeType?.startsWith('text/') ||
-        mimeType === 'application/json' ||
+    if (resolvedMimeType?.startsWith('text/') ||
+        resolvedMimeType === 'application/json' ||
         fileUrl.endsWith('.txt') ||
         fileUrl.endsWith('.json') ||
         fileUrl.endsWith('.csv') ||
@@ -378,7 +454,7 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       return (
         <div className="h-full bg-white dark:bg-gray-900">
           <iframe
-            src={fileUrl}
+            src={signedUrl || fileUrl}
             className="w-full h-full"
             frameBorder="0"
             title="Text Viewer"
@@ -388,16 +464,14 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       );
     }
 
-    // Assignment type with no specific mime type
     if (fileType === 'assignment') {
-      // Try to determine based on file extension
       const extension = fileUrl.split('.').pop()?.toLowerCase();
-      
-      // If it's a known document type, use Google Docs Viewer
+
       if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(extension || '')) {
+        const urlToUse = signedUrl || fileUrl;
         return (
           <iframe
-            src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
+            src={`https://docs.google.com/viewer?url=${encodeURIComponent(urlToUse)}&embedded=true`}
             className="w-full h-full"
             frameBorder="0"
             title="Document Viewer"
@@ -406,7 +480,6 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       }
     }
 
-    // Fallback for unsupported types
     return (
       <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
         <div className="text-center p-8 max-w-md">
@@ -417,14 +490,13 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
             Preview not available
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            This file type ({mimeType || fileType}) cannot be previewed directly in the browser.
+            This file type ({resolvedMimeType || fileType}) cannot be previewed directly in the browser.
           </p>
-          {/* Only show download options for non-video content */}
-          {fileType !== 'video' && !mimeType?.startsWith('video/') ? (
+          {fileType !== 'video' && !resolvedMimeType?.startsWith('video/') ? (
             <div className="space-y-3">
               <button
                 onClick={() => MaterialFileService.downloadFile(fileUrl, title)}
-                className="inline-flex items-center justify-center w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center justify-center w-full px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download File
@@ -455,16 +527,20 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 rounded-t-lg">
           <div className="flex items-center space-x-3 flex-1 min-w-0">
-            <div className="text-gray-500 dark:text-gray-400">
-              {getFileIcon()}
+            <div className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+              {getFileIcon('sm')}
             </div>
-            <h2 className="text-lg font-semibold truncate text-gray-900 dark:text-white">
-              {title}
-            </h2>
+            <div className="flex flex-col min-w-0">
+              <h2 className="text-lg font-semibold truncate text-gray-900 dark:text-white">
+                {title}
+              </h2>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {getFileTypeLabel()}
+              </span>
+            </div>
           </div>
           <div className="flex items-center space-x-2 ml-4">
-            {/* Only show download button for non-video materials */}
-            {fileType !== 'video' && !mimeType?.startsWith('video/') && (
+            {fileType !== 'video' && !resolvedMimeType?.startsWith('video/') && (
               <button
                 onClick={() => MaterialFileService.downloadFile(fileUrl, title)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
