@@ -1,8 +1,8 @@
 ///home/project/src/app/system-admin/learning/materials/page.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
-import { Plus, FileText, Upload, Download, Eye, Trash2, CreditCard as Edit2 } from 'lucide-react';
+import { Plus, FileText, Upload, Download, Eye, Trash2, CreditCard as Edit2, FolderUp } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { useUser } from '../../../../contexts/UserContext';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -18,6 +18,9 @@ import { FilePreviewModal } from '../../../../components/shared/FilePreviewModal
 import { toast } from '../../../../components/shared/Toast';
 import { MaterialTypeSelector } from '../../../../components/shared/MaterialTypeSelector';
 import { DragDropFileUpload } from '../../../../components/shared/DragDropFileUpload';
+import { FormWizard, WizardStep } from '../../../../components/shared/FormWizard';
+import { CurriculumTreeSelector } from '../../../../components/shared/CurriculumTreeSelector';
+import { BulkUploadModal } from '../../../../components/shared/BulkUploadModal';
 import { detectFileType, getMimeTypeFromExtension, formatFileSize as utilFormatFileSize, getMaxFileSizeForType } from '../../../../lib/utils/fileTypeDetector';
 import { MaterialFileService } from '../../../../services/materialFileService';
 
@@ -127,6 +130,18 @@ export default function MaterialManagementPage() {
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [curriculumSelection, setCurriculumSelection] = useState({
+    dataStructureId: null as string | null,
+    dataStructureName: undefined as string | undefined,
+    unitId: null as string | null,
+    unitName: undefined as string | undefined,
+    topicId: null as string | null,
+    topicName: undefined as string | undefined,
+    subtopicId: null as string | null,
+    subtopicName: undefined as string | undefined
+  });
 
   const [formState, setFormState] = useState<FormState>({
     title: '',
@@ -690,6 +705,72 @@ export default function MaterialManagementPage() {
     }
   };
 
+  const handleBulkUpload = useCallback(async (
+    file: File,
+    metadata: {
+      title: string;
+      type: MaterialType;
+      dataStructureId: string;
+      unitId?: string;
+      topicId?: string;
+      subtopicId?: string;
+    }
+  ) => {
+    const fileTypeInfo = detectFileType(file.name, file.type);
+    const mimeType = fileTypeInfo.mimeType;
+
+    const originalName = file.name;
+    const uniquePrefix = Math.random().toString(36).slice(2);
+    const fileName = `AdminMaterials/${uniquePrefix}_${originalName}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('materials_files')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: mimeType
+      });
+
+    if (uploadError) throw uploadError;
+
+    const materialData = {
+      title: metadata.title,
+      description: '',
+      data_structure_id: metadata.dataStructureId,
+      unit_id: metadata.unitId || null,
+      topic_id: metadata.topicId || null,
+      subtopic_id: metadata.subtopicId || null,
+      type: metadata.type,
+      file_path: uploadData.path,
+      file_url: uploadData.path,
+      mime_type: mimeType,
+      size: file.size,
+      status: 'active',
+      created_by: user?.id,
+      created_by_role: 'system_admin',
+      visibility_scope: 'global',
+      school_id: null,
+      grade_id: null,
+      teacher_id: null
+    };
+
+    const { error: insertError } = await supabase
+      .from('materials')
+      .insert([materialData]);
+
+    if (insertError) throw insertError;
+  }, [user?.id]);
+
+  const handleBulkUploadComplete = useCallback((results: { success: number; failed: number }) => {
+    if (results.success > 0) {
+      toast.success(`Successfully uploaded ${results.success} material${results.success !== 1 ? 's' : ''}`);
+      fetchMaterials();
+    }
+    if (results.failed > 0) {
+      toast.error(`${results.failed} file${results.failed !== 1 ? 's' : ''} failed to upload`);
+    }
+  }, []);
+
   const formatFileSize = (bytes: number) => {
     return utilFormatFileSize(bytes);
   };
@@ -934,15 +1015,24 @@ export default function MaterialManagementPage() {
 
       <div className="flex justify-between items-center">
         <div />
-        <Button
-          onClick={() => {
-            setEditingMaterial(null);
-            setIsFormOpen(true);
-          }}
-          leftIcon={<Plus className="h-4 w-4" />}
-        >
-          Add Material
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => setIsBulkUploadOpen(true)}
+            leftIcon={<FolderUp className="h-4 w-4" />}
+          >
+            Bulk Upload
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingMaterial(null);
+              setIsFormOpen(true);
+            }}
+            leftIcon={<Plus className="h-4 w-4" />}
+          >
+            Add Material
+          </Button>
+        </div>
       </div>
 
       <FilterCard
@@ -1274,6 +1364,14 @@ export default function MaterialManagementPage() {
         cancelText="Cancel"
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
+      />
+
+      {/* Bulk Upload Modal */}
+      <BulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        onUploadComplete={handleBulkUploadComplete}
+        uploadHandler={handleBulkUpload}
       />
     </div>
   );

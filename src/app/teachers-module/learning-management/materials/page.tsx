@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
-import { Plus, Upload, Download, Eye, Trash2, CreditCard as Edit2, FileText } from 'lucide-react';
+import { Plus, Upload, Download, Eye, Trash2, CreditCard as Edit2, FileText, FolderUp } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../lib/supabase';
 import { useUser } from '../../../../contexts/UserContext';
@@ -21,7 +21,14 @@ import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { MaterialPreview } from '../../../../components/shared/MaterialPreview';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
+import { FilePreviewModal } from '../../../../components/shared/FilePreviewModal';
+import { MaterialTypeSelector, MaterialType } from '../../../../components/shared/MaterialTypeSelector';
+import { DragDropFileUpload } from '../../../../components/shared/DragDropFileUpload';
+import { BulkUploadModal } from '../../../../components/shared/BulkUploadModal';
+import { detectFileType, getMaxFileSizeForType, formatFileSize as utilFormatFileSize } from '../../../../lib/utils/fileTypeDetector';
 import { toast } from '../../../../components/shared/Toast';
+
+const MATERIAL_TYPES = ['video', 'document', 'ebook', 'audio', 'assignment', 'interactive'] as const;
 
 const materialSchema = z.object({
   title: z.string().min(2, 'Title must be at least 2 characters'),
@@ -31,7 +38,7 @@ const materialSchema = z.object({
   topic_id: z.union([z.string().uuid(), z.literal('')]).nullable().optional(),
   subtopic_id: z.union([z.string().uuid(), z.literal('')]).nullable().optional(),
   grade_id: z.union([z.string().uuid(), z.literal('')]).nullable().optional(),
-  type: z.enum(['video', 'ebook', 'audio', 'assignment']),
+  type: z.enum(MATERIAL_TYPES),
   status: z.enum(['active', 'inactive'])
 });
 
@@ -43,15 +50,17 @@ interface FormState {
   topic_id: string;
   subtopic_id: string;
   grade_id: string;
-  type: 'video' | 'ebook' | 'audio' | 'assignment';
+  type: MaterialType;
   status: 'active' | 'inactive';
 }
 
-const ACCEPTED_FILE_TYPES = {
-  video: ['.mp4', '.webm', '.ogg', '.mov', '.avi'],
-  audio: ['.mp3', '.wav', '.ogg', '.m4a', '.aac'],
-  ebook: ['.pdf', '.epub', '.doc', '.docx'],
-  assignment: ['.pdf', '.doc', '.docx', '.txt']
+const ACCEPTED_FILE_TYPES: Record<string, string[]> = {
+  video: ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv'],
+  audio: ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.wma', '.flac'],
+  document: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp', '.rtf'],
+  ebook: ['.pdf', '.epub', '.mobi', '.azw', '.azw3'],
+  assignment: ['.pdf', '.doc', '.docx', '.txt', '.md', '.xls', '.xlsx'],
+  interactive: ['.html', '.zip', '.json']
 };
 
 export default function TeacherMaterialsPage() {
@@ -65,6 +74,9 @@ export default function TeacherMaterialsPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [materialsToDelete, setMaterialsToDelete] = useState<Material[]>([]);
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
 
   const [formState, setFormState] = useState<FormState>({
     title: '',
@@ -403,22 +415,70 @@ export default function TeacherMaterialsPage() {
   };
 
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return utilFormatFileSize(bytes);
   };
 
   const getTypeIcon = (type: string) => {
-    const icons = {
+    const icons: Record<string, string> = {
       video: '🎥',
+      document: '📄',
       ebook: '📚',
       audio: '🎵',
-      assignment: '📝'
+      assignment: '📝',
+      interactive: '🎮'
     };
-    return icons[type as keyof typeof icons] || '📄';
+    return icons[type] || '📄';
   };
+
+  const confirmFileUpload = () => {
+    if (pendingFile) {
+      setUploadedFile(pendingFile);
+      setPendingFile(null);
+    }
+  };
+
+  const handleBulkUpload = useCallback(async (
+    file: File,
+    metadata: {
+      title: string;
+      type: MaterialType;
+      dataStructureId: string;
+      unitId?: string;
+      topicId?: string;
+      subtopicId?: string;
+    }
+  ) => {
+    if (!teacherInfo) throw new Error('Teacher info not available');
+
+    const filePath = await uploadTeacherMaterialFile(file, teacherInfo.schoolId);
+    const fileTypeInfo = detectFileType(file.name, file.type);
+
+    await createTeacherMaterial({
+      title: metadata.title,
+      description: '',
+      data_structure_id: metadata.dataStructureId,
+      unit_id: metadata.unitId || null,
+      topic_id: metadata.topicId || null,
+      subtopic_id: metadata.subtopicId || null,
+      type: metadata.type,
+      file_path: filePath,
+      mime_type: fileTypeInfo.mimeType,
+      size: file.size,
+      school_id: teacherInfo.schoolId,
+      teacher_id: teacherInfo.teacherId,
+      status: 'active'
+    });
+  }, [teacherInfo]);
+
+  const handleBulkUploadComplete = useCallback((results: { success: number; failed: number }) => {
+    if (results.success > 0) {
+      toast.success(`Successfully uploaded ${results.success} material${results.success !== 1 ? 's' : ''}`);
+      queryClient.invalidateQueries(['teacher-materials']);
+    }
+    if (results.failed > 0) {
+      toast.error(`${results.failed} file${results.failed !== 1 ? 's' : ''} failed to upload`);
+    }
+  }, [queryClient]);
 
   const columns = [
     {
@@ -612,27 +672,37 @@ export default function TeacherMaterialsPage() {
       {!hasError && teacherInfo?.schoolId && (
         <div className="flex justify-between items-center">
           <div />
-          <Button
-            onClick={() => {
-              setEditingMaterial(null);
-              setFormState({
-                title: '',
-                description: '',
-                data_structure_id: '',
-                unit_id: '',
-                topic_id: '',
-                subtopic_id: '',
-                grade_id: '',
-                type: 'video',
-                status: 'active'
-              });
-              setIsFormOpen(true);
-            }}
-            leftIcon={<Plus className="h-4 w-4" />}
-            disabled={isLoading}
-          >
-            Upload Material
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setIsBulkUploadOpen(true)}
+              leftIcon={<FolderUp className="h-4 w-4" />}
+              disabled={isLoading}
+            >
+              Bulk Upload
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingMaterial(null);
+                setFormState({
+                  title: '',
+                  description: '',
+                  data_structure_id: '',
+                  unit_id: '',
+                  topic_id: '',
+                  subtopic_id: '',
+                  grade_id: '',
+                  type: 'video',
+                  status: 'active'
+                });
+                setIsFormOpen(true);
+              }}
+              leftIcon={<Plus className="h-4 w-4" />}
+              disabled={isLoading}
+            >
+              Upload Material
+            </Button>
+          </div>
         </div>
       )}
 
@@ -689,9 +759,11 @@ export default function TeacherMaterialsPage() {
                 label="Type"
                 options={[
                   { value: 'video', label: 'Video' },
+                  { value: 'document', label: 'Document' },
                   { value: 'ebook', label: 'E-book' },
                   { value: 'audio', label: 'Audio' },
-                  { value: 'assignment', label: 'Assignment' }
+                  { value: 'assignment', label: 'Assignment' },
+                  { value: 'interactive', label: 'Interactive' }
                 ]}
                 selectedValues={filters.types}
                 onChange={(values) => setFilters({ ...filters, types: values })}
@@ -722,6 +794,8 @@ export default function TeacherMaterialsPage() {
           setIsFormOpen(false);
           setEditingMaterial(null);
           setUploadedFile(null);
+          setPendingFile(null);
+          setShowFilePreview(false);
           setFormErrors({});
         }}
         onSave={() => {
@@ -775,36 +849,27 @@ export default function TeacherMaterialsPage() {
             />
           </FormField>
 
-          <FormField id="type" label="Type" required error={formErrors.type}>
-            <Select
-              id="type"
-              options={[
-                { value: 'video', label: 'Video' },
-                { value: 'ebook', label: 'E-book' },
-                { value: 'audio', label: 'Audio' },
-                { value: 'assignment', label: 'Assignment' }
-              ]}
-              value={formState.type}
-              onChange={(value) => setFormState(prev => ({ ...prev, type: value as any }))}
-            />
-          </FormField>
+          <MaterialTypeSelector
+            selectedType={formState.type}
+            onTypeChange={(type) => setFormState(prev => ({ ...prev, type }))}
+            error={formErrors.type}
+            disabled={createMutation.isLoading || updateMutation.isLoading}
+          />
 
-          {!editingMaterial && (
-            <FormField id="file" label="File" required error={formErrors.file}>
-              <input
-                type="file"
-                id="file"
-                accept={Object.values(ACCEPTED_FILE_TYPES).flat().join(',')}
-                onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 dark:file:bg-emerald-900/30 file:text-emerald-700 dark:file:text-emerald-300 hover:file:bg-emerald-100 dark:hover:file:bg-emerald-900/50"
-              />
-              {uploadedFile && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
-                  Selected: {uploadedFile.name} ({formatFileSize(uploadedFile.size)})
-                </p>
-              )}
-            </FormField>
-          )}
+          <DragDropFileUpload
+            onFileSelect={(file) => {
+              setPendingFile(file);
+              setShowFilePreview(true);
+            }}
+            acceptedTypes={ACCEPTED_FILE_TYPES[formState.type] || []}
+            maxSize={getMaxFileSizeForType(formState.type)}
+            selectedFile={uploadedFile}
+            onClear={() => setUploadedFile(null)}
+            error={formErrors.file}
+            disabled={createMutation.isLoading || updateMutation.isLoading}
+            materialType={formState.type}
+            existingFileName={editingMaterial ? editingMaterial.file_path?.split('/').pop() : undefined}
+          />
 
           <FormField id="status" label="Status" required error={formErrors.status}>
             <Select
@@ -845,6 +910,26 @@ export default function TeacherMaterialsPage() {
           setIsConfirmDialogOpen(false);
           setMaterialsToDelete([]);
         }}
+      />
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        isOpen={showFilePreview}
+        onClose={() => {
+          setShowFilePreview(false);
+          setPendingFile(null);
+        }}
+        file={pendingFile}
+        onConfirm={confirmFileUpload}
+        maxFileSize={getMaxFileSizeForType(formState.type)}
+      />
+
+      {/* Bulk Upload Modal */}
+      <BulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        onUploadComplete={handleBulkUploadComplete}
+        uploadHandler={handleBulkUpload}
       />
     </div>
   );
