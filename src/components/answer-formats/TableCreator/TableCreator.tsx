@@ -59,6 +59,8 @@ interface TableCreatorProps {
   onTemplateSave?: (template: TableTemplateDTO) => void;
   importSessionId?: string;
   questionIdentifier?: string;
+  isStudentTestMode?: boolean;
+  isAdminTestMode?: boolean;
 }
 
 const TableCreator: React.FC<TableCreatorProps> = ({
@@ -78,8 +80,11 @@ const TableCreator: React.FC<TableCreatorProps> = ({
   enableAutoSave = true,
   onTemplateSave,
   importSessionId,
-  questionIdentifier
+  questionIdentifier,
+  isStudentTestMode = false,
+  isAdminTestMode = false
 }) => {
+  const isSimulationMode = isStudentTestMode || isAdminTestMode;
   const hotTableRef = useRef<any>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -584,8 +589,8 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {/* Auto-Save Status Indicator - Hidden in simulation mode (disabled) */}
-      {enableAutoSave && !disabled && !showCorrectAnswer && (
+      {/* Auto-Save Status Indicator - Hidden in simulation mode */}
+      {enableAutoSave && !disabled && !showCorrectAnswer && !isSimulationMode && (
         <div className="flex items-center justify-end gap-2 text-sm">
           {/* Preview Mode - No save capability */}
           {isPreviewQuestion && !isImportReviewMode && (
@@ -649,8 +654,8 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {/* Configuration - Hidden in simulation mode (disabled with showCorrectAnswer) */}
-      {!disabled && (
+      {/* Configuration - Hidden in simulation mode */}
+      {!disabled && !isSimulationMode && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Title */}
@@ -744,8 +749,8 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {/* Column Headers */}
-      {!disabled && (
+      {/* Column Headers - Hidden in simulation mode */}
+      {!disabled && !isSimulationMode && (
         <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-300 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Column Headers
@@ -766,13 +771,43 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
+      {/* Student Test Mode: Inline Title and Progress Indicator */}
+      {isSimulationMode && (
+        <div className="flex items-center justify-between gap-4 px-1">
+          {title && (
+            <div className="flex items-center gap-2">
+              <TableIcon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {title}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {stats.filled} of {stats.total} cells filled
+              </span>
+              <div className="w-24 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-300"
+                  style={{ width: `${stats.total > 0 ? Math.round((stats.filled / stats.total) * 100) : 0}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className={cn(
         "border rounded-lg overflow-hidden",
         disabled ? "opacity-60" : "",
-        "border-gray-300 dark:border-gray-700"
+        isSimulationMode
+          ? "border-gray-200 dark:border-gray-600 shadow-sm"
+          : "border-gray-300 dark:border-gray-700"
       )}>
-        {title && (
+        {/* Table Title Header - Only show in non-simulation mode when not disabled */}
+        {title && !isSimulationMode && (
           <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
             <h3 className="font-semibold text-gray-800 dark:text-gray-200">
               {title}
@@ -780,20 +815,23 @@ const TableCreator: React.FC<TableCreatorProps> = ({
           </div>
         )}
 
-        <div className="bg-white dark:bg-gray-900">
+        <div className={cn(
+          "bg-white dark:bg-gray-900",
+          isSimulationMode && "simulation-table-container"
+        )}>
           <HotTable
             ref={hotTableRef}
             data={tableData}
             colHeaders={headers}
             rowHeaders={true}
             width="100%"
-            height="400"
+            height={isSimulationMode ? "350" : "400"}
             licenseKey="non-commercial-and-evaluation"
             readOnly={disabled}
             afterChange={handleAfterChange}
-            contextMenu={!disabled}
-            manualColumnResize={true}
-            manualRowResize={true}
+            contextMenu={!disabled && !isSimulationMode}
+            manualColumnResize={!isSimulationMode}
+            manualRowResize={!isSimulationMode}
             stretchH="all"
             className={cn(
               disabled && "pointer-events-none"
@@ -803,7 +841,7 @@ const TableCreator: React.FC<TableCreatorProps> = ({
       </div>
 
       {/* Actions - Hidden in simulation mode */}
-      {!disabled && (
+      {!disabled && !isSimulationMode && (
         <div className="flex items-center justify-between gap-2">
           <Button
             variant="outline"
@@ -836,8 +874,8 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {/* Validation Messages */}
-      {!validation.isValid && validation.errors.length > 0 && (
+      {/* Validation Messages - Hidden in simulation mode */}
+      {!isSimulationMode && !validation.isValid && validation.errors.length > 0 && (
         <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
@@ -855,7 +893,7 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {validation.warnings.length > 0 && (
+      {!isSimulationMode && validation.warnings.length > 0 && (
         <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
@@ -887,8 +925,8 @@ const TableCreator: React.FC<TableCreatorProps> = ({
         </div>
       )}
 
-      {/* Help Text */}
-      {!disabled && (
+      {/* Help Text - Hidden in simulation mode */}
+      {!disabled && !isSimulationMode && (
         <div className="text-sm text-gray-500 dark:text-gray-400 italic">
           Click on cells to enter data. Use the buttons above to add or remove rows and columns.
           Right-click for more options.

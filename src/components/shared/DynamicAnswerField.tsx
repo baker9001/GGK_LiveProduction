@@ -832,12 +832,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           subQuestionId={question.sub_question_id}
           value={parsedTable}
           onChange={(data) => onChange(JSON.stringify(data))}
-          disabled={(disabled && !isEditing) || isStudentTest}
-          enableAutoSave={true}
+          disabled={disabled && !isEditing}
+          enableAutoSave={!isStudentTest && !isAdminTesting}
           importSessionId={importSessionId}
           questionIdentifier={questionIdentifier}
           showCorrectAnswer={showCorrectAnswer && (isAdminTesting || isStudentTest)}
           correctAnswerData={correctAnswerData}
+          isStudentTestMode={isStudentTest}
+          isAdminTestMode={isAdminTesting}
           onTemplateSave={(templateConfig) => {
             console.log('[DynamicAnswerField] Table template save callback:', templateConfig);
             question.preview_data = JSON.stringify(templateConfig);
@@ -2246,11 +2248,13 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               performValidation(data);
             }}
             disabled={disabled}
-            enableAutoSave={true}
+            enableAutoSave={!isStudentTest && !isAdminTesting}
             importSessionId={importSessionId}
             questionIdentifier={questionIdentifier}
             showCorrectAnswer={showCorrectAnswer}
             correctAnswerData={correctAnswerData}
+            isStudentTestMode={isStudentTest}
+            isAdminTestMode={isAdminTesting}
             onTemplateSave={(templateConfig) => {
               console.log('[DynamicAnswerField] Table template save callback (test sim):', templateConfig);
               question.preview_data = JSON.stringify(templateConfig);
