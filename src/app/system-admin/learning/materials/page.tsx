@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { z } from 'zod';
-import { Plus, FileText, Upload, Download, Eye, Trash2, CreditCard as Edit2, FolderUp } from 'lucide-react';
+import { Plus, FileText, Upload, Download, Eye, Trash2, Edit2, FolderUp } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { useUser } from '../../../../contexts/UserContext';
 import { DataTable } from '../../../../components/shared/DataTable';
