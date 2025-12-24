@@ -426,16 +426,28 @@ export function useQuestionMutations() {
     mutationFn: async ({ questionId }: ConfirmQuestionParams) => {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      
+
+      // Fetch the corresponding users.id from auth.uid() for foreign key compatibility
+      let userId: string | null = null;
+      if (user?.id) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+
+        userId = userData?.id || null;
+      }
+
       // Get the question to find its paper_id
       const { data: question, error: fetchError } = await supabase
         .from('questions_master_admin')
         .select('paper_id')
         .eq('id', questionId)
         .single();
-      
+
       if (fetchError) throw fetchError;
-      
+
       // Update main question status (allow from draft or qa_review)
       const { error: questionError } = await supabase
         .from('questions_master_admin')
@@ -443,7 +455,7 @@ export function useQuestionMutations() {
           status: 'active',
           is_confirmed: true,
           confirmed_at: new Date().toISOString(),
-          confirmed_by: user?.id || null,
+          confirmed_by: userId,
           updated_at: new Date().toISOString()
         })
         .eq('id', questionId)
@@ -458,22 +470,22 @@ export function useQuestionMutations() {
           status: 'active',
           is_confirmed: true,
           confirmed_at: new Date().toISOString(),
-          confirmed_by: user?.id || null,
+          confirmed_by: userId,
           updated_at: new Date().toISOString()
         })
         .eq('question_id', questionId)
         .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
-      
+
       if (subQuestionError) throw subQuestionError;
 
       // Record the confirmation action
-      if (user?.id) {
+      if (userId) {
         const { error: confirmError } = await supabase
           .from('question_confirmations')
           .insert({
             question_id: questionId,
             action: 'confirmed',
-            performed_by: user.id,
+            performed_by: userId,
             performed_at: new Date().toISOString()
           });
 
@@ -543,6 +555,18 @@ export function useQuestionMutations() {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
+      // Fetch the corresponding users.id from auth.uid() for foreign key compatibility
+      let userId: string | null = null;
+      if (user?.id) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+
+        userId = userData?.id || null;
+      }
+
       // First, get the paper to check current status
       const { data: paper, error: paperFetchError } = await supabase
         .from('papers_setup')
@@ -583,12 +607,12 @@ export function useQuestionMutations() {
           status: 'active',
           qa_status: 'completed',
           qa_completed_at: now,
-          qa_completed_by: user?.id || null,
+          qa_completed_by: userId,
           published_at: now,
-          published_by: user?.id || null,
+          published_by: userId,
           updated_at: now,
           last_status_change_at: now,
-          last_status_change_by: user?.id || null
+          last_status_change_by: userId
         })
         .eq('id', paperId)
         .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
@@ -602,7 +626,7 @@ export function useQuestionMutations() {
           paper_id: paperId,
           previous_status: paper.status,
           new_status: 'active',
-          changed_by: user?.id || null,
+          changed_by: userId,
           changed_at: now,
           reason: 'Paper published after QA review',
           metadata: {
@@ -653,13 +677,26 @@ export function useQuestionMutations() {
       if (questionsResponse.error) throw questionsResponse.error;
 
       const user = auth.user;
+
+      // Fetch the corresponding users.id from auth.uid() for foreign key compatibility
+      let userId: string | null = null;
+      if (user?.id) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+
+        userId = userData?.id || null;
+      }
+
       const now = new Date().toISOString();
 
       const paperUpdates: Record<string, any> = {
         status: newStatus,
         updated_at: now,
         last_status_change_at: now,
-        last_status_change_by: user?.id || null
+        last_status_change_by: userId
       };
 
       if (newStatus === 'draft') {
@@ -710,7 +747,7 @@ export function useQuestionMutations() {
             paper_id: paperId,
             previous_status: paperResponse.data.status,
             new_status: newStatus,
-            changed_by: user?.id || null,
+            changed_by: userId,
             changed_at: now,
             reason:
               newStatus === 'inactive'

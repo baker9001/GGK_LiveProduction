@@ -300,6 +300,19 @@ export default function LicenseManagementPage() {
           throw new Error('User authentication required. Please log in and try again.');
         }
 
+        // Fetch the corresponding users.id from auth.uid()
+        // The license_actions.performed_by references admin_users(id) which equals users.id (not auth.uid())
+        const { data: userData, error: userLookupError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .single();
+
+        if (userLookupError || !userData) {
+          console.error('Error fetching user record:', userLookupError);
+          throw new Error('Failed to identify current user. Please try logging in again.');
+        }
+
         // Create license action record
         const actionRecord = {
           license_id: payload.license_id,
@@ -309,12 +322,13 @@ export default function LicenseManagementPage() {
                           null,
           new_end_date: payload.new_end_date,
           notes: payload.notes,
-          performed_by: user.id
+          performed_by: userData.id  // Use users.id (not auth.uid()) for foreign key compatibility
         };
 
         console.log('Inserting license action:', {
           ...actionRecord,
-          performed_by: user.id,
+          performed_by: userData.id,
+          auth_user_id: user.id,
           user_email: user.email
         });
 
