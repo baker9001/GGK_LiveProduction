@@ -1,14 +1,23 @@
 /**
  * File: /src/lib/auth.ts
- * Dependencies: 
+ * Dependencies:
  *   - None (Supabase auth removed)
- * 
+ *
  * SECURITY FIXES:
  *   - Added auth change events
  *   - Improved session monitoring
  *   - Prevent redirect loops
  *   - Complete session cleanup
  */
+
+// CRITICAL FIX: Imports must be at the TOP of the file
+import {
+  IDLE_TIMEOUT_MS,
+  ABSOLUTE_TIMEOUT_MS,
+  REMEMBER_ME_DURATION_MS,
+  STORAGE_KEYS as CONFIG_STORAGE_KEYS
+} from './sessionConfig';
+import { isWithinGracePeriod, cleanupAllGracePeriods } from './sessionGracePeriod';
 
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
@@ -36,14 +45,6 @@ const EXTENDED_GRACE_PERIOD_KEY = 'ggk_extended_grace_period';
 export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
 // Session durations - UPDATED TO BEST PRACTICES
-import {
-  IDLE_TIMEOUT_MS,
-  ABSOLUTE_TIMEOUT_MS,
-  REMEMBER_ME_DURATION_MS,
-  STORAGE_KEYS as CONFIG_STORAGE_KEYS
-} from './sessionConfig';
-import { isWithinGracePeriod, cleanupAllGracePeriods } from './sessionGracePeriod';
-
 // Use best practice durations
 const DEFAULT_SESSION_DURATION = IDLE_TIMEOUT_MS; // 15 minutes idle timeout
 const REMEMBER_SESSION_DURATION = REMEMBER_ME_DURATION_MS; // 30 days with remember me
