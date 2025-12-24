@@ -7,7 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { Key, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
+import { Key, Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
