@@ -37,6 +37,22 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
   const isAuthorized = testMode ? !!realAdmin : !!currentUser;
 
   if (!isAuthorized) {
+    // CRITICAL FIX: Check if test mode exit is in progress
+    // During test mode exit, contexts are updating and user may appear unauthorized temporarily
+    if (typeof window !== 'undefined') {
+      try {
+        const testModeExiting = localStorage.getItem('test_mode_exiting');
+        if (testModeExiting) {
+          console.log('[ProtectedRoute] Test mode exit in progress, waiting for context update');
+          // Return null temporarily while admin context restores
+          // This prevents false "session expired" during the transition
+          return null;
+        }
+      } catch (error) {
+        console.warn('[ProtectedRoute] Error checking test mode exit flag:', error);
+      }
+    }
+
     console.log('[ProtectedRoute] No authenticated user, redirecting to signin');
     // Clear any stale auth data before redirecting
     if (typeof window !== 'undefined') {

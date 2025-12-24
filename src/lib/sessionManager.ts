@@ -544,6 +544,17 @@ function showSessionWarning(remainingMinutes: number): void {
 function handleSessionExpired(message: string): void {
   if (isRedirecting) return;
 
+  // CRITICAL FIX: Check test mode exit flag FIRST to prevent false session expiration
+  try {
+    const testModeExiting = localStorage.getItem('test_mode_exiting');
+    if (testModeExiting) {
+      console.log('[SessionManager] Skipping expiration - test mode exit in progress');
+      return;
+    }
+  } catch (error) {
+    console.warn('[SessionManager] Error checking test mode exit flag:', error);
+  }
+
   // CRITICAL FIX: Don't expire session during deliberate reload
   // This prevents false "session expired" during user-initiated refreshes
   try {

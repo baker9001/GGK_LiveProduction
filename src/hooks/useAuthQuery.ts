@@ -27,6 +27,17 @@ function isSessionExpirationError(error: any): boolean {
 
 // Handle session expiration
 function handleSessionExpiration(): void {
+  // CRITICAL FIX: Check test mode exit flag before expiring session
+  try {
+    const testModeExiting = localStorage.getItem('test_mode_exiting');
+    if (testModeExiting) {
+      console.log('[useAuthQuery] Skipping expiration - test mode exit in progress');
+      return;
+    }
+  } catch (error) {
+    console.warn('[useAuthQuery] Error checking test mode exit flag:', error);
+  }
+
   console.error('[useAuthQuery] Session expiration detected');
   clearAuthenticatedUser();
   markSessionExpired('Your session has expired. Please sign in again to continue.');
