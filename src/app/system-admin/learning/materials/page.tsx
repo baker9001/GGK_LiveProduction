@@ -526,6 +526,16 @@ export default function MaterialManagementPage() {
         throw new Error('File is required');
       }
 
+      // CRITICAL FIX: Get the actual Supabase auth user ID instead of localStorage user ID
+      const { data: { session } } = await supabase.auth.getSession();
+      const authUserId = session?.user?.id;
+
+      console.log('[Materials] User IDs comparison:', {
+        localStorageUserId: user?.id,
+        supabaseAuthUserId: authUserId,
+        match: user?.id === authUserId
+      });
+
       const materialData = {
         ...validatedData,
         file_path: filePath,
@@ -533,7 +543,7 @@ export default function MaterialManagementPage() {
         mime_type: mimeType,
         size: fileSize,
         thumbnail_url: thumbnailPath,
-        created_by: user?.id,
+        created_by: authUserId, // Use Supabase auth user ID instead of localStorage
         created_by_role: 'system_admin',
         visibility_scope: 'global',
         school_id: null,
@@ -564,6 +574,34 @@ export default function MaterialManagementPage() {
         toast.success('Material updated successfully');
       } else {
         console.log('[Materials] Inserting new material...');
+
+        // DIAGNOSTIC: Check Supabase auth session
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('[Materials] Auth session:', {
+          userId: session?.user?.id,
+          email: session?.user?.email,
+          hasSession: !!session
+        });
+
+        // DIAGNOSTIC: Check if user is in admin_users table
+        const { data: adminCheck, error: adminCheckError } = await supabase
+          .from('admin_users')
+          .select('id')
+          .eq('id', session?.user?.id)
+          .maybeSingle();
+
+        console.log('[Materials] Admin check:', {
+          isAdmin: !!adminCheck,
+          adminCheckError,
+          sessionUserId: session?.user?.id
+        });
+
+        console.log('[Materials] Material data to insert:', {
+          ...materialData,
+          created_by: materialData.created_by,
+          created_by_role: materialData.created_by_role
+        });
+
         const { data: insertData, error } = await supabase
           .from('materials')
           .insert([materialData])
@@ -571,7 +609,29 @@ export default function MaterialManagementPage() {
 
         if (error) {
           console.error('[Materials] Insert error:', error);
-          throw error;
+          console.error('[Materials] Error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+          });
+
+          // Provide user-friendly error messages
+          let errorMessage = 'Failed to save material';
+
+          if (error.message?.includes('new row violates row-level security policy') ||
+              error.code === '42501' ||
+              error.code === 'PGRST301') {
+            errorMessage = 'Permission denied: You do not have permission to create materials. Please ensure you are logged in as a system administrator.';
+            console.error('[Materials] RLS POLICY VIOLATION - User is not authorized');
+          } else if (error.message?.includes('violates foreign key constraint')) {
+            errorMessage = 'Database constraint error: Please ensure all required fields are valid.';
+            console.error('[Materials] FOREIGN KEY VIOLATION');
+          } else {
+            errorMessage = `Failed to save material: ${error.message}`;
+          }
+
+          throw new Error(errorMessage);
         }
         console.log('[Materials] Insert successful:', insertData);
         toast.success('Material created successfully');
