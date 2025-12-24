@@ -84,8 +84,16 @@ export function ConfirmationDialog({
   const { Icon, iconClass } = toneConfig[tone];
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div 
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={(e) => {
+        // Close dialog when clicking backdrop (not the dialog content)
+        if (e.target === e.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
+      <div
         className={cn(
           "bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-black/30 max-w-md w-full overflow-hidden",
           className

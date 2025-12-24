@@ -40,7 +40,7 @@ import { SessionWarningBanner } from './components/shared/SessionWarningBanner';
 import { ActivityConfirmationDialog } from './components/shared/ActivityConfirmationDialog';
 import { ReactQueryProvider } from './providers/ReactQueryProvider';
 import { TestModeBar } from './components/admin/TestModeBar';
-import { isInTestMode, getCurrentUser } from './lib/auth';
+import { isInTestMode, getCurrentUser, cleanupTestModeExitFlag } from './lib/auth';
 import {
   initializeSessionManager,
   cleanupSessionManager
@@ -167,6 +167,10 @@ function App() {
     if (!isPublic) {
       console.log('[App] Initializing session management system on protected page');
       initializeSessionManager();
+
+      // CRITICAL FIX: Clean up test mode exit flag after page loads
+      // This prevents false session expiration after exiting test mode
+      cleanupTestModeExitFlag();
     } else {
       console.log('[App] Skipping session management on public page:', currentPath);
     }

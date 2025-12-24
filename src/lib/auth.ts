@@ -641,7 +641,9 @@ export function exitTestMode(): void {
 
   // CRITICAL FIX: Set flag to prevent session expiration during transition
   // This ensures the admin's session is not incorrectly marked as expired
+  // Flag will be cleared after the page loads on the dashboard
   localStorage.setItem('test_mode_exiting', 'true');
+  localStorage.setItem('test_mode_exit_timestamp', Date.now().toString());
 
   // Update the last activity time to prevent timeout during transition
   localStorage.setItem(LAST_PAGE_LOAD_TIME_KEY, Date.now().toString());
@@ -661,11 +663,37 @@ export function exitTestMode(): void {
   // Dispatch auth change event to restore real admin context
   dispatchAuthChange();
 
-  // Small delay to let contexts update, then clear the exit flag
+  // Redirect immediately without clearing the flag
+  // The flag will be cleared after the dashboard loads
   setTimeout(() => {
-    localStorage.removeItem('test_mode_exiting');
     window.location.href = '/app/system-admin/dashboard';
   }, 100);
+}
+
+// Clean up test mode exit flag after successful page load
+export function cleanupTestModeExitFlag(): void {
+  try {
+    const exitFlag = localStorage.getItem('test_mode_exiting');
+    const exitTimestamp = localStorage.getItem('test_mode_exit_timestamp');
+
+    if (exitFlag && exitTimestamp) {
+      const timeSinceExit = Date.now() - parseInt(exitTimestamp, 10);
+
+      // Clear flag if exit was recent (within last 10 seconds)
+      if (timeSinceExit < 10000) {
+        console.log('[TestMode] Cleaning up exit flag after successful navigation');
+        localStorage.removeItem('test_mode_exiting');
+        localStorage.removeItem('test_mode_exit_timestamp');
+      } else {
+        // Stale flag, clear it anyway
+        console.log('[TestMode] Clearing stale exit flag');
+        localStorage.removeItem('test_mode_exiting');
+        localStorage.removeItem('test_mode_exit_timestamp');
+      }
+    }
+  } catch (error) {
+    console.error('[TestMode] Error cleaning up exit flag:', error);
+  }
 }
 
 export function isInTestMode(): boolean {
