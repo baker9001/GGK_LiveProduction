@@ -799,10 +799,14 @@ if (typeof window !== 'undefined') {
   lastLoginTime = getPersistedLastLoginTime();
   persistLastPageLoadTime(); // Record page load time
 
-  // Check if this is a deliberate reload and extend grace period
+  // Check if this is a deliberate reload or browser refresh and extend grace period
   try {
+    let isBrowserRefresh = false;
+    let reloadReason = 'unknown';
+
+    // Check for deliberate reload marker
     const reloadMarker = localStorage.getItem(DELIBERATE_RELOAD_KEY);
-    const reloadReason = localStorage.getItem(RELOAD_REASON_KEY);
+    const storedReloadReason = localStorage.getItem(RELOAD_REASON_KEY);
 
     if (reloadMarker) {
       const reloadTime = parseInt(reloadMarker, 10);
@@ -810,14 +814,41 @@ if (typeof window !== 'undefined') {
 
       // If reload marker is less than 5 seconds old, this is a deliberate reload
       if (timeSinceReload < 5000) {
-        console.log(`[Auth] Detected deliberate reload: ${reloadReason || 'unknown'}`);
-        // Store extended grace period marker
-        localStorage.setItem(EXTENDED_GRACE_PERIOD_KEY, Date.now().toString());
+        isBrowserRefresh = true;
+        reloadReason = storedReloadReason || 'unknown';
+        console.log(`[Auth] Detected deliberate reload: ${reloadReason}`);
       }
 
       // Clean up reload marker
       localStorage.removeItem(DELIBERATE_RELOAD_KEY);
       localStorage.removeItem(RELOAD_REASON_KEY);
+    }
+
+    // CRITICAL FIX: Also detect browser refresh using Performance API
+    if (!isBrowserRefresh && window.performance) {
+      // Check legacy API
+      if (window.performance.navigation && window.performance.navigation.type === 1) {
+        isBrowserRefresh = true;
+        reloadReason = 'browser_refresh';
+        console.log('[Auth] Detected browser refresh (F5/Ctrl+R)');
+      }
+
+      // Check modern API
+      if (!isBrowserRefresh && window.performance.getEntriesByType) {
+        const navigationEntries = window.performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+        if (navigationEntries.length > 0 && navigationEntries[0].type === 'reload') {
+          isBrowserRefresh = true;
+          reloadReason = 'browser_refresh';
+          console.log('[Auth] Detected browser refresh (PerformanceNavigationTiming)');
+        }
+      }
+    }
+
+    // If this is a browser refresh or deliberate reload, set extended grace period
+    if (isBrowserRefresh) {
+      localStorage.setItem(EXTENDED_GRACE_PERIOD_KEY, Date.now().toString());
+      localStorage.setItem(RELOAD_REASON_KEY, reloadReason);
+      console.log(`[Auth] Extended grace period activated for: ${reloadReason}`);
     }
   } catch (error) {
     console.warn('[Auth] Failed to check reload marker:', error);

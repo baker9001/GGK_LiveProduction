@@ -68,7 +68,7 @@ export function initializeSessionManager(): void {
 
   console.log('[SessionManager] Initializing comprehensive session management');
 
-  // Check if this is a deliberate reload
+  // Check if this is a deliberate reload OR browser refresh
   let isDeliberateReload = false;
   let reloadReason = 'unknown';
   try {
@@ -88,6 +88,28 @@ export function initializeSessionManager(): void {
       // Clean up reload marker
       localStorage.removeItem(DELIBERATE_RELOAD_KEY);
       localStorage.removeItem(RELOAD_REASON_KEY);
+    }
+
+    // CRITICAL FIX: Detect browser refresh (F5, Ctrl+R, etc.)
+    // Check if this is a browser reload using performance.navigation
+    if (window.performance && window.performance.navigation) {
+      const navType = window.performance.navigation.type;
+      // Type 1 = reload (F5, Ctrl+R, browser refresh button)
+      if (navType === 1) {
+        isDeliberateReload = true;
+        reloadReason = 'browser_refresh';
+        console.log('[SessionManager] Detected browser refresh (F5/Ctrl+R)');
+      }
+    }
+
+    // Also check PerformanceNavigationTiming API (modern browsers)
+    if (!isDeliberateReload && window.performance && window.performance.getEntriesByType) {
+      const navigationEntries = window.performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+      if (navigationEntries.length > 0 && navigationEntries[0].type === 'reload') {
+        isDeliberateReload = true;
+        reloadReason = 'browser_refresh';
+        console.log('[SessionManager] Detected browser refresh (PerformanceNavigationTiming)');
+      }
     }
   } catch (error) {
     console.warn('[SessionManager] Failed to check reload marker:', error);
@@ -127,6 +149,21 @@ export function initializeSessionManager(): void {
   const savedActivity = localStorage.getItem(LAST_ACTIVITY_KEY);
   if (savedActivity) {
     lastActivityTime = parseInt(savedActivity, 10);
+  }
+
+  // CRITICAL FIX: Set up beforeunload listener to detect when user is about to refresh/reload
+  // This prevents false session expiration messages on browser refresh
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+      try {
+        // Mark that page is being unloaded (likely a refresh)
+        localStorage.setItem(DELIBERATE_RELOAD_KEY, Date.now().toString());
+        localStorage.setItem(RELOAD_REASON_KEY, 'browser_refresh');
+        console.log('[SessionManager] Page unloading - marking as browser refresh');
+      } catch (error) {
+        console.warn('[SessionManager] Failed to set reload marker:', error);
+      }
+    });
   }
 
   // Listen for Supabase session changes (cross-tab or automatic refresh failures)

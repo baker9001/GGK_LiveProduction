@@ -47,6 +47,7 @@ export function SessionWarningBanner() {
   const [isVisible, setIsVisible] = useState(false);
   const [remainingMinutes, setRemainingMinutes] = useState(0);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [pageLoadTime] = useState(Date.now());
 
   useEffect(() => {
     // CRITICAL FIX: Don't show warning on public pages
@@ -54,6 +55,7 @@ export function SessionWarningBanner() {
       console.log('[SessionWarningBanner] On public page, skipping');
       return;
     }
+
     const resolveRemainingMinutes = () => {
       const localRemaining = getSessionRemainingTime();
 
@@ -78,6 +80,14 @@ export function SessionWarningBanner() {
       // Double-check we're not on a public page
       if (typeof window !== 'undefined' && isPublicPage(window.location.pathname)) {
         console.log('[SessionWarningBanner] Warning event on public page, ignoring');
+        return;
+      }
+
+      // CRITICAL FIX: Don't show warning immediately after page load (30 second grace period)
+      // This prevents false warnings after browser refresh
+      const timeSincePageLoad = Date.now() - pageLoadTime;
+      if (timeSincePageLoad < 30000) {
+        console.log('[SessionWarningBanner] Page just loaded, ignoring warning event for grace period');
         return;
       }
 
@@ -115,7 +125,7 @@ export function SessionWarningBanner() {
       window.removeEventListener(SESSION_EXTENDED_EVENT, handleExtended as EventListener);
       clearInterval(countdownInterval);
     };
-  }, [isVisible, isDismissed]);
+  }, [isVisible, isDismissed, pageLoadTime]);
 
   const handleExtendSession = () => {
     extendSession();
