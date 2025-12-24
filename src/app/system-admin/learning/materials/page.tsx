@@ -1,6 +1,6 @@
 ///home/project/src/app/system-admin/learning/materials/page.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { z } from 'zod';
 import { Plus, FileText, Upload, Download, Eye, Trash2, CreditCard as Edit2, FolderUp } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
@@ -160,6 +160,8 @@ export default function MaterialManagementPage() {
     types: [] as string[],
     status: [] as string[]
   });
+
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     fetchMaterials();
@@ -465,11 +467,18 @@ export default function MaterialManagementPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    console.log('[Materials] handleSubmit called');
+    console.log('[Materials] Form state:', formState);
+    console.log('[Materials] Uploaded file:', uploadedFile?.name, uploadedFile?.size);
+    console.log('[Materials] User:', user?.id, user?.email);
+
     setFormErrors({});
     setUploading(true);
 
     try {
+      console.log('[Materials] Validating form data with Zod...');
       const validatedData = materialSchema.parse(formState);
+      console.log('[Materials] Validation passed:', validatedData);
 
       let filePath = editingMaterial?.file_path;
       let fileUrl = editingMaterial?.file_url || '';
@@ -482,7 +491,7 @@ export default function MaterialManagementPage() {
         mimeType = fileTypeInfo.mimeType;
         fileSize = uploadedFile.size;
 
-        console.log('File details before upload:', {
+        console.log('[Materials] File details before upload:', {
           name: uploadedFile.name,
           type: mimeType,
           category: fileTypeInfo.category,
@@ -491,18 +500,19 @@ export default function MaterialManagementPage() {
         });
 
         if (editingMaterial?.file_path) {
+          console.log('[Materials] Removing old file:', editingMaterial.file_path);
           await supabase.storage
             .from('materials_files')
             .remove([editingMaterial.file_path]);
         }
 
+        console.log('[Materials] Starting file upload to storage...');
         filePath = await handleFileUpload(uploadedFile);
+        console.log('[Materials] File upload complete, path:', filePath);
         fileUrl = filePath;
       }
 
-      // Handle thumbnail upload
       if (uploadedThumbnail) {
-        // Delete old thumbnail if exists
         if (editingMaterial?.thumbnail_url) {
           await supabase.storage
             .from('thumbnails')
@@ -512,6 +522,7 @@ export default function MaterialManagementPage() {
       }
 
       if (!filePath) {
+        console.error('[Materials] No file path - file is required');
         throw new Error('File is required');
       }
 
@@ -533,7 +544,10 @@ export default function MaterialManagementPage() {
         subtopic_id: validatedData.subtopic_id && validatedData.subtopic_id !== '' ? validatedData.subtopic_id : null,
       };
 
+      console.log('[Materials] Material data to save:', materialData);
+
       if (editingMaterial) {
+        console.log('[Materials] Updating existing material:', editingMaterial.id);
         const { error } = await supabase
           .from('materials')
           .update({
@@ -542,14 +556,24 @@ export default function MaterialManagementPage() {
           })
           .eq('id', editingMaterial.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('[Materials] Update error:', error);
+          throw error;
+        }
+        console.log('[Materials] Update successful');
         toast.success('Material updated successfully');
       } else {
-        const { error } = await supabase
+        console.log('[Materials] Inserting new material...');
+        const { data: insertData, error } = await supabase
           .from('materials')
-          .insert([materialData]);
+          .insert([materialData])
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error('[Materials] Insert error:', error);
+          throw error;
+        }
+        console.log('[Materials] Insert successful:', insertData);
         toast.success('Material created successfully');
       }
 
@@ -561,7 +585,9 @@ export default function MaterialManagementPage() {
       setThumbnailPreview(null);
       setFormErrors({});
     } catch (error) {
+      console.error('[Materials] Caught error in handleSubmit:', error);
       if (error instanceof z.ZodError) {
+        console.log('[Materials] Zod validation error:', error.errors);
         const errors: Record<string, string> = {};
         error.errors.forEach((err) => {
           if (err.path.length > 0) {
@@ -569,12 +595,15 @@ export default function MaterialManagementPage() {
           }
         });
         setFormErrors(errors);
+        toast.error('Please fix the validation errors');
       } else {
-        console.error('Error saving material:', error);
-        setFormErrors({ form: 'Failed to save material. Please try again.' });
-        toast.error('Failed to save material');
+        console.error('[Materials] Non-Zod error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setFormErrors({ form: `Failed to save material: ${errorMessage}` });
+        toast.error(`Failed to save material: ${errorMessage}`);
       }
     } finally {
+      console.log('[Materials] handleSubmit complete, setting uploading=false');
       setUploading(false);
     }
   };
@@ -1122,13 +1151,19 @@ export default function MaterialManagementPage() {
           setFormErrors({});
         }}
         onSave={() => {
-          const form = document.querySelector('form');
-          if (form) form.requestSubmit();
+          console.log('[Materials] Save button clicked, formRef.current:', formRef.current);
+          if (formRef.current) {
+            console.log('[Materials] Triggering form submit via ref');
+            formRef.current.requestSubmit();
+          } else {
+            console.error('[Materials] Form ref is null - form not found!');
+            toast.error('Form not ready. Please try again.');
+          }
         }}
         loading={uploading}
         width="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
               {formErrors.form}
