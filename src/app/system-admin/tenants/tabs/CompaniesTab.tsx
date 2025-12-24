@@ -38,8 +38,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X,
+import {
+  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit2, Trash2, Users, X,
   Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key,
   Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, RefreshCw,
   AlertTriangle
@@ -1976,7 +1976,7 @@ export default function CompaniesTab() {
               className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
               title="Edit Company"
             >
-              <Edit className="h-4 w-4" />
+              <Edit2 className="h-4 w-4" />
             </button>
             
             <button
@@ -2662,7 +2662,7 @@ export default function CompaniesTab() {
                                 className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                                 title="Edit Admin"
                               >
-                                <Edit className="h-5 w-5" />
+                                <Edit2 className="h-5 w-5" />
                               </button>
                               
                               {/* Remove */}
