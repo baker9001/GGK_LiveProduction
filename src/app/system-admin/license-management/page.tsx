@@ -36,6 +36,8 @@ interface License {
   subject_id: string;
   subject_name: string;
   quantity: number;
+  total_quantity: number;
+  used_quantity: number;
   start_date: string;
   end_date: string;
   status: 'active' | 'inactive';
@@ -153,6 +155,7 @@ export default function LicenseManagementPage() {
         .select(`
           id,
           total_quantity,
+          total_allocated,
           start_date,
           end_date,
           status,
@@ -161,7 +164,7 @@ export default function LicenseManagementPage() {
           companies(id, name),
           data_structures(
             id,
-            region_id, 
+            region_id,
             program_id,
             provider_id,
             subject_id,
@@ -214,6 +217,8 @@ export default function LicenseManagementPage() {
         subject_id: license.data_structures?.subject_id || '',
         subject_name: license.data_structures?.edu_subjects?.name || 'Unknown',
         quantity: license.total_quantity,
+        total_quantity: license.total_quantity || 0,
+        used_quantity: license.total_allocated || 0,
         start_date: license.start_date,
         end_date: license.end_date,
         status: license.status,
