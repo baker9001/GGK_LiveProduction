@@ -539,6 +539,8 @@ export default function MaterialManagementPage() {
       const materialData = {
         ...validatedData,
         file_path: filePath,
+        // Note: file_url duplicates file_path for legacy compatibility. Since the bucket is private,
+        // actual access URLs are generated via MaterialFileService.getSignedUrl() at runtime.
         file_url: fileUrl,
         mime_type: mimeType,
         size: fileSize,
@@ -552,6 +554,8 @@ export default function MaterialManagementPage() {
         unit_id: validatedData.unit_id && validatedData.unit_id !== '' ? validatedData.unit_id : null,
         topic_id: validatedData.topic_id && validatedData.topic_id !== '' ? validatedData.topic_id : null,
         subtopic_id: validatedData.subtopic_id && validatedData.subtopic_id !== '' ? validatedData.subtopic_id : null,
+        // Store original filename for reference and auditing
+        original_filename: uploadedFile?.name || editingMaterial?.file_path?.split('/').pop() || null,
       };
 
       console.log('[Materials] Material data to save:', materialData);
@@ -805,6 +809,15 @@ export default function MaterialManagementPage() {
       subtopicId?: string;
     }
   ) => {
+    // CRITICAL FIX: Get the actual Supabase auth user ID instead of localStorage user ID
+    // This ensures RLS policies work correctly as they check auth.uid()
+    const { data: { session } } = await supabase.auth.getSession();
+    const authUserId = session?.user?.id;
+
+    if (!authUserId) {
+      throw new Error('User session not found. Please log in again.');
+    }
+
     const fileTypeInfo = detectFileType(file.name, file.type);
     const mimeType = fileTypeInfo.mimeType;
 
@@ -831,16 +844,18 @@ export default function MaterialManagementPage() {
       subtopic_id: metadata.subtopicId || null,
       type: metadata.type,
       file_path: uploadData.path,
+      // Note: file_url duplicates file_path for legacy compatibility
       file_url: uploadData.path,
       mime_type: mimeType,
       size: file.size,
       status: 'active',
-      created_by: user?.id,
+      created_by: authUserId, // Use Supabase auth user ID for RLS compatibility
       created_by_role: 'system_admin',
       visibility_scope: 'global',
       school_id: null,
       grade_id: null,
-      teacher_id: null
+      teacher_id: null,
+      original_filename: originalName // Store original filename for reference
     };
 
     const { error: insertError } = await supabase
@@ -848,7 +863,7 @@ export default function MaterialManagementPage() {
       .insert([materialData]);
 
     if (insertError) throw insertError;
-  }, [user?.id]);
+  }, []);
 
   const handleBulkUploadComplete = useCallback((results: { success: number; failed: number }) => {
     if (results.success > 0) {

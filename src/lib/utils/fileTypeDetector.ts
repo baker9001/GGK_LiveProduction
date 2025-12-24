@@ -40,6 +40,7 @@ const MIME_TYPE_MAP: Record<string, Omit<FileTypeInfo, 'extension'>> = {
   'application/vnd.oasis.opendocument.text': { mimeType: 'application/vnd.oasis.opendocument.text', category: 'document', canPreview: true, viewerType: 'word' },
   'application/vnd.oasis.opendocument.spreadsheet': { mimeType: 'application/vnd.oasis.opendocument.spreadsheet', category: 'document', canPreview: true, viewerType: 'excel' },
   'application/vnd.oasis.opendocument.presentation': { mimeType: 'application/vnd.oasis.opendocument.presentation', category: 'document', canPreview: true, viewerType: 'powerpoint' },
+  'application/rtf': { mimeType: 'application/rtf', category: 'document', canPreview: true, viewerType: 'word' }, // Rich Text Format
 
   'image/jpeg': { mimeType: 'image/jpeg', category: 'image', canPreview: true, viewerType: 'image' },
   'image/png': { mimeType: 'image/png', category: 'image', canPreview: true, viewerType: 'image' },
@@ -70,6 +71,8 @@ const MIME_TYPE_MAP: Record<string, Omit<FileTypeInfo, 'extension'>> = {
 const EXTENSION_TO_MIME: Record<string, string> = {
   'mp4': 'video/mp4',
   'webm': 'video/webm',
+  // Note: .ogg defaults to video/ogg, but browsers detect audio-only ogg as audio/ogg
+  // The detectFileType function prioritizes browser MIME type over extension mapping
   'ogg': 'video/ogg',
   'ogv': 'video/ogg',
   'mov': 'video/quicktime',
@@ -97,6 +100,7 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   'odt': 'application/vnd.oasis.opendocument.text',
   'ods': 'application/vnd.oasis.opendocument.spreadsheet',
   'odp': 'application/vnd.oasis.opendocument.presentation',
+  'rtf': 'application/rtf', // Rich Text Format
 
   'jpg': 'image/jpeg',
   'jpeg': 'image/jpeg',
