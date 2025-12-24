@@ -35,9 +35,19 @@ const RELOAD_REASON_KEY = 'ggk_reload_reason';
 const EXTENDED_GRACE_PERIOD_KEY = 'ggk_extended_grace_period';
 export const SESSION_EXPIRED_EVENT = 'ggk-session-expired';
 
-// Session durations
-const DEFAULT_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-const REMEMBER_SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
+// Session durations - UPDATED TO BEST PRACTICES
+import {
+  IDLE_TIMEOUT_MS,
+  ABSOLUTE_TIMEOUT_MS,
+  REMEMBER_ME_DURATION_MS,
+  STORAGE_KEYS as CONFIG_STORAGE_KEYS
+} from './sessionConfig';
+import { isWithinGracePeriod, cleanupAllGracePeriods } from './sessionGracePeriod';
+
+// Use best practice durations
+const DEFAULT_SESSION_DURATION = IDLE_TIMEOUT_MS; // 15 minutes idle timeout
+const REMEMBER_SESSION_DURATION = REMEMBER_ME_DURATION_MS; // 30 days with remember me
+const ABSOLUTE_SESSION_DURATION = ABSOLUTE_TIMEOUT_MS; // 8 hours absolute maximum
 
 // Pages that don't require authentication
 const PUBLIC_PAGES = [
@@ -60,15 +70,42 @@ export function dispatchAuthChange(): void {
 }
 
 // Generate a simple JWT-like token for API calls
+// UPDATED: Now tracks both idle timeout and absolute session timeout
 export function generateAuthToken(user: User, rememberMe: boolean = false): string {
+  const now = Date.now();
   const duration = rememberMe ? REMEMBER_SESSION_DURATION : DEFAULT_SESSION_DURATION;
+
+  // Get or create session start time (for absolute timeout)
+  let sessionStartTime = now;
+  try {
+    const stored = localStorage.getItem(CONFIG_STORAGE_KEYS.SESSION_START_TIME);
+    if (stored) {
+      sessionStartTime = parseInt(stored, 10) || now;
+    } else {
+      localStorage.setItem(CONFIG_STORAGE_KEYS.SESSION_START_TIME, now.toString());
+    }
+  } catch (error) {
+    console.warn('[Auth] Could not access session start time');
+  }
+
+  // Calculate both idle timeout and absolute timeout
+  const idleExpiry = now + duration;
+  const absoluteExpiry = sessionStartTime + ABSOLUTE_SESSION_DURATION;
+
+  // Use whichever comes first
+  const effectiveExpiry = Math.min(idleExpiry, absoluteExpiry);
+
   const payload = {
     id: user.id,
     email: user.email,
     role: user.role,
-    exp: Date.now() + duration,
+    exp: effectiveExpiry,
+    idleExp: idleExpiry,
+    absoluteExp: absoluteExpiry,
+    sessionStart: sessionStartTime,
     rememberMe
   };
+
   // Simple base64 encoding (for demo - use proper JWT in production)
   return btoa(JSON.stringify(payload));
 }
@@ -194,6 +231,9 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(LAST_LOGIN_TIME_KEY);
   localStorage.removeItem(LAST_PAGE_LOAD_TIME_KEY);
 
+  // NEW: Clear session start time for absolute timeout tracking
+  localStorage.removeItem(CONFIG_STORAGE_KEYS.SESSION_START_TIME);
+
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
   localStorage.removeItem('last_user_id');
@@ -204,6 +244,9 @@ export function clearAuthenticatedUser(): void {
     localStorage.removeItem('ggk_remembered_email');
     localStorage.removeItem('ggk_user_logout');
   }
+
+  // NEW: Clean up all grace period markers
+  cleanupAllGracePeriods();
 
   sessionStorage.clear();
   console.log('User logged out, all auth data cleared');

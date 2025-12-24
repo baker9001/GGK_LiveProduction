@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, LogIn } from 'lucide-react';
+import { Clock, Lock, AlertCircle, LogIn, Shield } from 'lucide-react';
 import { Button } from './Button';
 import { SESSION_EXPIRED_EVENT, consumeSessionExpiredNotice } from '../../lib/auth';
 
@@ -38,9 +38,27 @@ function isPublicPage(path: string): boolean {
   );
 }
 
+/**
+ * Parse expiration reason from message
+ */
+function getExpirationReason(message: string): 'inactivity' | 'absolute' | 'security' | 'unknown' {
+  const lowerMessage = message.toLowerCase();
+  if (lowerMessage.includes('inactivity') || lowerMessage.includes('inactive')) {
+    return 'inactivity';
+  }
+  if (lowerMessage.includes('secure') || lowerMessage.includes('security') || lowerMessage.includes('another device')) {
+    return 'security';
+  }
+  if (lowerMessage.includes('maximum') || lowerMessage.includes('absolute')) {
+    return 'absolute';
+  }
+  return 'unknown';
+}
+
 export function SessionExpiredNotice() {
   const [isVisible, setIsVisible] = useState(false);
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
+  const [fadeIn, setFadeIn] = useState(false);
 
   useEffect(() => {
     // CRITICAL FIX: Don't show session expired notice on public pages
@@ -68,6 +86,8 @@ export function SessionExpiredNotice() {
       const detailMessage = customEvent.detail?.message || DEFAULT_MESSAGE;
       setMessage(detailMessage);
       setIsVisible(true);
+      // Trigger fade-in animation
+      setTimeout(() => setFadeIn(true), 10);
     };
 
     if (typeof window !== 'undefined') {
@@ -79,6 +99,8 @@ export function SessionExpiredNotice() {
         console.log('[SessionExpiredNotice] Found stored session expiration message');
         setMessage(storedMessage);
         setIsVisible(true);
+        // Trigger fade-in animation
+        setTimeout(() => setFadeIn(true), 10);
       }
     }
 
@@ -90,184 +112,110 @@ export function SessionExpiredNotice() {
   }, []);
 
   const handleAcknowledge = () => {
-    setIsVisible(false);
-    if (typeof window !== 'undefined') {
-      window.location.replace('/signin');
-    }
+    setFadeIn(false);
+    setTimeout(() => {
+      setIsVisible(false);
+      if (typeof window !== 'undefined') {
+        window.location.replace('/signin');
+      }
+    }, 200);
   };
 
   if (!isVisible) {
     return null;
   }
 
+  const reason = getExpirationReason(message);
+
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm px-4">
-      <div className="max-w-3xl w-full overflow-hidden rounded-2xl border border-white/10 bg-white/95 shadow-2xl backdrop-blur dark:bg-gray-900/95">
-        <div className="grid grid-cols-1 gap-0 md:grid-cols-5">
-          <div className="relative hidden overflow-hidden md:col-span-2 md:block bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-800 dark:to-gray-900">
-            <svg
-              viewBox="0 0 400 500"
-              className="h-full w-full"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <defs>
-                <linearGradient id="clockGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style={{ stopColor: '#6366f1', stopOpacity: 0.8 }} />
-                  <stop offset="100%" style={{ stopColor: '#8b5cf6', stopOpacity: 0.9 }} />
-                </linearGradient>
-                <linearGradient id="lockGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style={{ stopColor: '#ef4444', stopOpacity: 0.7 }} />
-                  <stop offset="100%" style={{ stopColor: '#f97316', stopOpacity: 0.8 }} />
-                </linearGradient>
-                <filter id="shadow">
-                  <feDropShadow dx="0" dy="4" stdDeviation="8" floodOpacity="0.2" />
-                </filter>
-              </defs>
-
-              {/* Background decorative circles */}
-              <circle cx="100" cy="100" r="60" fill="#6366f1" opacity="0.05" />
-              <circle cx="320" cy="400" r="80" fill="#8b5cf6" opacity="0.05" />
-              <circle cx="350" cy="150" r="40" fill="#ec4899" opacity="0.05" />
-
-              {/* Main clock circle */}
-              <g filter="url(#shadow)">
-                <circle
-                  cx="200"
-                  cy="220"
-                  r="100"
-                  fill="url(#clockGradient)"
-                  stroke="#ffffff"
-                  strokeWidth="4"
-                />
-
-                {/* Clock face */}
-                <circle cx="200" cy="220" r="90" fill="#ffffff" opacity="0.95" />
-
-                {/* Clock hour markers */}
-                <circle cx="200" cy="145" r="4" fill="#6366f1" />
-                <circle cx="275" cy="220" r="4" fill="#6366f1" />
-                <circle cx="200" cy="295" r="4" fill="#6366f1" />
-                <circle cx="125" cy="220" r="4" fill="#6366f1" />
-
-                {/* Clock hands - showing expired time */}
-                <line
-                  x1="200"
-                  y1="220"
-                  x2="200"
-                  y2="170"
-                  stroke="#1e293b"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                />
-                <line
-                  x1="200"
-                  y1="220"
-                  x2="240"
-                  y2="220"
-                  stroke="#1e293b"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                />
-
-                {/* Center dot */}
-                <circle cx="200" cy="220" r="8" fill="#6366f1" />
-              </g>
-
-              {/* Lock icon overlay */}
-              <g filter="url(#shadow)">
-                {/* Lock body */}
-                <rect
-                  x="160"
-                  y="360"
-                  width="80"
-                  height="70"
-                  rx="8"
-                  fill="url(#lockGradient)"
-                />
-                <rect
-                  x="165"
-                  y="365"
-                  width="70"
-                  height="60"
-                  rx="6"
-                  fill="#ffffff"
-                  opacity="0.2"
-                />
-
-                {/* Lock shackle - open/unlocked */}
-                <path
-                  d="M 175 360 Q 175 330, 200 330 Q 225 330, 225 360"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                />
-
-                {/* Keyhole */}
-                <circle cx="200" cy="390" r="8" fill="#ffffff" opacity="0.9" />
-                <rect x="196" y="390" width="8" height="20" rx="2" fill="#ffffff" opacity="0.9" />
-              </g>
-
-              {/* Warning indicator - small red dot with pulse effect */}
-              <circle cx="260" cy="180" r="12" fill="#ef4444" opacity="0.9" />
-              <circle cx="260" cy="180" r="8" fill="#ffffff" />
-              <text
-                x="260"
-                y="186"
-                textAnchor="middle"
-                fill="#ef4444"
-                fontSize="16"
-                fontWeight="bold"
-              >
-                !
-              </text>
-
-              {/* Time expired arc */}
-              <path
-                d="M 200 120 A 100 100 0 1 1 199.9 120"
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth="3"
-                strokeDasharray="5,5"
-                opacity="0.4"
-              />
-            </svg>
-            <div className="absolute inset-0 bg-gradient-to-t from-gray-900/40 via-transparent to-transparent" />
-          </div>
-
-          <div className="md:col-span-3 p-8">
-            <div className="flex items-center gap-3 text-gray-900 dark:text-gray-100">
-              <span className="inline-flex items-center justify-center rounded-full bg-red-500/10 p-2 text-red-500">
-                <AlertCircle className="h-6 w-6" aria-hidden="true" />
-              </span>
-              <div>
-                <h2 className="text-2xl font-semibold">Session expired</h2>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                  {message}
-                </p>
+    <div
+      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm px-4 transition-opacity duration-300 ${
+        fadeIn ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      <div className={`max-w-2xl w-full overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl transition-all duration-300 ${
+        fadeIn ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+      }`}>
+        {/* Icon Section - Now fully responsive */}
+        <div className="relative bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 py-8 md:py-12">
+          <div className="flex items-center justify-center gap-4">
+            {/* Clock Icon */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl animate-pulse" />
+              <div className="relative bg-white dark:bg-gray-800 p-4 rounded-full shadow-lg">
+                <Clock className="h-12 w-12 md:h-16 md:w-16 text-blue-600 dark:text-blue-400" strokeWidth={1.5} />
               </div>
             </div>
 
-            <div className="mt-6 rounded-lg border border-gray-200/60 bg-gray-50/60 p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-200">
-              <p className="font-medium">Why am I seeing this?</p>
-              <p className="mt-2">
-                For your security, sessions end automatically after a period of inactivity or when you sign in from another device.
-              </p>
-              <p className="mt-2">
-                To keep your work safe, please sign in again. You&apos;ll return to the login page once you acknowledge this message.
-              </p>
+            {/* Lock Icon */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-red-500/20 rounded-full blur-xl animate-pulse" style={{ animationDelay: '0.5s' }} />
+              <div className="relative bg-white dark:bg-gray-800 p-4 rounded-full shadow-lg">
+                <Lock className="h-12 w-12 md:h-16 md:w-16 text-red-600 dark:text-red-400" strokeWidth={1.5} />
+              </div>
             </div>
+          </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-              <Button
-                className="inline-flex items-center gap-2"
-                onClick={handleAcknowledge}
-              >
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                Go to sign in
-              </Button>
+          {/* Decorative elements */}
+          <div className="absolute top-4 left-4 w-20 h-20 bg-blue-500/10 rounded-full blur-2xl" />
+          <div className="absolute bottom-4 right-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl" />
+        </div>
+
+        {/* Content Section */}
+        <div className="p-6 md:p-8">
+          {/* Header */}
+          <div className="flex items-start gap-3 text-gray-900 dark:text-gray-100">
+            <span className="inline-flex items-center justify-center rounded-full bg-red-500/10 dark:bg-red-500/20 p-2 flex-shrink-0">
+              <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" aria-hidden="true" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl md:text-2xl font-semibold">Session Expired</h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {message}
+              </p>
             </div>
+          </div>
+
+          {/* Explanation Box */}
+          <div className="mt-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
+            <div className="flex items-start gap-2">
+              <Shield className="h-5 w-5 text-gray-600 dark:text-gray-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                  {reason === 'inactivity' && 'Session ended due to inactivity'}
+                  {reason === 'absolute' && 'Maximum session time reached'}
+                  {reason === 'security' && 'Session ended for security'}
+                  {reason === 'unknown' && 'Why did this happen?'}
+                </p>
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  {reason === 'inactivity' &&
+                    'For your security, sessions automatically end after 15 minutes of inactivity. This protects your account if you forget to sign out.'}
+                  {reason === 'absolute' &&
+                    'Sessions have a maximum lifetime of 8 hours for security. This ensures your account stays protected even during active use.'}
+                  {reason === 'security' &&
+                    'Your session was ended to protect your account. This may happen when signing in from another device or location.'}
+                  {reason === 'unknown' &&
+                    'For your security, sessions end automatically after inactivity or when you sign in from another device.'}
+                </p>
+                <p className="mt-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Your work is safe
+                </p>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  All your data has been saved. Simply sign in again to continue where you left off.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <Button
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2"
+              onClick={handleAcknowledge}
+            >
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              Return to Sign In
+            </Button>
           </div>
         </div>
       </div>
