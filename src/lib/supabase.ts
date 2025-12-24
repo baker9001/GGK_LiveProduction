@@ -209,6 +209,13 @@ export const handleSupabaseError = (error: any, context?: string) => {
 
     // CRITICAL FIX: Check if we're in grace period or about to reload before marking session expired
     import('./auth').then(({ clearAuthenticatedUser, markSessionExpired, isWithinGracePeriod }) => {
+      // CRITICAL FIX: Check test mode exit in progress
+      const testModeExiting = localStorage.getItem('test_mode_exiting');
+      if (testModeExiting) {
+        console.log('[Supabase] Auth error during test mode exit - not marking session as expired');
+        throw new Error('Session validation skipped during test mode exit');
+      }
+
       // Check grace period
       if (isWithinGracePeriod()) {
         console.log('[Supabase] Auth error during grace period - not marking session as expired');

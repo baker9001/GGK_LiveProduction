@@ -268,9 +268,17 @@ export function markUserLogout(): void {
 
 // Mark that the session expired so the UI can show a friendly inline notice
 export function markSessionExpired(message: string = 'Your session has expired. Please sign in again to continue.'): void {
-  // CRITICAL FIX: Don't mark session as expired during deliberate reloads
-  // Check if deliberate reload is in progress
+  // CRITICAL FIX: Don't mark session as expired during test mode exit
+  // Check if test mode exit is in progress
   try {
+    const testModeExiting = localStorage.getItem('test_mode_exiting');
+    if (testModeExiting) {
+      console.log('[Auth] Skipping session expired mark - test mode exit in progress');
+      return;
+    }
+
+    // CRITICAL FIX: Don't mark session as expired during deliberate reloads
+    // Check if deliberate reload is in progress
     const deliberateReload = localStorage.getItem('ggk_deliberate_reload');
     if (deliberateReload) {
       const reloadTime = parseInt(deliberateReload, 10);
@@ -631,6 +639,14 @@ export function startTestMode(testUser: User, skipAuthDispatch: boolean = false)
 export function exitTestMode(): void {
   const metadata = getTestModeMetadata();
 
+  // CRITICAL FIX: Set flag to prevent session expiration during transition
+  // This ensures the admin's session is not incorrectly marked as expired
+  localStorage.setItem('test_mode_exiting', 'true');
+
+  // Update the last activity time to prevent timeout during transition
+  localStorage.setItem(LAST_PAGE_LOAD_TIME_KEY, Date.now().toString());
+
+  // Clean up test mode data
   localStorage.removeItem(TEST_USER_KEY);
   localStorage.removeItem('test_mode_metadata');
   localStorage.removeItem('test_mode_expiration');
@@ -645,8 +661,9 @@ export function exitTestMode(): void {
   // Dispatch auth change event to restore real admin context
   dispatchAuthChange();
 
-  // Small delay to let contexts update
+  // Small delay to let contexts update, then clear the exit flag
   setTimeout(() => {
+    localStorage.removeItem('test_mode_exiting');
     window.location.href = '/app/system-admin/dashboard';
   }, 100);
 }

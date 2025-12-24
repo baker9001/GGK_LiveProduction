@@ -208,13 +208,13 @@ export function TestModeBar() {
       {/* Exit Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={showExitConfirm}
-        onClose={() => setShowExitConfirm(false)}
+        onCancel={() => setShowExitConfirm(false)}
         onConfirm={handleConfirmExit}
         title="Exit Test Mode"
         message={`Are you sure you want to exit test mode and return to your admin dashboard? Current session has ${formatTime(timeRemaining)} remaining.`}
         confirmText="Exit Test Mode"
         confirmVariant="warning"
-        icon={<X />}
+        tone="warning"
       />
     </>
   );
