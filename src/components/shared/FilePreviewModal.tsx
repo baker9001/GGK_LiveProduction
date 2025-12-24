@@ -17,6 +17,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   onConfirm,
   maxFileSize,
 }) => {
+  const modalRef = React.useRef<HTMLDivElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileInfo, setFileInfo] = useState<ReturnType<typeof detectFileType> | null>(null);
   const [validation, setValidation] = useState<{
@@ -24,6 +25,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     typeValid: boolean;
     previewable: boolean;
   }>({ sizeValid: true, typeValid: true, previewable: false });
+
+  // Register this modal as a portal so the parent SlideInForm doesn't close when clicking inside it
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      // Register with the global portal system (used by SlideInForm)
+      const registerPortal = (window as any).__registerSlideInFormPortal;
+      if (registerPortal && typeof registerPortal === 'function') {
+        return registerPortal(modalRef.current);
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!file) {
@@ -69,7 +81,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return () => {
       setPreviewUrl(null);
     };
-  }, [file, maxFileSize]);
+  }, [file, maxFileSize, isOpen]);
 
   if (!isOpen || !file) return null;
 
@@ -173,7 +185,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         onClick={onClose}
       />
 
-      <div className="absolute inset-4 md:inset-8 lg:inset-12 xl:inset-24 bg-white dark:bg-gray-800 rounded-lg shadow-2xl flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div
+        ref={modalRef}
+        className="absolute inset-4 md:inset-8 lg:inset-12 xl:inset-24 bg-white dark:bg-gray-800 rounded-lg shadow-2xl flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
         <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
           <div className="flex items-center gap-3">
             <File className="h-6 w-6 text-gray-600 dark:text-gray-400" />
