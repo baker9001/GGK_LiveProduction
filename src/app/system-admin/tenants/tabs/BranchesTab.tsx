@@ -678,20 +678,20 @@ export default function BranchesTab() {
       header: 'Logo',
       enableSorting: false,
       cell: (row: Branch) => (
-        <div className="w-10 h-10 flex items-center justify-center">
+        <div className="w-16 h-16 flex items-center justify-center">
           {row.logo ? (
             <img
               src={getLogoUrl(row.logo)}
               alt={`${row.name} logo`}
-              className="w-10 h-10 object-contain rounded-md"
+              className="w-16 h-16 object-contain rounded-md border border-gray-200 dark:border-gray-600"
               onError={(e) => {
                 console.error('Failed to load logo:', row.logo);
                 (e.target as HTMLImageElement).style.display = 'none';
               }}
             />
           ) : (
-            <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center">
-              <ImageOff className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center border border-gray-200 dark:border-gray-600">
+              <ImageOff className="w-6 h-6 text-gray-400 dark:text-gray-500" />
             </div>
           )}
         </div>

@@ -71,6 +71,9 @@ export default function SchoolsTab() {
     status: []
   });
 
+  // Track uploaded logo path for form preview
+  const [uploadedLogoPath, setUploadedLogoPath] = useState<string | null>(null);
+
   // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [schoolsToDelete, setSchoolsToDelete] = useState<School[]>([]);
@@ -239,6 +242,7 @@ export default function SchoolsTab() {
 
       // Fetch related data separately
       const companyIds = [...new Set(data.map(item => item.company_id))];
+      const schoolIds = data.map(item => item.id);
 
       const [companiesData] = await Promise.all([
         companyIds.length > 0 ? supabase
@@ -262,72 +266,107 @@ export default function SchoolsTab() {
       const regionMap = new Map(regionsData.data?.map(r => [r.id, r.name]) || []);
       const companyMap = new Map(companiesData.data?.map(c => [c.id, { name: c.name, region_id: c.region_id }]) || []);
 
-      // Enhanced data fetching with statistics for each school
-      const enhancedSchools = await Promise.all(data.map(async (school) => {
+      // PERFORMANCE OPTIMIZATION: Fetch all statistics in batch queries instead of N+1 queries
+      // This reduces database calls from 6*N to just 6 queries total
+      const [branchesData, studentsData, teachersData, adminUsersData, gradeLevelsData, classSectionsData] = await Promise.all([
+        // Fetch all branches counts grouped by school_id
+        supabase
+          .from('branches')
+          .select('school_id')
+          .in('school_id', schoolIds)
+          .eq('status', 'active'),
+
+        // Fetch all students counts grouped by school_id
+        supabase
+          .from('students')
+          .select('school_id')
+          .in('school_id', schoolIds)
+          .eq('is_active', true),
+
+        // Fetch all teachers counts grouped by school_id
+        supabase
+          .from('teachers')
+          .select('school_id')
+          .in('school_id', schoolIds)
+          .eq('is_active', true),
+
+        // Fetch all admin users assigned to schools
+        supabase
+          .from('entity_admin_scope')
+          .select('scope_id')
+          .eq('scope_type', 'school')
+          .in('scope_id', schoolIds)
+          .eq('is_active', true),
+
+        // Fetch all grade levels grouped by school_id
+        supabase
+          .from('grade_levels')
+          .select('school_id')
+          .in('school_id', schoolIds)
+          .eq('status', 'active'),
+
+        // Fetch all class sections for these schools
+        supabase
+          .from('class_sections')
+          .select(`
+            id,
+            grade_levels!inner(school_id)
+          `)
+          .in('grade_levels.school_id', schoolIds)
+          .eq('status', 'active')
+      ]);
+
+      // Create count maps for fast lookup
+      const branchesCountMap = new Map<string, number>();
+      branchesData.data?.forEach(b => {
+        branchesCountMap.set(b.school_id, (branchesCountMap.get(b.school_id) || 0) + 1);
+      });
+
+      const studentsCountMap = new Map<string, number>();
+      studentsData.data?.forEach(s => {
+        studentsCountMap.set(s.school_id, (studentsCountMap.get(s.school_id) || 0) + 1);
+      });
+
+      const teachersCountMap = new Map<string, number>();
+      teachersData.data?.forEach(t => {
+        teachersCountMap.set(t.school_id, (teachersCountMap.get(t.school_id) || 0) + 1);
+      });
+
+      const adminUsersCountMap = new Map<string, number>();
+      adminUsersData.data?.forEach(a => {
+        adminUsersCountMap.set(a.scope_id, (adminUsersCountMap.get(a.scope_id) || 0) + 1);
+      });
+
+      const gradeLevelsCountMap = new Map<string, number>();
+      gradeLevelsData.data?.forEach(g => {
+        gradeLevelsCountMap.set(g.school_id, (gradeLevelsCountMap.get(g.school_id) || 0) + 1);
+      });
+
+      const classSectionsCountMap = new Map<string, number>();
+      classSectionsData.data?.forEach(cs => {
+        const schoolId = (cs as any).grade_levels?.school_id;
+        if (schoolId) {
+          classSectionsCountMap.set(schoolId, (classSectionsCountMap.get(schoolId) || 0) + 1);
+        }
+      });
+
+      // Map schools with their statistics (no more async operations per school)
+      const enhancedSchools = data.map((school) => {
         const company = companyMap.get(school.company_id);
-        
-        // Fetch additional statistics for each school
-        const [branchesCount, studentsCount, teachersCount, adminUsersCount, gradeLevelsCount, classSectionsCount] = await Promise.all([
-          // Count branches
-          supabase
-            .from('branches')
-            .select('id', { count: 'exact', head: true })
-            .eq('school_id', school.id)
-            .eq('status', 'active'),
-          
-          // Count students
-          supabase
-            .from('students')
-            .select('id', { count: 'exact', head: true })
-            .eq('school_id', school.id)
-            .eq('is_active', true),
-          
-          // Count teachers
-          supabase
-            .from('teachers')
-            .select('id', { count: 'exact', head: true })
-            .eq('school_id', school.id)
-            .eq('is_active', true),
-          
-          // Count admin users assigned to this school
-          supabase
-            .from('entity_admin_scope')
-            .select('id', { count: 'exact', head: true })
-            .eq('scope_type', 'school')
-            .eq('scope_id', school.id)
-            .eq('is_active', true),
-          
-          // Count grade levels
-          supabase
-            .from('grade_levels')
-            .select('id', { count: 'exact', head: true })
-            .eq('school_id', school.id)
-            .eq('status', 'active'),
-          
-          // Count class sections (through grade levels)
-          supabase
-            .from('class_sections')
-            .select(`
-              id,
-              grade_levels!inner(school_id)
-            `, { count: 'exact', head: true })
-            .eq('grade_levels.school_id', school.id)
-            .eq('status', 'active')
-        ]);
-        
+
         return {
           ...school,
           company_name: company?.name ?? 'Unknown Company',
           region_name: company ? regionMap.get(company.region_id) ?? 'Unknown Region' : 'Unknown Region',
-          // Enhanced statistics
-          branches_count: branchesCount.count || 0,
-          students_count: studentsCount.count || 0,
-          teachers_count: teachersCount.count || 0,
-          admin_users_count: adminUsersCount.count || 0,
-          grade_levels_count: gradeLevelsCount.count || 0,
-          class_sections_count: classSectionsCount.count || 0
+          // Enhanced statistics from pre-fetched counts
+          branches_count: branchesCountMap.get(school.id) || 0,
+          students_count: studentsCountMap.get(school.id) || 0,
+          teachers_count: teachersCountMap.get(school.id) || 0,
+          admin_users_count: adminUsersCountMap.get(school.id) || 0,
+          grade_levels_count: gradeLevelsCountMap.get(school.id) || 0,
+          class_sections_count: classSectionsCountMap.get(school.id) || 0
         };
-      }));
+      });
 
       console.log('=== SCHOOLS QUERY DEBUG END ===');
       return enhancedSchools;
@@ -474,20 +513,20 @@ export default function SchoolsTab() {
       header: 'Logo',
       enableSorting: false,
       cell: (row: School) => (
-        <div className="w-10 h-10 flex items-center justify-center">
+        <div className="w-16 h-16 flex items-center justify-center">
           {row.logo ? (
             <img
               src={getLogoUrl(row.logo)}
               alt={`${row.name} logo`}
-              className="w-10 h-10 object-contain rounded-md"
+              className="w-16 h-16 object-contain rounded-md border border-gray-200 dark:border-gray-600"
               onError={(e) => {
                 console.error('Failed to load logo:', row.logo);
                 (e.target as HTMLImageElement).style.display = 'none';
               }}
             />
           ) : (
-            <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center">
-              <ImageOff className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center border border-gray-200 dark:border-gray-600">
+              <ImageOff className="w-6 h-6 text-gray-400 dark:text-gray-500" />
             </div>
           )}
         </div>
@@ -592,6 +631,7 @@ export default function SchoolsTab() {
         <Button
           onClick={() => {
             setEditingSchool(null);
+            setUploadedLogoPath(null);
             setIsFormOpen(true);
           }}
           leftIcon={<Plus className="h-4 w-4" />}
@@ -658,6 +698,7 @@ export default function SchoolsTab() {
         isFetching={isFetching}
         onEdit={(school) => {
           setEditingSchool(school);
+          setUploadedLogoPath(null);
           setIsFormOpen(true);
         }}
         onDelete={handleDelete}
@@ -672,6 +713,7 @@ export default function SchoolsTab() {
         onClose={() => {
           setIsFormOpen(false);
           setEditingSchool(null);
+          setUploadedLogoPath(null);
           setFormErrors({});
         }}
         onSave={() => {
@@ -738,14 +780,21 @@ export default function SchoolsTab() {
             <input
               type="hidden"
               name="logo"
-              value={editingSchool?.logo || ''}
+              value={uploadedLogoPath || editingSchool?.logo || ''}
             />
             <ImageUpload
               id="logo"
               bucket="school-logos"
-              value={editingSchool?.logo}
-              publicUrl={editingSchool?.logo ? getLogoUrl(editingSchool.logo) : null}
+              value={uploadedLogoPath || editingSchool?.logo}
+              publicUrl={
+                uploadedLogoPath
+                  ? getLogoUrl(uploadedLogoPath)
+                  : editingSchool?.logo
+                    ? getLogoUrl(editingSchool.logo)
+                    : null
+              }
               onChange={(path) => {
+                setUploadedLogoPath(path);
                 const input = document.querySelector('input[name="logo"]') as HTMLInputElement;
                 if (input) input.value = path || '';
               }}
