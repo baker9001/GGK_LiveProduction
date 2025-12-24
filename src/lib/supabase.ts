@@ -92,7 +92,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     for (let i = 0; i < maxRetries; i++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        // CRITICAL FIX: Increase timeout to 120 seconds for large file uploads
+        // Previous 30s timeout was causing 504 Gateway Timeout errors
+        const timeoutDuration = 120000; // 2 minutes
+        const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
         const response = await fetch(url, {
           ...options,
@@ -108,15 +111,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         return response;
       } catch (error) {
         lastError = error;
-        console.warn(`Fetch attempt ${i + 1} failed:`, error);
+        console.warn(`[Supabase Fetch] Attempt ${i + 1} failed:`, error);
 
         // If it's a network error, wait before retrying
         if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+          const waitTime = 1000 * (i + 1);
+          console.log(`[Supabase Fetch] Retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
     }
 
+    console.error('[Supabase Fetch] All retry attempts failed:', lastError);
     throw lastError;
   },
   // Add realtime configuration

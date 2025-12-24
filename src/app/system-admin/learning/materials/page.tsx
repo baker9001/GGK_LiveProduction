@@ -427,24 +427,51 @@ export default function MaterialManagementPage() {
     const originalName = file.name;
     const uniquePrefix = Math.random().toString(36).slice(2);
     const fileName = `AdminMaterials/${uniquePrefix}_${originalName}`;
-    
-    console.log('Uploading file with details:', {
+
+    console.log('[File Upload] Starting upload with details:', {
       name: file.name,
       type: file.type,
       size: formatFileSize(file.size),
-      sizeBytes: file.size
+      sizeBytes: file.size,
+      path: fileName
     });
 
-    const { data, error } = await supabase.storage
-      .from('materials_files')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: file.type // Explicitly set content type
-      });
+    // Warn about large files
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > 50) {
+      console.warn('[File Upload] Large file detected:', fileSizeMB.toFixed(2), 'MB - This may take several minutes');
+    }
 
-    if (error) throw error;
-    return data.path;
+    try {
+      const { data, error } = await supabase.storage
+        .from('materials_files')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type // Explicitly set content type
+        });
+
+      if (error) {
+        console.error('[File Upload] Upload failed:', error);
+        throw error;
+      }
+
+      console.log('[File Upload] Upload successful:', data.path);
+      return data.path;
+    } catch (error: any) {
+      console.error('[File Upload] Caught error:', error);
+
+      // Provide specific error messages for common issues
+      if (error.message?.includes('504') || error.message?.includes('timeout')) {
+        throw new Error(`File upload timed out. File size: ${formatFileSize(file.size)}. Try compressing the file or use a better internet connection.`);
+      } else if (error.message?.includes('413') || error.message?.includes('too large')) {
+        throw new Error(`File is too large (${formatFileSize(file.size)}). Maximum size varies by file type.`);
+      } else if (error.message?.includes('403') || error.message?.includes('permission')) {
+        throw new Error('Permission denied. You may not have access to upload files to this storage bucket.');
+      } else {
+        throw new Error(`Upload failed: ${error.message}`);
+      }
+    }
   };
 
   const handleThumbnailUpload = async (file: File): Promise<string> => {
@@ -623,15 +650,46 @@ export default function MaterialManagementPage() {
           // Provide user-friendly error messages
           let errorMessage = 'Failed to save material';
 
-          if (error.message?.includes('new row violates row-level security policy') ||
+          // Check for timeout errors
+          if (error.message?.includes('504') ||
+              error.message?.includes('timeout') ||
+              error.message?.includes('Gateway Timeout')) {
+            errorMessage = 'Upload timed out. This usually happens with large files or slow connections. Please try:\n' +
+                          '1. Using a smaller file (compress videos/images)\n' +
+                          '2. Checking your internet connection\n' +
+                          '3. Refreshing the page and trying again';
+            console.error('[Materials] TIMEOUT ERROR - File upload took too long');
+          }
+          // Check for HTML error responses (indicates server returned error page instead of JSON)
+          else if (error.message?.includes('DOCTYPE') ||
+                   error.message?.includes('Unexpected token')) {
+            errorMessage = 'Server error: The upload service returned an error page. This might indicate:\n' +
+                          '1. Network connectivity issues\n' +
+                          '2. Server temporarily unavailable\n' +
+                          '3. File too large\n\n' +
+                          'Please try again in a few moments or contact support if the issue persists.';
+            console.error('[Materials] SERVER ERROR - Received HTML instead of JSON');
+          }
+          // Check for RLS policy violations
+          else if (error.message?.includes('new row violates row-level security policy') ||
               error.code === '42501' ||
               error.code === 'PGRST301') {
             errorMessage = 'Permission denied: You do not have permission to create materials. Please ensure you are logged in as a system administrator.';
             console.error('[Materials] RLS POLICY VIOLATION - User is not authorized');
-          } else if (error.message?.includes('violates foreign key constraint')) {
+          }
+          // Check for foreign key violations
+          else if (error.message?.includes('violates foreign key constraint')) {
             errorMessage = 'Database constraint error: Please ensure all required fields are valid.';
             console.error('[Materials] FOREIGN KEY VIOLATION');
-          } else {
+          }
+          // Check for network errors
+          else if (error.message?.includes('Failed to fetch') ||
+                   error.message?.includes('Network')) {
+            errorMessage = 'Network error: Unable to reach the server. Please check your internet connection and try again.';
+            console.error('[Materials] NETWORK ERROR');
+          }
+          // Generic error
+          else {
             errorMessage = `Failed to save material: ${error.message}`;
           }
 
