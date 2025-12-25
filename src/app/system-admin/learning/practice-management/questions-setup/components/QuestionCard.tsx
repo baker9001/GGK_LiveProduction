@@ -9,7 +9,9 @@ import {
   Plus,
   HelpCircle,
   BookOpen,
-  FileText
+  FileText,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { Button } from '../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
@@ -60,6 +62,9 @@ interface QuestionCardProps {
   onConfirm?: (questionId: string) => void;
   showQAActions?: boolean;
   readOnly?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
+  showSelectCheckbox?: boolean;
 }
 
 export function QuestionCard({
@@ -72,7 +77,10 @@ export function QuestionCard({
   onDeleteSubQuestion,
   onConfirm,
   showQAActions = false,
-  readOnly = false
+  readOnly = false,
+  isSelected = false,
+  onToggleSelect,
+  showSelectCheckbox = false
 }: QuestionCardProps) {
   const [isExpanded, setIsExpanded] = useState(true); // Expand/collapse entire card
   const [expandedParts, setExpandedParts] = useState(true); // Default to expanded for better UX
@@ -503,9 +511,10 @@ export function QuestionCard({
         id={`question-${question.id}`}
         className={cn(
           'rounded-2xl border overflow-hidden bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
-          needsAttachmentWarning && showQAActions
+          isSelected && 'ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-50/30 dark:bg-blue-900/10 border-blue-300 dark:border-blue-600',
+          needsAttachmentWarning && showQAActions && !isSelected
             ? 'border-amber-300/80 dark:border-amber-500/70 ring-1 ring-amber-200/60 dark:ring-amber-500/30'
-            : 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
+            : !isSelected && 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
         )}
       >
         {/* Question Header - Clickable to expand/collapse */}
@@ -566,6 +575,42 @@ export function QuestionCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Selection Checkbox */}
+            {showSelectCheckbox && onToggleSelect && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleSelect();
+                  }
+                }}
+                className={cn(
+                  "flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200",
+                  "hover:scale-110 active:scale-95",
+                  "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900",
+                  isSelected
+                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700"
+                )}
+                aria-label={isSelected ? `Deselect Question ${question.question_number}` : `Select Question ${question.question_number}`}
+                aria-pressed={isSelected}
+                role="checkbox"
+                aria-checked={isSelected}
+                title={isSelected ? "Deselect question" : "Select question"}
+                tabIndex={0}
+              >
+                {isSelected ? (
+                  <CheckSquare className="h-5 w-5" />
+                ) : (
+                  <Square className="h-5 w-5" />
+                )}
+              </button>
+            )}
             <StatusBadge
               status={question.status}
               showIcon

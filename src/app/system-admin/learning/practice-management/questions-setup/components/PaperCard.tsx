@@ -88,6 +88,22 @@ export function PaperCard({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Add keyboard shortcuts for selection (only when expanded and QA mode)
+  useEffect(() => {
+    if (!expanded || !showQAActions) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl/Cmd + A to select all questions
+      if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
+        event.preventDefault();
+        handleSelectAll();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [expanded, showQAActions, selectedQuestions.size, paper.questions.length]);
+
   useEffect(() => {
     return () => {
       if (archiveConfirmationTimeoutRef.current) {
@@ -1035,37 +1051,22 @@ export function PaperCard({
               {paper.questions
                 .sort((a, b) => naturalSort(a.question_number, b.question_number))
                 .map((question, questionIndex) => (
-                  <div key={question.id} className="relative">
-                    {/* Selection Checkbox */}
-                    {showQAActions && (
-                      <div className="absolute -left-8 top-4 z-10">
-                        <button
-                          onClick={() => handleSelectQuestion(question.id)}
-                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                        >
-                          {selectedQuestions.has(question.id) ? (
-                            <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                          ) : (
-                            <Square className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-                          )}
-                        </button>
-                      </div>
-                    )}
-                    
-                    <QuestionCard
-                      question={question}
-                      questionIndex={questionIndex}
-                      topics={topics}
-                      subtopics={subtopics}
-                      units={units}
-                      onDelete={onDeleteQuestion}
-                      onDeleteSubQuestion={onDeleteSubQuestion}
-                      onConfirm={() => confirmQuestion.mutateAsync({ questionId: question.id })}
-                      showQAActions={showQAActions}
-                      readOnly={readOnly}
-                      // NO LONGER PASSING pdfDataUrl or onPdfUpload
-                    />
-                  </div>
+                  <QuestionCard
+                    key={question.id}
+                    question={question}
+                    questionIndex={questionIndex}
+                    topics={topics}
+                    subtopics={subtopics}
+                    units={units}
+                    onDelete={onDeleteQuestion}
+                    onDeleteSubQuestion={onDeleteSubQuestion}
+                    onConfirm={() => confirmQuestion.mutateAsync({ questionId: question.id })}
+                    showQAActions={showQAActions}
+                    readOnly={readOnly}
+                    isSelected={selectedQuestions.has(question.id)}
+                    onToggleSelect={() => handleSelectQuestion(question.id)}
+                    showSelectCheckbox={showQAActions}
+                  />
                 ))}
             </div>
           </div>
