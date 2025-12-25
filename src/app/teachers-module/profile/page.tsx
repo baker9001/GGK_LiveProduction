@@ -61,6 +61,7 @@ import { SearchableMultiSelect } from '../../../components/shared/SearchableMult
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { toast } from '../../../components/shared/Toast';
 import { cn } from '../../../lib/utils';
+import { SessionPreferencesCard } from '../../../components/shared/SessionPreferencesCard';
 
 // ===== TYPE DEFINITIONS =====
 interface TeacherProfileData {
@@ -1092,6 +1093,9 @@ export default function TeacherProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Session Preferences Section */}
+      <SessionPreferencesCard />
 
       {/* Account Information Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">

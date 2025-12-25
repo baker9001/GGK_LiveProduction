@@ -67,6 +67,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { getPublicUrl } from '../../../lib/storageHelpers';
 import { cn } from '../../../lib/utils';
+import { SessionPreferencesCard } from '../../../components/shared/SessionPreferencesCard';
 
 // Enhanced type definitions
 interface UserProfile {
@@ -1284,6 +1285,9 @@ export default function SystemAdminProfilePage() {
             {/* Preferences Tab */}
             {activeTab === 'preferences' && (
               <div className="space-y-6">
+                {/* Session Preferences Card */}
+                <SessionPreferencesCard />
+
                 {/* System Preferences Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-6 py-4 border-b border-gray-200 dark:border-gray-700">

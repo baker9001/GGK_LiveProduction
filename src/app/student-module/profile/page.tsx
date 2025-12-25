@@ -30,6 +30,7 @@ import { PhoneInput } from '../../../components/shared/PhoneInput';
 import { toast } from '../../../components/shared/Toast';
 import { getPublicUrl } from '../../../lib/storageHelpers';
 import { userCreationService } from '../../../services/userCreationService';
+import { SessionPreferencesCard } from '../../../components/shared/SessionPreferencesCard';
 
 // ---------------------------------------------------------------------------
 // Types & Constants
@@ -1406,6 +1407,9 @@ export default function StudentProfileSettingsPage() {
               )}
             </div>
           </div>
+
+          {/* Session Preferences */}
+          <SessionPreferencesCard />
 
           <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 text-white rounded-3xl shadow-xl p-6 space-y-4">
             <div className="flex items-center gap-3">
