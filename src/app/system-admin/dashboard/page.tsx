@@ -84,17 +84,18 @@ function EnvironmentSummary({ environment, status, timeDisplay }: EnvironmentSum
     : null;
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-indigo-200/70 bg-white/80 p-4 text-indigo-900 shadow-sm backdrop-blur dark:border-indigo-500/40 dark:bg-indigo-950/50 dark:text-indigo-100">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/15 text-indigo-700 dark:bg-indigo-500/25 dark:text-indigo-100">
+    <div className="w-full min-w-[280px] max-w-sm rounded-2xl border border-indigo-200/70 bg-white/90 px-5 py-4 text-indigo-900 shadow-sm backdrop-blur-sm transition-shadow hover:shadow-md dark:border-indigo-500/40 dark:bg-indigo-950/60 dark:text-indigo-100">
+      {/* Header row with icon and weather info */}
+      <div className="flex items-start gap-3.5">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500/15 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-200">
           <Thermometer className="h-5 w-5" />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-0.5 pt-0.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-indigo-500 dark:text-indigo-300">
             Local outlook
           </span>
           {status === 'loading' && (
-            <span className="flex items-center gap-2 text-sm font-medium">
+            <span className="flex items-center gap-2 text-sm font-medium text-indigo-800 dark:text-indigo-100">
               <LoadingSpinner
                 size="xs"
                 inline
@@ -106,35 +107,42 @@ function EnvironmentSummary({ environment, status, timeDisplay }: EnvironmentSum
             </span>
           )}
           {status === 'error' && (
-            <span className="text-sm font-medium">Weather data is unavailable right now.</span>
+            <span className="text-sm font-medium text-indigo-800 dark:text-indigo-100">
+              Weather data is unavailable right now.
+            </span>
           )}
           {status === 'ready' && temperatureSummary && (
-            <span className="text-sm font-semibold">
+            <span className="text-sm font-semibold text-indigo-900 dark:text-white">
               {temperatureSummary} • {environment?.condition}
             </span>
           )}
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-indigo-700 dark:text-indigo-200/80">
-        <span className="flex items-center gap-1">
-          <MapPin className="h-4 w-4" />
+      {/* Location and time row */}
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-indigo-100/50 pt-3 text-xs font-medium text-indigo-600 dark:border-indigo-500/20 dark:text-indigo-200/80">
+        <span className="flex items-center gap-1.5">
+          <MapPin className="h-3.5 w-3.5" />
           {environment?.locationLabel ?? 'Locating you'}
         </span>
-        <span className="flex items-center gap-1">
-          <Clock3 className="h-4 w-4" />
+        <span className="flex items-center gap-1.5">
+          <Clock3 className="h-3.5 w-3.5" />
           {timeDisplay} local time
         </span>
-        {status === 'ready' && environment && (
-          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Updated moments ago
-          </span>
-        )}
       </div>
 
+      {/* Status indicator */}
+      {status === 'ready' && environment && (
+        <div className="mt-2.5">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+            Updated moments ago
+          </span>
+        </div>
+      )}
+
       {status === 'error' && (
-        <p className="mt-2 text-xs font-normal text-indigo-500/80 dark:text-indigo-200/70">
+        <p className="mt-2.5 text-xs font-normal leading-relaxed text-indigo-500/80 dark:text-indigo-200/70">
           You can continue monitoring metrics while we retry in the background.
         </p>
       )}
@@ -281,60 +289,74 @@ export default function DashboardPage() {
       <section
         className={clsx(
           'relative overflow-hidden rounded-2xl border border-gray-200',
-          'bg-gradient-to-r from-indigo-50 via-white to-purple-50 p-6 shadow-sm',
+          'bg-gradient-to-r from-indigo-50 via-white to-purple-50 shadow-sm',
           'dark:border-gray-700 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950'
         )}
         aria-live="polite"
       >
+        {/* Decorative blur element */}
         <div
           className={clsx(
-            'pointer-events-none absolute -right-12 top-0 hidden h-40 w-40 rounded-full',
-            'bg-indigo-200/50 blur-3xl sm:block dark:bg-indigo-500/10'
+            'pointer-events-none absolute -right-16 -top-8 hidden h-56 w-56 rounded-full',
+            'bg-indigo-200/40 blur-3xl sm:block dark:bg-indigo-500/10'
           )}
           aria-hidden="true"
         />
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
-              {greeting}, {preferredName}
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold text-gray-900 dark:text-white">
-              Here's what's happening across your organization today.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
-              Stay ahead of adoption, licensing, and engagement trends with a quick scan of live metrics
-              and local operating conditions.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {DASHBOARD_PRIORITIES.map(priority => (
-                <span
-                  key={priority}
-                  className="inline-flex items-center gap-2 rounded-full bg-indigo-100/80 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-100"
-                >
-                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500 dark:bg-indigo-300" />
-                  {priority}
-                </span>
-              ))}
+        <div
+          className={clsx(
+            'pointer-events-none absolute -left-8 bottom-0 hidden h-32 w-32 rounded-full',
+            'bg-purple-200/30 blur-2xl lg:block dark:bg-purple-500/10'
+          )}
+          aria-hidden="true"
+        />
+
+        {/* Content container with improved padding */}
+        <div className="relative px-6 py-6 lg:px-8 lg:py-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            {/* Left side: Greeting and description */}
+            <div className="flex-1 min-w-0 lg:max-w-2xl">
+              <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                {greeting}, {preferredName}
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold text-gray-900 sm:text-3xl dark:text-white">
+                Here's what's happening across your organization today.
+              </h1>
+              <p className="mt-3 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+                Stay ahead of adoption, licensing, and engagement trends with a quick scan of live metrics
+                and local operating conditions.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2.5">
+                {DASHBOARD_PRIORITIES.map(priority => (
+                  <span
+                    key={priority}
+                    className="inline-flex items-center gap-2 rounded-full bg-indigo-100/80 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-100 dark:hover:bg-indigo-500/30"
+                  >
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-indigo-500 dark:bg-indigo-300" />
+                    {priority}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:items-end">
-            <EnvironmentSummary environment={environment} status={environmentStatus} timeDisplay={timeDisplay} />
+            {/* Right side: Environment summary and test button */}
+            <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end lg:flex-col lg:items-end lg:ml-8 xl:ml-12">
+              <EnvironmentSummary environment={environment} status={environmentStatus} timeDisplay={timeDisplay} />
 
-            {/* Test Mode Button - Only show for SSA and not already in test mode */}
-            {isSSA && !inTestMode && (
-              <Button
-                onClick={() => setShowTestModal(true)}
-                variant="outline"
-                leftIcon={<FlaskConical className="h-4 w-4" />}
-                className={clsx(
-                  'border-indigo-500 text-indigo-600 backdrop-blur hover:bg-indigo-50',
-                  'dark:border-indigo-500/50 dark:text-indigo-200 dark:hover:bg-indigo-500/10'
-                )}
-              >
-                Test as User
-              </Button>
-            )}
+              {/* Test Mode Button - Only show for SSA and not already in test mode */}
+              {isSSA && !inTestMode && (
+                <Button
+                  onClick={() => setShowTestModal(true)}
+                  variant="outline"
+                  leftIcon={<FlaskConical className="h-4 w-4" />}
+                  className={clsx(
+                    'w-full sm:w-auto border-indigo-500 text-indigo-600 backdrop-blur hover:bg-indigo-50',
+                    'dark:border-indigo-500/50 dark:text-indigo-200 dark:hover:bg-indigo-500/10'
+                  )}
+                >
+                  Test as User
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </section>
