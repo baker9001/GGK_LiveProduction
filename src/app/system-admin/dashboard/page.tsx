@@ -64,6 +64,121 @@ const DASHBOARD_PRIORITIES = [
   'Share insights with regional leads'
 ];
 
+// IP-based geolocation providers with fallbacks
+interface GeoLocationResult {
+  city?: string;
+  region?: string;
+  regionCode?: string;
+  country?: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+}
+
+async function fetchFromIpApiCo(): Promise<GeoLocationResult> {
+  const response = await fetch('https://ipapi.co/json/', {
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!response.ok) throw new Error(`ipapi.co failed: ${response.status}`);
+  const data = await response.json();
+
+  if (data.error) throw new Error(`ipapi.co error: ${data.reason || 'Unknown error'}`);
+
+  const lat = Number(data.latitude);
+  const lng = Number(data.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error('ipapi.co: Invalid coordinates');
+  }
+
+  return {
+    city: data.city,
+    region: data.region,
+    regionCode: data.region_code,
+    country: data.country_name,
+    latitude: lat,
+    longitude: lng,
+    timezone: data.timezone
+  };
+}
+
+async function fetchFromIpApi(): Promise<GeoLocationResult> {
+  // ip-api.com - free, no API key needed, 45 requests/minute
+  const response = await fetch('http://ip-api.com/json/?fields=status,message,country,regionName,city,lat,lon,timezone', {
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!response.ok) throw new Error(`ip-api.com failed: ${response.status}`);
+  const data = await response.json();
+
+  if (data.status === 'fail') throw new Error(`ip-api.com error: ${data.message}`);
+
+  const lat = Number(data.lat);
+  const lng = Number(data.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error('ip-api.com: Invalid coordinates');
+  }
+
+  return {
+    city: data.city,
+    region: data.regionName,
+    country: data.country,
+    latitude: lat,
+    longitude: lng,
+    timezone: data.timezone
+  };
+}
+
+async function fetchFromIpWhoIs(): Promise<GeoLocationResult> {
+  // ipwho.is - free, no rate limits for reasonable use
+  const response = await fetch('https://ipwho.is/', {
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!response.ok) throw new Error(`ipwho.is failed: ${response.status}`);
+  const data = await response.json();
+
+  if (!data.success) throw new Error(`ipwho.is error: ${data.message || 'Unknown error'}`);
+
+  const lat = Number(data.latitude);
+  const lng = Number(data.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error('ipwho.is: Invalid coordinates');
+  }
+
+  return {
+    city: data.city,
+    region: data.region,
+    regionCode: data.region_code,
+    country: data.country,
+    latitude: lat,
+    longitude: lng,
+    timezone: data.timezone?.id
+  };
+}
+
+async function getGeoLocation(): Promise<GeoLocationResult> {
+  const providers = [
+    { name: 'ipapi.co', fetch: fetchFromIpApiCo },
+    { name: 'ip-api.com', fetch: fetchFromIpApi },
+    { name: 'ipwho.is', fetch: fetchFromIpWhoIs }
+  ];
+
+  const errors: string[] = [];
+
+  for (const provider of providers) {
+    try {
+      console.log(`[Dashboard] Trying geolocation provider: ${provider.name}`);
+      const result = await provider.fetch();
+      console.log(`[Dashboard] Geolocation success with ${provider.name}:`, result.city);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[Dashboard] ${provider.name} failed:`, message);
+      errors.push(`${provider.name}: ${message}`);
+    }
+  }
+
+  throw new Error(`All geolocation providers failed: ${errors.join('; ')}`);
+}
+
 function getWeatherDescription(code: number | undefined): string {
   if (typeof code !== 'number') {
     return 'Conditions unavailable';
@@ -173,36 +288,22 @@ export default function DashboardPage() {
       try {
         setEnvironmentStatus(previous => (previous === 'ready' ? previous : 'loading'));
 
-        const locationResponse = await fetch('https://ipapi.co/json/');
-        if (!locationResponse.ok) {
-          throw new Error('Failed to determine location');
-        }
+        // Get location using IP-based geolocation with fallbacks
+        const locationData = await getGeoLocation();
 
-        const locationData: {
-          city?: string;
-          region?: string;
-          region_code?: string;
-          country_name?: string;
-          latitude?: number | string;
-          longitude?: number | string;
-          timezone?: string;
-        } = await locationResponse.json();
+        if (cancelled) return;
 
-        const latitude = Number(locationData.latitude);
-        const longitude = Number(locationData.longitude);
-
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-          throw new Error('Location did not include coordinates');
-        }
-
+        // Fetch weather data from Open-Meteo
         const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast');
-        weatherUrl.searchParams.set('latitude', latitude.toString());
-        weatherUrl.searchParams.set('longitude', longitude.toString());
+        weatherUrl.searchParams.set('latitude', locationData.latitude.toString());
+        weatherUrl.searchParams.set('longitude', locationData.longitude.toString());
         weatherUrl.searchParams.set('current_weather', 'true');
 
-        const weatherResponse = await fetch(weatherUrl.toString());
+        const weatherResponse = await fetch(weatherUrl.toString(), {
+          signal: AbortSignal.timeout(10000)
+        });
         if (!weatherResponse.ok) {
-          throw new Error('Failed to fetch weather');
+          throw new Error(`Failed to fetch weather: ${weatherResponse.status}`);
         }
 
         const weatherData: {
@@ -216,15 +317,14 @@ export default function DashboardPage() {
           throw new Error('Weather response missing temperature');
         }
 
-        const locationParts = [locationData.city, locationData.region_code ?? locationData.region]
+        // Build location label from available data
+        const locationParts = [locationData.city, locationData.regionCode ?? locationData.region]
           .map(part => (typeof part === 'string' && part.trim() ? part.trim() : null))
           .filter((part): part is string => Boolean(part));
 
-        const locationLabel = locationParts.join(', ') || locationData.country_name || 'your area';
+        const locationLabel = locationParts.join(', ') || locationData.country || 'your area';
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         const snapshot: EnvironmentSnapshot = {
           locationLabel,
@@ -235,15 +335,17 @@ export default function DashboardPage() {
           fetchedAt: new Date()
         };
 
+        console.log('[Dashboard] Environment snapshot loaded:', locationLabel, `${Math.round(temperatureC)}°C`);
         setEnvironment(snapshot);
         setEnvironmentStatus('ready');
       } catch (error) {
-        console.warn('[Dashboard] Failed to load environment snapshot:', error);
+        console.error('[Dashboard] Failed to load environment snapshot:', error);
         if (!cancelled) {
           setEnvironmentStatus('error');
+          // Retry after 30 seconds instead of 60
           retryTimer = window.setTimeout(() => {
             loadEnvironmentSnapshot();
-          }, 60_000);
+          }, 30_000);
         }
       }
     }
