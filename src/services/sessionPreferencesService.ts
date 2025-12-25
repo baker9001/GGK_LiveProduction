@@ -28,7 +28,7 @@ import {
 // In-memory cache
 let cachedPreferences: UserSessionPreferences | null = null;
 let cacheExpiry = 0;
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION_MS = 1 * 60 * 1000; // 1 minute - reduced to minimize stale data
 
 /**
  * Get user's session preferences with caching
