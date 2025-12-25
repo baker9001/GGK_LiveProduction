@@ -1,7 +1,10 @@
-# Quick Test Guide - License Actions
+# Quick Test Guide - License Actions Fix
 
-## What Was Fixed
-The `license_actions` table was missing from the database, causing all license action operations (EXPAND, EXTEND, RENEW) to fail. This has now been fixed.
+## ✅ What Was Fixed
+
+The `license_actions` table was **missing critical columns** (`performed_by` and `updated_at`), causing all license action operations to fail with error: *"Failed to record the action history"*.
+
+**Fix applied**: Added missing columns with proper foreign keys and triggers.
 
 ## Quick Test Steps
 
@@ -44,10 +47,11 @@ The `license_actions` table was missing from the database, causing all license a
 
 ## What to Check
 
-✅ **Success Messages** - Should see green toast notification
-✅ **License Updates** - Table refreshes with new values
-✅ **No Errors** - Check browser console (F12) for errors
-✅ **History Works** - If you view history, actions should appear
+✅ **Success Messages** - Should see green toast: "License expanded/extended/renewed successfully"
+✅ **License Updates** - Table refreshes immediately with new values
+✅ **No Errors** - Browser console shows no red errors (ignore Chameleon JS warnings)
+✅ **Console Logs** - Should see "Inserting license action:" with performed_by field
+✅ **History Works** - Actions are recorded in database
 
 ---
 
@@ -76,10 +80,44 @@ No error messages = Success! ✅
 
 ## Database Check (Optional)
 
-If you have database access, verify table exists:
+Verify actions are being recorded with the new columns:
 
 ```sql
-SELECT * FROM license_actions ORDER BY created_at DESC LIMIT 5;
+SELECT
+  la.action_type,
+  la.change_quantity,
+  la.new_end_date,
+  u.email as performed_by_user,
+  la.created_at,
+  la.updated_at
+FROM license_actions la
+LEFT JOIN users u ON u.id = la.performed_by
+ORDER BY la.created_at DESC
+LIMIT 5;
 ```
 
-Should show your recent actions.
+Should show your recent actions with the admin's email address! ✅
+
+---
+
+## 🔍 Technical Details
+
+### Before Fix:
+```
+Frontend: INSERT { ..., performed_by: "user-id" }
+Database: ❌ "Column performed_by does not exist"
+User sees: "Failed to record the action history"
+```
+
+### After Fix:
+```
+Frontend: INSERT { ..., performed_by: "user-id" }
+Database: ✅ Column exists, INSERT succeeds
+User sees: "License expanded successfully" 🎉
+```
+
+---
+
+## 📋 Full Documentation
+
+See `LICENSE_ACTION_ERROR_FIX_COMPLETE.md` for complete technical details.
