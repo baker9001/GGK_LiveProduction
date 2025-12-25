@@ -41,47 +41,7 @@ export function FullPageQuestionReview({
   const [showQuestionNavigation, setShowQuestionNavigation] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [navigatorView, setNavigatorView] = useState<NavigatorView>('all');
-  const [navigatorSize, setNavigatorSize] = useState<NavigatorSize>('normal');
-  const [topOffset, setTopOffset] = useState(120); // Default offset for header + page title
-
-  // Calculate the actual top offset based on existing page elements
-  useEffect(() => {
-    const calculateTopOffset = () => {
-      // Find main header
-      const mainHeader = document.querySelector('.admin-header, header, [data-testid="main-header"]');
-      const pageTitle = document.querySelector('.page-title, [data-testid="page-title"], .breadcrumb-section');
-      
-      let offset = 0;
-      
-      if (mainHeader) {
-        const headerRect = mainHeader.getBoundingClientRect();
-        offset += headerRect.height;
-      }
-      
-      if (pageTitle) {
-        const titleRect = pageTitle.getBoundingClientRect();
-        // Use bottom position to account for any margins
-        offset = titleRect.bottom;
-      }
-      
-      // If we found elements, use calculated offset, otherwise use default
-      if (offset > 0) {
-        setTopOffset(offset);
-      } else {
-        // Fallback to a reasonable default
-        setTopOffset(112); // Reduced from 120 to minimize gap
-      }
-    };
-
-    calculateTopOffset();
-    
-    // Small delay to ensure DOM is fully rendered
-    setTimeout(calculateTopOffset, 100);
-    
-    // Recalculate on window resize
-    window.addEventListener('resize', calculateTopOffset);
-    return () => window.removeEventListener('resize', calculateTopOffset);
-  }, []);
+  const [navigatorSize, setNavigatorSize] = useState<NavigatorSize>('expanded');
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -232,10 +192,7 @@ export function FullPageQuestionReview({
   };
 
   return (
-    <div 
-      className="fixed inset-x-0 bottom-0 z-40 bg-gray-50 dark:bg-gray-900 flex flex-col"
-      style={{ top: `${topOffset}px` }}
-    >
+    <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Compact Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex-shrink-0 shadow-sm">
         <div className="flex items-center justify-between gap-6">
@@ -348,10 +305,13 @@ export function FullPageQuestionReview({
             <>
               {/* Navigator Header */}
               <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 space-y-3 bg-gray-50 dark:bg-gray-900/50">
-                <div className="flex items-center justify-between">
+                <div className={cn(
+                  "flex items-center",
+                  navigatorSize === 'compact' ? "flex-col gap-2" : "justify-between"
+                )}>
                   <h3 className={cn(
                     "font-bold text-gray-900 dark:text-white transition-all flex items-center gap-2",
-                    navigatorSize === 'compact' && "text-xs text-center w-full justify-center"
+                    navigatorSize === 'compact' && "text-xs"
                   )}>
                     {navigatorSize !== 'compact' && <List className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
                     {navigatorSize === 'compact' ? 'Q' : 'Questions'}
@@ -392,7 +352,7 @@ export function FullPageQuestionReview({
                       size="sm"
                       variant="ghost"
                       onClick={() => setNavigatorSize('normal')}
-                      className="absolute top-3 right-3 h-7 w-7 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
+                      className="h-7 w-7 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
                       title="Expand sidebar"
                     >
                       <PanelLeft className="h-3.5 w-3.5" />
