@@ -31,6 +31,16 @@ import {
   isPublicPath
 } from './sessionConfig';
 import { showSessionToast } from '../components/shared/SubtleSessionToast';
+import {
+  getUserSessionPreferences,
+  clearPreferencesCache,
+  getWarningStyleSync,
+  getCachedPreferences,
+} from '../services/sessionPreferencesService';
+import {
+  UserSessionPreferences,
+  DEFAULT_SESSION_PREFERENCES,
+} from '../types/session';
 
 // Re-export for convenience
 export {
@@ -74,6 +84,32 @@ let pageLoadTime = Date.now();
 
 // BroadcastChannel for cross-tab communication
 let broadcastChannel: BroadcastChannel | null = null;
+
+// User preferences cache (loaded asynchronously)
+let userPrefs: UserSessionPreferences = DEFAULT_SESSION_PREFERENCES;
+let prefsLoadedAt = 0;
+const PREFS_RELOAD_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Load user preferences (called on init and periodically)
+ */
+async function loadUserPreferences(): Promise<void> {
+  try {
+    userPrefs = await getUserSessionPreferences();
+    prefsLoadedAt = Date.now();
+    console.log(`[SessionManager] Loaded user preferences: warningStyle=${userPrefs.warningStyle}, idleTimeout=${userPrefs.idleTimeoutMinutes}min`);
+  } catch (error) {
+    console.warn('[SessionManager] Failed to load user preferences, using defaults:', error);
+    userPrefs = DEFAULT_SESSION_PREFERENCES;
+  }
+}
+
+/**
+ * Get current user preferences (from cache)
+ */
+function getUserPrefs(): UserSessionPreferences {
+  return userPrefs;
+}
 
 /**
  * Initialize the session manager
@@ -159,6 +195,14 @@ export function initializeSessionManager(): void {
 
   // Start session monitoring
   startSessionMonitoring();
+
+  // Load user preferences (async, won't block init)
+  void loadUserPreferences();
+
+  // Periodically refresh preferences
+  setInterval(() => {
+    void loadUserPreferences();
+  }, PREFS_RELOAD_INTERVAL);
 
   // Load last activity from storage
   const savedActivity = localStorage.getItem(LAST_ACTIVITY_KEY);
@@ -272,6 +316,11 @@ export function cleanupSessionManager(): void {
     window.removeEventListener('storage', storageListener);
     storageListener = null;
   }
+
+  // Clear preferences cache on logout
+  clearPreferencesCache();
+  userPrefs = DEFAULT_SESSION_PREFERENCES;
+  prefsLoadedAt = 0;
 
   console.log('[SessionManager] Cleanup complete');
 }
@@ -601,18 +650,55 @@ function checkSessionStatus(): void {
     : localRemainingMinutes;
 
   // Check if session is about to expire (within warning threshold)
-  if (remainingMinutes > 0 && remainingMinutes <= WARNING_THRESHOLD_MINUTES) {
-    // ENHANCEMENT: Check if user is currently active
-    if (isUserActive()) {
-      // User is active - silently extend instead of showing warning
-      console.log('[SessionManager] User active in warning zone - silently extending');
-      silentExtendSession();
-      return;
+  // Use user's preferred warning threshold if available
+  const prefs = getUserPrefs();
+  const effectiveWarningThreshold = prefs.warningThresholdMinutes || WARNING_THRESHOLD_MINUTES;
+
+  if (remainingMinutes > 0 && remainingMinutes <= effectiveWarningThreshold) {
+    // ENHANCEMENT: Check if user is currently active and wants auto-extend
+    if (isUserActive() && prefs.extendOnActivity) {
+      // User is active - handle based on warning style preference
+      if (prefs.warningStyle === 'silent') {
+        // Silent mode: just extend, no notification
+        console.log('[SessionManager] User active - silently extending (silent mode)');
+        silentExtendSession();
+        return;
+      } else if (prefs.warningStyle === 'toast') {
+        // Toast mode: show subtle toast and extend
+        console.log('[SessionManager] User active - extending with toast notification');
+        silentExtendSession();
+        showSessionToast('Session extended', { type: 'success', duration: 2000 });
+        return;
+      }
+      // Banner mode: fall through to show banner
     }
 
-    // User is INACTIVE - show warning (existing behavior)
-    if (!warningShown) {
-      showSessionWarning(remainingMinutes);
+    // Handle based on warning style preference
+    switch (prefs.warningStyle) {
+      case 'silent':
+        // Auto-extend without any UI
+        if (prefs.autoExtendEnabled) {
+          console.log('[SessionManager] Auto-extending session (silent mode)');
+          silentExtendSession();
+        }
+        break;
+
+      case 'toast':
+        // Show subtle toast and extend
+        if (prefs.autoExtendEnabled) {
+          console.log('[SessionManager] Auto-extending session (toast mode)');
+          silentExtendSession();
+          showSessionToast('Session extended', { type: 'success', duration: 2000 });
+        }
+        break;
+
+      case 'banner':
+      default:
+        // Show full banner warning (existing behavior)
+        if (!warningShown) {
+          showSessionWarning(remainingMinutes);
+        }
+        break;
     }
     return;
   }
