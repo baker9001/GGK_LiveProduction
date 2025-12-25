@@ -16,6 +16,7 @@ import { toast } from '../../../../../components/shared/Toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { autoPopulateAnswerFields } from '../../../../../services/answerFieldAutoPopulationService';
 import { LoadingSpinner } from '../../../../../components/shared/LoadingSpinner';
+import { cn } from '../../../../../lib/utils';
 
 // Type definitions (keeping your existing types)
 export interface Attachment {
@@ -1260,27 +1261,50 @@ export default function QuestionsSetupPage() {
       {/* Main Content with Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="w-full flex-wrap gap-3">
-          <TabsTrigger value="analytics" className="flex-1 min-w-[200px]">
+          <TabsTrigger
+            value="analytics"
+            className={cn(
+              "flex-1 min-w-[200px]",
+              activeTab === 'analytics'
+                ? "bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 text-white shadow-xl shadow-blue-500/30 dark:shadow-blue-500/20 border-blue-500/40"
+                : "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400/40"
+            )}
+          >
             <BarChart3 className="h-4 w-4 mr-2" />
             Analytics
           </TabsTrigger>
           <TabsTrigger
             value="qa"
-            className="flex-1 min-w-[200px] text-orange-600 dark:text-orange-400"
+            className={cn(
+              "flex-1 min-w-[200px]",
+              activeTab === 'qa'
+                ? "bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 text-white shadow-xl shadow-orange-500/30 dark:shadow-orange-500/20 border-orange-500/40"
+                : "text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:border-orange-400/40"
+            )}
           >
             <AlertTriangle className="h-4 w-4 mr-2" />
             Under QA ({underQAPapers.length})
           </TabsTrigger>
           <TabsTrigger
             value="published"
-            className="flex-1 min-w-[200px] text-green-600 dark:text-green-400"
+            className={cn(
+              "flex-1 min-w-[200px]",
+              activeTab === 'published'
+                ? "bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 text-white shadow-xl shadow-emerald-500/30 dark:shadow-emerald-500/20 border-emerald-500/40"
+                : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-400/40"
+            )}
           >
             <CheckCircle className="h-4 w-4 mr-2" />
             Published Papers ({publishedPapers.length})
           </TabsTrigger>
           <TabsTrigger
             value="archived"
-            className="flex-1 min-w-[200px] text-gray-600 dark:text-gray-400"
+            className={cn(
+              "flex-1 min-w-[200px]",
+              activeTab === 'archived'
+                ? "bg-gradient-to-r from-slate-500 via-slate-600 to-slate-700 text-white shadow-xl shadow-slate-500/30 dark:shadow-slate-500/20 border-slate-500/40"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/20 hover:border-slate-400/40"
+            )}
           >
             <Archive className="h-4 w-4 mr-2" />
             Archived ({archivedPapers.length})
