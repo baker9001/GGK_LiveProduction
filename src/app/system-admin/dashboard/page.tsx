@@ -1,4 +1,7 @@
 // /src/app/system-admin/dashboard/page.tsx
+//
+// Enhanced with browser geolocation support for accurate user location.
+// Uses GPS/WiFi on supported devices with IP-based fallback.
 
 import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
@@ -10,13 +13,16 @@ import {
   FlaskConical,
   MapPin,
   Thermometer,
-  Clock3
+  Clock3,
+  Navigation
 } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { TestAnyUserModal } from '../../../components/admin/TestAnyUserModal';
 import { getRealAdminUser, isInTestMode } from '../../../lib/auth';
 import { getPreferredName, getTimeBasedGreeting } from '../../../lib/greeting';
 import { LoadingSpinner } from '../../../components/shared/LoadingSpinner';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { LocationPermissionPrompt } from '@/components/shared/LocationPermissionPrompt';
 
 interface EnvironmentSnapshot {
   locationLabel: string;
@@ -25,6 +31,7 @@ interface EnvironmentSnapshot {
   condition: string;
   timezone?: string;
   fetchedAt: Date;
+  isHighAccuracy?: boolean;
 }
 
 type EnvironmentStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -64,121 +71,6 @@ const DASHBOARD_PRIORITIES = [
   'Share insights with regional leads'
 ];
 
-// IP-based geolocation providers with fallbacks
-interface GeoLocationResult {
-  city?: string;
-  region?: string;
-  regionCode?: string;
-  country?: string;
-  latitude: number;
-  longitude: number;
-  timezone?: string;
-}
-
-async function fetchFromIpApiCo(): Promise<GeoLocationResult> {
-  const response = await fetch('https://ipapi.co/json/', {
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!response.ok) throw new Error(`ipapi.co failed: ${response.status}`);
-  const data = await response.json();
-
-  if (data.error) throw new Error(`ipapi.co error: ${data.reason || 'Unknown error'}`);
-
-  const lat = Number(data.latitude);
-  const lng = Number(data.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new Error('ipapi.co: Invalid coordinates');
-  }
-
-  return {
-    city: data.city,
-    region: data.region,
-    regionCode: data.region_code,
-    country: data.country_name,
-    latitude: lat,
-    longitude: lng,
-    timezone: data.timezone
-  };
-}
-
-async function fetchFromIpApi(): Promise<GeoLocationResult> {
-  // ip-api.com - free, no API key needed, 45 requests/minute
-  const response = await fetch('http://ip-api.com/json/?fields=status,message,country,regionName,city,lat,lon,timezone', {
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!response.ok) throw new Error(`ip-api.com failed: ${response.status}`);
-  const data = await response.json();
-
-  if (data.status === 'fail') throw new Error(`ip-api.com error: ${data.message}`);
-
-  const lat = Number(data.lat);
-  const lng = Number(data.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new Error('ip-api.com: Invalid coordinates');
-  }
-
-  return {
-    city: data.city,
-    region: data.regionName,
-    country: data.country,
-    latitude: lat,
-    longitude: lng,
-    timezone: data.timezone
-  };
-}
-
-async function fetchFromIpWhoIs(): Promise<GeoLocationResult> {
-  // ipwho.is - free, no rate limits for reasonable use
-  const response = await fetch('https://ipwho.is/', {
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!response.ok) throw new Error(`ipwho.is failed: ${response.status}`);
-  const data = await response.json();
-
-  if (!data.success) throw new Error(`ipwho.is error: ${data.message || 'Unknown error'}`);
-
-  const lat = Number(data.latitude);
-  const lng = Number(data.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new Error('ipwho.is: Invalid coordinates');
-  }
-
-  return {
-    city: data.city,
-    region: data.region,
-    regionCode: data.region_code,
-    country: data.country,
-    latitude: lat,
-    longitude: lng,
-    timezone: data.timezone?.id
-  };
-}
-
-async function getGeoLocation(): Promise<GeoLocationResult> {
-  const providers = [
-    { name: 'ipapi.co', fetch: fetchFromIpApiCo },
-    { name: 'ip-api.com', fetch: fetchFromIpApi },
-    { name: 'ipwho.is', fetch: fetchFromIpWhoIs }
-  ];
-
-  const errors: string[] = [];
-
-  for (const provider of providers) {
-    try {
-      console.log(`[Dashboard] Trying geolocation provider: ${provider.name}`);
-      const result = await provider.fetch();
-      console.log(`[Dashboard] Geolocation success with ${provider.name}:`, result.city);
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[Dashboard] ${provider.name} failed:`, message);
-      errors.push(`${provider.name}: ${message}`);
-    }
-  }
-
-  throw new Error(`All geolocation providers failed: ${errors.join('; ')}`);
-}
-
 function getWeatherDescription(code: number | undefined): string {
   if (typeof code !== 'number') {
     return 'Conditions unavailable';
@@ -191,9 +83,10 @@ interface EnvironmentSummaryProps {
   environment: EnvironmentSnapshot | null;
   status: EnvironmentStatus;
   timeDisplay: string;
+  isHighAccuracy?: boolean;
 }
 
-function EnvironmentSummary({ environment, status, timeDisplay }: EnvironmentSummaryProps) {
+function EnvironmentSummary({ environment, status, timeDisplay, isHighAccuracy }: EnvironmentSummaryProps) {
   const temperatureSummary = environment
     ? `${Math.round(environment.temperatureC)}°C / ${Math.round(environment.temperatureF)}°F`
     : null;
@@ -237,7 +130,11 @@ function EnvironmentSummary({ environment, status, timeDisplay }: EnvironmentSum
       {/* Location and time row */}
       <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-indigo-100/50 pt-3 text-xs font-medium text-indigo-600 dark:border-indigo-500/20 dark:text-indigo-200/80">
         <span className="flex items-center gap-1.5">
-          <MapPin className="h-3.5 w-3.5" />
+          {isHighAccuracy ? (
+            <Navigation className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <MapPin className="h-3.5 w-3.5" />
+          )}
           {environment?.locationLabel ?? 'Locating you'}
         </span>
         <span className="flex items-center gap-1.5">
@@ -248,11 +145,17 @@ function EnvironmentSummary({ environment, status, timeDisplay }: EnvironmentSum
 
       {/* Status indicator */}
       {status === 'ready' && environment && (
-        <div className="mt-2.5">
+        <div className="mt-2.5 flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
             <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
             Updated moments ago
           </span>
+          {isHighAccuracy && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Navigation className="h-3 w-3" />
+              Precise
+            </span>
+          )}
         </div>
       )}
 
@@ -273,6 +176,16 @@ export default function DashboardPage() {
     new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date())
   );
 
+  // Use the enhanced geolocation hook with browser API support
+  const {
+    location: geoLocation,
+    isLoading: geoLoading,
+    error: geoError,
+    permissionState,
+    isHighAccuracy,
+    requestPermission
+  } = useGeolocation({ retryInterval: 30000 });
+
   const realAdmin = getRealAdminUser();
   const isSSA = realAdmin?.role === 'SSA';
   const inTestMode = isInTestMode();
@@ -280,28 +193,29 @@ export default function DashboardPage() {
   const greeting = getTimeBasedGreeting();
   const preferredName = getPreferredName(realAdmin?.name) ?? 'Admin';
 
+  // Fetch weather when we have location coordinates
   useEffect(() => {
+    if (!geoLocation) {
+      setEnvironmentStatus(geoLoading ? 'loading' : (geoError ? 'error' : 'idle'));
+      return;
+    }
+
     let cancelled = false;
-    let retryTimer: number | undefined;
 
-    async function loadEnvironmentSnapshot() {
+    async function fetchWeather() {
       try {
-        setEnvironmentStatus(previous => (previous === 'ready' ? previous : 'loading'));
-
-        // Get location using IP-based geolocation with fallbacks
-        const locationData = await getGeoLocation();
-
-        if (cancelled) return;
+        setEnvironmentStatus(prev => (prev === 'ready' ? prev : 'loading'));
 
         // Fetch weather data from Open-Meteo
         const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast');
-        weatherUrl.searchParams.set('latitude', locationData.latitude.toString());
-        weatherUrl.searchParams.set('longitude', locationData.longitude.toString());
+        weatherUrl.searchParams.set('latitude', geoLocation.latitude.toString());
+        weatherUrl.searchParams.set('longitude', geoLocation.longitude.toString());
         weatherUrl.searchParams.set('current_weather', 'true');
 
         const weatherResponse = await fetch(weatherUrl.toString(), {
           signal: AbortSignal.timeout(10000)
         });
+
         if (!weatherResponse.ok) {
           throw new Error(`Failed to fetch weather: ${weatherResponse.status}`);
         }
@@ -318,11 +232,11 @@ export default function DashboardPage() {
         }
 
         // Build location label from available data
-        const locationParts = [locationData.city, locationData.regionCode ?? locationData.region]
+        const locationParts = [geoLocation.city, geoLocation.regionCode ?? geoLocation.region]
           .map(part => (typeof part === 'string' && part.trim() ? part.trim() : null))
           .filter((part): part is string => Boolean(part));
 
-        const locationLabel = locationParts.join(', ') || locationData.country || 'your area';
+        const locationLabel = locationParts.join(', ') || geoLocation.country || 'your area';
 
         if (cancelled) return;
 
@@ -331,34 +245,33 @@ export default function DashboardPage() {
           temperatureC,
           temperatureF: (temperatureC * 9) / 5 + 32,
           condition: getWeatherDescription(weatherCode),
-          timezone: locationData.timezone,
-          fetchedAt: new Date()
+          timezone: geoLocation.timezone,
+          fetchedAt: new Date(),
+          isHighAccuracy: geoLocation.source === 'browser'
         };
 
-        console.log('[Dashboard] Environment snapshot loaded:', locationLabel, `${Math.round(temperatureC)}°C`);
+        console.log(
+          '[Dashboard] Environment snapshot loaded:',
+          locationLabel,
+          `${Math.round(temperatureC)}°C`,
+          `(${geoLocation.source}${geoLocation.accuracy ? `, ±${Math.round(geoLocation.accuracy)}m` : ''})`
+        );
         setEnvironment(snapshot);
         setEnvironmentStatus('ready');
       } catch (error) {
-        console.error('[Dashboard] Failed to load environment snapshot:', error);
+        console.error('[Dashboard] Failed to fetch weather:', error);
         if (!cancelled) {
           setEnvironmentStatus('error');
-          // Retry after 30 seconds instead of 60
-          retryTimer = window.setTimeout(() => {
-            loadEnvironmentSnapshot();
-          }, 30_000);
         }
       }
     }
 
-    loadEnvironmentSnapshot();
+    fetchWeather();
 
     return () => {
       cancelled = true;
-      if (retryTimer) {
-        window.clearTimeout(retryTimer);
-      }
     };
-  }, []);
+  }, [geoLocation, geoLoading, geoError]);
 
   useEffect(() => {
     const targetTimezone = environment?.timezone;
@@ -442,7 +355,12 @@ export default function DashboardPage() {
 
             {/* Right side: Environment summary and test button */}
             <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end lg:flex-col lg:items-end lg:ml-8 xl:ml-12">
-              <EnvironmentSummary environment={environment} status={environmentStatus} timeDisplay={timeDisplay} />
+              <EnvironmentSummary
+                environment={environment}
+                status={environmentStatus}
+                timeDisplay={timeDisplay}
+                isHighAccuracy={isHighAccuracy}
+              />
 
               {/* Test Mode Button - Only show for SSA and not already in test mode */}
               {isSSA && !inTestMode && (
@@ -462,6 +380,13 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* Location Permission Prompt - shows when using IP location and permission not yet requested */}
+      <LocationPermissionPrompt
+        permissionState={permissionState}
+        isHighAccuracy={isHighAccuracy}
+        onRequestPermission={requestPermission}
+      />
 
       {/* Simple Statistics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
