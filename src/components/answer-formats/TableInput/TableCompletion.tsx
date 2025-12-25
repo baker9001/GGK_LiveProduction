@@ -798,16 +798,24 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
       return;
     }
 
-    // Single click: toggle selection (existing behavior)
-    const newSelection = new Set(selectedCells);
+    // Check if Ctrl (Windows/Linux) or Cmd (Mac) is held
+    const isMultiSelect = event && (event.ctrlKey || event.metaKey);
 
-    if (newSelection.has(cellKey)) {
-      newSelection.delete(cellKey);
+    if (isMultiSelect) {
+      // Multi-select mode: toggle selection
+      const newSelection = new Set(selectedCells);
+      if (newSelection.has(cellKey)) {
+        newSelection.delete(cellKey);
+      } else {
+        newSelection.add(cellKey);
+      }
+      setSelectedCells(newSelection);
     } else {
+      // Single select mode: clear previous selection and select only this cell
+      const newSelection = new Set<string>();
       newSelection.add(cellKey);
+      setSelectedCells(newSelection);
     }
-
-    setSelectedCells(newSelection);
   }, [isEditingTemplate, selectedCells, paintModeEnabled, paintModeType, cellTypes]);
 
   // Right-click handler for context menu
@@ -1260,7 +1268,7 @@ const TableCompletion: React.FC<TableCompletionProps> = ({
     // Add click handlers for cell selection in edit mode (but not in preview mode or test/simulation modes)
     if (isEditingTemplate && !previewMode && !isAdminTestMode && !isStudentTestMode) {
       td.style.cursor = paintModeEnabled ? 'crosshair' : 'pointer';
-      td.onclick = () => handleCellClick(row, col);
+      td.onclick = (e: MouseEvent) => handleCellClick(row, col, e);
       td.oncontextmenu = (e: any) => handleCellRightClick(row, col, e);
     }
 
