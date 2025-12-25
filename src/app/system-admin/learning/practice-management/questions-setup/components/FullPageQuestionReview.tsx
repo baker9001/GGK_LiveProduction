@@ -21,8 +21,6 @@ interface FullPageQuestionReviewProps {
   onDeleteSubQuestion: (subQuestion: SubQuestion) => void;
   showQAActions?: boolean;
   readOnly?: boolean;
-  pdfDataUrl?: string | null;
-  onPdfUpload?: (file: File) => void;
 }
 
 type NavigatorView = 'all' | 'active' | 'qa_review' | 'incomplete';
@@ -37,9 +35,7 @@ export function FullPageQuestionReview({
   onDeleteQuestion,
   onDeleteSubQuestion,
   showQAActions = false,
-  readOnly = false,
-  pdfDataUrl,
-  onPdfUpload
+  readOnly = false
 }: FullPageQuestionReviewProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showQuestionNavigation, setShowQuestionNavigation] = useState(true);
@@ -240,51 +236,43 @@ export function FullPageQuestionReview({
       className="fixed inset-x-0 bottom-0 z-40 bg-gray-50 dark:bg-gray-900 flex flex-col"
       style={{ top: `${topOffset}px` }}
     >
-      {/* Consolidated Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          {/* Left Section */}
-          <div className="flex items-center space-x-4">
+      {/* Compact Header */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex-shrink-0 shadow-sm">
+        <div className="flex items-center justify-between gap-6">
+          {/* Left: Close & Paper Info */}
+          <div className="flex items-center gap-4 min-w-0 flex-1">
             <Button
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              title="Close (Esc)"
+              className="flex-shrink-0 h-8 w-8 p-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              title="Close Full Review (Esc)"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </Button>
-            
-            {/* Paper Info */}
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+
+            <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+
+            {/* Paper Info - Compact */}
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-sm flex-shrink-0">
                 <FileText className="h-4 w-4" />
               </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h1 className="text-base font-semibold text-gray-900 dark:text-white">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-sm font-bold text-gray-900 dark:text-white truncate">
                     {paper.code}
                   </h1>
-                  <StatusBadge status={paper.status} className="text-xs" />
+                  <StatusBadge status={paper.status} className="text-xs flex-shrink-0" />
                 </div>
-                <div className="flex items-center space-x-3 text-xs text-gray-600 dark:text-gray-400">
-                  <span>{paper.subject}</span>
-                  <span>•</span>
-                  <span>{paper.provider}</span>
-                  <span>•</span>
-                  <span>{paper.program}</span>
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
+                  <span className="truncate">{paper.subject}</span>
+                  <span className="text-gray-400">•</span>
+                  <span>{paper.total_marks || 0} marks</span>
                   {paper.duration && (
                     <>
-                      <span>•</span>
-                      <Clock className="h-3 w-3 inline mr-1" />
+                      <span className="text-gray-400">•</span>
                       <span>{paper.duration}</span>
-                    </>
-                  )}
-                  {paper.total_marks && (
-                    <>
-                      <span>•</span>
-                      <Award className="h-3 w-3 inline mr-1" />
-                      <span>{paper.total_marks} marks</span>
                     </>
                   )}
                 </div>
@@ -292,61 +280,59 @@ export function FullPageQuestionReview({
             </div>
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center space-x-4">
-            {/* Question Progress & Navigation */}
-            <div className="flex items-center space-x-3 px-3 py-1.5 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToPrevious}
-                disabled={currentQuestionIndex === 0}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Question {currentQuestionIndex + 1} of {paper.questions.length}
-                </span>
-                {currentQuestion && (
-                  <>
-                    <span className="text-gray-400 dark:text-gray-500">•</span>
-                    <StatusBadge status={currentQuestion.status} className="text-xs" />
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {currentQuestion.marks} marks
-                    </span>
-                  </>
-                )}
-              </div>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToNext}
-                disabled={currentQuestionIndex === paper.questions.length - 1}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+          {/* Center: Question Navigation */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goToPrevious}
+              disabled={currentQuestionIndex === 0}
+              className="h-8 w-8 p-0 hover:bg-white dark:hover:bg-gray-800"
+              title="Previous Question (←)"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="flex items-center gap-2 px-3">
+              <span className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                {currentQuestionIndex + 1} / {paper.questions.length}
+              </span>
+              {currentQuestion && (
+                <>
+                  <span className="h-1 w-1 rounded-full bg-gray-400 dark:bg-gray-500" />
+                  <StatusBadge status={currentQuestion.status} className="text-xs" showIcon={false} />
+                </>
+              )}
             </div>
 
-            {/* Compact Statistics */}
-            <div className="flex items-center space-x-3 text-sm">
-              <div className="flex items-center space-x-1.5 px-2 py-1 rounded-md bg-green-50 dark:bg-green-900/20">
-                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                <span className="font-medium text-green-700 dark:text-green-300">{statistics.confirmedCount}</span>
-              </div>
-              <div className="flex items-center space-x-1.5 px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-900/20">
-                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <span className="font-medium text-amber-700 dark:text-amber-300">{statistics.qaReviewCount}</span>
-              </div>
-              <div className="flex items-center space-x-1.5 px-2 py-1 rounded-md bg-red-50 dark:bg-red-900/20">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                <span className="font-medium text-red-700 dark:text-red-300">{statistics.incompleteCount}</span>
-              </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={goToNext}
+              disabled={currentQuestionIndex === paper.questions.length - 1}
+              className="h-8 w-8 p-0 hover:bg-white dark:hover:bg-gray-800"
+              title="Next Question (→)"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Right: Statistics */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{statistics.confirmedCount}</span>
             </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-bold text-amber-700 dark:text-amber-300">{statistics.qaReviewCount}</span>
+            </div>
+            {statistics.incompleteCount > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
+                <AlertCircle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                <span className="text-sm font-bold text-rose-700 dark:text-rose-300">{statistics.incompleteCount}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -361,47 +347,57 @@ export function FullPageQuestionReview({
           {showQuestionNavigation && (
             <>
               {/* Navigator Header */}
-              <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 space-y-3">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 space-y-3 bg-gray-50 dark:bg-gray-900/50">
                 <div className="flex items-center justify-between">
                   <h3 className={cn(
-                    "font-semibold text-gray-900 dark:text-white transition-all",
-                    navigatorSize === 'compact' && "text-xs text-center w-full"
+                    "font-bold text-gray-900 dark:text-white transition-all flex items-center gap-2",
+                    navigatorSize === 'compact' && "text-xs text-center w-full justify-center"
                   )}>
+                    {navigatorSize !== 'compact' && <List className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
                     {navigatorSize === 'compact' ? 'Q' : 'Questions'}
                   </h3>
-                  <div className="flex items-center space-x-1">
-                    {navigatorSize !== 'compact' && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setNavigatorSize(navigatorSize === 'normal' ? 'expanded' : 'normal')}
-                          className="h-7 w-7 p-0"
-                          title={navigatorSize === 'normal' ? 'Expand' : 'Normal'}
-                        >
-                          {navigatorSize === 'normal' ? <Maximize2 className="h-3 w-3" /> : <Minimize2 className="h-3 w-3" />}
-                        </Button>
-                      </>
-                    )}
+                  {navigatorSize !== 'compact' && (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setNavigatorSize(navigatorSize === 'normal' ? 'expanded' : 'normal')}
+                        className="h-7 w-7 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title={navigatorSize === 'normal' ? 'Expand sidebar' : 'Normal size'}
+                      >
+                        {navigatorSize === 'normal' ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setNavigatorSize('compact')}
+                        className="h-7 w-7 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="Compact view"
+                      >
+                        <PanelLeftClose className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowQuestionNavigation(false)}
+                        className="h-7 w-7 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="Hide sidebar"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                  {navigatorSize === 'compact' && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => setNavigatorSize(navigatorSize === 'compact' ? 'normal' : 'compact')}
-                      className="h-7 w-7 p-0"
-                      title={navigatorSize === 'compact' ? 'Expand' : 'Compact'}
+                      onClick={() => setNavigatorSize('normal')}
+                      className="absolute top-3 right-3 h-7 w-7 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
+                      title="Expand sidebar"
                     >
-                      {navigatorSize === 'compact' ? <PanelLeft className="h-3 w-3" /> : <PanelLeftClose className="h-3 w-3" />}
+                      <PanelLeft className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setShowQuestionNavigation(false)}
-                      className="h-7 w-7 p-0"
-                      title="Hide sidebar"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  )}
                 </div>
 
                 {/* Search and Filter */}
@@ -625,13 +621,13 @@ export function FullPageQuestionReview({
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
           {/* Show Navigator Button (when hidden) */}
           {!showQuestionNavigation && (
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
               <Button
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 onClick={() => setShowQuestionNavigation(true)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                title="Show sidebar"
+                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600"
+                title="Show questions sidebar"
               >
                 <PanelLeft className="h-4 w-4 mr-2" />
                 Show Questions
@@ -640,69 +636,70 @@ export function FullPageQuestionReview({
           )}
 
           {/* Question Content Area */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="max-w-7xl mx-auto p-6">
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent">
+            <div className="max-w-7xl mx-auto px-6 py-8">
               {currentQuestion && (
-                <QuestionCard
-                  question={currentQuestion}
-                  questionIndex={currentQuestionIndex}
-                  topics={topics}
-                  subtopics={subtopics}
-                  units={units}
-                  onDelete={onDeleteQuestion}
-                  onDeleteSubQuestion={onDeleteSubQuestion}
-                  showQAActions={showQAActions}
-                  readOnly={readOnly}
-                  pdfDataUrl={pdfDataUrl}
-                  onPdfUpload={onPdfUpload}
-                />
+                <div className="animate-in fade-in duration-200">
+                  <QuestionCard
+                    question={currentQuestion}
+                    questionIndex={currentQuestionIndex}
+                    topics={topics}
+                    subtopics={subtopics}
+                    units={units}
+                    onDelete={onDeleteQuestion}
+                    onDeleteSubQuestion={onDeleteSubQuestion}
+                    showQAActions={showQAActions}
+                    readOnly={readOnly}
+                  />
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Footer with Quick Navigation */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-2 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4 text-xs text-gray-600 dark:text-gray-400">
-            <span className="flex items-center space-x-2">
-              <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded">←</kbd>
-              <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded">→</kbd>
-              <span>Navigate</span>
+      {/* Compact Footer */}
+      <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-2.5 flex-shrink-0">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400">
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono shadow-sm">←</kbd>
+              <kbd className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono shadow-sm">→</kbd>
+              <span className="text-gray-500 dark:text-gray-400">Navigate</span>
             </span>
-            <span className="flex items-center space-x-2">
-              <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded">Ctrl</kbd>
-              <span>+</span>
-              <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded">F</kbd>
-              <span>Search</span>
+            <span className="h-4 w-px bg-gray-300 dark:bg-gray-600" />
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono shadow-sm">Ctrl+F</kbd>
+              <span className="text-gray-500 dark:text-gray-400">Search</span>
             </span>
-            <span className="flex items-center space-x-2">
-              <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded">Esc</kbd>
-              <span>Close</span>
+            <span className="h-4 w-px bg-gray-300 dark:bg-gray-600" />
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono shadow-sm">Esc</kbd>
+              <span className="text-gray-500 dark:text-gray-400">Close</span>
             </span>
           </div>
-          
-          <div className="flex items-center space-x-2">
+
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={() => goToQuestion(0)}
               disabled={currentQuestionIndex === 0}
-              className="text-xs"
+              className="h-7 px-3 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              title="Jump to first question (Home)"
             >
-              <Zap className="h-3 w-3 mr-1" />
               First
             </Button>
+            <span className="h-4 w-px bg-gray-300 dark:bg-gray-600" />
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               onClick={() => goToQuestion(paper.questions.length - 1)}
               disabled={currentQuestionIndex === paper.questions.length - 1}
-              className="text-xs"
+              className="h-7 px-3 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              title="Jump to last question (End)"
             >
               Last
-              <Zap className="h-3 w-3 ml-1" />
             </Button>
           </div>
         </div>

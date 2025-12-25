@@ -1085,7 +1085,6 @@ export function PaperCard({
           onDeleteSubQuestion={onDeleteSubQuestion}
           showQAActions={showQAActions}
           readOnly={readOnly}
-          // NO LONGER PASSING pdfDataUrl or onPdfUpload
         />
       )}
     </>
