@@ -703,6 +703,7 @@ export default function EntityProfilePage() {
             </div>
           </div>
         </div>
+        </div>
       )}
     </div>
   );
