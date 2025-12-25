@@ -2,17 +2,21 @@
 
 ## ✅ What Was Fixed
 
-**Two critical database issues** causing license actions to fail:
+**Three critical database issues** causing license actions to fail:
 
 1. **license_actions table** - Missing `performed_by` and `updated_at` columns
    - Error: *"Failed to record the action history"*
-   - Fix: Added columns with proper foreign keys and triggers
+   - Fix: ✅ Added columns with proper foreign keys and triggers
 
 2. **licenses table** - Missing `updated_at` column
    - Error: *"record 'new' has no field 'updated_at'"*
-   - Fix: Added column so UPDATE trigger works correctly
+   - Fix: ✅ Added column so UPDATE trigger works correctly
 
-**Both fixes applied** - License actions now work end-to-end! 🎉
+3. **license_actions table** - `change_quantity` NOT NULL constraint
+   - Error: *"Failed to record the action history"* (EXTEND action only)
+   - Fix: ✅ Made `change_quantity` nullable for EXTEND actions
+
+**All three fixes applied** - All license actions now work perfectly! 🎉
 
 ## Quick Test Steps
 
@@ -29,14 +33,14 @@
 
 ---
 
-### 2. EXTEND (Push Out Expiration Date)
+### 2. EXTEND (Push Out Expiration Date) - Previously Failing ❌ Now Fixed ✅
 1. Click the **three dots (⋮)** on any license
 2. Select **"Extend Validity"**
-3. Choose new end date: `6 months from now`
+3. Choose new end date: `30/12/2026` (6 months from now)
 4. Add notes (optional): `Extending trial period`
 5. Click **Save**
 
-**Expected:** Success message, end date updates to new date
+**Expected:** ✅ Success message "License extended successfully", end date updates to new date
 
 ---
 
@@ -110,16 +114,16 @@ Should show your recent actions with the admin's email address! ✅
 
 ## 🔍 Technical Details
 
-### Two-Part Fix
+### Three-Part Fix
 
-**Problem #1 - Action Recording**:
+**Problem #1 - Action Recording (All Actions)**:
 ```
 Frontend: INSERT into license_actions { performed_by: "user-id" }
 Database: ❌ "Column performed_by does not exist"
 Result: ❌ Action not recorded
 ```
 
-**Problem #2 - License Update**:
+**Problem #2 - License Update (All Actions)**:
 ```
 Frontend: UPDATE licenses SET total_quantity = X
 Trigger: update_licenses_updated_at tries to set NEW.updated_at
@@ -127,16 +131,23 @@ Database: ❌ "record 'new' has no field 'updated_at'"
 Result: ❌ License not updated
 ```
 
-**After Both Fixes**:
+**Problem #3 - EXTEND Action Only**:
 ```
-Frontend: INSERT into license_actions { performed_by: "user-id" }
-Database: ✅ INSERT succeeds (column exists)
+Frontend: INSERT into license_actions { change_quantity: null }
+Database: ❌ "NOT NULL constraint violation on change_quantity"
+Result: ❌ EXTEND action fails (EXPAND and RENEW work)
+```
 
-Frontend: UPDATE licenses SET total_quantity = X
+**After All Three Fixes**:
+```
+Frontend: INSERT into license_actions { performed_by: "user-id", change_quantity: null }
+Database: ✅ INSERT succeeds (performed_by exists, change_quantity nullable)
+
+Frontend: UPDATE licenses SET end_date = new_date
 Trigger: ✅ Sets updated_at = now() (column exists)
 Database: ✅ UPDATE succeeds
 
-User sees: "License expanded successfully" 🎉
+User sees: "License extended successfully" 🎉
 ```
 
 ---
@@ -145,3 +156,4 @@ User sees: "License expanded successfully" 🎉
 
 - **Complete Fix Summary**: `LICENSE_ACTIONS_COMPLETE_FIX_SUMMARY.md`
 - **Technical Analysis**: `LICENSE_ACTION_ERROR_FIX_COMPLETE.md`
+- **EXTEND Action Fix**: `LICENSE_EXTEND_ACTION_FIX_COMPLETE.md` (Latest Fix)
