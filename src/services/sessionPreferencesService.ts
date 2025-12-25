@@ -249,3 +249,325 @@ export async function preloadPreferences(): Promise<void> {
     console.warn('[SessionPreferences] Failed to preload preferences:', error);
   }
 }
+
+// ============================================================================
+// PHASE 2 & 3: Advanced Features
+// ============================================================================
+
+/**
+ * Get preference change history for current user
+ */
+export async function getPreferenceHistory(limit = 50): Promise<{
+  success: boolean;
+  data?: any[];
+  error?: string;
+}> {
+  const user = getCurrentUser();
+  if (!user) {
+    return { success: false, error: 'Not authenticated' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_session_preferences_history')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('changed_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error loading history:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get all available presets
+ */
+export async function getAvailablePresets(): Promise<{
+  success: boolean;
+  data?: any[];
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('session_preference_presets')
+      .select('*')
+      .order('is_system_preset', { ascending: false })
+      .order('name');
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error loading presets:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get presets recommended for current user
+ */
+export async function getRecommendedPresets(): Promise<{
+  success: boolean;
+  data?: any[];
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('get_recommended_presets');
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error loading recommended presets:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Apply a preset by name
+ */
+export async function applyPresetByName(
+  presetName: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc('apply_session_preset', {
+      p_preset_name: presetName,
+    });
+
+    if (error) throw error;
+
+    // Clear cache after applying preset
+    clearPreferencesCache();
+
+    const result = data?.[0];
+    return {
+      success: result?.success ?? false,
+      message: result?.message,
+      error: result?.success ? undefined : result?.message,
+    };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error applying preset:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Export current preferences to JSON
+ */
+export async function exportPreferences(): Promise<{
+  success: boolean;
+  data?: any;
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('export_session_preferences');
+
+    if (error) throw error;
+
+    if (data?.error) {
+      return { success: false, error: data.error };
+    }
+
+    return { success: true, data };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error exporting preferences:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Import preferences from JSON
+ */
+export async function importPreferences(
+  preferencesJson: any
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc('import_session_preferences', {
+      p_preferences_json: preferencesJson,
+    });
+
+    if (error) throw error;
+
+    // Clear cache after importing
+    clearPreferencesCache();
+
+    const result = data?.[0];
+    return {
+      success: result?.success ?? false,
+      message: result?.message,
+      error: result?.success ? undefined : result?.message,
+    };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error importing preferences:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================================
+// ADMIN-ONLY FUNCTIONS (Phase 2)
+// ============================================================================
+
+/**
+ * Bulk reset preferences for all users of a specific type
+ * Admin only
+ */
+export async function bulkResetPreferences(
+  userType: string,
+  reason?: string
+): Promise<{
+  success: boolean;
+  usersAffected?: number;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('bulk_reset_session_preferences', {
+      p_user_type: userType,
+      p_reason: reason,
+    });
+
+    if (error) throw error;
+
+    const result = data?.[0];
+    return {
+      success: result?.success ?? false,
+      usersAffected: result?.users_affected,
+      message: result?.message,
+      error: result?.success ? undefined : result?.message,
+    };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error in bulk reset:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Bulk apply preset to multiple users by email
+ * Admin only
+ */
+export async function bulkApplyPreset(
+  userEmails: string[],
+  presetConfig: any,
+  reason?: string
+): Promise<{
+  success: boolean;
+  usersAffected?: number;
+  usersFailed?: number;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('bulk_apply_preset', {
+      p_user_emails: userEmails,
+      p_preset_config: presetConfig,
+      p_reason: reason,
+    });
+
+    if (error) throw error;
+
+    const result = data?.[0];
+    return {
+      success: result?.success ?? false,
+      usersAffected: result?.users_affected,
+      usersFailed: result?.users_failed,
+      message: result?.message,
+      error: result?.success ? undefined : result?.message,
+    };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error in bulk apply:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Bulk update a single field for users
+ * Admin only
+ */
+export async function bulkUpdateField(
+  fieldName: string,
+  newValue: string,
+  userType?: string,
+  reason?: string
+): Promise<{
+  success: boolean;
+  usersAffected?: number;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('bulk_update_preference_field', {
+      p_field_name: fieldName,
+      p_new_value: newValue,
+      p_user_type: userType,
+      p_reason: reason,
+    });
+
+    if (error) throw error;
+
+    const result = data?.[0];
+    return {
+      success: result?.success ?? false,
+      usersAffected: result?.users_affected,
+      message: result?.message,
+      error: result?.success ? undefined : result?.message,
+    };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error in bulk update:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get bulk operations statistics
+ * Admin only
+ */
+export async function getBulkOperationsStats(
+  daysBack = 30
+): Promise<{
+  success: boolean;
+  data?: any[];
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('get_bulk_operations_stats', {
+      p_days_back: daysBack,
+    });
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error loading stats:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check user session limits (for debugging/support)
+ * Admin only
+ */
+export async function checkUserLimits(
+  userEmail: string
+): Promise<{
+  success: boolean;
+  data?: any;
+  error?: string;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('check_user_session_limits', {
+      p_user_email: userEmail,
+    });
+
+    if (error) throw error;
+
+    return { success: true, data: data?.[0] };
+  } catch (error: any) {
+    console.error('[SessionPreferences] Error checking limits:', error);
+    return { success: false, error: error.message };
+  }
+}
