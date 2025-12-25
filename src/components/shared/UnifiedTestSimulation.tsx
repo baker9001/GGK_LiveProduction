@@ -1975,6 +1975,32 @@ export function UnifiedTestSimulation({
 
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-4xl mx-auto p-6">
+                {/* Reminder banner when exam hasn't started */}
+                {!isRunning && !isQAMode && features.allowAnswerInput && (
+                  <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                          Click "Start Exam" Before Answering
+                        </h4>
+                        <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                          Please click the <strong>Start Exam</strong> button in the top-right corner before filling in your answers.
+                          Any answers entered before starting the exam will not be recorded or submitted.
+                        </p>
+                        <Button
+                          onClick={startExam}
+                          leftIcon={<Play className="h-4 w-4" />}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          size="sm"
+                        >
+                          Start Exam Now
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {isNavigating && (
                   <div className="flex items-center justify-center py-12">
                     <div className="animate-pulse text-gray-500 dark:text-gray-400">
