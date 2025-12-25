@@ -29,28 +29,28 @@ export function useQuestionBatchOperations() {
   const batchConfirmQuestions = useMutation({
     mutationFn: async ({ questionIds, paperId }: BatchConfirmQuestionsParams) => {
       if (questionIds.length === 0) return { success: true };
-      
-      // Update all questions in batch
+
+      // Update all questions in batch (allow from both draft and qa_review status)
       const { error: questionsError } = await supabase
         .from('questions_master_admin')
-        .update({ 
+        .update({
           status: 'active',
           updated_at: new Date().toISOString()
         })
         .in('id', questionIds)
-        .eq('status', 'qa_review');
-      
+        .in('status', ['draft', 'qa_review']);
+
       if (questionsError) throw questionsError;
-      
-      // Update all related sub-questions
+
+      // Update all related sub-questions (allow from both draft and qa_review status)
       const { error: subQuestionsError } = await supabase
         .from('sub_questions')
-        .update({ 
+        .update({
           status: 'active',
           updated_at: new Date().toISOString()
         })
         .in('question_id', questionIds)
-        .eq('status', 'qa_review');
+        .in('status', ['draft', 'qa_review']);
       
       if (subQuestionsError) throw subQuestionsError;
       

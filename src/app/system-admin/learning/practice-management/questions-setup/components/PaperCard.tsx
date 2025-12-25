@@ -159,20 +159,60 @@ export function PaperCard({
   };
   
   const handleBatchConfirm = async () => {
-    const selectedQuestionsToConfirm = paper.questions
-      .filter(q => selectedQuestions.has(q.id) && q.status === 'qa_review')
-      .filter(q => validateForConfirmation(q).isValid);
-    
-    if (selectedQuestionsToConfirm.length === 0) {
-      toast.error('No valid questions selected for confirmation');
+    // Get all selected questions that are not already confirmed
+    const selectedQuestionsList = paper.questions.filter(q => selectedQuestions.has(q.id));
+    const alreadyConfirmed = selectedQuestionsList.filter(q => q.status === 'active');
+    const eligibleForConfirm = selectedQuestionsList.filter(q => ['draft', 'qa_review'].includes(q.status));
+
+    // Validate eligible questions
+    const validQuestions: typeof eligibleForConfirm = [];
+    const invalidQuestions: typeof eligibleForConfirm = [];
+
+    eligibleForConfirm.forEach(q => {
+      const validation = validateForConfirmation(q);
+      if (validation.isValid) {
+        validQuestions.push(q);
+      } else {
+        invalidQuestions.push(q);
+      }
+    });
+
+    // Show appropriate error messages
+    if (validQuestions.length === 0) {
+      if (alreadyConfirmed.length === selectedQuestionsList.length) {
+        toast.error(`All ${selectedQuestionsList.length} selected question${selectedQuestionsList.length > 1 ? 's are' : ' is'} already confirmed`);
+      } else if (invalidQuestions.length > 0) {
+        toast.error(
+          `No valid questions to confirm. ${invalidQuestions.length} question${invalidQuestions.length > 1 ? 's need' : ' needs'} attention (missing required fields or attachments)`
+        );
+      } else {
+        toast.error('No valid questions selected for confirmation');
+      }
       return;
     }
-    
+
+    // Confirm valid questions
     await batchConfirmQuestions.mutateAsync({
-      questionIds: selectedQuestionsToConfirm.map(q => q.id),
+      questionIds: validQuestions.map(q => q.id),
       paperId: paper.id
     });
-    
+
+    // Show detailed success message
+    let message = `${validQuestions.length} question${validQuestions.length > 1 ? 's' : ''} confirmed successfully`;
+    if (alreadyConfirmed.length > 0) {
+      message += ` (${alreadyConfirmed.length} already confirmed)`;
+    }
+    if (invalidQuestions.length > 0) {
+      message += ` (${invalidQuestions.length} need attention)`;
+      toast.success(message);
+      toast.error(
+        `${invalidQuestions.length} question${invalidQuestions.length > 1 ? 's' : ''} could not be confirmed. Check for missing fields or attachments.`,
+        { duration: 5000 }
+      );
+    } else {
+      toast.success(message);
+    }
+
     setSelectedQuestions(new Set());
   };
   
@@ -779,42 +819,83 @@ export function PaperCard({
                 )}
                 
                 {/* Batch Actions */}
-                {showQAActions && selectedQuestions.size > 0 && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                        {selectedQuestions.size} question{selectedQuestions.size > 1 ? 's' : ''} selected
-                      </span>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={handleBatchConfirm}
-                          leftIcon={<CircleCheck className="h-3 w-3" />}
-                          className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
-                        >
-                          Confirm Selected
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleBatchDelete}
-                          leftIcon={<Trash2 className="h-3 w-3" />}
-                          className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
-                        >
-                          Delete Selected
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedQuestions(new Set())}
-                        >
-                          Clear Selection
-                        </Button>
+                {showQAActions && selectedQuestions.size > 0 && (() => {
+                  const selectedQuestionsList = paper.questions.filter(q => selectedQuestions.has(q.id));
+                  const alreadyConfirmed = selectedQuestionsList.filter(q => q.status === 'active');
+                  const eligibleForConfirm = selectedQuestionsList.filter(q => ['draft', 'qa_review'].includes(q.status));
+                  const validForConfirm = eligibleForConfirm.filter(q => validateForConfirmation(q).isValid);
+                  const needAttention = eligibleForConfirm.filter(q => !validateForConfirmation(q).isValid);
+                  const canConfirmAny = validForConfirm.length > 0;
+
+                  return (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                              {selectedQuestions.size} question{selectedQuestions.size > 1 ? 's' : ''} selected
+                            </span>
+                            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                              {validForConfirm.length > 0 && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-green-700 dark:text-green-300">
+                                  <CircleCheck className="h-3 w-3" />
+                                  {validForConfirm.length} can confirm
+                                </span>
+                              )}
+                              {alreadyConfirmed.length > 0 && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-gray-600 dark:text-gray-300">
+                                  <CheckCircle className="h-3 w-3" />
+                                  {alreadyConfirmed.length} confirmed
+                                </span>
+                              )}
+                              {needAttention.length > 0 && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-amber-700 dark:text-amber-300">
+                                  <AlertCircle className="h-3 w-3" />
+                                  {needAttention.length} need attention
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={handleBatchConfirm}
+                              leftIcon={<CircleCheck className="h-3 w-3" />}
+                              className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
+                              disabled={!canConfirmAny}
+                              title={
+                                !canConfirmAny
+                                  ? alreadyConfirmed.length === selectedQuestionsList.length
+                                    ? 'All selected questions are already confirmed'
+                                    : 'Selected questions need attention (missing fields or attachments)'
+                                  : `Confirm ${validForConfirm.length} question${validForConfirm.length > 1 ? 's' : ''}`
+                              }
+                            >
+                              Confirm Selected
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleBatchDelete}
+                              leftIcon={<Trash2 className="h-3 w-3" />}
+                              className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+                            >
+                              Delete Selected
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedQuestions(new Set())}
+                            >
+                              Clear Selection
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 
                 {/* Confirmation Progress Bar */}
                 {showQAActions && paper.status === 'qa_review' && (
