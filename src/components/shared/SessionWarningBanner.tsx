@@ -9,38 +9,14 @@ import {
   getSupabaseSessionRemainingMinutes,
   isSupabaseSessionRequired
 } from '../../lib/sessionManager';
+import { isPublicPath } from '../../lib/sessionConfig';
 
 /**
  * Check if current page is a public page
+ * Uses centralized isPublicPath from sessionConfig.ts
  */
 function isPublicPage(path: string): boolean {
-  const publicPaths = [
-    '/',
-    '/landing',
-    '/signin',
-    '/login',
-    '/forgot-password',
-    '/reset-password',
-    '/about',
-    '/contact',
-    '/subjects',
-    '/resources',
-    '/pricing',
-    '/privacy',
-    '/terms',
-    '/cookies',
-    '/cambridge-igcse',
-    '/cambridge-o-level',
-    '/cambridge-a-level',
-    '/edexcel-igcse',
-    '/edexcel-a-level',
-    '/mock-exams',
-    '/video-lessons'
-  ];
-
-  return publicPaths.some(publicPath =>
-    path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
-  );
+  return isPublicPath(path);
 }
 
 export function SessionWarningBanner() {

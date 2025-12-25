@@ -14,7 +14,9 @@ import {
   STORAGE_KEYS,
   getGracePeriodDuration,
   validateGracePeriod,
-  MAX_GRACE_PERIOD_MS
+  MAX_GRACE_PERIOD_MS,
+  MAX_TOTAL_GRACE_TIME_MS,
+  MAX_GRACE_PERIODS_PER_SESSION
 } from './sessionConfig';
 
 /**
@@ -194,6 +196,7 @@ export function isWithinGracePeriod(): boolean {
 
 /**
  * Start a grace period with a specific reason
+ * Includes stacking prevention to avoid security bypass
  */
 export function startGracePeriod(reason: GracePeriodReason): void {
   if (typeof window === 'undefined') return;
@@ -203,13 +206,44 @@ export function startGracePeriod(reason: GracePeriodReason): void {
     const duration = getGracePeriodDuration(reason || undefined);
     const validatedDuration = validateGracePeriod(duration);
 
+    // SECURITY: Check cumulative grace time to prevent stacking abuse
+    const totalGraceTimeStr = localStorage.getItem(STORAGE_KEYS.TOTAL_GRACE_TIME);
+    const graceCountStr = localStorage.getItem(STORAGE_KEYS.GRACE_PERIOD_COUNT);
+
+    const totalGraceTime = totalGraceTimeStr ? parseInt(totalGraceTimeStr, 10) : 0;
+    const graceCount = graceCountStr ? parseInt(graceCountStr, 10) : 0;
+
+    // Check if maximum total grace time exceeded
+    if (totalGraceTime >= MAX_TOTAL_GRACE_TIME_MS) {
+      console.warn(
+        `[GracePeriod] BLOCKED: Maximum cumulative grace time reached (${Math.round(totalGraceTime/1000)}s >= ${Math.round(MAX_TOTAL_GRACE_TIME_MS/1000)}s)`
+      );
+      return;
+    }
+
+    // Check if maximum grace period count exceeded
+    if (graceCount >= MAX_GRACE_PERIODS_PER_SESSION) {
+      console.warn(
+        `[GracePeriod] BLOCKED: Maximum grace period count reached (${graceCount} >= ${MAX_GRACE_PERIODS_PER_SESSION})`
+      );
+      return;
+    }
+
+    // Update cumulative tracking
+    const newTotalGraceTime = totalGraceTime + validatedDuration;
+    const newGraceCount = graceCount + 1;
+
+    localStorage.setItem(STORAGE_KEYS.TOTAL_GRACE_TIME, newTotalGraceTime.toString());
+    localStorage.setItem(STORAGE_KEYS.GRACE_PERIOD_COUNT, newGraceCount.toString());
+
     // Store grace period markers
     localStorage.setItem(STORAGE_KEYS.EXTENDED_GRACE_PERIOD, now.toString());
     localStorage.setItem(STORAGE_KEYS.GRACE_PERIOD_REASON, reason || '');
     localStorage.setItem(STORAGE_KEYS.GRACE_PERIOD_START_TIME, now.toString());
 
     console.log(
-      `[GracePeriod] Started grace period: ${reason || 'unknown'} (${Math.round(validatedDuration / 1000)}s)`
+      `[GracePeriod] Started grace period: ${reason || 'unknown'} (${Math.round(validatedDuration / 1000)}s) ` +
+      `[Total: ${Math.round(newTotalGraceTime/1000)}s/${Math.round(MAX_TOTAL_GRACE_TIME_MS/1000)}s, Count: ${newGraceCount}/${MAX_GRACE_PERIODS_PER_SESSION}]`
     );
 
     // Set up automatic cleanup
@@ -331,6 +365,7 @@ export function shouldSkipSessionCheck(): boolean {
 
 /**
  * Clean up all grace period markers on logout
+ * Also resets cumulative tracking for security
  */
 export function cleanupAllGracePeriods(): void {
   if (typeof window === 'undefined') return;
@@ -342,7 +377,11 @@ export function cleanupAllGracePeriods(): void {
     localStorage.removeItem(STORAGE_KEYS.DELIBERATE_RELOAD);
     localStorage.removeItem(STORAGE_KEYS.RELOAD_REASON);
 
-    console.log('[GracePeriod] Cleaned up all grace period markers');
+    // Also clear cumulative tracking (reset on logout)
+    localStorage.removeItem(STORAGE_KEYS.TOTAL_GRACE_TIME);
+    localStorage.removeItem(STORAGE_KEYS.GRACE_PERIOD_COUNT);
+
+    console.log('[GracePeriod] Cleaned up all grace period markers and reset cumulative tracking');
   } catch (error) {
     console.warn('[GracePeriod] Error cleaning up all grace periods:', error);
   }

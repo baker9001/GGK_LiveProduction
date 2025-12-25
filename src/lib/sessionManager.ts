@@ -18,6 +18,18 @@ import {
   type User
 } from './auth';
 import { supabase } from './supabase';
+import {
+  WARNING_THRESHOLD_MINUTES,
+  SESSION_CHECK_INTERVAL_MS,
+  ACTIVITY_CHECK_INTERVAL_MS,
+  AUTO_EXTEND_INTERVAL_MS,
+  ACTIVITY_TIMEOUT_MS,
+  BASE_GRACE_PERIOD_MS,
+  STORAGE_KEYS,
+  SESSION_EVENTS,
+  BROADCAST_CHANNEL_NAME,
+  isPublicPath
+} from './sessionConfig';
 
 // Re-export for convenience
 export {
@@ -26,27 +38,26 @@ export {
   isSupabaseSessionRequired
 };
 
-// Session configuration constants
-const WARNING_THRESHOLD_MINUTES = 5; // Warn user 5 minutes before expiration
-const ACTIVITY_CHECK_INTERVAL = 30000; // Check activity every 30 seconds
-const SESSION_CHECK_INTERVAL = 30000; // Check session every 30 seconds (more frequent than before)
-const AUTO_EXTEND_INTERVAL = 15 * 60 * 1000; // Auto-extend every 15 minutes of activity
-const ACTIVITY_TIMEOUT = 2 * 60 * 1000; // Consider inactive after 2 minutes without activity
-const GRACE_PERIOD = 30000; // 30 second grace period before actual logout
+// Use centralized config values
+const ACTIVITY_CHECK_INTERVAL = ACTIVITY_CHECK_INTERVAL_MS;
+const SESSION_CHECK_INTERVAL = SESSION_CHECK_INTERVAL_MS;
+const AUTO_EXTEND_INTERVAL = AUTO_EXTEND_INTERVAL_MS;
+const ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT_MS;
+const GRACE_PERIOD = BASE_GRACE_PERIOD_MS;
 
-// Event names
-export const SESSION_WARNING_EVENT = 'ggk-session-warning';
-export const SESSION_EXTENDED_EVENT = 'ggk-session-extended';
-export const SESSION_ACTIVITY_EVENT = 'ggk-session-activity';
+// Event names - use centralized config
+export const SESSION_WARNING_EVENT = SESSION_EVENTS.WARNING;
+export const SESSION_EXTENDED_EVENT = SESSION_EVENTS.EXTENDED;
+export const SESSION_ACTIVITY_EVENT = SESSION_EVENTS.ACTIVITY;
 
-// Storage keys
-const LAST_ACTIVITY_KEY = 'ggk_last_activity';
-const SESSION_WARNING_SHOWN_KEY = 'ggk_session_warning_shown';
-const LAST_AUTO_EXTEND_KEY = 'ggk_last_auto_extend';
-const LAST_PAGE_LOAD_TIME_KEY = 'ggk_last_page_load_time';
-const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
-const DELIBERATE_RELOAD_KEY = 'ggk_deliberate_reload';
-const RELOAD_REASON_KEY = 'ggk_reload_reason';
+// Storage keys - use centralized config
+const LAST_ACTIVITY_KEY = STORAGE_KEYS.LAST_ACTIVITY;
+const SESSION_WARNING_SHOWN_KEY = STORAGE_KEYS.SESSION_WARNING_SHOWN;
+const LAST_AUTO_EXTEND_KEY = STORAGE_KEYS.LAST_AUTO_EXTEND;
+const LAST_PAGE_LOAD_TIME_KEY = STORAGE_KEYS.LAST_PAGE_LOAD_TIME;
+const LAST_LOGIN_TIME_KEY = STORAGE_KEYS.LAST_LOGIN_TIME;
+const DELIBERATE_RELOAD_KEY = STORAGE_KEYS.DELIBERATE_RELOAD;
+const RELOAD_REASON_KEY = STORAGE_KEYS.RELOAD_REASON;
 
 // Activity tracking
 let lastActivityTime = Date.now();
@@ -132,7 +143,7 @@ export function initializeSessionManager(): void {
 
   // Initialize BroadcastChannel for cross-tab sync
   try {
-    broadcastChannel = new BroadcastChannel('ggk-session-channel');
+    broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
     broadcastChannel.onmessage = handleBroadcastMessage;
     console.log('[SessionManager] Cross-tab synchronization enabled');
   } catch (error) {
@@ -582,11 +593,31 @@ function handleSessionExpired(message: string): void {
   if (isRedirecting) return;
 
   // CRITICAL FIX: Check test mode exit flag FIRST to prevent false session expiration
+  // Added: Auto-cleanup of stale test mode exit flags to prevent security bypass
   try {
     const testModeExiting = localStorage.getItem('test_mode_exiting');
+    const exitTimestamp = localStorage.getItem('test_mode_exit_timestamp');
+
     if (testModeExiting) {
-      console.log('[SessionManager] Skipping expiration - test mode exit in progress');
-      return;
+      // Check if the flag is stale (older than 10 seconds)
+      if (exitTimestamp) {
+        const timeSinceExit = Date.now() - parseInt(exitTimestamp, 10);
+
+        if (timeSinceExit > 10000) {
+          // Auto-cleanup stale flag - security improvement
+          console.log('[SessionManager] Cleaning up stale test mode exit flag (age: ' + Math.round(timeSinceExit/1000) + 's)');
+          localStorage.removeItem('test_mode_exiting');
+          localStorage.removeItem('test_mode_exit_timestamp');
+          // Continue with normal expiration flow
+        } else {
+          console.log('[SessionManager] Skipping expiration - test mode exit in progress');
+          return;
+        }
+      } else {
+        // Flag exists but no timestamp - clean it up as it's orphaned
+        console.log('[SessionManager] Cleaning up orphaned test mode exit flag');
+        localStorage.removeItem('test_mode_exiting');
+      }
     }
   } catch (error) {
     console.warn('[SessionManager] Error checking test mode exit flag:', error);
@@ -670,28 +701,10 @@ function handleSessionExpired(message: string): void {
 
 /**
  * Check if current page is public
+ * Uses centralized isPublicPath from sessionConfig.ts
  */
 function isPublicPage(path: string): boolean {
-  const publicPaths = [
-    '/',
-    '/landing',
-    '/signin',
-    '/login',
-    '/forgot-password',
-    '/reset-password',
-    '/about',
-    '/contact',
-    '/subjects',
-    '/resources',
-    '/pricing',
-    '/privacy',
-    '/terms',
-    '/cookies'
-  ];
-
-  return publicPaths.some(publicPath =>
-    path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
-  );
+  return isPublicPath(path);
 }
 
 /**
