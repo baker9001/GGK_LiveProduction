@@ -1,10 +1,125 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, Lock, LogIn, Shield } from 'lucide-react';
+import { LogIn, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
 import { SESSION_EXPIRED_EVENT, consumeSessionExpiredNotice } from '../../lib/auth';
 import { isPublicPath } from '../../lib/sessionConfig';
 
 const DEFAULT_MESSAGE = 'Your session has expired. Please sign in again to continue.';
+
+/**
+ * Modern SVG illustration for session timeout
+ * Shows a friendly character with a clock indicating time has passed
+ */
+function TimeoutIllustration() {
+  return (
+    <svg
+      viewBox="0 0 400 300"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-full max-w-sm mx-auto"
+    >
+      {/* Background Elements */}
+      <defs>
+        <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#f0fdf4" />
+          <stop offset="100%" stopColor="#dcfce7" />
+        </linearGradient>
+        <linearGradient id="clockGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#059669" />
+        </linearGradient>
+        <linearGradient id="personGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fbbf24" />
+          <stop offset="100%" stopColor="#f59e0b" />
+        </linearGradient>
+      </defs>
+
+      {/* Decorative circles */}
+      <circle cx="50" cy="50" r="30" fill="#dcfce7" opacity="0.6" />
+      <circle cx="350" cy="80" r="20" fill="#fef3c7" opacity="0.6" />
+      <circle cx="320" cy="250" r="25" fill="#dcfce7" opacity="0.6" />
+      <circle cx="80" cy="230" r="15" fill="#fef3c7" opacity="0.6" />
+
+      {/* Large Clock */}
+      <g className="animate-pulse" style={{ animationDuration: '3s' }}>
+        <circle cx="200" cy="120" r="70" fill="white" stroke="url(#clockGradient)" strokeWidth="6" />
+        <circle cx="200" cy="120" r="60" fill="white" />
+
+        {/* Clock face markers */}
+        {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle, i) => (
+          <line
+            key={i}
+            x1={200 + 48 * Math.cos((angle - 90) * Math.PI / 180)}
+            y1={120 + 48 * Math.sin((angle - 90) * Math.PI / 180)}
+            x2={200 + 54 * Math.cos((angle - 90) * Math.PI / 180)}
+            y2={120 + 54 * Math.sin((angle - 90) * Math.PI / 180)}
+            stroke="#10b981"
+            strokeWidth={i % 3 === 0 ? 3 : 1.5}
+            strokeLinecap="round"
+          />
+        ))}
+
+        {/* Clock hands - showing timeout position */}
+        <line x1="200" y1="120" x2="200" y2="80" stroke="#064e3b" strokeWidth="4" strokeLinecap="round" />
+        <line x1="200" y1="120" x2="230" y2="135" stroke="#064e3b" strokeWidth="3" strokeLinecap="round" />
+        <circle cx="200" cy="120" r="6" fill="#064e3b" />
+      </g>
+
+      {/* Expired badge */}
+      <g transform="translate(240, 60)">
+        <rect x="0" y="0" width="70" height="28" rx="14" fill="#fef2f2" stroke="#fca5a5" strokeWidth="2" />
+        <text x="35" y="18" textAnchor="middle" fontSize="11" fontWeight="600" fill="#dc2626">
+          TIMEOUT
+        </text>
+      </g>
+
+      {/* Person illustration */}
+      <g transform="translate(100, 180)">
+        {/* Body */}
+        <ellipse cx="100" cy="85" rx="45" ry="30" fill="#10b981" />
+
+        {/* Head */}
+        <circle cx="100" cy="30" r="28" fill="#fcd9b6" />
+
+        {/* Hair */}
+        <path d="M72 20 Q72 5, 100 5 Q128 5, 128 20 Q125 12, 100 12 Q75 12, 72 20" fill="#4b5563" />
+
+        {/* Eyes - sleepy/tired expression */}
+        <path d="M88 28 Q92 32 96 28" stroke="#1f2937" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M104 28 Q108 32 112 28" stroke="#1f2937" strokeWidth="2" fill="none" strokeLinecap="round" />
+
+        {/* Slight smile */}
+        <path d="M92 42 Q100 48 108 42" stroke="#9ca3af" strokeWidth="2" fill="none" strokeLinecap="round" />
+
+        {/* Arms raised in "oh well" gesture */}
+        <path d="M55 70 Q40 50 50 40" stroke="#fcd9b6" strokeWidth="14" fill="none" strokeLinecap="round" />
+        <path d="M145 70 Q160 50 150 40" stroke="#fcd9b6" strokeWidth="14" fill="none" strokeLinecap="round" />
+
+        {/* Hands */}
+        <circle cx="50" cy="38" r="8" fill="#fcd9b6" />
+        <circle cx="150" cy="38" r="8" fill="#fcd9b6" />
+      </g>
+
+      {/* Floating elements */}
+      <g className="animate-bounce" style={{ animationDuration: '2s', animationDelay: '0.5s' }}>
+        <circle cx="320" cy="140" r="8" fill="#fbbf24" opacity="0.8" />
+        <circle cx="340" cy="160" r="5" fill="#10b981" opacity="0.8" />
+      </g>
+
+      <g className="animate-bounce" style={{ animationDuration: '2.5s' }}>
+        <circle cx="70" cy="140" r="6" fill="#10b981" opacity="0.8" />
+        <circle cx="55" cy="165" r="4" fill="#fbbf24" opacity="0.8" />
+      </g>
+
+      {/* Zzz for session "sleeping" */}
+      <g fill="#9ca3af" fontFamily="sans-serif" fontWeight="bold">
+        <text x="270" y="190" fontSize="16" opacity="0.7">z</text>
+        <text x="285" y="175" fontSize="20" opacity="0.8">z</text>
+        <text x="305" y="155" fontSize="24" opacity="0.9">Z</text>
+      </g>
+    </svg>
+  );
+}
 
 /**
  * Check if current page is a public page that doesn't require authentication
@@ -29,6 +144,34 @@ function getExpirationReason(message: string): 'inactivity' | 'absolute' | 'secu
     return 'absolute';
   }
   return 'unknown';
+}
+
+/**
+ * Get friendly message based on expiration reason
+ */
+function getReasonMessage(reason: 'inactivity' | 'absolute' | 'security' | 'unknown'): { title: string; description: string } {
+  switch (reason) {
+    case 'inactivity':
+      return {
+        title: 'Looks like you took a break',
+        description: 'Your session ended after being inactive. We do this to keep your account safe.'
+      };
+    case 'absolute':
+      return {
+        title: 'Time for a fresh start',
+        description: 'Sessions automatically refresh after 8 hours for your security.'
+      };
+    case 'security':
+      return {
+        title: 'Security check completed',
+        description: 'We signed you out to protect your account. This happens when signing in elsewhere.'
+      };
+    default:
+      return {
+        title: 'Your session has ended',
+        description: 'Please sign back in to continue where you left off.'
+      };
+  }
 }
 
 export function SessionExpiredNotice() {
@@ -94,7 +237,7 @@ export function SessionExpiredNotice() {
       if (typeof window !== 'undefined') {
         window.location.replace('/signin');
       }
-    }, 200);
+    }, 300);
   };
 
   if (!isVisible) {
@@ -102,97 +245,81 @@ export function SessionExpiredNotice() {
   }
 
   const reason = getExpirationReason(message);
+  const { title, description } = getReasonMessage(reason);
 
   return (
     <div
-      className={`fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/90 backdrop-blur-md px-4 transition-opacity duration-300 ${
+      className={`fixed inset-0 z-[10000] flex items-center justify-center px-4 transition-all duration-500 ${
         fadeIn ? 'opacity-100' : 'opacity-0'
       }`}
+      style={{
+        background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 25%, #fefce8 50%, #fff7ed 75%, #fef2f2 100%)'
+      }}
     >
-      <div className={`max-w-lg w-full overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-2xl transition-all duration-300 ${
-        fadeIn ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
-      }`}>
-        {/* Icon Section - Modern minimal design */}
-        <div className="relative bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-slate-800 dark:via-slate-750 dark:to-slate-800 py-10">
-          <div className="flex items-center justify-center gap-5">
-            {/* Clock Icon */}
-            <div className="relative">
-              <div className="absolute inset-0 bg-emerald-400/20 dark:bg-emerald-500/20 rounded-full blur-2xl animate-pulse" />
-              <div className="relative bg-white dark:bg-slate-700 p-5 rounded-full shadow-lg ring-4 ring-emerald-100 dark:ring-emerald-900/30">
-                <Clock className="h-10 w-10 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
-              </div>
-            </div>
+      {/* Animated background shapes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div
+          className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-200/30 rounded-full blur-3xl animate-pulse"
+          style={{ animationDuration: '4s' }}
+        />
+        <div
+          className="absolute -bottom-40 -left-40 w-80 h-80 bg-amber-200/30 rounded-full blur-3xl animate-pulse"
+          style={{ animationDuration: '5s', animationDelay: '1s' }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-100/20 rounded-full blur-3xl"
+        />
+      </div>
 
-            {/* Lock Icon */}
-            <div className="relative">
-              <div className="absolute inset-0 bg-amber-400/20 dark:bg-amber-500/20 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '0.5s' }} />
-              <div className="relative bg-white dark:bg-slate-700 p-5 rounded-full shadow-lg ring-4 ring-amber-100 dark:ring-amber-900/30">
-                <Lock className="h-10 w-10 text-amber-600 dark:text-amber-400" strokeWidth={2} />
-              </div>
-            </div>
+      <div
+        className={`relative max-w-md w-full transition-all duration-500 ${
+          fadeIn ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-4 opacity-0'
+        }`}
+      >
+        {/* Main Card */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl shadow-emerald-900/10 overflow-hidden border border-white/50">
+          {/* Illustration Section */}
+          <div className="pt-8 pb-4 px-6">
+            <TimeoutIllustration />
           </div>
-        </div>
 
-        {/* Content Section */}
-        <div className="p-8">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-              Session Expired
-            </h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Your session has ended. Please sign in again to continue.
+          {/* Content Section */}
+          <div className="px-8 pb-8 text-center">
+            {/* Title */}
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-3">
+              {title}
+            </h1>
+
+            {/* Description */}
+            <p className="text-slate-600 text-base mb-8 leading-relaxed max-w-sm mx-auto">
+              {description}
+            </p>
+
+            {/* Data safe message */}
+            <div className="flex items-center justify-center gap-2 text-sm text-emerald-700 bg-emerald-50 rounded-full py-2 px-4 mb-8 mx-auto w-fit">
+              <RefreshCw className="h-4 w-4" />
+              <span>Don't worry, your work is saved</span>
+            </div>
+
+            {/* Sign In Button */}
+            <Button
+              onClick={handleAcknowledge}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-10 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-emerald-500/25 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <LogIn className="h-5 w-5" aria-hidden="true" />
+              Sign Back In
+            </Button>
+
+            {/* Footer note */}
+            <p className="text-xs text-slate-400 mt-6">
+              Need help? Contact your administrator
             </p>
           </div>
-
-          {/* Explanation Box */}
-          <div className="rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 p-5 mb-6">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-                <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                  <Shield className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                </div>
-              </div>
-              <div className="flex-1 space-y-3">
-                <div>
-                  <p className="font-semibold text-sm text-slate-900 dark:text-white mb-1">
-                    Why did this happen?
-                  </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {reason === 'inactivity' &&
-                      'For your security, sessions end automatically after 15 minutes of inactivity. This protects your account if you forget to sign out.'}
-                    {reason === 'absolute' &&
-                      'Sessions have a maximum lifetime of 8 hours for security. This ensures your account stays protected even during active use.'}
-                    {reason === 'security' &&
-                      'Your session was ended to protect your account. This may happen when signing in from another device or location.'}
-                    {reason === 'unknown' &&
-                      'For your security, sessions end automatically after inactivity or when you sign in from another device.'}
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-600">
-                  <p className="font-semibold text-sm text-slate-900 dark:text-white mb-1">
-                    Your work is safe
-                  </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    All your data has been saved. Simply sign in again to continue where you left off.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-center">
-            <Button
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-lg font-medium shadow-lg shadow-emerald-500/30 transition-all hover:shadow-xl hover:shadow-emerald-500/40"
-              onClick={handleAcknowledge}
-            >
-              <LogIn className="h-4 w-4" aria-hidden="true" />
-              Return to Sign In
-            </Button>
-          </div>
         </div>
+
+        {/* Decorative elements outside the card */}
+        <div className="absolute -top-6 -right-6 w-12 h-12 bg-amber-400 rounded-full opacity-80 animate-bounce" style={{ animationDuration: '3s' }} />
+        <div className="absolute -bottom-4 -left-4 w-8 h-8 bg-emerald-400 rounded-full opacity-80 animate-bounce" style={{ animationDuration: '2.5s', animationDelay: '0.5s' }} />
       </div>
     </div>
   );
