@@ -30,6 +30,7 @@ import {
   BROADCAST_CHANNEL_NAME,
   isPublicPath
 } from './sessionConfig';
+import { showSessionToast } from '../components/shared/SubtleSessionToast';
 
 // Re-export for convenience
 export {
@@ -37,6 +38,9 @@ export {
   getSupabaseSessionRemainingMinutes,
   isSupabaseSessionRequired
 };
+
+// Re-export showSessionToast for Phase 3 user preference integration
+export { showSessionToast };
 
 // Use centralized config values
 const ACTIVITY_CHECK_INTERVAL = ACTIVITY_CHECK_INTERVAL_MS;
@@ -413,6 +417,57 @@ export function extendSession(): void {
   broadcastMessage({ type: 'extended', timestamp: now });
 }
 
+// Rate limiting for silent extensions
+const MIN_SILENT_EXTEND_INTERVAL = 3 * 60 * 1000; // 3 minutes minimum between silent extends
+
+/**
+ * Silently extend session without any UI notification
+ * Used when user is active but session is running low
+ * Prevents interrupting active users with warning banners
+ */
+function silentExtendSession(): void {
+  const user = getAuthenticatedUser();
+  if (!user) return;
+
+  // Rate limiting - prevent abuse and excessive token regeneration
+  const lastExtend = localStorage.getItem(LAST_AUTO_EXTEND_KEY);
+  const lastExtendTime = lastExtend ? parseInt(lastExtend, 10) : 0;
+  const timeSinceExtend = Date.now() - lastExtendTime;
+
+  if (timeSinceExtend < MIN_SILENT_EXTEND_INTERVAL) {
+    console.log(`[SessionManager] Silent extend rate limited (${Math.round(timeSinceExtend/1000)}s < ${Math.round(MIN_SILENT_EXTEND_INTERVAL/1000)}s)`);
+    return;
+  }
+
+  // Extend the session
+  setAuthenticatedUser(user);
+
+  // Refresh Supabase token
+  void supabase.auth.refreshSession().catch(error => {
+    console.warn('[SessionManager] Failed to refresh Supabase session during silent extend:', error);
+  });
+
+  // Update tracking
+  const now = Date.now();
+  localStorage.setItem(LAST_AUTO_EXTEND_KEY, now.toString());
+
+  // Clear warning state
+  warningShown = false;
+  localStorage.removeItem(SESSION_WARNING_SHOWN_KEY);
+
+  console.log('[SessionManager] Session silently extended (no UI notification)');
+
+  // Dispatch extension event with silent flag (components can check this)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_EXTENDED_EVENT, {
+      detail: { timestamp: now, auto: true, silent: true }
+    }));
+  }
+
+  // Broadcast to other tabs with silent flag
+  broadcastMessage({ type: 'extended', timestamp: now, silent: true });
+}
+
 /**
  * Start session monitoring
  */
@@ -545,9 +600,20 @@ function checkSessionStatus(): void {
     ? Math.min(...activeRemainingCandidates)
     : localRemainingMinutes;
 
-  // Check if session is about to expire (within 5 minutes)
-  if (remainingMinutes > 0 && remainingMinutes <= WARNING_THRESHOLD_MINUTES && !warningShown) {
-    showSessionWarning(remainingMinutes);
+  // Check if session is about to expire (within warning threshold)
+  if (remainingMinutes > 0 && remainingMinutes <= WARNING_THRESHOLD_MINUTES) {
+    // ENHANCEMENT: Check if user is currently active
+    if (isUserActive()) {
+      // User is active - silently extend instead of showing warning
+      console.log('[SessionManager] User active in warning zone - silently extending');
+      silentExtendSession();
+      return;
+    }
+
+    // User is INACTIVE - show warning (existing behavior)
+    if (!warningShown) {
+      showSessionWarning(remainingMinutes);
+    }
     return;
   }
 

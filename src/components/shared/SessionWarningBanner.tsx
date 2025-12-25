@@ -75,7 +75,16 @@ export function SessionWarningBanner() {
       setIsDismissed(false);
     };
 
-    const handleExtended = () => {
+    const handleExtended = (event: Event) => {
+      const customEvent = event as CustomEvent<{ silent?: boolean }>;
+
+      // If this was a silent extension, don't change UI state
+      // This prevents hiding the warning when session is silently extended for active users
+      if (customEvent.detail?.silent) {
+        console.log('[SessionWarningBanner] Ignoring silent extension');
+        return;
+      }
+
       setIsVisible(false);
       setIsDismissed(false);
     };
@@ -85,13 +94,26 @@ export function SessionWarningBanner() {
 
     // Update countdown every 10 seconds
     const countdownInterval = setInterval(() => {
+      const current = resolveRemainingMinutes();
+
       if (isVisible && !isDismissed) {
-        const current = resolveRemainingMinutes();
         setRemainingMinutes(current);
 
         // Hide if session was extended or expired
         if (current === 0 || current > 5) {
           setIsVisible(false);
+        }
+      }
+
+      // ENHANCEMENT: Re-show warning at critical thresholds even if dismissed
+      // This ensures users are warned before logout regardless of previous dismissal
+      if (isDismissed && current > 0) {
+        // Re-warn at 2 minutes and 1 minute regardless of previous dismissal
+        if (current <= 2) {
+          console.log('[SessionWarningBanner] Re-showing warning at critical threshold');
+          setRemainingMinutes(current);
+          setIsVisible(true);
+          setIsDismissed(false);
         }
       }
     }, 10000);
