@@ -105,6 +105,18 @@ export const DELIBERATE_RELOAD_GRACE_PERIOD_MS = 90000; // 90 seconds
  */
 export const MAX_GRACE_PERIOD_MS = 90000; // 90 seconds
 
+/**
+ * Maximum total grace time per session: 5 minutes (SECURITY LIMIT)
+ * Prevents grace period stacking/abuse
+ */
+export const MAX_TOTAL_GRACE_TIME_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Maximum grace periods per session: 10 (SECURITY LIMIT)
+ * Prevents repeated refresh abuse
+ */
+export const MAX_GRACE_PERIODS_PER_SESSION = 10;
+
 // ============================================================================
 // LONG OPERATIONS
 // ============================================================================
@@ -230,6 +242,8 @@ export const STORAGE_KEYS = {
   EXTENDED_GRACE_PERIOD: 'ggk_extended_grace_period',
   GRACE_PERIOD_START_TIME: 'ggk_grace_period_start_time',
   GRACE_PERIOD_REASON: 'ggk_grace_period_reason',
+  TOTAL_GRACE_TIME: 'ggk_total_grace_time',
+  GRACE_PERIOD_COUNT: 'ggk_grace_period_count',
 
   // Long operations
   CRITICAL_OPERATION: 'ggk_critical_operation',
@@ -272,6 +286,48 @@ export const SESSION_EVENTS = {
 // ============================================================================
 
 export const BROADCAST_CHANNEL_NAME = 'ggk-session-channel';
+
+// ============================================================================
+// PUBLIC PATHS (Centralized - Single Source of Truth)
+// ============================================================================
+
+/**
+ * Paths that don't require authentication
+ * Used by sessionManager, auth, and UI components
+ */
+export const PUBLIC_PATHS = [
+  '/',
+  '/landing',
+  '/signin',
+  '/login',
+  '/forgot-password',
+  '/reset-password',
+  '/about',
+  '/contact',
+  '/subjects',
+  '/resources',
+  '/pricing',
+  '/privacy',
+  '/terms',
+  '/cookies',
+  '/cambridge-igcse',
+  '/cambridge-o-level',
+  '/cambridge-a-level',
+  '/edexcel-igcse',
+  '/edexcel-a-level',
+  '/mock-exams',
+  '/video-lessons',
+  '/features'
+] as const;
+
+/**
+ * Check if a path is a public page (doesn't require authentication)
+ */
+export function isPublicPath(path: string): boolean {
+  return PUBLIC_PATHS.some(publicPath =>
+    path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
+  );
+}
 
 // ============================================================================
 // UTILITY FUNCTIONS

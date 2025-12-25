@@ -1,41 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, Lock, AlertCircle, LogIn, Shield } from 'lucide-react';
+import { Clock, Lock, LogIn, Shield } from 'lucide-react';
 import { Button } from './Button';
 import { SESSION_EXPIRED_EVENT, consumeSessionExpiredNotice } from '../../lib/auth';
+import { isPublicPath } from '../../lib/sessionConfig';
 
 const DEFAULT_MESSAGE = 'Your session has expired. Please sign in again to continue.';
 
 /**
  * Check if current page is a public page that doesn't require authentication
+ * Uses centralized isPublicPath from sessionConfig.ts
  */
 function isPublicPage(path: string): boolean {
-  const publicPaths = [
-    '/',
-    '/landing',
-    '/signin',
-    '/login',
-    '/forgot-password',
-    '/reset-password',
-    '/about',
-    '/contact',
-    '/subjects',
-    '/resources',
-    '/pricing',
-    '/privacy',
-    '/terms',
-    '/cookies',
-    '/cambridge-igcse',
-    '/cambridge-o-level',
-    '/cambridge-a-level',
-    '/edexcel-igcse',
-    '/edexcel-a-level',
-    '/mock-exams',
-    '/video-lessons'
-  ];
-
-  return publicPaths.some(publicPath =>
-    path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
-  );
+  return isPublicPath(path);
 }
 
 /**

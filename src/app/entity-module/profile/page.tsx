@@ -38,6 +38,7 @@ import { ToggleSwitch } from '../../../components/shared/ToggleSwitch';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { toast } from '../../../components/shared/Toast';
 import { getPublicUrl } from '../../../lib/storageHelpers';
+import { SessionPreferencesCard } from '../../../components/shared/SessionPreferencesCard';
 
 interface EntityUserProfile {
   id: string;
@@ -591,11 +592,15 @@ export default function EntityProfilePage() {
 
       {/* Other tabs content similar to system admin but adapted for entity users */}
       {activeTab === 'preferences' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              System Preferences
-            </h2>
+        <div className="space-y-6">
+          {/* Session Preferences */}
+          <SessionPreferencesCard />
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                System Preferences
+              </h2>
             <Button
               onClick={handleSubmit}
               loading={updateProfileMutation.isPending}
@@ -697,6 +702,7 @@ export default function EntityProfilePage() {
               </div>
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>

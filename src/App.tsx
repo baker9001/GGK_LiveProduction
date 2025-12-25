@@ -37,6 +37,7 @@ import { PermissionProvider } from './contexts/PermissionContext';
 import { Toast } from './components/shared/Toast';
 import { SessionExpiredNotice } from './components/shared/SessionExpiredNotice';
 import { SessionWarningBanner } from './components/shared/SessionWarningBanner';
+import { SubtleSessionToast } from './components/shared/SubtleSessionToast';
 import { ActivityConfirmationDialog } from './components/shared/ActivityConfirmationDialog';
 import { ReactQueryProvider } from './providers/ReactQueryProvider';
 import { TestModeBar } from './components/admin/TestModeBar';
@@ -227,6 +228,7 @@ function App() {
             <Toast />
             <SessionExpiredNotice />
             <SessionWarningBanner />
+            <SubtleSessionToast />
             <ActivityConfirmationDialog
               isOpen={showActivityDialog}
               onConfirm={handleActivityConfirm}

@@ -17,7 +17,7 @@ import {
   REMEMBER_ME_DURATION_MS,
   STORAGE_KEYS as CONFIG_STORAGE_KEYS
 } from './sessionConfig';
-import { isWithinGracePeriod, cleanupAllGracePeriods } from './sessionGracePeriod';
+import { isWithinGracePeriod as isWithinGracePeriodCheck, cleanupAllGracePeriods } from './sessionGracePeriod';
 
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
@@ -161,7 +161,7 @@ export function getAuthenticatedUser(): User | null {
   // Ensure the Supabase auth session is still valid when required
   // CRITICAL FIX: Skip Supabase validation if within grace period after page reload
   // This prevents false "session expired" warnings when clicking refresh/start new import
-  if (isSupabaseSessionRequired() && !isWithinGracePeriod() && !isSupabaseSessionActive(30000)) {
+  if (isSupabaseSessionRequired() && !isWithinGracePeriodCheck() && !isSupabaseSessionActive(30000)) {
     console.warn('[Auth] Supabase session is missing or expired. Clearing local auth state.');
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -855,59 +855,10 @@ if (typeof window !== 'undefined') {
   }
 }
 
-/**
- * Check if we're within grace period after page load/reload
- * Grace period prevents false session expiration warnings during deliberate reloads
- * EXPORTED: Used by supabase.ts auth listener to prevent false positives
- */
-export function isWithinGracePeriod(): boolean {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    // Get page load time
-    const pageLoadTimeStr = localStorage.getItem(LAST_PAGE_LOAD_TIME_KEY);
-    if (!pageLoadTimeStr) return false;
-
-    const pageLoadTime = parseInt(pageLoadTimeStr, 10);
-    const timeSincePageLoad = Date.now() - pageLoadTime;
-
-    // Default grace period: 60 seconds
-    let gracePeriodMs = 60000;
-
-    // Check for extended grace period based on reload reason
-    const extendedGracePeriodStr = localStorage.getItem(EXTENDED_GRACE_PERIOD_KEY);
-
-    if (extendedGracePeriodStr) {
-      const extendedGraceTime = parseInt(extendedGracePeriodStr, 10);
-      const timeSinceExtendedGrace = Date.now() - extendedGraceTime;
-
-      // Only use extended grace if it's recent
-      if (timeSinceExtendedGrace < 180000) { // 3 minutes max
-        // Extended grace period: 180 seconds for deliberate reloads
-        gracePeriodMs = 180000;
-
-        if (timeSincePageLoad < gracePeriodMs) {
-          console.log(`[Auth] Within extended grace period (${Math.round(timeSincePageLoad/1000)}s/${Math.round(gracePeriodMs/1000)}s) - skipping Supabase session check`);
-          return true;
-        }
-
-        // Clean up expired extended grace period marker
-        localStorage.removeItem(EXTENDED_GRACE_PERIOD_KEY);
-      }
-    }
-
-    // Check default grace period
-    if (timeSincePageLoad < gracePeriodMs) {
-      console.log(`[Auth] Within grace period (${Math.round(timeSincePageLoad/1000)}s/${Math.round(gracePeriodMs/1000)}s) - skipping Supabase session check`);
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    console.warn('[Auth] Error checking grace period:', error);
-    return false;
-  }
-}
+// NOTE: isWithinGracePeriod is imported from sessionGracePeriod.ts (line 20)
+// The centralized implementation in sessionGracePeriod.ts is the single source of truth
+// Re-export for backward compatibility with external modules
+export { isWithinGracePeriod } from './sessionGracePeriod';
 
 export function startSessionMonitoring(): void {
   // Prevent multiple intervals

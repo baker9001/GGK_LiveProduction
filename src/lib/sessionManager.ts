@@ -18,6 +18,29 @@ import {
   type User
 } from './auth';
 import { supabase } from './supabase';
+import {
+  WARNING_THRESHOLD_MINUTES,
+  SESSION_CHECK_INTERVAL_MS,
+  ACTIVITY_CHECK_INTERVAL_MS,
+  AUTO_EXTEND_INTERVAL_MS,
+  ACTIVITY_TIMEOUT_MS,
+  BASE_GRACE_PERIOD_MS,
+  STORAGE_KEYS,
+  SESSION_EVENTS,
+  BROADCAST_CHANNEL_NAME,
+  isPublicPath
+} from './sessionConfig';
+import { showSessionToast } from '../components/shared/SubtleSessionToast';
+import {
+  getUserSessionPreferences,
+  clearPreferencesCache,
+  getWarningStyleSync,
+  getCachedPreferences,
+} from '../services/sessionPreferencesService';
+import {
+  UserSessionPreferences,
+  DEFAULT_SESSION_PREFERENCES,
+} from '../types/session';
 
 // Re-export for convenience
 export {
@@ -26,27 +49,29 @@ export {
   isSupabaseSessionRequired
 };
 
-// Session configuration constants
-const WARNING_THRESHOLD_MINUTES = 5; // Warn user 5 minutes before expiration
-const ACTIVITY_CHECK_INTERVAL = 30000; // Check activity every 30 seconds
-const SESSION_CHECK_INTERVAL = 30000; // Check session every 30 seconds (more frequent than before)
-const AUTO_EXTEND_INTERVAL = 15 * 60 * 1000; // Auto-extend every 15 minutes of activity
-const ACTIVITY_TIMEOUT = 2 * 60 * 1000; // Consider inactive after 2 minutes without activity
-const GRACE_PERIOD = 30000; // 30 second grace period before actual logout
+// Re-export showSessionToast for Phase 3 user preference integration
+export { showSessionToast };
 
-// Event names
-export const SESSION_WARNING_EVENT = 'ggk-session-warning';
-export const SESSION_EXTENDED_EVENT = 'ggk-session-extended';
-export const SESSION_ACTIVITY_EVENT = 'ggk-session-activity';
+// Use centralized config values
+const ACTIVITY_CHECK_INTERVAL = ACTIVITY_CHECK_INTERVAL_MS;
+const SESSION_CHECK_INTERVAL = SESSION_CHECK_INTERVAL_MS;
+const AUTO_EXTEND_INTERVAL = AUTO_EXTEND_INTERVAL_MS;
+const ACTIVITY_TIMEOUT = ACTIVITY_TIMEOUT_MS;
+const GRACE_PERIOD = BASE_GRACE_PERIOD_MS;
 
-// Storage keys
-const LAST_ACTIVITY_KEY = 'ggk_last_activity';
-const SESSION_WARNING_SHOWN_KEY = 'ggk_session_warning_shown';
-const LAST_AUTO_EXTEND_KEY = 'ggk_last_auto_extend';
-const LAST_PAGE_LOAD_TIME_KEY = 'ggk_last_page_load_time';
-const LAST_LOGIN_TIME_KEY = 'ggk_last_login_time';
-const DELIBERATE_RELOAD_KEY = 'ggk_deliberate_reload';
-const RELOAD_REASON_KEY = 'ggk_reload_reason';
+// Event names - use centralized config
+export const SESSION_WARNING_EVENT = SESSION_EVENTS.WARNING;
+export const SESSION_EXTENDED_EVENT = SESSION_EVENTS.EXTENDED;
+export const SESSION_ACTIVITY_EVENT = SESSION_EVENTS.ACTIVITY;
+
+// Storage keys - use centralized config
+const LAST_ACTIVITY_KEY = STORAGE_KEYS.LAST_ACTIVITY;
+const SESSION_WARNING_SHOWN_KEY = STORAGE_KEYS.SESSION_WARNING_SHOWN;
+const LAST_AUTO_EXTEND_KEY = STORAGE_KEYS.LAST_AUTO_EXTEND;
+const LAST_PAGE_LOAD_TIME_KEY = STORAGE_KEYS.LAST_PAGE_LOAD_TIME;
+const LAST_LOGIN_TIME_KEY = STORAGE_KEYS.LAST_LOGIN_TIME;
+const DELIBERATE_RELOAD_KEY = STORAGE_KEYS.DELIBERATE_RELOAD;
+const RELOAD_REASON_KEY = STORAGE_KEYS.RELOAD_REASON;
 
 // Activity tracking
 let lastActivityTime = Date.now();
@@ -59,6 +84,32 @@ let pageLoadTime = Date.now();
 
 // BroadcastChannel for cross-tab communication
 let broadcastChannel: BroadcastChannel | null = null;
+
+// User preferences cache (loaded asynchronously)
+let userPrefs: UserSessionPreferences = DEFAULT_SESSION_PREFERENCES;
+let prefsLoadedAt = 0;
+const PREFS_RELOAD_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Load user preferences (called on init and periodically)
+ */
+async function loadUserPreferences(): Promise<void> {
+  try {
+    userPrefs = await getUserSessionPreferences();
+    prefsLoadedAt = Date.now();
+    console.log(`[SessionManager] Loaded user preferences: warningStyle=${userPrefs.warningStyle}, idleTimeout=${userPrefs.idleTimeoutMinutes}min`);
+  } catch (error) {
+    console.warn('[SessionManager] Failed to load user preferences, using defaults:', error);
+    userPrefs = DEFAULT_SESSION_PREFERENCES;
+  }
+}
+
+/**
+ * Get current user preferences (from cache)
+ */
+function getUserPrefs(): UserSessionPreferences {
+  return userPrefs;
+}
 
 /**
  * Initialize the session manager
@@ -132,7 +183,7 @@ export function initializeSessionManager(): void {
 
   // Initialize BroadcastChannel for cross-tab sync
   try {
-    broadcastChannel = new BroadcastChannel('ggk-session-channel');
+    broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
     broadcastChannel.onmessage = handleBroadcastMessage;
     console.log('[SessionManager] Cross-tab synchronization enabled');
   } catch (error) {
@@ -144,6 +195,14 @@ export function initializeSessionManager(): void {
 
   // Start session monitoring
   startSessionMonitoring();
+
+  // Load user preferences (async, won't block init)
+  void loadUserPreferences();
+
+  // Periodically refresh preferences
+  setInterval(() => {
+    void loadUserPreferences();
+  }, PREFS_RELOAD_INTERVAL);
 
   // Load last activity from storage
   const savedActivity = localStorage.getItem(LAST_ACTIVITY_KEY);
@@ -257,6 +316,11 @@ export function cleanupSessionManager(): void {
     window.removeEventListener('storage', storageListener);
     storageListener = null;
   }
+
+  // Clear preferences cache on logout
+  clearPreferencesCache();
+  userPrefs = DEFAULT_SESSION_PREFERENCES;
+  prefsLoadedAt = 0;
 
   console.log('[SessionManager] Cleanup complete');
 }
@@ -402,6 +466,57 @@ export function extendSession(): void {
   broadcastMessage({ type: 'extended', timestamp: now });
 }
 
+// Rate limiting for silent extensions
+const MIN_SILENT_EXTEND_INTERVAL = 3 * 60 * 1000; // 3 minutes minimum between silent extends
+
+/**
+ * Silently extend session without any UI notification
+ * Used when user is active but session is running low
+ * Prevents interrupting active users with warning banners
+ */
+function silentExtendSession(): void {
+  const user = getAuthenticatedUser();
+  if (!user) return;
+
+  // Rate limiting - prevent abuse and excessive token regeneration
+  const lastExtend = localStorage.getItem(LAST_AUTO_EXTEND_KEY);
+  const lastExtendTime = lastExtend ? parseInt(lastExtend, 10) : 0;
+  const timeSinceExtend = Date.now() - lastExtendTime;
+
+  if (timeSinceExtend < MIN_SILENT_EXTEND_INTERVAL) {
+    console.log(`[SessionManager] Silent extend rate limited (${Math.round(timeSinceExtend/1000)}s < ${Math.round(MIN_SILENT_EXTEND_INTERVAL/1000)}s)`);
+    return;
+  }
+
+  // Extend the session
+  setAuthenticatedUser(user);
+
+  // Refresh Supabase token
+  void supabase.auth.refreshSession().catch(error => {
+    console.warn('[SessionManager] Failed to refresh Supabase session during silent extend:', error);
+  });
+
+  // Update tracking
+  const now = Date.now();
+  localStorage.setItem(LAST_AUTO_EXTEND_KEY, now.toString());
+
+  // Clear warning state
+  warningShown = false;
+  localStorage.removeItem(SESSION_WARNING_SHOWN_KEY);
+
+  console.log('[SessionManager] Session silently extended (no UI notification)');
+
+  // Dispatch extension event with silent flag (components can check this)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_EXTENDED_EVENT, {
+      detail: { timestamp: now, auto: true, silent: true }
+    }));
+  }
+
+  // Broadcast to other tabs with silent flag
+  broadcastMessage({ type: 'extended', timestamp: now, silent: true });
+}
+
 /**
  * Start session monitoring
  */
@@ -534,9 +649,57 @@ function checkSessionStatus(): void {
     ? Math.min(...activeRemainingCandidates)
     : localRemainingMinutes;
 
-  // Check if session is about to expire (within 5 minutes)
-  if (remainingMinutes > 0 && remainingMinutes <= WARNING_THRESHOLD_MINUTES && !warningShown) {
-    showSessionWarning(remainingMinutes);
+  // Check if session is about to expire (within warning threshold)
+  // Use user's preferred warning threshold if available
+  const prefs = getUserPrefs();
+  const effectiveWarningThreshold = prefs.warningThresholdMinutes || WARNING_THRESHOLD_MINUTES;
+
+  if (remainingMinutes > 0 && remainingMinutes <= effectiveWarningThreshold) {
+    // ENHANCEMENT: Check if user is currently active and wants auto-extend
+    if (isUserActive() && prefs.extendOnActivity) {
+      // User is active - handle based on warning style preference
+      if (prefs.warningStyle === 'silent') {
+        // Silent mode: just extend, no notification
+        console.log('[SessionManager] User active - silently extending (silent mode)');
+        silentExtendSession();
+        return;
+      } else if (prefs.warningStyle === 'toast') {
+        // Toast mode: show subtle toast and extend
+        console.log('[SessionManager] User active - extending with toast notification');
+        silentExtendSession();
+        showSessionToast('Session extended', { type: 'success', duration: 2000 });
+        return;
+      }
+      // Banner mode: fall through to show banner
+    }
+
+    // Handle based on warning style preference
+    switch (prefs.warningStyle) {
+      case 'silent':
+        // Auto-extend without any UI
+        if (prefs.autoExtendEnabled) {
+          console.log('[SessionManager] Auto-extending session (silent mode)');
+          silentExtendSession();
+        }
+        break;
+
+      case 'toast':
+        // Show subtle toast and extend
+        if (prefs.autoExtendEnabled) {
+          console.log('[SessionManager] Auto-extending session (toast mode)');
+          silentExtendSession();
+          showSessionToast('Session extended', { type: 'success', duration: 2000 });
+        }
+        break;
+
+      case 'banner':
+      default:
+        // Show full banner warning (existing behavior)
+        if (!warningShown) {
+          showSessionWarning(remainingMinutes);
+        }
+        break;
+    }
     return;
   }
 
@@ -582,11 +745,31 @@ function handleSessionExpired(message: string): void {
   if (isRedirecting) return;
 
   // CRITICAL FIX: Check test mode exit flag FIRST to prevent false session expiration
+  // Added: Auto-cleanup of stale test mode exit flags to prevent security bypass
   try {
     const testModeExiting = localStorage.getItem('test_mode_exiting');
+    const exitTimestamp = localStorage.getItem('test_mode_exit_timestamp');
+
     if (testModeExiting) {
-      console.log('[SessionManager] Skipping expiration - test mode exit in progress');
-      return;
+      // Check if the flag is stale (older than 10 seconds)
+      if (exitTimestamp) {
+        const timeSinceExit = Date.now() - parseInt(exitTimestamp, 10);
+
+        if (timeSinceExit > 10000) {
+          // Auto-cleanup stale flag - security improvement
+          console.log('[SessionManager] Cleaning up stale test mode exit flag (age: ' + Math.round(timeSinceExit/1000) + 's)');
+          localStorage.removeItem('test_mode_exiting');
+          localStorage.removeItem('test_mode_exit_timestamp');
+          // Continue with normal expiration flow
+        } else {
+          console.log('[SessionManager] Skipping expiration - test mode exit in progress');
+          return;
+        }
+      } else {
+        // Flag exists but no timestamp - clean it up as it's orphaned
+        console.log('[SessionManager] Cleaning up orphaned test mode exit flag');
+        localStorage.removeItem('test_mode_exiting');
+      }
     }
   } catch (error) {
     console.warn('[SessionManager] Error checking test mode exit flag:', error);
@@ -670,28 +853,10 @@ function handleSessionExpired(message: string): void {
 
 /**
  * Check if current page is public
+ * Uses centralized isPublicPath from sessionConfig.ts
  */
 function isPublicPage(path: string): boolean {
-  const publicPaths = [
-    '/',
-    '/landing',
-    '/signin',
-    '/login',
-    '/forgot-password',
-    '/reset-password',
-    '/about',
-    '/contact',
-    '/subjects',
-    '/resources',
-    '/pricing',
-    '/privacy',
-    '/terms',
-    '/cookies'
-  ];
-
-  return publicPaths.some(publicPath =>
-    path === publicPath || (publicPath !== '/' && path.startsWith(publicPath + '/'))
-  );
+  return isPublicPath(path);
 }
 
 /**
