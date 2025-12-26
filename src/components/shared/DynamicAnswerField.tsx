@@ -21,12 +21,18 @@ import {
   Trash2,
   Copy,
   Link as LinkIcon,
-  Target
+  Target,
+  Info
 } from 'lucide-react';
 import { RichTextEditor } from './RichTextEditor';
 import Button from './Button';
 import { cn } from '@/lib/utils';
-import { cleanAcceptableVariations } from '@/lib/validation/acceptableVariationsValidation';
+import {
+  cleanAcceptableVariations,
+  validateAcceptableVariations,
+  addVariation,
+  removeVariation
+} from '@/lib/validation/acceptableVariationsValidation';
 import {
   CodeEditor,
   FileUploader,
@@ -289,6 +295,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   // Admin mode states
   const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>(() => question.correct_answers || []);
   const [editingAnswerIndex, setEditingAnswerIndex] = useState<number | null>(null);
+  const [newVariations, setNewVariations] = useState<Record<number, string>>({});
 
   // Refs for cursor position management in text inputs
   const singleWordInputRef = useRef<HTMLInputElement>(null);
@@ -581,6 +588,26 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     onChange([...adminCorrectAnswers, newAnswer]);
   };
 
+  const handleAddAcceptableVariation = (answerIndex: number, variation: string) => {
+    const answer = adminCorrectAnswers[answerIndex];
+    const result = addVariation(answer.acceptable_variations || [], variation, answer.answer);
+
+    if (result.errors.length > 0) {
+      // Show error in console (toast would be better but keeping it simple)
+      console.error('Variation validation error:', result.errors[0]);
+      return false;
+    }
+
+    handleUpdateCorrectAnswer(answerIndex, 'acceptable_variations', result.updated);
+    return true;
+  };
+
+  const handleRemoveAcceptableVariation = (answerIndex: number, variationIndex: number) => {
+    const answer = adminCorrectAnswers[answerIndex];
+    const updated = removeVariation(answer.acceptable_variations || [], variationIndex);
+    handleUpdateCorrectAnswer(answerIndex, 'acceptable_variations', updated);
+  };
+
   // Render Admin Mode Editor
   const renderAdminModeEditor = () => {
     const requirementLabel = getAnswerRequirementLabel(question.answer_requirement);
@@ -714,6 +741,80 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                       />
                       <span className="text-gray-600 dark:text-gray-400">Error carried forward (ecf)</span>
                     </label>
+                  </div>
+
+                  {/* Acceptable Variations Section */}
+                  <div className="mt-3 space-y-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Acceptable Variations
+                      </label>
+                      <div className="group relative">
+                        <Info className="h-3 w-3 text-blue-500" />
+                        <div className="absolute hidden group-hover:block z-10 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg -top-2 left-6">
+                          Alternative ways to write this answer (e.g., "H2O" for "H₂O", "CO2" for "CO₂")
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Display existing variations */}
+                    {answer.acceptable_variations && answer.acceptable_variations.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {answer.acceptable_variations.map((variation, vIndex) => (
+                          <div
+                            key={vIndex}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-700 dark:text-blue-300"
+                          >
+                            <span>{variation}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAcceptableVariation(index, vIndex)}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add new variation */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newVariations[index] || ''}
+                        onChange={(e) => setNewVariations({ ...newVariations, [index]: e.target.value })}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const variation = newVariations[index]?.trim();
+                            if (variation && handleAddAcceptableVariation(index, variation)) {
+                              setNewVariations({ ...newVariations, [index]: '' });
+                            }
+                          }
+                        }}
+                        placeholder="Add variation (e.g., H2O for H₂O)"
+                        className="flex-1 px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const variation = newVariations[index]?.trim();
+                          if (variation && handleAddAcceptableVariation(index, variation)) {
+                            setNewVariations({ ...newVariations, [index]: '' });
+                          }
+                        }}
+                        disabled={!newVariations[index]?.trim()}
+                        className={cn(
+                          "px-2 py-1 text-xs border rounded flex items-center justify-center",
+                          newVariations[index]?.trim()
+                            ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 cursor-not-allowed"
+                        )}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 
@@ -2392,7 +2493,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               .map((ca, idx) => (
                 <div key={ca.alternative_id || idx} className="text-sm">
                   <span className="text-green-700 dark:text-green-300">
-                    • {question.subject?.toLowerCase().includes('chemistry') 
+                    • {question.subject?.toLowerCase().includes('chemistry')
                         ? formatChemicalFormula(ca.answer)
                         : ca.answer}
                   </span>
@@ -2405,6 +2506,28 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     <span className="ml-2 text-xs text-green-600 dark:text-green-400">
                       [{ca.marks} mark{ca.marks !== 1 ? 's' : ''}]
                     </span>
+                  )}
+                  {renderMarkSchemeBadges(ca)}
+                  {/* Display acceptable variations for this answer */}
+                  {ca.acceptable_variations && ca.acceptable_variations.length > 0 && (
+                    <div className="mt-2 ml-4 pl-3 border-l-2 border-green-300 dark:border-green-700">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Info className="h-3 w-3 text-green-600 dark:text-green-400" />
+                        <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                          Acceptable Variations ({ca.acceptable_variations.length})
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {ca.acceptable_variations.map((variation, vIdx) => (
+                          <span
+                            key={vIdx}
+                            className="inline-flex items-center px-2 py-0.5 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700 rounded text-xs text-green-700 dark:text-green-300"
+                          >
+                            {variation}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               ))}
