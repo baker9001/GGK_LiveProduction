@@ -29,6 +29,16 @@ export const ANSWER_FORMAT_OPTIONS: SelectOption[] = [
     description: 'Short phrase or sentence (e.g., "Photosynthesis occurs in chloroplasts")'
   },
   {
+    value: 'paragraph',
+    label: 'Paragraph',
+    description: 'Extended text response'
+  },
+  {
+    value: 'definition',
+    label: 'Definition',
+    description: 'Formal definition required'
+  },
+  {
     value: 'two_items',
     label: 'Two Items',
     description: 'Two separate items (e.g., listing two causes)'
@@ -49,14 +59,34 @@ export const ANSWER_FORMAT_OPTIONS: SelectOption[] = [
     description: 'Multiple points with labels (e.g., "(a) ..., (b) ..., (c) ...")'
   },
   {
+    value: 'numerical',
+    label: 'Numerical',
+    description: 'Single numerical answer'
+  },
+  {
     value: 'calculation',
     label: 'Calculation',
     description: 'Mathematical calculation with working steps'
   },
   {
+    value: 'calculation_with_formula',
+    label: 'Calculation with Formula',
+    description: 'Formula, substitution, and answer'
+  },
+  {
+    value: 'measurement',
+    label: 'Measurement',
+    description: 'Reading from instrument'
+  },
+  {
     value: 'equation',
     label: 'Equation',
     description: 'Mathematical or chemical equation'
+  },
+  {
+    value: 'chemical_formula',
+    label: 'Chemical Formula',
+    description: 'Chemical formula'
   },
   {
     value: 'chemical_structure',
@@ -65,6 +95,16 @@ export const ANSWER_FORMAT_OPTIONS: SelectOption[] = [
     component: 'ChemicalStructureEditor',
     requiresStorage: false,
     isVisual: true
+  },
+  {
+    value: 'structural_formula',
+    label: 'Structural Formula',
+    description: 'Structural representation'
+  },
+  {
+    value: 'name_and_structure',
+    label: 'Name and Structure',
+    description: 'Both name and structure'
   },
   {
     value: 'structural_diagram',
@@ -107,6 +147,11 @@ export const ANSWER_FORMAT_OPTIONS: SelectOption[] = [
     isVisual: true
   },
   {
+    value: 'sequence',
+    label: 'Sequence',
+    description: 'Ordering items'
+  },
+  {
     value: 'code',
     label: 'Code',
     description: 'Programming code snippet',
@@ -140,44 +185,114 @@ export const ANSWER_FORMAT_OPTIONS: SelectOption[] = [
 // Answer Requirement Options
 export const ANSWER_REQUIREMENT_OPTIONS: SelectOption[] = [
   {
+    value: 'single_answer',
+    label: 'Single Answer',
+    description: 'Only one specific answer needed'
+  },
+  {
     value: 'single_choice',
-    label: 'Single Choice',
-    description: 'Only one correct answer (typical for MCQ)'
+    label: 'Single Choice (Legacy)',
+    description: 'Only one correct answer (typical for MCQ) - alias for single_answer'
+  },
+  {
+    value: 'any_one',
+    label: 'Any One',
+    description: 'Any one from a list of alternatives'
+  },
+  {
+    value: 'any_one_from',
+    label: 'Any One From (Legacy)',
+    description: 'Any one correct answer from alternatives - alias for any_one'
+  },
+  {
+    value: 'any_two',
+    label: 'Any Two',
+    description: 'Any two from a list of alternatives'
+  },
+  {
+    value: 'any_2_from',
+    label: 'Any 2 From (Legacy)',
+    description: 'Any two correct answers from alternatives - alias for any_two'
+  },
+  {
+    value: 'any_three',
+    label: 'Any Three',
+    description: 'Any three from a list'
+  },
+  {
+    value: 'any_3_from',
+    label: 'Any 3 From (Legacy)',
+    description: 'Any three correct answers from alternatives - alias for any_three'
   },
   {
     value: 'both_required',
     label: 'Both Required',
-    description: 'Both items/parts must be correct'
+    description: 'Both parts needed'
   },
   {
-    value: 'any_one_from',
-    label: 'Any One From',
-    description: 'Any one correct answer from alternatives'
+    value: 'both_points',
+    label: 'Both Points',
+    description: 'Both points needed for full marks'
   },
   {
-    value: 'any_2_from',
-    label: 'Any 2 From',
-    description: 'Any two correct answers from alternatives'
-  },
-  {
-    value: 'any_3_from',
-    label: 'Any 3 From',
-    description: 'Any three correct answers from alternatives'
+    value: 'two_points',
+    label: 'Two Points',
+    description: 'Two distinct points required'
   },
   {
     value: 'all_required',
     label: 'All Required',
-    description: 'All specified items must be correct'
+    description: 'All listed answers needed'
+  },
+  {
+    value: 'method_and_result',
+    label: 'Method and Result',
+    description: 'Both test method AND result needed'
+  },
+  {
+    value: 'working_and_answer',
+    label: 'Working and Answer',
+    description: 'Both working AND final answer needed'
+  },
+  {
+    value: 'complete_equation',
+    label: 'Complete Equation',
+    description: 'Fully balanced equation'
+  },
+  {
+    value: 'correct_order',
+    label: 'Correct Order',
+    description: 'Specific sequence required'
+  },
+  {
+    value: 'two_criteria',
+    label: 'Two Criteria',
+    description: 'Two distinct criteria for marking'
+  },
+  {
+    value: 'all_columns_correct',
+    label: 'All Columns Correct',
+    description: 'All table columns correct'
+  },
+  {
+    value: 'two_complete_answers',
+    label: 'Two Complete Answers',
+    description: 'Two full answers (name + structure)'
+  },
+  {
+    value: 'all_five_points',
+    label: 'All Five Points',
+    description: 'All five marking points needed'
+  },
+  {
+    value: 'both_structures',
+    label: 'Both Structures',
+    description: 'Both structural diagrams needed'
   },
   {
     value: 'alternative_methods',
     label: 'Alternative Methods',
     description: 'Different valid approaches/methods accepted'
-  },
-  {
-    value: 'acceptable_variations',
-    label: 'Acceptable Variations',
-    description: 'Different phrasings/variations accepted'
   },
   {
     value: 'not_applicable',

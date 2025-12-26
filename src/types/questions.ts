@@ -31,32 +31,55 @@ export type DifficultyLevel = 'Easy' | 'Medium' | 'Hard';
 export type AnswerFormat =
   | 'single_word'
   | 'single_line'
+  | 'paragraph'
+  | 'definition'
   | 'two_items'
   | 'two_items_connected'
   | 'multi_line'
   | 'multi_line_labeled'
+  | 'numerical'
   | 'calculation'
+  | 'calculation_with_formula'
+  | 'measurement'
   | 'equation'
+  | 'chemical_formula'
   | 'chemical_structure'
+  | 'structural_formula'
   | 'structural_diagram'
+  | 'name_and_structure'
   | 'diagram'
   | 'table'
   | 'table_completion'
   | 'graph'
+  | 'sequence'
   | 'code'
   | 'audio'
   | 'file_upload'
   | 'not_applicable';
 
 export type AnswerRequirement =
-  | 'single_choice'
+  | 'single_answer'
+  | 'single_choice' // Legacy alias for single_answer
+  | 'any_one'
+  | 'any_one_from' // Legacy alias for any_one
+  | 'any_two'
+  | 'any_2_from' // Legacy alias for any_two
+  | 'any_three'
+  | 'any_3_from' // Legacy alias for any_three
   | 'both_required'
-  | 'any_one_from'
-  | 'any_2_from'
-  | 'any_3_from'
+  | 'both_points'
+  | 'two_points'
   | 'all_required'
+  | 'method_and_result'
+  | 'working_and_answer'
+  | 'complete_equation'
+  | 'correct_order'
+  | 'two_criteria'
+  | 'all_columns_correct'
+  | 'two_complete_answers'
+  | 'all_five_points'
+  | 'both_structures'
   | 'alternative_methods'
-  | 'acceptable_variations'
   | 'not_applicable';
 
 export type AlternativeType =
@@ -279,6 +302,11 @@ export interface QuestionCorrectAnswer {
   acceptable_variations?: string[];
   answer_text?: string; // For complex formats like table_completion template structure
   answer_type?: string; // Type identifier (e.g., 'table_template')
+  marking_components?: Array<{
+    component: string;
+    marks: number;
+    description?: string;
+  }>; // For multi-step answers with component-based marking
   marking_flags?: {
     accepts_reverse_argument?: boolean;
     accepts_equivalent_phrasing?: boolean;
@@ -529,6 +557,7 @@ export interface ComplexQuestionPart {
   marks: number;
   answer_format?: AnswerFormat;
   answer_requirement?: AnswerRequirement;
+  alternative_type?: AlternativeType; // Part-level alternative type indicator
   has_direct_answer?: boolean; // Whether this part expects a direct answer
   is_contextual_only?: boolean; // Whether this part is purely contextual
   correct_answers: QuestionCorrectAnswer[];
@@ -550,6 +579,7 @@ export interface ComplexQuestionSubpart {
   marks: number;
   answer_format?: AnswerFormat;
   answer_requirement?: AnswerRequirement;
+  alternative_type?: AlternativeType; // Subpart-level alternative type indicator
   correct_answers: QuestionCorrectAnswer[];
   options?: QuestionOption[];
   attachments?: QuestionAttachment[];

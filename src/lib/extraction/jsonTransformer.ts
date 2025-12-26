@@ -35,6 +35,7 @@ interface ImportedQuestion {
   correct_answers?: ImportedCorrectAnswer[];
   answer_format?: string;
   answer_requirement?: string;
+  alternative_type?: string;
   hint?: string;
   explanation?: string;
   marking_criteria?: any;
@@ -49,6 +50,7 @@ interface ImportedQuestionPart {
   marks: number;
   answer_format?: string;
   answer_requirement?: string;
+  alternative_type?: string;
   total_alternatives?: number;
   correct_answers?: ImportedCorrectAnswer[];
   options?: Array<{
@@ -73,6 +75,11 @@ interface ImportedCorrectAnswer {
   context?: any;
   unit?: string;
   acceptable_variations?: string[];
+  marking_components?: Array<{
+    component: string;
+    marks: number;
+    description?: string;
+  }>;
   accepts_equivalent_phrasing?: boolean;
   accepts_reverse_argument?: boolean;
   error_carried_forward?: boolean;
@@ -364,6 +371,7 @@ function transformQuestionPart(
     marks: part.marks || 0,
     answer_format: answerFormat,
     answer_requirement: answerRequirement,
+    alternative_type: part.alternative_type,
     has_direct_answer: hasDirectAnswer,
     is_contextual_only: isContextualOnly,
     total_alternatives: part.total_alternatives,
@@ -495,6 +503,7 @@ function transformQuestionSubpart(
     marks: subpart.marks || 0,
     answer_format: answerFormat,
     answer_requirement: answerRequirement,
+    alternative_type: subpart.alternative_type,
     has_direct_answer: hasDirectAnswer,
     is_contextual_only: isContextualOnly,
     total_alternatives: subpart.total_alternatives,

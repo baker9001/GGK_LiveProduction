@@ -85,6 +85,27 @@ import {
   type AnswerRequirement
 } from '../../../../../../lib/extraction/answerRequirementDeriver';
 
+// Import Answer Structure Requirements Guide v1.0 validation utilities
+import {
+  validateMandatoryAnswerFields,
+  validateQuestionCompleteMandatoryFields,
+  generateComplianceReport,
+  checkNamingConsistency,
+  type ValidationResult
+} from '../../../../../../lib/validation/mandatoryFieldsValidator';
+import {
+  getRecommendationByQuestionText,
+  validateCombination,
+  type MatrixRecommendation
+} from '../../../../../../lib/constants/answerStructureMatrix';
+import {
+  runComprehensiveValidation,
+  validateAnswerFormatMatchesContent,
+  validateAnswerRequirementMatchesAnswers,
+  validateAlternativeTypeConsistency,
+  validateAlternativesVsVariations
+} from '../../../../../../lib/validation/enhancedAnswerFormatValidation';
+
 // Import sub-components and utilities
 import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import QuestionSupportMatrix from './components/QuestionSupportMatrix';
@@ -326,6 +347,7 @@ interface ProcessedPart {
   marks: number;
   answer_format: string;
   answer_requirement?: string;
+  alternative_type?: string; // Part-level alternative type indicator
   figure?: boolean;
   figure_required?: boolean;
   attachments?: string[];
@@ -358,6 +380,7 @@ interface ProcessedSubpart {
   marks: number;
   answer_format: string;
   answer_requirement?: string;
+  alternative_type?: string; // Subpart-level alternative type indicator
   attachments?: string[];
   correct_answers?: ProcessedAnswer[];
   options?: ProcessedOption[];
@@ -390,6 +413,11 @@ interface ProcessedAnswer {
   context?: any;
   unit?: string;
   measurement_details?: any;
+  marking_components?: Array<{
+    component: string;
+    marks: number;
+    description?: string;
+  }>;
   accepts_equivalent_phrasing?: boolean;
   error_carried_forward?: boolean;
   answer_requirement?: string;
@@ -4012,6 +4040,131 @@ function QuestionsTabInner({
           console.log('Pre-import validation passed successfully');
           toast.success('Extraction validation passed', { duration: 2000 });
         }
+      }
+
+      // Answer Structure Requirements Guide v1.0 Compliance Check
+      console.log('Running Answer Structure Requirements Guide v1.0 compliance check...');
+      const guideValidationResults = questions.map((q: any, index: number) => {
+        const validation = runComprehensiveValidation(q, `Question ${index + 1}`);
+
+        // Validate parts if they exist
+        if (q.parts) {
+          q.parts.forEach((part: any, pIndex: number) => {
+            const partValidation = runComprehensiveValidation(
+              part,
+              `Question ${index + 1}, Part ${part.part || String.fromCharCode(97 + pIndex)}`
+            );
+            validation.errors.push(...partValidation.errors);
+            validation.warnings.push(...partValidation.warnings);
+            validation.recommendations.push(...partValidation.recommendations);
+
+            // Validate subparts if they exist
+            if (part.subparts) {
+              part.subparts.forEach((subpart: any, sIndex: number) => {
+                const subpartValidation = runComprehensiveValidation(
+                  subpart,
+                  `Question ${index + 1}, Part ${part.part}, Subpart ${subpart.subpart || `(${sIndex + 1})`}`
+                );
+                validation.errors.push(...subpartValidation.errors);
+                validation.warnings.push(...subpartValidation.warnings);
+                validation.recommendations.push(...subpartValidation.recommendations);
+              });
+            }
+          });
+        }
+
+        return {
+          questionIndex: index + 1,
+          validation,
+          complianceReport: generateComplianceReport(q)
+        };
+      });
+
+      const totalGuideErrors = guideValidationResults.reduce((sum, r) => sum + r.validation.errors.length, 0);
+      const totalGuideWarnings = guideValidationResults.reduce((sum, r) => sum + r.validation.warnings.length, 0);
+      const totalRecommendations = guideValidationResults.reduce((sum, r) => sum + r.validation.recommendations.length, 0);
+      const averageComplianceScore = Math.round(
+        guideValidationResults.reduce((sum, r) => sum + r.complianceReport.score, 0) / guideValidationResults.length
+      );
+
+      if (totalGuideErrors > 0) {
+        console.log('=== ANSWER STRUCTURE GUIDE COMPLIANCE ERRORS ===');
+        guideValidationResults.forEach(result => {
+          if (result.validation.errors.length > 0) {
+            console.log(`\nQuestion ${result.questionIndex}:`);
+            result.validation.errors.forEach(err => {
+              console.log(`  ✗ [${err.code}] ${err.message}`);
+            });
+          }
+        });
+
+        const continueWithErrors = await requestInlineConfirmation({
+          title: 'Answer Structure Guide Compliance Issues',
+          message: (
+            <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+              <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                <AlertTriangle className="w-5 h-5" />
+                <span className="font-semibold">Compliance Score: {averageComplianceScore}%</span>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium">Found {totalGuideErrors} mandatory field errors:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {guideValidationResults.slice(0, 3).map(r =>
+                    r.validation.errors.slice(0, 2).map((err, i) => (
+                      <li key={i} className="text-xs">Q{r.questionIndex}: {err.message}</li>
+                    ))
+                  )}
+                </ul>
+                {totalGuideErrors > 6 && (
+                  <p className="text-xs italic">...and {totalGuideErrors - 6} more errors</p>
+                )}
+              </div>
+              {totalRecommendations > 0 && (
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  {totalRecommendations} recommendations available in console
+                </p>
+              )}
+              <p className="text-xs">Per Answer Structure Requirements Guide v1.0, all answer-containing sections must have answer_format, answer_requirement, and alternative_type.</p>
+            </div>
+          ),
+          confirmText: 'Continue Anyway',
+          cancelText: 'Fix Errors',
+          confirmVariant: 'danger',
+        });
+
+        if (!continueWithErrors) {
+          console.log('Import cancelled due to Answer Structure Guide compliance errors');
+          return;
+        }
+      } else if (totalGuideWarnings > 0) {
+        console.log('=== ANSWER STRUCTURE GUIDE WARNINGS ===');
+        guideValidationResults.forEach(result => {
+          if (result.validation.warnings.length > 0) {
+            console.log(`\nQuestion ${result.questionIndex}:`);
+            result.validation.warnings.forEach(warn => {
+              console.log(`  ⚠ [${warn.code}] ${warn.message}`);
+            });
+          }
+        });
+        toast.warning(`${totalGuideWarnings} Answer Structure Guide warnings. Check console for details.`, { duration: 5000 });
+      }
+
+      if (totalRecommendations > 0) {
+        console.log('\n=== ANSWER STRUCTURE GUIDE RECOMMENDATIONS ===');
+        guideValidationResults.forEach(result => {
+          if (result.validation.recommendations.length > 0) {
+            console.log(`\nQuestion ${result.questionIndex}:`);
+            result.validation.recommendations.forEach(rec => {
+              console.log(`  💡 ${rec}`);
+            });
+          }
+        });
+      }
+
+      console.log(`\nOverall Compliance: ${averageComplianceScore}% (${guideValidationResults.filter(r => r.complianceReport.isCompliant).length}/${guideValidationResults.length} questions fully compliant)`);
+
+      if (averageComplianceScore === 100) {
+        toast.success('✓ 100% Answer Structure Guide compliant', { duration: 3000 });
       }
 
       // Perform validation with multiple fallbacks
