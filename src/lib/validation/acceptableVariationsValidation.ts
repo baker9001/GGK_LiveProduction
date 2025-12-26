@@ -3,6 +3,8 @@
  * Ensures data quality and prevents common errors
  */
 
+import { isStructuredFormat } from '../constants/answerOptions';
+
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
@@ -17,10 +19,12 @@ export interface ValidationResult {
  * - Duplicate values
  * - Excessive whitespace
  * - Match with main answer
+ * - Format-specific validation
  */
 export function validateAcceptableVariations(
   variations: string[] | undefined | null,
-  mainAnswer?: string
+  mainAnswer?: string,
+  format?: string | null
 ): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -72,6 +76,21 @@ export function validateAcceptableVariations(
   const tooLong = cleaned.filter(v => v.length > 200);
   if (tooLong.length > 0) {
     warnings.push(`${tooLong.length} variation(s) are unusually long (>200 characters)`);
+  }
+
+  // Format-specific validation
+  if (format && isStructuredFormat(format)) {
+    switch (format) {
+      case 'code':
+        warnings.push('Ensure code variations are syntactically valid');
+        break;
+      case 'equation':
+        warnings.push('Verify equation variations are mathematically equivalent');
+        break;
+      case 'calculation':
+        warnings.push('Variations for calculations should apply to final answer only');
+        break;
+    }
   }
 
   return {

@@ -16,6 +16,33 @@ export interface SelectOption {
   isVisual?: boolean; // Whether this is a visual/interactive format
 }
 
+// Format Classifications for Acceptable Variations Support
+
+// Text-based formats that fully support acceptable variations
+export const TEXT_FORMATS_WITH_VARIATIONS = [
+  'single_word', 'single_line', 'paragraph', 'definition',
+  'two_items', 'two_items_connected',
+  'multi_line', 'multi_line_labeled',
+  'numerical', 'measurement', 'calculation_with_formula',
+  'chemical_formula', 'structural_formula', 'name_and_structure',
+  'sequence'
+];
+
+// Structured text formats - need special handling
+// Accept variations but with format-specific validation
+export const STRUCTURED_TEXT_FORMATS = [
+  'code',           // Programming code - variations for syntax styles
+  'equation',       // Math/chemical equations - variations for notation
+  'calculation'     // Math calculations - variations for final answer only
+];
+
+// Visual/Interactive formats - DO NOT show UI but preserve data
+export const VISUAL_FORMATS = [
+  'chemical_structure', 'structural_diagram', 'diagram',
+  'table', 'table_completion', 'graph',
+  'audio', 'file_upload', 'not_applicable'
+];
+
 // Answer Format Options
 export const ANSWER_FORMAT_OPTIONS: SelectOption[] = [
   {
@@ -500,4 +527,52 @@ export function deriveAnswerRequirement(question: {
   }
 
   return result.answerRequirement;
+}
+
+/**
+ * Helper Functions for Format Classification
+ */
+
+// Check if a format supports acceptable variations UI
+export function supportsAcceptableVariations(format?: string | null): boolean {
+  if (!format) return true; // Show by default if format undefined
+  return TEXT_FORMATS_WITH_VARIATIONS.includes(format) ||
+         STRUCTURED_TEXT_FORMATS.includes(format);
+}
+
+// Check if format is structured (code, equation, etc.)
+export function isStructuredFormat(format?: string | null): boolean {
+  if (!format) return false;
+  return STRUCTURED_TEXT_FORMATS.includes(format);
+}
+
+// Get format-specific placeholder text for variations input
+export function getVariationPlaceholder(format?: string | null): string {
+  if (!format) return 'Add variation (e.g., H2O for H₂O)';
+
+  switch (format) {
+    case 'code':
+      return 'Add syntax variation (e.g., for loop vs while loop)';
+    case 'equation':
+      return 'Add notation variation (e.g., H₂O vs H2O)';
+    case 'calculation':
+      return 'Add final answer variation (e.g., 0.5 vs 1/2)';
+    case 'chemical_formula':
+      return 'Add formula variation (e.g., C₆H₁₂O₆ vs C6H12O6)';
+    default:
+      return 'Add variation (e.g., H2O for H₂O)';
+  }
+}
+
+// Get format-specific tooltip text
+export function getVariationTooltip(format?: string | null): string {
+  if (!format) {
+    return 'Alternative ways to write this answer (e.g., "H2O" for "H₂O", "CO2" for "CO₂")';
+  }
+
+  if (isStructuredFormat(format)) {
+    return `For ${format} format: Add variations for different valid representations`;
+  }
+
+  return 'Alternative ways to write this answer (e.g., "H2O" for "H₂O", "CO2" for "CO₂")';
 }

@@ -1038,6 +1038,7 @@ export function QuestionCard({
               correctAnswer={question.correct_answer}
               correctAnswers={question.correct_answers}
               answerRequirement={question.answer_requirement}
+              answerFormat={question.answer_format}
               totalAlternatives={question.total_alternatives}
               questionType={question.type}
               readOnly={readOnly}
@@ -1379,6 +1380,7 @@ export function QuestionCard({
                         correctAnswer={subQuestion.correct_answer}
                         correctAnswers={subQuestion.correct_answers}
                         answerRequirement={subQuestion.answer_requirement}
+                        answerFormat={subQuestion.answer_format}
                         totalAlternatives={subQuestion.total_alternatives}
                         questionType={subQuestion.type}
                         readOnly={readOnly}
