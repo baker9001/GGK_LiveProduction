@@ -1,16 +1,15 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/CorrectAnswersDisplay.tsx
 import React, { useState } from 'react';
-import { CheckCircle, AlertCircle, Edit, Save, X, Plus, Trash2, Info, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle, AlertCircle, Edit, Save, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../../../../../components/shared/Button';
 import { cn } from '../../../../../../lib/utils';
 import { toast } from '../../../../../../components/shared/Toast';
-import { validateAcceptableVariations, addVariation, removeVariation } from '../../../../../../lib/validation/acceptableVariationsValidation';
+import { validateAcceptableVariations } from '../../../../../../lib/validation/acceptableVariationsValidation';
 
 interface CorrectAnswer {
   answer: string;
   marks?: number;
   alternative_id?: number;
-  acceptable_variations?: string[];
   context?: {
     type: string;
     value: string;
@@ -39,7 +38,6 @@ export function CorrectAnswersDisplay({
 }: CorrectAnswersDisplayProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedAnswers, setEditedAnswers] = useState<CorrectAnswer[]>([]);
-  const [newVariations, setNewVariations] = useState<Record<number, string>>({});
 
   // Initialize edited answers when starting edit
   const startEditing = () => {
@@ -153,25 +151,6 @@ export function CorrectAnswersDisplay({
     } else {
       toast.error('Cannot delete the last answer. At least one correct answer is required.');
     }
-  };
-
-  const addAcceptableVariation = (answerIndex: number, variation: string) => {
-    const answer = editedAnswers[answerIndex];
-    const result = addVariation(answer.acceptable_variations, variation, answer.answer);
-
-    if (result.errors.length > 0) {
-      toast.error(result.errors[0]);
-      return false;
-    }
-
-    updateAnswer(answerIndex, 'acceptable_variations', result.updated);
-    return true;
-  };
-
-  const removeAcceptableVariation = (answerIndex: number, variationIndex: number) => {
-    const answer = editedAnswers[answerIndex];
-    const updated = removeVariation(answer.acceptable_variations, variationIndex);
-    updateAnswer(answerIndex, 'acceptable_variations', updated);
   };
 
   const getRequirementText = () => {
@@ -324,75 +303,6 @@ export function CorrectAnswersDisplay({
                   </div>
                 </div>
               )}
-
-              {/* Acceptable Variations Section */}
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    Acceptable Variations
-                  </label>
-                  <div className="group relative">
-                    <Info className="h-3 w-3 text-blue-500" />
-                    <div className="absolute hidden group-hover:block z-10 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg -top-2 left-6">
-                      Alternative ways to write this answer (e.g., "H2O" for "H₂O", "CO2" for "CO₂")
-                    </div>
-                  </div>
-                </div>
-
-                {/* Display existing variations */}
-                {answer.acceptable_variations && answer.acceptable_variations.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {answer.acceptable_variations.map((variation, vIndex) => (
-                      <div
-                        key={vIndex}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-300"
-                      >
-                        <span>{variation}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeAcceptableVariation(index, vIndex)}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add new variation */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newVariations[index] || ''}
-                    onChange={(e) => setNewVariations({ ...newVariations, [index]: e.target.value })}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const variation = newVariations[index]?.trim();
-                        if (variation && addAcceptableVariation(index, variation)) {
-                          setNewVariations({ ...newVariations, [index]: '' });
-                        }
-                      }
-                    }}
-                    placeholder="Add variation (e.g., H2O for H₂O)"
-                    className="flex-1 px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const variation = newVariations[index]?.trim();
-                      if (variation && addAcceptableVariation(index, variation)) {
-                        setNewVariations({ ...newVariations, [index]: '' });
-                      }
-                    }}
-                    disabled={!newVariations[index]?.trim()}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
             </div>
           ))}
 
@@ -483,28 +393,6 @@ export function CorrectAnswersDisplay({
                     </span>
                   )}
                 </div>
-
-                {/* Display acceptable variations */}
-                {answer.acceptable_variations && answer.acceptable_variations.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Info className="h-4 w-4 text-blue-500" />
-                      <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                        Acceptable Variations ({answer.acceptable_variations.length})
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {answer.acceptable_variations.map((variation, vIndex) => (
-                        <span
-                          key={vIndex}
-                          className="inline-flex items-center px-2 py-1 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-300"
-                        >
-                          {variation}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>

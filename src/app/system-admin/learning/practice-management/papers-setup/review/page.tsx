@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { QuestionViewer, QuestionData, UserResponse, ValidationReport, UploadedAttachment } from '../../../../../../components/shared/questions/QuestionViewer';
 import { supabase } from '../../../../../../lib/supabase';
 import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
@@ -9,17 +10,9 @@ import { LoadingSpinner } from '../../../../../../components/shared/LoadingSpinn
 import { ArrowLeft, Save, CheckCircle, AlertTriangle, Eye, Menu, X } from 'lucide-react';
 import { cn } from '../../../../../../lib/utils';
 import EnhancedQuestionNavigator, { buildEnhancedNavigationItems, NavigationItem, QuestionStatus, AttachmentStatus } from '../../../../../../components/shared/EnhancedQuestionNavigator';
-import { QuestionCard } from '../components/QuestionCard';
-import { Question, SubQuestion } from '../page';
-
-interface ValidationReport {
-  isValid: boolean;
-  errors?: string[];
-  warnings?: string[];
-}
 
 interface ReviewPageState {
-  questions: Question[];
+  questions: QuestionData[];
   loading: boolean;
   saving: boolean;
   validationReports: Record<string, ValidationReport>;
@@ -30,7 +23,7 @@ interface ReviewPageState {
   units: Array<{ id: string; name: string }>;
   chapters: Array<{ id: string; name: string }>;
   topics: Array<{ id: string; name: string }>;
-  subtopics: Array<{ id: string; name: string; topic_id: string }>;
+  subtopics: Array<{ id: string; name: string }>;
 }
 
 export default function PaperSetupReviewPage() {
@@ -135,12 +128,13 @@ export default function PaperSetupReviewPage() {
       // Extract questions from raw_json
       const rawQuestions = session.raw_json?.questions || [];
 
-      // Transform to Question format with ALL fields including acceptable_variations
-      const questions: Question[] = rawQuestions.map((q: any, index: number) => ({
+      // Transform to QuestionData format with ALL fields
+      const questions: QuestionData[] = rawQuestions.map((q: any, index: number) => ({
         id: q.id || `q-${index + 1}`,
         question_number: q.question_number || `${index + 1}`,
-        question_type: mapQuestionType(q.question_type || q.type),
-        question_description: q.question_text || q.question_description || '',
+        type: mapQuestionType(q.question_type || q.type),
+        category: q.category,
+        question_text: q.question_text || q.question_description || '',
         marks: q.marks || q.total_marks || 0,
         difficulty: q.difficulty,
         status: q.status || 'draft',
@@ -156,7 +150,6 @@ export default function PaperSetupReviewPage() {
         topic_id: q.topic_id,
         subtopic: q.subtopic || q.subtopics?.[0],
         subtopic_id: q.subtopic_id,
-        subtopics: Array.isArray(q.subtopics) ? q.subtopics : (q.subtopic ? [q.subtopic] : []),
 
         // Answer configuration
         answer_format: q.answer_format,
@@ -167,17 +160,14 @@ export default function PaperSetupReviewPage() {
         hint: q.hint,
         explanation: q.explanation,
 
-        // Nested structures with acceptable_variations
+        // Nested structures
         correct_answers: (q.correct_answers || []).map((ans: any) => ({
           answer: ans.answer || ans.text || '',
           marks: ans.marks,
           alternative_id: ans.alternative_id,
-          acceptable_variations: ans.acceptable_variations || [],
-          context: ans.context ? {
-            type: ans.context.type || ans.context_type,
-            value: ans.context.value || ans.context_value,
-            label: ans.context.label || ans.context_label
-          } : undefined
+          context_type: ans.context_type,
+          context_value: ans.context_value,
+          context_label: ans.context_label
         })),
         options: (q.options || []).map((opt: any) => ({
           label: opt.label || opt.id || '',
@@ -185,71 +175,32 @@ export default function PaperSetupReviewPage() {
           is_correct: opt.is_correct || false,
           explanation: opt.explanation
         })),
-        sub_questions: (q.parts || q.sub_questions || []).map((part: any) => ({
-          id: part.id || `${q.id}-${part.part}`,
-          part_label: part.part || part.part_label || '',
-          question_description: part.question_text || part.question_description || part.description || '',
+        parts: (q.parts || []).map((part: any) => ({
+          part: part.part || part.part_label || '',
+          question_text: part.question_text || part.description || '',
           marks: part.marks || 0,
           answer_format: part.answer_format,
           answer_requirement: part.answer_requirement,
           hint: part.hint,
           explanation: part.explanation,
-          correct_answers: (part.correct_answers || []).map((ans: any) => ({
-            answer: ans.answer || ans.text || '',
-            marks: ans.marks,
-            alternative_id: ans.alternative_id,
-            acceptable_variations: ans.acceptable_variations || [],
-            context: ans.context ? {
-              type: ans.context.type || ans.context_type,
-              value: ans.context.value || ans.context_value,
-              label: ans.context.label || ans.context_label
-            } : undefined
-          })),
-          options: (part.options || []).map((opt: any) => ({
-            label: opt.label || opt.id || '',
-            text: opt.text || opt.option_text || '',
-            is_correct: opt.is_correct || false,
-            explanation: opt.explanation
-          })),
-          subparts: (part.subparts || []).map((sp: any) => ({
-            id: sp.id || `${part.id}-${sp.part}`,
-            part_label: sp.part || sp.part_label || '',
-            question_description: sp.question_text || sp.question_description || sp.description || '',
-            marks: sp.marks || 0,
-            answer_format: sp.answer_format,
-            answer_requirement: sp.answer_requirement,
-            hint: sp.hint,
-            explanation: sp.explanation,
-            correct_answers: (sp.correct_answers || []).map((ans: any) => ({
-              answer: ans.answer || ans.text || '',
-              marks: ans.marks,
-              alternative_id: ans.alternative_id,
-              acceptable_variations: ans.acceptable_variations || [],
-              context: ans.context ? {
-                type: ans.context.type || ans.context_type,
-                value: ans.context.value || ans.context_value,
-                label: ans.context.label || ans.context_label
-              } : undefined
-            })),
-            attachments: sp.attachments || []
-          })),
+          correct_answers: part.correct_answers || [],
+          options: part.options || [],
+          subparts: part.subparts || [],
           attachments: part.attachments || []
         })),
         attachments: (q.attachments || []).map((att: any) => ({
           id: att.id || `att-${Math.random().toString(36).substr(2, 9)}`,
-          file_name: att.file_name || att.name || 'Attachment',
-          file_url: att.file_url || att.url || '',
-          file_type: att.file_type || att.type || 'image/png',
-          file_size: att.file_size || att.size,
-          placement: att.placement
+          name: att.file_name || att.name || 'Attachment',
+          url: att.file_url || att.url || '',
+          type: att.file_type || att.type || 'image/png',
+          size: att.file_size || att.size
         })),
 
         // Metadata
         exam_board: session.metadata?.exam_board || q.exam_board,
         paper_code: session.metadata?.paper_code || q.paper_code,
         year: session.metadata?.year || q.year,
-        created_at: q.created_at,
-        updated_at: q.updated_at
+        meta: q.meta || {}
       }));
 
       setState(prev => ({
@@ -267,8 +218,8 @@ export default function PaperSetupReviewPage() {
     }
   };
 
-  const mapQuestionType = (type: string): string => {
-    const typeMap: Record<string, string> = {
+  const mapQuestionType = (type: string): QuestionData['type'] => {
+    const typeMap: Record<string, QuestionData['type']> = {
       'mcq': 'mcq',
       'multiple_choice': 'mcq',
       'true_false': 'true_false',
@@ -285,23 +236,32 @@ export default function PaperSetupReviewPage() {
     return typeMap[type.toLowerCase()] || 'structured';
   };
 
-  const handleDeleteQuestion = (question: Question) => {
+  const handleQuestionUpdate = (questionId: string, updated: QuestionData) => {
     setState(prev => ({
       ...prev,
-      questions: prev.questions.filter(q => q.id !== question.id)
+      questions: prev.questions.map(q =>
+        q.id === questionId ? updated : q
+      )
     }));
-    toast.success('Question removed from review');
   };
 
-  const handleDeleteSubQuestion = (subQuestion: SubQuestion) => {
+  const handleValidation = (questionId: string, report: ValidationReport) => {
     setState(prev => ({
       ...prev,
-      questions: prev.questions.map(q => ({
-        ...q,
-        sub_questions: q.sub_questions?.filter(sq => sq.id !== subQuestion.id) || []
-      }))
+      validationReports: {
+        ...prev.validationReports,
+        [questionId]: report
+      }
     }));
-    toast.success('Sub-question removed');
+  };
+
+  const handleAttachmentsChange = (questionId: string, attachments: UploadedAttachment[]) => {
+    setState(prev => ({
+      ...prev,
+      questions: prev.questions.map(q =>
+        q.id === questionId ? { ...q, attachments } : q
+      )
+    }));
   };
 
   const handleSaveAll = async () => {
@@ -406,8 +366,8 @@ export default function PaperSetupReviewPage() {
       const hasError = report?.errors && report.errors.length > 0;
       const isComplete = report?.isValid || false;
       const needsAttachment = question.attachments?.length === 0 &&
-        (question.question_description?.toLowerCase().includes('figure') ||
-         question.question_description?.toLowerCase().includes('diagram'));
+        (question.question_text?.toLowerCase().includes('figure') ||
+         question.question_text?.toLowerCase().includes('diagram'));
 
       statusData.set(question.id!, {
         isComplete,
@@ -428,12 +388,12 @@ export default function PaperSetupReviewPage() {
         id: q.id!,
         question_number: q.question_number || '',
         marks: q.marks,
-        type: q.question_type,
-        parts: q.sub_questions?.map((p: any) => ({
-          id: p.id || `${q.id}-${p.part_label}`,
-          part_label: p.part_label,
+        type: q.type,
+        parts: q.parts?.map((p: any) => ({
+          id: `${q.id}-${p.part}`,
+          part_label: p.part,
           marks: p.marks,
-          question_description: p.question_description,
+          question_description: p.question_text,
           has_direct_answer: true,
           subparts: p.subparts || []
         })) || []
@@ -582,16 +542,20 @@ export default function PaperSetupReviewPage() {
                 <div className="absolute -left-12 top-6 text-2xl font-bold text-gray-300 dark:text-gray-600">
                   {index + 1}
                 </div>
-                <QuestionCard
+                <QuestionViewer
                   question={question}
-                  questionIndex={index}
+                  mode="review"
+                  subject={question.subject}
+                  examBoard={question.exam_board}
+                  editable={true}
+                  showValidation={true}
+                  onUpdate={(updated) => handleQuestionUpdate(question.id!, updated)}
+                  onValidate={(report) => handleValidation(question.id!, report)}
+                  onAttachmentsChange={(attachments) => handleAttachmentsChange(question.id!, attachments)}
+                  units={state.units}
+                  chapters={state.chapters}
                   topics={state.topics}
                   subtopics={state.subtopics}
-                  units={state.units}
-                  onDelete={handleDeleteQuestion}
-                  onDeleteSubQuestion={handleDeleteSubQuestion}
-                  readOnly={false}
-                  showQAActions={false}
                 />
               </div>
             ))}
