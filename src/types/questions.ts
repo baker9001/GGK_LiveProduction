@@ -524,6 +524,7 @@ export interface DataStructureInfo {
 export interface ComplexQuestionPart {
   id: string;
   part_label: string;
+  type?: QuestionType; // Question type for this part (descriptive, mcq, tf, etc.)
   question_text: string;
   marks: number;
   answer_format?: AnswerFormat;
@@ -544,6 +545,7 @@ export interface ComplexQuestionPart {
 export interface ComplexQuestionSubpart {
   id: string;
   subpart_label: string;
+  type?: QuestionType; // Question type for this subpart (descriptive, mcq, tf, etc.)
   question_text: string;
   marks: number;
   answer_format?: AnswerFormat;

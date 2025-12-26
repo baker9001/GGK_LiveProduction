@@ -321,6 +321,7 @@ interface ProcessedQuestion {
 interface ProcessedPart {
   id?: string; // Add id field for parts
   part: string;
+  type?: string; // Question type for this part (descriptive, mcq, tf, table_completion, etc.)
   question_text: string;
   marks: number;
   answer_format: string;
@@ -352,6 +353,7 @@ interface ProcessedPart {
 interface ProcessedSubpart {
   id?: string; // Add id field for subparts
   subpart: string;
+  type?: string; // Question type for this subpart (descriptive, mcq, tf, table_completion, etc.)
   question_text: string;
   marks: number;
   answer_format: string;
@@ -1876,6 +1878,14 @@ function QuestionsTabInner({
 
         // Enhanced answer format detection for main question
         let mainAnswerFormat = q.answer_format;
+
+        // VALIDATION LOGGING: Track answer_format from JSON
+        if (q.answer_format) {
+          console.log(`[Question ${index + 1}] 📋 Explicit answer_format from JSON: "${q.answer_format}" (type: ${questionType})`);
+        } else {
+          console.log(`[Question ${index + 1}] ⚠️  No answer_format in JSON, will derive`);
+        }
+
         if (typeof mainAnswerFormat === 'string' && mainAnswerFormat.toLowerCase() === 'not applicable') {
           mainAnswerFormat = 'not_applicable';
         }
@@ -1960,9 +1970,21 @@ function QuestionsTabInner({
         }
 
         const expectsDirectAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable';
-        if (!expectsDirectAnswer) {
+
+        // CRITICAL FIX: Check if answer_format was explicitly provided in JSON before overwriting
+        const hasExplicitFormat = q.answer_format &&
+          q.answer_format !== 'not_applicable' &&
+          q.answer_format !== 'undefined' &&
+          String(q.answer_format).trim().length > 0;
+
+        if (!expectsDirectAnswer && !hasExplicitFormat) {
+          // Only override if NO explicit format was provided in JSON
           answerRequirement = 'not_applicable';
           mainAnswerFormat = 'not_applicable';
+        } else if (hasExplicitFormat) {
+          // Preserve explicit format from JSON - don't overwrite it
+          console.log(`[Question ${index + 1}] Preserving explicit answer_format from JSON: ${q.answer_format}`);
+          mainAnswerFormat = q.answer_format;
         }
 
         const figureFlag = resolveFigureFlag(q);
@@ -2127,6 +2149,14 @@ function QuestionsTabInner({
 
     const questionText = ensureString(part.question_text || part.text || part.question || '');
     let answerFormat = part.answer_format;
+
+    // VALIDATION LOGGING: Track answer_format from JSON
+    if (part.answer_format) {
+      console.log(`  [Part ${partLabel}] 📋 Explicit answer_format from JSON: "${part.answer_format}" (type: ${part.type || 'not specified'})`);
+    } else {
+      console.log(`  [Part ${partLabel}] ⚠️  No answer_format in JSON, will derive`);
+    }
+
     if (typeof answerFormat === 'string' && answerFormat.toLowerCase() === 'not applicable') {
       answerFormat = 'not_applicable';
     }
@@ -2183,9 +2213,21 @@ function QuestionsTabInner({
 
     // FIX: Treat undefined answerRequirement as not applicable for expectsAnswer check
     const expectsAnswer = hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable' && answerRequirement !== undefined;
-    if (!expectsAnswer) {
+
+    // CRITICAL FIX: Check if answer_format was explicitly provided in JSON before overwriting
+    const hasExplicitFormat = part.answer_format &&
+      part.answer_format !== 'not_applicable' &&
+      part.answer_format !== 'undefined' &&
+      String(part.answer_format).trim().length > 0;
+
+    if (!expectsAnswer && !hasExplicitFormat) {
+      // Only override if NO explicit format was provided in JSON
       answerFormat = 'not_applicable';
       answerRequirement = 'not_applicable';
+    } else if (hasExplicitFormat) {
+      // Preserve explicit format from JSON - don't overwrite it
+      console.log(`  [Part ${partLabel}] Preserving explicit answer_format from JSON: ${part.answer_format}`);
+      answerFormat = part.answer_format;
     }
 
     const partFigureFlag = resolveFigureFlag(part);
@@ -2194,6 +2236,7 @@ function QuestionsTabInner({
     const processedPart: ProcessedPart = {
       id: partId,
       part: partLabel,
+      type: part.type || 'descriptive', // Capture type from JSON
       question_text: questionText || '',
       marks: parseInt(String(part.marks ?? '0')),  // FIXED: Explicitly handle undefined/null
       answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),
@@ -2309,6 +2352,14 @@ function QuestionsTabInner({
 
     const questionText = ensureString(subpart.question_text || subpart.text || subpart.question || '');
     let answerFormat = subpart.answer_format || (questionText ? detectAnswerFormat(questionText) : undefined);
+
+    // VALIDATION LOGGING: Track answer_format from JSON
+    if (subpart.answer_format) {
+      console.log(`  [Subpart ${subpartLabel}] 📋 Explicit answer_format from JSON: "${subpart.answer_format}" (type: ${subpart.type || 'not specified'})`);
+    } else {
+      console.log(`  [Subpart ${subpartLabel}] ⚠️  No answer_format in JSON, will derive`);
+    }
+
     if (typeof answerFormat === 'string' && answerFormat.toLowerCase() === 'not applicable') {
       answerFormat = 'not_applicable';
     }
@@ -2377,10 +2428,20 @@ function QuestionsTabInner({
       isContextualOnly = false;
     }
 
-    // Only override format/requirement if we truly have no answer data
-    if (!expectsAnswer && !hasCorrectAnswers) {
+    // CRITICAL FIX: Check if answer_format was explicitly provided in JSON before overwriting
+    const hasExplicitFormat = subpart.answer_format &&
+      subpart.answer_format !== 'not_applicable' &&
+      subpart.answer_format !== 'undefined' &&
+      String(subpart.answer_format).trim().length > 0;
+
+    // Only override format/requirement if we truly have no answer data AND no explicit format
+    if (!expectsAnswer && !hasCorrectAnswers && !hasExplicitFormat) {
       answerFormat = 'not_applicable';
       answerRequirement = 'not_applicable';
+    } else if (hasExplicitFormat) {
+      // Preserve explicit format from JSON - don't overwrite it
+      console.log(`  [Subpart ${subpartLabel}] Preserving explicit answer_format from JSON: ${subpart.answer_format}`);
+      answerFormat = subpart.answer_format;
     }
 
     const subpartFigureFlag = resolveFigureFlag(subpart);
@@ -2389,6 +2450,7 @@ function QuestionsTabInner({
     const processedSubpart: ProcessedSubpart = {
       id: subpartId,
       subpart: subpartLabel,
+      type: subpart.type || 'descriptive', // Capture type from JSON
       question_text: questionText || '',
       marks: parseInt(String(subpart.marks ?? '0')),  // FIXED: Explicitly handle undefined/null
       answer_format: answerFormat || (!expectsAnswer ? 'not_applicable' : 'single_line'),

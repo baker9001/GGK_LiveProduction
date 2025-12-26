@@ -66,6 +66,7 @@ interface Attachment {
 export interface QuestionPart {
   id: string;
   part_label: string;
+  type?: string; // Question type for this part (descriptive, mcq, tf, table_completion, etc.)
   question_text: string;
   marks: number;
   answer_format?: string;

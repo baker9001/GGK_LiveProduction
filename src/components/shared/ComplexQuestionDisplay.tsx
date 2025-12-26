@@ -209,7 +209,7 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
               <DynamicAnswerField
               question={{
                 id: subpart.id,
-                type: 'descriptive',
+                type: subpart.type || 'descriptive', // Use actual type from data
                 answer_format: subpart.answer_format,
                 answer_requirement: subpart.answer_requirement,
                 correct_answers: subpart.correct_answers,
@@ -307,7 +307,7 @@ const ComplexQuestionDisplay: React.FC<ComplexQuestionDisplayProps> = ({
                 <DynamicAnswerField
                   question={{
                     id: part.id,
-                    type: 'descriptive',
+                    type: part.type || 'descriptive', // Use actual type from data
                     answer_format: part.answer_format,
                     answer_requirement: part.answer_requirement,
                     correct_answers: part.correct_answers,

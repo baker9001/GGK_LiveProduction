@@ -273,6 +273,9 @@ function determineRequirement(
     if (explicitType === 'one_required') return 'one_required';
     if (explicitType === 'all_required') return 'all_required';
     if (explicitType === 'standalone') return 'one_required';
+    if (explicitType === 'structure_function_pair') return 'all_required'; // Both structure and function must be correct
+    if (explicitType === 'two_required') return 'any_from'; // Any 2 required
+    if (explicitType === 'three_required') return 'any_from'; // Any 3 required
   }
 
   // Fallback: parse from answer text content
