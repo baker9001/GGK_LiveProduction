@@ -99,20 +99,40 @@ export function detectAnswerExpectation(
 
   // RULE 2: If has correct_answers, must expect an answer
   // THIS IS THE HIGHEST PRIORITY RULE - Data always overrides text analysis
+  // ABSOLUTE ENFORCEMENT: This rule returns EARLY - no other rules can override
   if (element.correct_answers && element.correct_answers.length > 0) {
-    // Filter out empty or null answers
-    const validAnswers = element.correct_answers.filter(ans =>
-      ans && (ans.answer || ans.text) && String(ans.answer || ans.text).trim().length > 0
-    );
+    console.log(`[RULE 2] Checking correct_answers array with ${element.correct_answers.length} items`);
+
+    // Filter out truly empty or null answers - be lenient with validation
+    const validAnswers = element.correct_answers.filter(ans => {
+      // Accept any object that has an 'answer' field (even if empty string - the data is present)
+      if (ans && typeof ans === 'object' && ('answer' in ans || 'text' in ans)) {
+        const answerValue = ans.answer || ans.text;
+        // Accept non-null/undefined values, including empty strings (the field exists)
+        if (answerValue !== null && answerValue !== undefined) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    console.log(`[RULE 2] Found ${validAnswers.length} valid answer objects (with answer/text field)`);
 
     if (validAnswers.length > 0) {
+      console.log(`[RULE 2] ✓ ABSOLUTE RETURN: has_direct_answer=true, is_contextual_only=false`);
+      console.log(`[RULE 2] Reason: ${validAnswers.length} valid correct_answer(s) present in data`);
+      // EARLY RETURN - No other rules can override this
       return {
         has_direct_answer: true,
         is_contextual_only: false,
         confidence: 'high',
-        reason: `Has ${validAnswers.length} valid correct_answer(s) - data overrides text analysis`
+        reason: `ABSOLUTE: Has ${validAnswers.length} valid correct_answer(s) - data overrides all text analysis`
       };
     }
+
+    // If array exists but no valid answers found, log warning
+    console.warn(`[RULE 2] ⚠️ correct_answers array exists (${element.correct_answers.length} items) but no valid answers found after filtering`);
+    console.warn(`[RULE 2] Sample item:`, element.correct_answers[0]);
   }
 
   // RULE 3: If has answer_format specified, expects an answer

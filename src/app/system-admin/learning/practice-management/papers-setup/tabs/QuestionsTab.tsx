@@ -2247,9 +2247,31 @@ function QuestionsTabInner({
       }
     }
 
-    if (expectsAnswer && part.correct_answers) {
+    // CRITICAL FIX: Make correct_answers presence ABSOLUTE - data overrides flags
+    const hasAnswersInData = part.correct_answers &&
+      Array.isArray(part.correct_answers) &&
+      part.correct_answers.length > 0;
+
+    if (hasAnswersInData) {
+      // ALWAYS process answers if they exist in data - override expectsAnswer
       try {
-        console.log(`  [Part ${partLabel}] Processing ${Array.isArray(part.correct_answers) ? part.correct_answers.length : 0} answers...`);
+        console.log(`  [Part ${partLabel}] ✓ DATA-DRIVEN: Processing ${part.correct_answers.length} answers (data presence overrides flags)`);
+        processedPart.correct_answers = processAnswers(part.correct_answers, answerRequirement);
+
+        // Force expectsAnswer-related flags to true if we have answers
+        if (!expectsAnswer) {
+          console.warn(`  [Part ${partLabel}] ⚠️ OVERRIDE: Forcing expectsAnswer=true due to data presence (was: has_direct_answer=${hasDirectAnswer}, is_contextual_only=${isContextualOnly})`);
+          processedPart.has_direct_answer = true;
+          processedPart.is_contextual_only = false;
+        }
+      } catch (answersError) {
+        console.error(`  [Part ${partLabel}] Error processing answers:`, answersError);
+        throw new Error(`Failed to process answers: ${answersError instanceof Error ? answersError.message : String(answersError)}`);
+      }
+    } else if (expectsAnswer && part.correct_answers) {
+      // Fallback to old logic for edge cases (non-array or empty)
+      try {
+        console.log(`  [Part ${partLabel}] Processing answers (fallback path)...`);
         processedPart.correct_answers = processAnswers(part.correct_answers, answerRequirement);
       } catch (answersError) {
         console.error(`  [Part ${partLabel}] Error processing answers:`, answersError);
@@ -2342,10 +2364,18 @@ function QuestionsTabInner({
       answerRequirement = 'not_applicable';
     }
 
-    // CRITICAL FIX: Data-driven answer expectation
+    // CRITICAL FIX: Data-driven answer expectation - DATA ALWAYS WINS
     // If we have correct_answers data, we EXPECT an answer regardless of metadata flags
     const expectsAnswer = hasCorrectAnswers ||
                           (hasDirectAnswer && !isContextualOnly && answerRequirement !== 'not_applicable');
+
+    // ABSOLUTE ENFORCEMENT: If we have answer data, override conflicting flags
+    if (hasCorrectAnswers && !expectsAnswer) {
+      console.warn(`  [Subpart ${subpartLabel}] ⚠️ OVERRIDE: Forcing expectsAnswer=true due to data presence (${subpart.correct_answers.length} answers)`);
+      console.warn(`    Previous flags: has_direct_answer=${hasDirectAnswer}, is_contextual_only=${isContextualOnly}, answerRequirement=${answerRequirement}`);
+      hasDirectAnswer = true;
+      isContextualOnly = false;
+    }
 
     // Only override format/requirement if we truly have no answer data
     if (!expectsAnswer && !hasCorrectAnswers) {
@@ -2365,7 +2395,10 @@ function QuestionsTabInner({
       answer_requirement: answerRequirement || (!expectsAnswer ? 'not_applicable' : 'single_choice'),
       attachments: ensureArray(subpart.attachments),
       correct_answers: hasCorrectAnswers
-        ? processAnswers(subpart.correct_answers, answerRequirement)
+        ? (() => {
+            console.log(`  [Subpart ${subpartLabel}] ✓ DATA-DRIVEN: Processing ${subpart.correct_answers.length} answers (data presence enforced)`);
+            return processAnswers(subpart.correct_answers, answerRequirement);
+          })()
         : [],
       options: expectsAnswer && subpart.options
         ? processOptions(subpart.options, subpart.correct_answers, subpart.correct_answer)
