@@ -19,6 +19,9 @@ export interface RawCorrectAnswerRow {
   context_type: string | null;
   context_value: string | null;
   context_label: string | null;
+  acceptable_variations?: string[] | null;
+  accepts_equivalent_phrasing?: boolean | null;
+  error_carried_forward?: boolean | null;
 }
 
 export interface RawAnswerComponentRow {
@@ -57,6 +60,7 @@ interface MarkingPoint {
     type: string | null;
     value: string | null;
   };
+  acceptableVariations?: Record<string, string[]>; // Map of answer to its variations
 }
 
 interface MarkingAnnotations {
@@ -208,6 +212,17 @@ function buildMarkingPoints(context: AutoMarkContext): MarkingPoint[] {
     const alternatives = related.flatMap((entry) => parseAlternatives(entry.answer));
     const dependencies = collectDependencies(related.map((entry) => entry.answer));
 
+    // Build acceptable variations map (answer -> variations)
+    const acceptableVariations: Record<string, string[]> = {};
+    related.forEach((entry) => {
+      if ('acceptable_variations' in entry && entry.acceptable_variations && Array.isArray(entry.acceptable_variations)) {
+        const variations = entry.acceptable_variations.filter((v): v is string => typeof v === 'string' && v.trim() !== '');
+        if (variations.length > 0) {
+          acceptableVariations[entry.answer] = variations;
+        }
+      }
+    });
+
     points.push({
       id,
       marks: baseMarks || context.question.marks || 1,
@@ -218,7 +233,8 @@ function buildMarkingPoints(context: AutoMarkContext): MarkingPoint[] {
       context: {
         type: 'context_type' in row ? row.context_type ?? null : null,
         value: 'context_value' in row ? row.context_value ?? null : null
-      }
+      },
+      acceptableVariations: Object.keys(acceptableVariations).length > 0 ? acceptableVariations : undefined
     });
   });
 
@@ -541,6 +557,25 @@ function responseMatches(
 
   if (candidate === response) {
     return true;
+  }
+
+  // Check acceptable variations for this specific answer
+  if (point.acceptableVariations && point.acceptableVariations[candidate]) {
+    const variations = point.acceptableVariations[candidate];
+    const normalizedResponse = response.trim();
+
+    for (const variation of variations) {
+      const normalizedVariation = variation.trim();
+      if (normalizedVariation === normalizedResponse) {
+        notes.push(`accepted variation: "${variation}"`);
+        return true;
+      }
+      // Also check case-insensitive match for notation variations
+      if (normalizedVariation.toLowerCase() === normalizedResponse.toLowerCase()) {
+        notes.push(`accepted variation (case-insensitive): "${variation}"`);
+        return true;
+      }
+    }
   }
 
   if (areEquivalentNumbers(candidate, response)) {

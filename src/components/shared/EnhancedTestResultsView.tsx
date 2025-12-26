@@ -34,6 +34,7 @@ interface CorrectAnswer {
   context?: Record<string, unknown> | null;
   unit?: string;
   answer_requirement?: string;
+  acceptable_variations?: string[]; // Acceptable notation/format variations of the answer
 }
 
 interface SubPartResult {
@@ -691,12 +692,29 @@ export function EnhancedTestResultsView({
                                                   <p className="text-xs font-medium text-blue-900 dark:text-blue-300 mb-1">
                                                     Expected Answer:
                                                   </p>
-                                                  <div className="space-y-1">
+                                                  <div className="space-y-2">
                                                     {part.correct_answers.map((ans, idx) => (
-                                                      <div key={idx} className="text-sm text-blue-800 dark:text-blue-200">
-                                                        • {ans.answer}
-                                                        {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
-                                                        {ans.marks && <span className="text-xs ml-1">({ans.marks} mark{ans.marks !== 1 ? 's' : ''})</span>}
+                                                      <div key={idx} className="space-y-1">
+                                                        <div className="text-sm text-blue-800 dark:text-blue-200">
+                                                          • {ans.answer}
+                                                          {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
+                                                          {ans.marks && <span className="text-xs ml-1">({ans.marks} mark{ans.marks !== 1 ? 's' : ''})</span>}
+                                                        </div>
+                                                        {ans.acceptable_variations && ans.acceptable_variations.length > 0 && (
+                                                          <div className="ml-4 pl-2 border-l-2 border-blue-300 dark:border-blue-700 bg-blue-100/50 dark:bg-blue-900/20 p-1.5 rounded">
+                                                            <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-0.5 flex items-center gap-1">
+                                                              <Info className="h-3 w-3" />
+                                                              Also accepts:
+                                                            </p>
+                                                            <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-0.5 pl-3">
+                                                              {ans.acceptable_variations.map((variation, vIdx) => (
+                                                                <li key={vIdx} className="list-disc">
+                                                                  {variation}
+                                                                </li>
+                                                              ))}
+                                                            </ul>
+                                                          </div>
+                                                        )}
                                                       </div>
                                                     ))}
                                                   </div>
@@ -775,12 +793,31 @@ export function EnhancedTestResultsView({
                                                               <p className="font-medium text-blue-900 dark:text-blue-300 mb-0.5">
                                                                 Expected:
                                                               </p>
-                                                              {subpart.correct_answers.map((ans, idx) => (
-                                                                <div key={idx} className="text-blue-800 dark:text-blue-200">
-                                                                  • {ans.answer}
-                                                                  {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
-                                                                </div>
-                                                              ))}
+                                                              <div className="space-y-1.5">
+                                                                {subpart.correct_answers.map((ans, idx) => (
+                                                                  <div key={idx} className="space-y-1">
+                                                                    <div className="text-blue-800 dark:text-blue-200">
+                                                                      • {ans.answer}
+                                                                      {ans.unit && <span className="text-xs ml-1 text-gray-600 dark:text-gray-400">({ans.unit})</span>}
+                                                                    </div>
+                                                                    {ans.acceptable_variations && ans.acceptable_variations.length > 0 && (
+                                                                      <div className="ml-3 pl-2 border-l-2 border-blue-300 dark:border-blue-700 bg-blue-100/50 dark:bg-blue-900/20 p-1 rounded">
+                                                                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-0.5 flex items-center gap-1">
+                                                                          <Info className="h-2.5 w-2.5" />
+                                                                          Also accepts:
+                                                                        </p>
+                                                                        <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-0.5 pl-2">
+                                                                          {ans.acceptable_variations.map((variation, vIdx) => (
+                                                                            <li key={vIdx} className="list-disc">
+                                                                              {variation}
+                                                                            </li>
+                                                                          ))}
+                                                                        </ul>
+                                                                      </div>
+                                                                    )}
+                                                                  </div>
+                                                                ))}
+                                                              </div>
                                                             </div>
                                                           )}
                                                         </div>

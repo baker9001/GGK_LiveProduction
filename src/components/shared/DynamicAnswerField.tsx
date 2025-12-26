@@ -26,6 +26,7 @@ import {
 import { RichTextEditor } from './RichTextEditor';
 import Button from './Button';
 import { cn } from '@/lib/utils';
+import { cleanAcceptableVariations } from '@/lib/validation/acceptableVariationsValidation';
 import {
   CodeEditor,
   FileUploader,
@@ -532,7 +533,15 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     value: CorrectAnswer[keyof CorrectAnswer]
   ) => {
     const updatedAnswers = [...adminCorrectAnswers];
-    updatedAnswers[index] = { ...updatedAnswers[index], [field]: value };
+
+    // Clean acceptable_variations when updating
+    if (field === 'acceptable_variations' && Array.isArray(value)) {
+      const cleaned = cleanAcceptableVariations(value as string[]);
+      updatedAnswers[index] = { ...updatedAnswers[index], [field]: cleaned as any };
+    } else {
+      updatedAnswers[index] = { ...updatedAnswers[index], [field]: value };
+    }
+
     setAdminCorrectAnswers(updatedAnswers);
     onChange(updatedAnswers);
   };

@@ -4,6 +4,7 @@ import { CheckCircle, AlertCircle, Edit, Save, X, Plus, Trash2 } from 'lucide-re
 import { Button } from '../../../../../../components/shared/Button';
 import { cn } from '../../../../../../lib/utils';
 import { toast } from '../../../../../../components/shared/Toast';
+import { validateAcceptableVariations } from '../../../../../../lib/validation/acceptableVariationsValidation';
 
 interface CorrectAnswer {
   answer: string;
@@ -74,6 +75,35 @@ export function CorrectAnswersDisplay({
     if (editedAnswers.length === 0) {
       toast.error('At least one correct answer is required');
       return;
+    }
+
+    // Validate acceptable_variations for each answer
+    const validationErrors: string[] = [];
+    const validationWarnings: string[] = [];
+
+    editedAnswers.forEach((answer, index) => {
+      if (answer.acceptable_variations && answer.acceptable_variations.length > 0) {
+        const validation = validateAcceptableVariations(answer.acceptable_variations, answer.answer);
+
+        if (!validation.isValid) {
+          validationErrors.push(`Answer ${index + 1}: ${validation.errors.join(', ')}`);
+        }
+
+        if (validation.warnings.length > 0) {
+          validationWarnings.push(`Answer ${index + 1}: ${validation.warnings.join(', ')}`);
+        }
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      toast.error(`Validation errors: ${validationErrors.join('; ')}`);
+      return;
+    }
+
+    if (validationWarnings.length > 0) {
+      console.warn('Validation warnings:', validationWarnings);
+      // Show warnings but allow save to proceed
+      toast.warning(validationWarnings.join('; '), { duration: 5000 });
     }
 
     try {
