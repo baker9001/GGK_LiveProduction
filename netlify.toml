@@ -3,7 +3,9 @@ publish = "dist"
 command = "npx vite build"
 
 [build.environment]
-NODE_VERSION = "18"
+NODE_VERSION = "20"
+# Skip secrets scanning for public Supabase keys (anon key is designed to be public)
+SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_URL,VITE_SUPABASE_ANON_KEY,VITE_API_URL"
 
 [[redirects]]
 from = "/*"
