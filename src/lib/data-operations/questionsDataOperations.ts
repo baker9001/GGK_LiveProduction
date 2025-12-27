@@ -1629,6 +1629,19 @@ export const insertSubQuestion = async (
 
     // Insert multiple correct answers if available
     if (part.correct_answers && Array.isArray(part.correct_answers)) {
+      // ENHANCED LOGGING: Track acceptable_variations being imported for parts/subparts
+      const answersWithVariations = part.correct_answers.filter((ca: any) =>
+        Array.isArray(ca.acceptable_variations) && ca.acceptable_variations.length > 0
+      );
+      if (answersWithVariations.length > 0) {
+        console.log('✨ [IMPORT] Found acceptable_variations in part/subpart:', answersWithVariations.length, 'answers');
+        console.log('✨ [IMPORT] Sample variation data:', {
+          answer: answersWithVariations[0].answer,
+          variations: answersWithVariations[0].acceptable_variations,
+          answer_format: part.answer_format
+        });
+      }
+
       const correctAnswersToInsert = part.correct_answers.map((ca: any) => ({
         sub_question_id: subQuestionRecord.id,
         answer: ensureString(ca.answer),
@@ -2514,6 +2527,20 @@ export const importQuestions = async (params: {
         // Insert multiple correct answers if available
         if (question.correct_answers && Array.isArray(question.correct_answers)) {
           console.log('📋 Inserting correct answers:', question.correct_answers.length);
+
+          // ENHANCED LOGGING: Track acceptable_variations being imported
+          const answersWithVariations = question.correct_answers.filter((ca: any) =>
+            Array.isArray(ca.acceptable_variations) && ca.acceptable_variations.length > 0
+          );
+          if (answersWithVariations.length > 0) {
+            console.log('✨ [IMPORT] Found acceptable_variations in', answersWithVariations.length, 'answers');
+            console.log('✨ [IMPORT] Sample variation data:', {
+              answer: answersWithVariations[0].answer,
+              variations: answersWithVariations[0].acceptable_variations,
+              answer_format: question.answer_format
+            });
+          }
+
           const correctAnswersToInsert = question.correct_answers.map((ca: any) => ({
             question_id: insertedQuestion.id,
             answer: ensureString(ca.answer),
@@ -2545,6 +2572,19 @@ export const importQuestions = async (params: {
             console.error('   Error details:', JSON.stringify(caError, null, 2));
           } else {
             console.log('✅ Correct answers inserted:', insertedAnswers?.length || 0);
+
+            // VERIFICATION LOG: Confirm acceptable_variations were saved to database
+            const insertedWithVariations = insertedAnswers?.filter((ans: any) =>
+              Array.isArray(ans.acceptable_variations) && ans.acceptable_variations.length > 0
+            );
+            if (insertedWithVariations && insertedWithVariations.length > 0) {
+              console.log('✅ [DATABASE] Verified acceptable_variations saved:', insertedWithVariations.length, 'answers');
+              console.log('✅ [DATABASE] Sample saved data:', {
+                id: insertedWithVariations[0].id,
+                answer: insertedWithVariations[0].answer,
+                variations: insertedWithVariations[0].acceptable_variations
+              });
+            }
           }
 
           // ✅ NEW: Persist table completion templates to normalized tables

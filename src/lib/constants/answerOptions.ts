@@ -535,7 +535,7 @@ export function deriveAnswerRequirement(question: {
 
 // Check if a format supports acceptable variations UI
 export function supportsAcceptableVariations(format?: string | null): boolean {
-  if (!format) return true; // Show by default if format undefined
+  if (!format) return false; // Don't show UI if format is not specified
   return TEXT_FORMATS_WITH_VARIATIONS.includes(format) ||
          STRUCTURED_TEXT_FORMATS.includes(format);
 }
