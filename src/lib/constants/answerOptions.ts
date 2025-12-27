@@ -534,8 +534,22 @@ export function deriveAnswerRequirement(question: {
  */
 
 // Check if a format supports acceptable variations UI
-export function supportsAcceptableVariations(format?: string | null): boolean {
+// UPDATED: Now data-driven - if variations exist, show them regardless of format
+export function supportsAcceptableVariations(format?: string | null, hasExistingData?: boolean): boolean {
+  // If data exists, always show the UI (data-driven approach)
+  if (hasExistingData === true) {
+    return true;
+  }
+
+  // For new data entry, check if format supports variations
   if (!format) return false; // Don't show UI if format is not specified
+  return TEXT_FORMATS_WITH_VARIATIONS.includes(format) ||
+         STRUCTURED_TEXT_FORMATS.includes(format);
+}
+
+// Check if a format is recommended for acceptable variations (for warnings)
+export function isFormatRecommendedForVariations(format?: string | null): boolean {
+  if (!format) return false;
   return TEXT_FORMATS_WITH_VARIATIONS.includes(format) ||
          STRUCTURED_TEXT_FORMATS.includes(format);
 }

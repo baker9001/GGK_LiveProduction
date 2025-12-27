@@ -35,6 +35,7 @@ import {
 } from '@/lib/validation/acceptableVariationsValidation';
 import {
   supportsAcceptableVariations,
+  isFormatRecommendedForVariations,
   isStructuredFormat,
   getVariationPlaceholder,
   getVariationTooltip
@@ -749,13 +750,18 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     </label>
                   </div>
 
-                  {/* Acceptable Variations Section - Conditional based on format */}
-                  {supportsAcceptableVariations(question.answer_format) && (
+                  {/* Acceptable Variations Section - Data-driven: show if format supports OR if data exists */}
+                  {supportsAcceptableVariations(question.answer_format, answer.acceptable_variations && answer.acceptable_variations.length > 0) && (
                     <div className="mt-3 space-y-2 pt-3 border-t border-gray-200 dark:border-gray-700">
                       <div className="flex items-center gap-2">
                         <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
                           Acceptable Variations
                         </label>
+                        {answer.acceptable_variations && answer.acceptable_variations.length > 0 && !isFormatRecommendedForVariations(question.answer_format) && (
+                          <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                            Format "{question.answer_format || 'none'}" may not support variations
+                          </span>
+                        )}
                         <div className="group relative">
                           <Info className="h-3 w-3 text-blue-500" />
                           <div className="absolute hidden group-hover:block z-10 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg -top-2 left-6">
@@ -2516,15 +2522,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     </span>
                   )}
                   {renderMarkSchemeBadges(ca)}
-                  {/* Display acceptable variations for this answer - only for supported formats */}
-                  {supportsAcceptableVariations(question.answer_format) &&
-                   ca.acceptable_variations && ca.acceptable_variations.length > 0 && (
+                  {/* Display acceptable variations for this answer - data-driven display */}
+                  {ca.acceptable_variations && ca.acceptable_variations.length > 0 && (
                     <div className="mt-2 ml-4 pl-3 border-l-2 border-green-300 dark:border-green-700">
                       <div className="flex items-center gap-2 mb-1">
                         <Info className="h-3 w-3 text-green-600 dark:text-green-400" />
                         <span className="text-xs font-medium text-green-700 dark:text-green-300">
                           Acceptable Variations ({ca.acceptable_variations.length})
                         </span>
+                        {!isFormatRecommendedForVariations(question.answer_format) && (
+                          <span className="text-xs px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                            ⚠
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {ca.acceptable_variations.map((variation, vIdx) => (

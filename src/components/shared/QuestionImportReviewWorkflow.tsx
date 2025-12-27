@@ -44,6 +44,7 @@ import {
   deriveAnswerFormat,
   deriveAnswerRequirement,
   supportsAcceptableVariations,
+  isFormatRecommendedForVariations,
   getVariationPlaceholder,
   getVariationTooltip
 } from '../../lib/constants/answerOptions';
@@ -1516,13 +1517,18 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               </Button>
             </div>
 
-            {/* Acceptable Variations Section - Conditional based on format */}
-            {supportsAcceptableVariations(questionContext.answer_format) && (
+            {/* Acceptable Variations Section - Data-driven: show if format supports OR if data exists */}
+            {supportsAcceptableVariations(questionContext.answer_format, answer.acceptable_variations && answer.acceptable_variations.length > 0) && (
               <div className="mt-3 space-y-2 border-t border-gray-200 dark:border-gray-700 pt-3">
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
                     Acceptable Variations
                   </label>
+                  {answer.acceptable_variations && answer.acceptable_variations.length > 0 && !isFormatRecommendedForVariations(questionContext.answer_format) && (
+                    <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                      Format "{questionContext.answer_format || 'none'}" may not support variations
+                    </span>
+                  )}
                   <div className="group relative">
                     <Info className="h-3 w-3 text-blue-500" />
                     <div className="absolute hidden group-hover:block z-10 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg -top-2 left-6">

@@ -7,6 +7,7 @@ import { toast } from '../../../../../../components/shared/Toast';
 import { validateAcceptableVariations, addVariation, removeVariation } from '../../../../../../lib/validation/acceptableVariationsValidation';
 import {
   supportsAcceptableVariations,
+  isFormatRecommendedForVariations,
   getVariationPlaceholder,
   getVariationTooltip
 } from '../../../../../../lib/constants/answerOptions';
@@ -55,18 +56,18 @@ export function CorrectAnswersDisplay({
     ) || [];
 
     if (answersWithVariations.length > 0) {
-      const supportsVariations = supportsAcceptableVariations(answerFormat);
+      const supportsVariations = supportsAcceptableVariations(answerFormat, true); // Pass true for hasExistingData
       console.log('[CorrectAnswersDisplay] Acceptable variations analysis:', {
         answerFormat,
         supportsVariations,
         answersWithVariations: answersWithVariations.length,
         totalAnswers: correctAnswers?.length,
         sampleData: answersWithVariations[0],
-        hiddenBecauseOfFormat: !supportsVariations
+        dataWillBeDisplayed: supportsVariations
       });
 
       if (!supportsVariations) {
-        console.warn(`[CorrectAnswersDisplay] acceptable_variations exist but UI is hidden because answer_format "${answerFormat}" does not support variations in edit mode`);
+        console.warn(`[CorrectAnswersDisplay] UNEXPECTED: acceptable_variations exist but supportsAcceptableVariations returned false even with hasExistingData=true`);
       }
     }
   }, [correctAnswers, answerFormat]);
@@ -355,13 +356,18 @@ export function CorrectAnswersDisplay({
                 </div>
               )}
 
-              {/* Acceptable Variations Section - Conditional based on format */}
-              {supportsAcceptableVariations(answerFormat) && (
+              {/* Acceptable Variations Section - Data-driven: show if format supports OR if data exists */}
+              {supportsAcceptableVariations(answerFormat, answer.acceptable_variations && answer.acceptable_variations.length > 0) && (
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
                       Acceptable Variations
                     </label>
+                    {answer.acceptable_variations && answer.acceptable_variations.length > 0 && !isFormatRecommendedForVariations(answerFormat) && (
+                      <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                        Format "{answerFormat || 'none'}" may not support variations
+                      </span>
+                    )}
                     <div className="group relative">
                       <Info className="h-3 w-3 text-blue-500" />
                       <div className="absolute hidden group-hover:block z-10 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg -top-2 left-6">
