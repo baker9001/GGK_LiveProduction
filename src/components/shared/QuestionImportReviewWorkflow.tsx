@@ -1468,10 +1468,6 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               }
             }}
           />
-
-          {renderAcceptableVariationsOnly(list, {
-            answer_format: questionContext.answer_format
-          })}
         </div>
       );
     }
