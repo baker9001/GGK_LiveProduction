@@ -2118,20 +2118,7 @@ function QuestionsTabInner({
 
         // Process direct answers if no parts
         if (!Array.isArray(q.parts) || q.parts.length === 0) {
-          const hasAnswersInData = q.correct_answers &&
-            Array.isArray(q.correct_answers) &&
-            q.correct_answers.length > 0;
-
-          if (hasAnswersInData) {
-            // ✅ DATA-DRIVEN: Always process answers if they exist, regardless of flags
-            processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
-
-            if (!expectsDirectAnswer) {
-              console.warn(`[Question ${questionNumber}] ⚠️ OVERRIDE: Forcing expectsDirectAnswer=true due to data presence (${q.correct_answers.length} answers)`);
-              processedQuestion.has_direct_answer = true;
-              processedQuestion.is_contextual_only = false;
-            }
-          } else if (expectsDirectAnswer) {
+          if (expectsDirectAnswer) {
             if (q.correct_answers) {
               processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
             } else if (q.correct_answer) {
@@ -2142,14 +2129,14 @@ function QuestionsTabInner({
                 answer_requirement: answerRequirement
               }];
             }
-          }
 
-          if ((expectsDirectAnswer || hasAnswersInData) && optionsArray.length > 0) {
-            processedQuestion.options = processOptions(
-              optionsArray,
-              q.correct_answers,
-              q.correct_answer
-            );
+            if (optionsArray.length > 0) {
+              processedQuestion.options = processOptions(
+                optionsArray,
+                q.correct_answers,
+                q.correct_answer
+              );
+            }
           }
         }
 
