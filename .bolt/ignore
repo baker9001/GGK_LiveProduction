@@ -1,0 +1,42 @@
+# Bolt.new ignore patterns
+# These files/folders won't be tracked by Bolt's save system
+
+# Documentation (implementation logs and reports)
+docs/
+
+# Test files
+tests/
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Database migration backups
+supabase/migrations/backup/
+.bolt/supabase_discarded_migrations/
