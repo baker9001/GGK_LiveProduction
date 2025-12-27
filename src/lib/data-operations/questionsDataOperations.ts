@@ -1088,6 +1088,66 @@ export const fetchDataStructureInfo = async (dataStructureId: string) => {
   }
 };
 
+const mergeAcceptableVariationsFromRaw = (workingJson: any, rawJson: any): any => {
+  if (!workingJson?.questions || !rawJson?.questions) return workingJson;
+
+  const rawQuestionsMap = new Map<string, any>();
+  rawJson.questions.forEach((q: any) => {
+    rawQuestionsMap.set(String(q.question_number), q);
+  });
+
+  const mergeAnswerVariations = (workingAns: any, rawAns: any) => {
+    if (!workingAns || !rawAns) return workingAns;
+    if (!workingAns.acceptable_variations?.length && rawAns.acceptable_variations?.length) {
+      console.log('[mergeAcceptableVariationsFromRaw] Restoring variations from raw_json:', rawAns.acceptable_variations);
+      return { ...workingAns, acceptable_variations: rawAns.acceptable_variations };
+    }
+    return workingAns;
+  };
+
+  const mergedQuestions = workingJson.questions.map((wq: any) => {
+    const rq = rawQuestionsMap.get(String(wq.question_number));
+    if (!rq) return wq;
+
+    let mergedQ = { ...wq };
+    if (wq.correct_answers?.length && rq.correct_answers?.length) {
+      mergedQ.correct_answers = wq.correct_answers.map((wa: any, i: number) =>
+        mergeAnswerVariations(wa, rq.correct_answers[i])
+      );
+    }
+
+    if (wq.parts?.length && rq.parts?.length) {
+      mergedQ.parts = wq.parts.map((wp: any, pi: number) => {
+        const rp = rq.parts[pi];
+        if (!rp) return wp;
+        let mergedPart = { ...wp };
+        if (wp.correct_answers?.length && rp.correct_answers?.length) {
+          mergedPart.correct_answers = wp.correct_answers.map((wa: any, i: number) =>
+            mergeAnswerVariations(wa, rp.correct_answers[i])
+          );
+        }
+        if (wp.subparts?.length && rp.subparts?.length) {
+          mergedPart.subparts = wp.subparts.map((ws: any, si: number) => {
+            const rs = rp.subparts[si];
+            if (!rs) return ws;
+            let mergedSub = { ...ws };
+            if (ws.correct_answers?.length && rs.correct_answers?.length) {
+              mergedSub.correct_answers = ws.correct_answers.map((wa: any, i: number) =>
+                mergeAnswerVariations(wa, rs.correct_answers[i])
+              );
+            }
+            return mergedSub;
+          });
+        }
+        return mergedPart;
+      });
+    }
+    return mergedQ;
+  });
+
+  return { ...workingJson, questions: mergedQuestions };
+};
+
 export const fetchImportedQuestions = async (importSessionId: string) => {
   try {
     console.log('[fetchImportedQuestions] Fetching session data for:', importSessionId);
@@ -1100,26 +1160,28 @@ export const fetchImportedQuestions = async (importSessionId: string) => {
 
     if (error) throw error;
 
-    // Prioritize working_json (edited data) over raw_json (original data)
     if (data?.working_json) {
-      console.log('✅ [fetchImportedQuestions] Loading from working_json (edited data)');
-      console.log('[fetchImportedQuestions] Data structure:', {
-        hasQuestions: !!data.working_json.questions,
-        questionCount: data.working_json.questions?.length,
-        hasMetadata: !!data.working_json.metadata,
-        lastSynced: data.last_synced_at
+      console.log('[fetchImportedQuestions] Loading from working_json (edited data)');
+      const hasRawWithVariations = data.raw_json?.questions?.some((q: any) => {
+        if (q.correct_answers?.some((a: any) => a.acceptable_variations?.length)) return true;
+        return q.parts?.some((p: any) => {
+          if (p.correct_answers?.some((a: any) => a.acceptable_variations?.length)) return true;
+          return p.subparts?.some((s: any) => s.correct_answers?.some((a: any) => a.acceptable_variations?.length));
+        });
       });
+
+      if (hasRawWithVariations) {
+        console.log('[fetchImportedQuestions] Merging acceptable_variations from raw_json');
+        const merged = mergeAcceptableVariationsFromRaw(data.working_json, data.raw_json);
+        return merged;
+      }
+
       return data.working_json;
     } else if (data?.raw_json) {
-      console.log('⚠️ [fetchImportedQuestions] Loading from raw_json (original data) - no edits yet');
-      console.log('[fetchImportedQuestions] Data structure:', {
-        hasQuestions: !!data.raw_json.questions,
-        questionCount: data.raw_json.questions?.length,
-        hasMetadata: !!data.raw_json.metadata
-      });
+      console.log('[fetchImportedQuestions] Loading from raw_json (original data)');
       return data.raw_json;
     } else if (data?.json_file_name) {
-      console.log('📁 [fetchImportedQuestions] Loading from storage file:', data.json_file_name);
+      console.log('[fetchImportedQuestions] Loading from storage file:', data.json_file_name);
       const { data: fileData, error: fileError } = await supabase.storage
         .from('past-paper-imports')
         .download(data.json_file_name);
@@ -1132,7 +1194,7 @@ export const fetchImportedQuestions = async (importSessionId: string) => {
 
     throw new Error('No data found for this import session');
   } catch (error) {
-    console.error('❌ [fetchImportedQuestions] Error fetching imported questions:', error);
+    console.error('[fetchImportedQuestions] Error fetching imported questions:', error);
     throw error;
   }
 };

@@ -1694,21 +1694,55 @@ function QuestionsTabInner({
         throw new Error('No questions found in parsed data');
       }
 
-      // DIAGNOSTIC LOG: Check if acceptable_variations exists in fetched data
+      const checkVariations = (ans: any) => {
+        return ans?.acceptable_variations?.length > 0 ||
+               ans?.variations?.length > 0 ||
+               ans?.alternate_answers?.length > 0 ||
+               ans?.alternates?.length > 0;
+      };
+
       const questionsWithVariations = data.questions.filter((q: any) => {
-        if (q.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)) return true;
-        if (q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length))) return true;
+        if (q.correct_answers?.some(checkVariations)) return true;
+        if (q.parts?.some((p: any) => {
+          if (p.correct_answers?.some(checkVariations)) return true;
+          return p.subparts?.some((sp: any) => sp.correct_answers?.some(checkVariations));
+        })) return true;
         return false;
       });
 
-      console.log('[initializeFromParsedData] Fetched data analysis:', {
+      const getSampleVariation = () => {
+        for (const q of data.questions) {
+          for (const ans of (q.correct_answers || [])) {
+            if (checkVariations(ans)) {
+              return {
+                questionNumber: q.question_number,
+                answerFields: Object.keys(ans).filter(k => k.includes('variat') || k.includes('alter')),
+                acceptable_variations: ans.acceptable_variations,
+                variations: ans.variations
+              };
+            }
+          }
+          for (const part of (q.parts || [])) {
+            for (const ans of (part.correct_answers || [])) {
+              if (checkVariations(ans)) {
+                return {
+                  questionNumber: q.question_number,
+                  partLabel: part.part,
+                  answerFields: Object.keys(ans).filter(k => k.includes('variat') || k.includes('alter')),
+                  acceptable_variations: ans.acceptable_variations,
+                  variations: ans.variations
+                };
+              }
+            }
+          }
+        }
+        return null;
+      };
+
+      console.log('[initializeFromParsedData] Data analysis:', {
         totalQuestions: data.questions.length,
-        questionsWithAcceptableVariations: questionsWithVariations.length,
-        sampleData: questionsWithVariations.length > 0 ? {
-          questionNumber: questionsWithVariations[0].question_number,
-          sampleAnswer: questionsWithVariations[0].correct_answers?.[0],
-          samplePart: questionsWithVariations[0].parts?.[0]
-        } : 'No acceptable_variations found in fetched data'
+        questionsWithVariations: questionsWithVariations.length,
+        sampleVariation: getSampleVariation() || 'No variations found in any field'
       });
 
       // Extract paper metadata with all available fields and validation
@@ -2559,9 +2593,23 @@ function QuestionsTabInner({
     return [];
   };
 
-  const normalizeAcceptableVariations = (variations: unknown): string[] => {
-    if (Array.isArray(variations)) return variations.map(v => String(v));
-    if (typeof variations === 'string') return [variations];
+  const normalizeAcceptableVariations = (variations: unknown, answerObj?: any): string[] => {
+    if (Array.isArray(variations) && variations.length > 0) {
+      return variations.map(v => String(v));
+    }
+    if (typeof variations === 'string' && variations.trim()) {
+      return [variations];
+    }
+    if (answerObj && typeof answerObj === 'object') {
+      const fallbackVariations = answerObj.variations || answerObj.alternate_answers || answerObj.alternates;
+      if (Array.isArray(fallbackVariations) && fallbackVariations.length > 0) {
+        console.log('[normalizeAcceptableVariations] Using fallback field:', {
+          field: answerObj.variations ? 'variations' : answerObj.alternate_answers ? 'alternate_answers' : 'alternates',
+          values: fallbackVariations
+        });
+        return fallbackVariations.map((v: unknown) => String(v));
+      }
+    }
     return [];
   };
 
@@ -2604,7 +2652,15 @@ function QuestionsTabInner({
 
         const context = ans.context;
 
-      const acceptableVariations = normalizeAcceptableVariations(ans.acceptable_variations);
+      const acceptableVariations = normalizeAcceptableVariations(ans.acceptable_variations, ans);
+
+      if (acceptableVariations.length > 0) {
+        console.log('[processAnswers] Extracted acceptable_variations:', {
+          answer: answerText.substring(0, 50),
+          variationsCount: acceptableVariations.length,
+          variations: acceptableVariations.slice(0, 3)
+        });
+      }
 
       let processedAnswer: ProcessedAnswer = {
         answer: answerText,
