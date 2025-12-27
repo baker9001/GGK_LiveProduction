@@ -1,0 +1,31 @@
+# Netlify Ignore - Files to exclude from deployment
+# https://docs.netlify.com/configure-builds/file-based-configuration/#ignore-files
+
+# Documentation with example URLs
+docs/
+
+# Test scripts
+*.mjs
+audit_table_systems.mjs
+check_edge_functions.mjs
+check_schema_details.mjs
+delete_admin_user.mjs
+test_schema.mjs
+test_marking_engine_fix.js
+test_marking_realistic.js
+test-mcq-options-insert.js
+
+# Markdown files with configuration examples
+NETLIFY_DEPLOY_FIX.md
+QUICK_FIX_SUMMARY.md
+DEPLOYMENT_GUIDE.md
+.netlify-credentials-removed.md
+.netlify-secret-scanner-explanation.md
+
+# Development files
+.env
+.env.*
+!.env.production.example
+
+# Scripts
+scripts/
