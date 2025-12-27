@@ -1,0 +1,8 @@
+# SPA fallback - all routes should serve index.html
+# This is critical for React Router to work correctly in production
+
+# Supabase Functions (if using Netlify with Supabase)
+/functions/*  https://dodvqvkiuuuxymboldkw.supabase.co/functions/v1/:splat  200
+
+# All other routes should serve the SPA
+/*    /index.html   200
