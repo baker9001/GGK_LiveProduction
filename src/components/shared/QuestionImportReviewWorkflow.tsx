@@ -1313,6 +1313,25 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   ) => {
     const list = Array.isArray(answers) ? answers : [];
 
+    const hasTableCompletionTemplate = (items: EditableCorrectAnswer[]) => {
+      return items.some((ans: any) => {
+        const candidate = ans.answer_text || ans.answer;
+        if (!candidate || typeof candidate !== 'string') return false;
+        try {
+          const parsed = JSON.parse(candidate);
+          return (
+            parsed &&
+            Array.isArray(parsed.cells) &&
+            parsed.cells.length > 0 &&
+            'rowIndex' in parsed.cells[0] &&
+            'colIndex' in parsed.cells[0]
+          );
+        } catch {
+          return false;
+        }
+      });
+    };
+
     // Formats that require specialized components (should use DynamicAnswerField)
     const complexFormats = [
       'code', 'audio', 'file_upload', 'table', 'table_completion',
@@ -1320,7 +1339,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     ];
 
     const useComplexInput = questionContext?.answer_format &&
-      complexFormats.includes(questionContext.answer_format);
+      complexFormats.includes(questionContext.answer_format) &&
+      (questionContext.answer_format !== 'table_completion' || hasTableCompletionTemplate(list));
 
     // If format requires specialized component, use DynamicAnswerField
     if (useComplexInput && questionContext) {
