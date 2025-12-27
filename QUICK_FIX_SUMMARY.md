@@ -37,8 +37,8 @@ Your deployed application was showing a white page due to missing SPA (Single Pa
 
 1. **Set Environment Variables in Netlify Dashboard**
    ```
-   VITE_SUPABASE_URL = https://dodvqvkiuuuxymboldkw.supabase.co
-   VITE_SUPABASE_ANON_KEY = [your anon key from .env]
+   VITE_SUPABASE_URL = [Your Supabase URL from .env file]
+   VITE_SUPABASE_ANON_KEY = [Your Supabase Anon Key from .env file]
    ```
 
 2. **Deploy**

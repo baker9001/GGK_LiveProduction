@@ -56,13 +56,13 @@ Make sure these are set in Netlify:
 2. **Add these variables**:
    ```
    VITE_SUPABASE_URL
-   Value: https://dodvqvkiuuuxymboldkw.supabase.co
+   Value: [Your Supabase URL from .env file]
 
    VITE_SUPABASE_ANON_KEY
-   Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvZHZxdmtpdXV1eHltYm9sZGt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4NDk0MjQsImV4cCI6MjA2MzQyNTQyNH0.A6qcX7N1SEs0t0yhhRhJFgv4-cqymAwEaIzQUDI7Veo
+   Value: [Your Supabase Anon Key from .env file]
 
    VITE_API_URL
-   Value: https://dodvqvkiuuuxymboldkw.supabase.co/functions/v1/create-admin-user
+   Value: [Your Supabase Functions URL from .env file]
    ```
 
 3. **Set scope**: All (deploy contexts)

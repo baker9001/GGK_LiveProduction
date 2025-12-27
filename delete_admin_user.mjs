@@ -1,7 +1,10 @@
 import https from 'https';
+import { config } from 'dotenv';
 
-const SUPABASE_URL = 'https://dodvqvkiuuuxymboldkw.supabase.co';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvZHZxdmtpdXV1eHltYm9sZGt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4NDk0MjQsImV4cCI6MjA2MzQyNTQyNH0.A6qcX7N1SEs0t0yhhRhJFgv4-cqymAwEaIzQUDI7Veo';
+config();
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
 const payload = JSON.stringify({
   email: 'admin@ggknowledge.com',
@@ -12,7 +15,7 @@ const payload = JSON.stringify({
 });
 
 const options = {
-  hostname: 'dodvqvkiuuuxymboldkw.supabase.co',
+  hostname: new URL(SUPABASE_URL).hostname,
   path: '/functions/v1/delete-admin-user',
   method: 'POST',
   headers: {
