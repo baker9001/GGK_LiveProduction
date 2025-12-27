@@ -121,13 +121,13 @@ npm run lint
 supabase functions deploy send-admin-invite
 
 # Deploy with custom environment
-supabase functions deploy send-admin-invite --project-ref dodvqvkiuuuxymboldkw
+supabase functions deploy send-admin-invite --project-ref YOUR_PROJECT_REF
 
 # View deployment status
 supabase functions list
 
 # Check function health
-curl https://dodvqvkiuuuxymboldkw.supabase.co/functions/v1/send-admin-invite \
+curl https://YOUR_PROJECT.supabase.co/functions/v1/send-admin-invite \
   -X OPTIONS \
   -H "apikey: YOUR_ANON_KEY"
 ```
@@ -139,19 +139,19 @@ curl https://dodvqvkiuuuxymboldkw.supabase.co/functions/v1/send-admin-invite \
 ```bash
 # Check if edge function is accessible
 curl -X OPTIONS \
-  https://dodvqvkiuuuxymboldkw.supabase.co/functions/v1/send-admin-invite \
+  https://YOUR_PROJECT.supabase.co/functions/v1/send-admin-invite \
   -H "apikey: $VITE_SUPABASE_ANON_KEY"
 
 # Test edge function directly (send test email)
 curl -X POST \
-  https://dodvqvkiuuuxymboldkw.supabase.co/functions/v1/send-admin-invite \
+  https://YOUR_PROJECT.supabase.co/functions/v1/send-admin-invite \
   -H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY" \
   -H "Content-Type: application/json" \
   -H "apikey: $VITE_SUPABASE_ANON_KEY" \
   -d '{"email":"test@example.com"}'
 
 # Check Supabase connection
-curl https://dodvqvkiuuuxymboldkw.supabase.co/rest/v1/ \
+curl https://YOUR_PROJECT.supabase.co/rest/v1/ \
   -H "apikey: $VITE_SUPABASE_ANON_KEY"
 
 # View edge function source (to verify deployment)
@@ -266,9 +266,9 @@ npm run diagnose-email
 - Docs: https://resend.com/docs
 
 ### Supabase
-- Dashboard: https://dodvqvkiuuuxymboldkw.supabase.co
-- Edge Functions: https://dodvqvkiuuuxymboldkw.supabase.co/project/dodvqvkiuuuxymboldkw/functions
-- Auth Config: https://dodvqvkiuuuxymboldkw.supabase.co/project/dodvqvkiuuuxymboldkw/auth/url-configuration
+- Dashboard: https://YOUR_PROJECT.supabase.co
+- Edge Functions: https://YOUR_PROJECT.supabase.co/project/YOUR_PROJECT/functions
+- Auth Config: https://YOUR_PROJECT.supabase.co/project/YOUR_PROJECT/auth/url-configuration
 
 ---
 

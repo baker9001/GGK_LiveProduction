@@ -131,7 +131,7 @@ The redirect URL in Supabase Auth needs to include your password reset page.
 
 #### Step 3.1: Add Redirect URLs in Supabase Dashboard
 
-1. Go to Supabase Dashboard: https://dodvqvkiuuuxymboldkw.supabase.co
+1. Go to Supabase Dashboard: https://YOUR_PROJECT.supabase.co
 2. Navigate to: **Authentication** → **URL Configuration**
 3. Scroll to **Redirect URLs** section
 4. Add these URLs (one per line):
@@ -402,7 +402,7 @@ supabase functions deploy send-admin-invite
 supabase functions logs send-admin-invite --tail
 
 # Test from terminal (optional)
-curl -X POST https://dodvqvkiuuuxymboldkw.supabase.co/functions/v1/send-admin-invite \
+curl -X POST https://YOUR_PROJECT.supabase.co/functions/v1/send-admin-invite \
   -H "Authorization: Bearer YOUR_ANON_KEY" \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com"}'
