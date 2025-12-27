@@ -23,6 +23,7 @@ interface CorrectAnswer {
   accepts_reverse_argument?: boolean;
   answer_requirement?: string;
   total_alternatives?: number;
+  acceptable_variations?: string[]; // Array of acceptable answer variations
 }
 
 export type MigrationStrategy = 'preserve' | 'reset' | 'extract' | 'auto';

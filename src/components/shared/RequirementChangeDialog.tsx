@@ -10,6 +10,7 @@ interface CorrectAnswer {
   answer: string;
   marks?: number;
   alternative_id?: number;
+  acceptable_variations?: string[]; // Array of acceptable answer variations
   [key: string]: unknown;
 }
 

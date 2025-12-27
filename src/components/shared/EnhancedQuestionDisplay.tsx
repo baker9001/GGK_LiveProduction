@@ -39,6 +39,7 @@ interface CorrectAnswer {
   answer_requirement?: string;
   answer_text?: string; // For complex formats like table_completion template structure
   answer_type?: string; // Type identifier (e.g., 'table_template')
+  acceptable_variations?: string[]; // Array of acceptable answer variations
 }
 
 interface QuestionOption {

@@ -13,6 +13,7 @@ interface CorrectAnswer {
     value: string;
     label?: string;
   };
+  acceptable_variations?: string[]; // Array of acceptable answer variations
 }
 
 interface QuestionData {

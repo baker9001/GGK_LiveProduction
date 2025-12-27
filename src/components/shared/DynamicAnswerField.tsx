@@ -83,7 +83,7 @@ interface CorrectAnswer {
   total_alternatives?: number;
   validation_issues?: string[];
   // Enhanced variation support from extraction guides
-  equivalent_variations?: string[];
+  acceptable_variations?: string[];
   answer_variations?: {
     alternative_phrasings?: string[];
     reverse_arguments?: string[];

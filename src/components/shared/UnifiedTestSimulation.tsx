@@ -125,6 +125,7 @@ interface CorrectAnswer {
   error_carried_forward?: boolean;
   answer_requirement?: string;
   total_alternatives?: number;
+  acceptable_variations?: string[]; // Array of acceptable answer variations
 }
 
 interface QuestionOption {
