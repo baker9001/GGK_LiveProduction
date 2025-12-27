@@ -20,7 +20,9 @@ import {
   ZoomIn,
   FileText,
   Loader2,
-  Save
+  Save,
+  Info,
+  X
 } from 'lucide-react';
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
@@ -40,8 +42,16 @@ import {
   ANSWER_FORMAT_OPTIONS,
   ANSWER_REQUIREMENT_OPTIONS,
   deriveAnswerFormat,
-  deriveAnswerRequirement
+  deriveAnswerRequirement,
+  supportsAcceptableVariations,
+  getVariationPlaceholder,
+  getVariationTooltip
 } from '../../lib/constants/answerOptions';
+import {
+  validateAcceptableVariations,
+  addVariation,
+  removeVariation
+} from '../../lib/validation/acceptableVariationsValidation';
 import EnhancedAnswerFormatSelector from './EnhancedAnswerFormatSelector';
 import DynamicAnswerField from './DynamicAnswerField';
 
@@ -177,6 +187,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveRef = useRef<number>(Date.now());
+  // State for managing new acceptable variations being typed
+  const [newVariations, setNewVariations] = useState<Record<string, string>>({});
 
   const isInitializedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1440,6 +1452,104 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
+
+            {/* Acceptable Variations Section - Conditional based on format */}
+            {supportsAcceptableVariations(questionContext.answer_format) && (
+              <div className="mt-3 space-y-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Acceptable Variations
+                  </label>
+                  <div className="group relative">
+                    <Info className="h-3 w-3 text-blue-500" />
+                    <div className="absolute hidden group-hover:block z-10 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg -top-2 left-6">
+                      {getVariationTooltip(questionContext.answer_format)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Display existing variations */}
+                {answer.acceptable_variations && answer.acceptable_variations.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {answer.acceptable_variations.map((variation: string, vIndex: number) => (
+                      <div
+                        key={vIndex}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-300"
+                      >
+                        <span>{variation}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentVariations = answer.acceptable_variations || [];
+                            const updated = removeVariation(currentVariations, vIndex);
+                            config.onChange(index, { acceptable_variations: updated });
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new variation */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newVariations[`${config.keyPrefix}-${index}`] || ''}
+                    onChange={(e) => setNewVariations({
+                      ...newVariations,
+                      [`${config.keyPrefix}-${index}`]: e.target.value
+                    })}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const variationKey = `${config.keyPrefix}-${index}`;
+                        const variation = newVariations[variationKey]?.trim();
+                        if (variation) {
+                          const currentVariations = answer.acceptable_variations || [];
+                          const result = addVariation(currentVariations, variation, answer.answer);
+
+                          if (result.errors.length > 0) {
+                            toast.error(result.errors[0]);
+                            return;
+                          }
+
+                          config.onChange(index, { acceptable_variations: result.updated });
+                          setNewVariations({ ...newVariations, [variationKey]: '' });
+                        }
+                      }
+                    }}
+                    placeholder={getVariationPlaceholder(questionContext.answer_format)}
+                    className="flex-1 px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const variationKey = `${config.keyPrefix}-${index}`;
+                      const variation = newVariations[variationKey]?.trim();
+                      if (variation) {
+                        const currentVariations = answer.acceptable_variations || [];
+                        const result = addVariation(currentVariations, variation, answer.answer);
+
+                        if (result.errors.length > 0) {
+                          toast.error(result.errors[0]);
+                          return;
+                        }
+
+                        config.onChange(index, { acceptable_variations: result.updated });
+                        setNewVariations({ ...newVariations, [variationKey]: '' });
+                      }
+                    }}
+                    disabled={!newVariations[`${config.keyPrefix}-${index}`]?.trim()}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -304,6 +304,15 @@ export default function PaperSetupReviewPage() {
     toast.success('Sub-question removed');
   };
 
+  const handleUpdateQuestion = (updatedQuestion: Question) => {
+    setState(prev => ({
+      ...prev,
+      questions: prev.questions.map(q =>
+        q.id === updatedQuestion.id ? updatedQuestion : q
+      )
+    }));
+  };
+
   const handleSaveAll = async () => {
     try {
       setState(prev => ({ ...prev, saving: true }));
@@ -584,10 +593,10 @@ export default function PaperSetupReviewPage() {
                 </div>
                 <QuestionCard
                   question={question}
-                  questionIndex={index}
                   topics={state.topics}
                   subtopics={state.subtopics}
                   units={state.units}
+                  onUpdate={handleUpdateQuestion}
                   onDelete={handleDeleteQuestion}
                   onDeleteSubQuestion={handleDeleteSubQuestion}
                   readOnly={false}
