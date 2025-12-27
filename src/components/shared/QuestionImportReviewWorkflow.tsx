@@ -305,6 +305,29 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             return;
           }
 
+          console.log('[Auto-Save] Starting save process for', updatedQuestions.length, 'questions');
+
+          // ENHANCED LOGGING: Track acceptable_variations being saved
+          const questionsWithVariations = updatedQuestions.filter(q => {
+            if (q.correct_answers?.some(ans => ans.acceptable_variations?.length)) return true;
+            if (q.parts?.some(p => p.correct_answers?.some(ans => ans.acceptable_variations?.length))) return true;
+            return false;
+          });
+
+          if (questionsWithVariations.length > 0) {
+            console.log('[Auto-Save] Found questions with acceptable_variations:', {
+              count: questionsWithVariations.length,
+              questionIds: questionsWithVariations.map(q => q.id),
+              sampleQuestion: {
+                id: questionsWithVariations[0].id,
+                hasDirectAnswers: !!questionsWithVariations[0].correct_answers?.length,
+                hasParts: !!questionsWithVariations[0].parts?.length,
+                sampleDirectAnswer: questionsWithVariations[0].correct_answers?.[0],
+                samplePartAnswer: questionsWithVariations[0].parts?.[0]?.correct_answers?.[0]
+              }
+            });
+          }
+
           // Fetch current session data
           const { data: session, error: fetchError } = await supabase
             .from('past_paper_import_sessions')
@@ -329,6 +352,24 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             }))
           };
 
+          // VERIFICATION LOG: Confirm data in working_json before database update
+          const questionsInWorkingJson = workingJson.questions.filter((q: any) => {
+            if (q.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)) return true;
+            if (q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length))) return true;
+            return false;
+          });
+
+          if (questionsInWorkingJson.length > 0) {
+            console.log('[Auto-Save] working_json ready to save with acceptable_variations:', {
+              count: questionsInWorkingJson.length,
+              sampleWorkingJson: {
+                questionId: questionsInWorkingJson[0].id,
+                correctAnswer: questionsInWorkingJson[0].correct_answers?.[0],
+                partAnswer: questionsInWorkingJson[0].parts?.[0]?.correct_answers?.[0]
+              }
+            });
+          }
+
           // Save to database
           const { error: updateError } = await supabase
             .from('past_paper_import_sessions')
@@ -344,7 +385,11 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             throw updateError;
           }
 
-          console.log(`[Auto-Save] Saved ${updatedQuestions.length} questions to working_json`);
+          console.log(`✅ [Auto-Save] Successfully saved ${updatedQuestions.length} questions to working_json`);
+          if (questionsWithVariations.length > 0) {
+            console.log(`✅ [Auto-Save] Including ${questionsWithVariations.length} questions with acceptable_variations`);
+          }
+
           lastSaveRef.current = Date.now();
           setSaveStatus('saved');
 
@@ -365,6 +410,20 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const commitQuestionUpdate = useCallback(
     (question: QuestionDisplayData, updates: Partial<QuestionDisplayData>) => {
+      // CRITICAL FIX: Create complete updated question object locally FIRST
+      // This ensures we have the latest data regardless of parent state propagation timing
+      const completeUpdatedQuestion = { ...question, ...updates };
+
+      console.log('[commitQuestionUpdate] Processing update:', {
+        questionId: question.id,
+        updateKeys: Object.keys(updates),
+        hasParts: !!updates.parts,
+        partsCount: updates.parts?.length,
+        hasCorrectAnswers: !!completeUpdatedQuestion.correct_answers,
+        sampleAnswer: completeUpdatedQuestion.correct_answers?.[0],
+        samplePartAnswer: updates.parts?.[0]?.correct_answers?.[0]
+      });
+
       // Update parent state (optimistic update)
       if (onQuestionUpdate) {
         onQuestionUpdate(question.id, updates);
@@ -373,13 +432,17 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
 
       // Trigger debounced save to database
-      // We pass the entire questions array which will be updated by parent
-      // The save will happen after debounce delay
+      // CRITICAL FIX: Use complete local copy instead of waiting for parent state
       if (questions && questions.length > 0) {
-        // Find and update the question in the array
         const updatedQuestions = questions.map(q =>
-          q.id === question.id ? { ...q, ...updates } : q
+          q.id === question.id ? completeUpdatedQuestion : q  // Use local complete copy
         );
+
+        console.log('[commitQuestionUpdate] Triggering save with updated data:', {
+          totalQuestions: updatedQuestions.length,
+          updatedQuestionId: question.id
+        });
+
         debouncedSaveToDatabase(updatedQuestions);
       }
     },

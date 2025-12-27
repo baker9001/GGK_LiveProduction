@@ -4376,9 +4376,47 @@ function QuestionsTabInner({
     setImportProgress({ current: 0, total: questions.length });
 
     try {
+      // CRITICAL FIX: Fetch latest data from working_json before import
+      // This ensures we import the most recent changes, even if debounced save hasn't completed
+      let questionsToImport = questions;
+
+      if (importSession?.id) {
+        console.log('[confirmImport] Fetching latest data from working_json before import');
+
+        try {
+          const { data: session, error: fetchError } = await supabase
+            .from('past_paper_import_sessions')
+            .select('working_json, raw_json')
+            .eq('id', importSession.id)
+            .single();
+
+          if (!fetchError && session) {
+            const latestData = session.working_json || session.raw_json;
+
+            if (latestData?.questions) {
+              questionsToImport = latestData.questions;
+              console.log('[confirmImport] Using latest questions from working_json:', {
+                count: questionsToImport.length,
+                questionsWithVariations: questionsToImport.filter((q: any) => {
+                  if (q.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)) return true;
+                  if (q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length))) return true;
+                  return false;
+                }).length
+              });
+            } else {
+              console.warn('[confirmImport] No questions in working_json, using state');
+            }
+          } else {
+            console.warn('[confirmImport] Could not fetch latest data, using state:', fetchError);
+          }
+        } catch (error) {
+          console.error('[confirmImport] Error fetching latest data, using state:', error);
+        }
+      }
+
       // Prepare the correct parameters for importQuestions
       const importParams = {
-        questions: questions,
+        questions: questionsToImport,  // CRITICAL: Use latest data from working_json
         mappings: questionMappings,
         attachments: attachments,
         paperId: existingPaperId!,
@@ -4387,14 +4425,19 @@ function QuestionsTabInner({
         yearOverride: paperMetadata.exam_year ? parseInt(paperMetadata.exam_year) : undefined,
         existingQuestionNumbers: existingQuestionNumbers
       };
-      
+
       console.log('Import parameters:', {
         questionCount: importParams.questions.length,
         paperId: importParams.paperId,
         dataStructureId: importParams.dataStructureInfo.id,
         mappingsCount: Object.keys(importParams.mappings).length,
         attachmentsCount: Object.keys(importParams.attachments).length,
-        existingCount: importParams.existingQuestionNumbers.size
+        existingCount: importParams.existingQuestionNumbers.size,
+        questionsWithAcceptableVariations: importParams.questions.filter((q: any) => {
+          if (q.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)) return true;
+          if (q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length))) return true;
+          return false;
+        }).length
       });
       
       // Call the import function with the correct signature
@@ -4611,6 +4654,25 @@ function QuestionsTabInner({
 
         console.log('[Auto-Save QuestionsTab] Saving', updatedQuestions.length, 'questions to database');
 
+        // ENHANCED LOGGING: Track acceptable_variations in questions being saved
+        const questionsWithVariations = updatedQuestions.filter(q => {
+          if (q.correct_answers?.some(ans => ans.acceptable_variations?.length)) return true;
+          if (q.parts?.some(p => p.correct_answers?.some(ans => ans.acceptable_variations?.length))) return true;
+          return false;
+        });
+
+        if (questionsWithVariations.length > 0) {
+          console.log('[Auto-Save QuestionsTab] Questions with acceptable_variations being saved:', {
+            count: questionsWithVariations.length,
+            questionIds: questionsWithVariations.map(q => q.id),
+            sampleData: {
+              questionId: questionsWithVariations[0].id,
+              correctAnswersVariations: questionsWithVariations[0].correct_answers?.[0]?.acceptable_variations,
+              partsVariations: questionsWithVariations[0].parts?.[0]?.correct_answers?.[0]?.acceptable_variations
+            }
+          });
+        }
+
         // Fetch current session data
         const { data: session, error: fetchError } = await supabase
           .from('past_paper_import_sessions')
@@ -4635,6 +4697,17 @@ function QuestionsTabInner({
           }))
         };
 
+        // VERIFICATION LOG: Confirm acceptable_variations are in working_json before save
+        const questionsInWorkingJson = workingJson.questions.filter((q: any) => {
+          if (q.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)) return true;
+          if (q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length))) return true;
+          return false;
+        });
+
+        if (questionsInWorkingJson.length > 0) {
+          console.log('[Auto-Save QuestionsTab] working_json contains acceptable_variations for', questionsInWorkingJson.length, 'questions');
+        }
+
         // Save to database
         const { error: updateError } = await supabase
           .from('past_paper_import_sessions')
@@ -4650,7 +4723,7 @@ function QuestionsTabInner({
           throw updateError;
         }
 
-        console.log('✅ [Auto-Save QuestionsTab] Successfully saved', updatedQuestions.length, 'questions');
+        console.log('✅ [Auto-Save QuestionsTab] Successfully saved', updatedQuestions.length, 'questions to working_json');
         toast.success('Changes saved successfully', { duration: 2000 });
       } catch (error) {
         console.error('❌ [Auto-Save QuestionsTab] Error:', error);
@@ -4697,7 +4770,33 @@ function QuestionsTabInner({
   };
 
   const handleQuestionUpdateFromReview = (questionId: string, updates: Partial<QuestionDisplayData>) => {
-    console.log('[QuestionsTab] Question update received:', { questionId, updates: Object.keys(updates) });
+    console.log('[QuestionsTab] Question update received:', {
+      questionId,
+      updateKeys: Object.keys(updates),
+      hasParts: !!updates.parts,
+      hasCorrectAnswers: !!updates.correct_answers
+    });
+
+    // ENHANCED LOGGING: Track acceptable_variations in nested structures
+    if (updates.parts) {
+      console.log('[QuestionsTab] Parts update detected:', {
+        partsCount: updates.parts.length,
+        partsWithAnswers: updates.parts.filter(p => p.correct_answers?.length).length,
+        samplePartAnswers: updates.parts[0]?.correct_answers?.map(ans => ({
+          answer: ans.answer?.substring(0, 30),
+          hasAcceptableVariations: !!ans.acceptable_variations,
+          variationsCount: ans.acceptable_variations?.length || 0
+        }))
+      });
+    }
+
+    if (updates.correct_answers) {
+      console.log('[QuestionsTab] Correct answers update detected:', {
+        answersCount: updates.correct_answers.length,
+        answersWithVariations: updates.correct_answers.filter(ans => ans.acceptable_variations?.length).length,
+        sampleVariations: updates.correct_answers[0]?.acceptable_variations
+      });
+    }
 
     setQuestions(prev => {
       const updatedQuestions = prev.map(q => {
@@ -4705,7 +4804,7 @@ function QuestionsTabInner({
           return q;
         }
 
-        return {
+        const updatedQuestion = {
           ...q,
           question_text: updates.question_text ?? q.question_text,
           marks: updates.marks ?? q.marks,
@@ -4724,11 +4823,22 @@ function QuestionsTabInner({
           options: updates.options ?? q.options,
           requires_manual_marking: updates.requires_manual_marking ?? q.requires_manual_marking,
           marking_criteria: updates.marking_criteria ?? q.marking_criteria,
-          parts: updates.parts ?? q.parts,
+          parts: updates.parts ?? q.parts,  // CRITICAL: Preserves complete nested structure
           figure_required: updates.figure_required ?? q.figure_required,
           figure: updates.figure ?? q.figure,
-          preview_data: updates.preview_data ?? q.preview_data, // Store table completion student data
+          preview_data: updates.preview_data ?? q.preview_data,
         };
+
+        // VERIFICATION LOG: Confirm nested structure preserved
+        if (updates.parts) {
+          console.log('[QuestionsTab] Updated question with parts:', {
+            questionId: updatedQuestion.id,
+            partsCount: updatedQuestion.parts?.length,
+            samplePartCorrectAnswers: updatedQuestion.parts?.[0]?.correct_answers?.[0]
+          });
+        }
+
+        return updatedQuestion;
       });
 
       // CRITICAL FIX: Trigger auto-save to database after state update
