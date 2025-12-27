@@ -42,8 +42,10 @@ interface Part {
 
 interface Question {
   id?: string;
+  question_number?: string;
   correct_answers?: CorrectAnswer[];
   parts?: Part[];
+  sub_questions?: Part[];
   [key: string]: any;
 }
 
@@ -182,26 +184,49 @@ export function mergeParts(
   });
 }
 
+function getPartsFromQuestion(question: Question | undefined): Part[] | undefined {
+  if (!question) return undefined;
+  return question.parts || question.sub_questions;
+}
+
 /**
  * Merges a single question, applying smart merge to all nested structures
+ * Handles both 'parts' and 'sub_questions' field naming conventions
  */
 export function mergeQuestion(
   workingQuestion: Question,
   rawQuestion: Question | undefined
 ): Question {
-  return {
+  const workingParts = getPartsFromQuestion(workingQuestion);
+  const rawParts = getPartsFromQuestion(rawQuestion);
+
+  const mergedParts = mergeParts(workingParts, rawParts);
+
+  const result: Question = {
     ...workingQuestion,
     correct_answers: mergeCorrectAnswers(
       workingQuestion.correct_answers,
       rawQuestion?.correct_answers
-    ),
-    parts: mergeParts(workingQuestion.parts, rawQuestion?.parts)
+    )
   };
+
+  if (workingQuestion.parts !== undefined) {
+    result.parts = mergedParts;
+  }
+  if (workingQuestion.sub_questions !== undefined) {
+    result.sub_questions = mergedParts;
+  }
+  if (workingQuestion.parts === undefined && workingQuestion.sub_questions === undefined && mergedParts.length > 0) {
+    result.parts = mergedParts;
+  }
+
+  return result;
 }
 
 /**
  * Merges all questions from working_json with raw_json backup
  * This is the main entry point for the smart merge strategy
+ * Supports matching by both 'id' and 'question_number' for flexibility
  */
 export function mergeQuestionsWithSmartVariations(
   workingQuestions: Question[],
@@ -211,17 +236,33 @@ export function mergeQuestionsWithSmartVariations(
     return workingQuestions;
   }
 
-  // Build map of raw questions by ID
-  const rawQuestionsMap = new Map<string, Question>();
+  const rawQuestionsById = new Map<string, Question>();
+  const rawQuestionsByNumber = new Map<string, Question>();
+
   rawQuestions.forEach((rawQ) => {
     if (rawQ.id) {
-      rawQuestionsMap.set(rawQ.id, rawQ);
+      rawQuestionsById.set(rawQ.id, rawQ);
+    }
+    if (rawQ.question_number) {
+      rawQuestionsByNumber.set(rawQ.question_number, rawQ);
     }
   });
 
-  // Merge each working question with its raw counterpart
-  return workingQuestions.map((workingQ) => {
-    const rawQ = workingQ.id ? rawQuestionsMap.get(workingQ.id) : undefined;
+  return workingQuestions.map((workingQ, index) => {
+    let rawQ: Question | undefined;
+
+    if (workingQ.id) {
+      rawQ = rawQuestionsById.get(workingQ.id);
+    }
+
+    if (!rawQ && workingQ.question_number) {
+      rawQ = rawQuestionsByNumber.get(workingQ.question_number);
+    }
+
+    if (!rawQ && rawQuestions[index]) {
+      rawQ = rawQuestions[index];
+    }
+
     return mergeQuestion(workingQ, rawQ);
   });
 }
@@ -229,6 +270,7 @@ export function mergeQuestionsWithSmartVariations(
 /**
  * Validates that acceptable_variations are preserved during save operations
  * Returns warnings (non-blocking) if data loss is detected
+ * Handles both 'parts' and 'sub_questions' field naming conventions
  */
 export function validateVariationsBeforeSave(
   questionsToSave: Question[],
@@ -241,34 +283,51 @@ export function validateVariationsBeforeSave(
     return { warnings, lostVariationsCount };
   }
 
-  const rawQuestionsMap = new Map<string, Question>();
+  const rawQuestionsById = new Map<string, Question>();
+  const rawQuestionsByNumber = new Map<string, Question>();
+
   originalRawQuestions.forEach((rawQ) => {
     if (rawQ.id) {
-      rawQuestionsMap.set(rawQ.id, rawQ);
+      rawQuestionsById.set(rawQ.id, rawQ);
+    }
+    if (rawQ.question_number) {
+      rawQuestionsByNumber.set(rawQ.question_number, rawQ);
     }
   });
 
-  questionsToSave.forEach((saveQ) => {
-    const rawQ = saveQ.id ? rawQuestionsMap.get(saveQ.id) : undefined;
+  questionsToSave.forEach((saveQ, qIndex) => {
+    let rawQ: Question | undefined;
+
+    if (saveQ.id) {
+      rawQ = rawQuestionsById.get(saveQ.id);
+    }
+    if (!rawQ && saveQ.question_number) {
+      rawQ = rawQuestionsByNumber.get(saveQ.question_number);
+    }
+    if (!rawQ && originalRawQuestions[qIndex]) {
+      rawQ = originalRawQuestions[qIndex];
+    }
+
     if (!rawQ) return;
 
-    // Check direct answers
     saveQ.correct_answers?.forEach((saveAns, idx) => {
-      const rawAns = rawQ.correct_answers?.[idx];
+      const rawAns = rawQ!.correct_answers?.[idx];
       if (
         rawAns?.acceptable_variations?.length &&
         !hasField(saveAns, 'acceptable_variations')
       ) {
         warnings.push(
-          `Question ${saveQ.id}: acceptable_variations missing in answer ${idx + 1}`
+          `Question ${saveQ.id || saveQ.question_number}: acceptable_variations missing in answer ${idx + 1}`
         );
         lostVariationsCount++;
       }
     });
 
-    // Check parts
-    saveQ.parts?.forEach((savePart, partIdx) => {
-      const rawPart = rawQ.parts?.[partIdx];
+    const saveParts = getPartsFromQuestion(saveQ);
+    const rawParts = getPartsFromQuestion(rawQ);
+
+    saveParts?.forEach((savePart, partIdx) => {
+      const rawPart = rawParts?.[partIdx];
       if (!rawPart) return;
 
       savePart.correct_answers?.forEach((saveAns, ansIdx) => {
@@ -278,13 +337,12 @@ export function validateVariationsBeforeSave(
           !hasField(saveAns, 'acceptable_variations')
         ) {
           warnings.push(
-            `Question ${saveQ.id}, Part ${partIdx + 1}: acceptable_variations missing in answer ${ansIdx + 1}`
+            `Question ${saveQ.id || saveQ.question_number}, Part ${partIdx + 1}: acceptable_variations missing in answer ${ansIdx + 1}`
           );
           lostVariationsCount++;
         }
       });
 
-      // Check subparts
       savePart.subparts?.forEach((saveSubpart, subpartIdx) => {
         const rawSubpart = rawPart.subparts?.[subpartIdx];
         if (!rawSubpart) return;
@@ -296,7 +354,7 @@ export function validateVariationsBeforeSave(
             !hasField(saveAns, 'acceptable_variations')
           ) {
             warnings.push(
-              `Question ${saveQ.id}, Part ${partIdx + 1}, Subpart ${subpartIdx + 1}: acceptable_variations missing`
+              `Question ${saveQ.id || saveQ.question_number}, Part ${partIdx + 1}, Subpart ${subpartIdx + 1}: acceptable_variations missing`
             );
             lostVariationsCount++;
           }
