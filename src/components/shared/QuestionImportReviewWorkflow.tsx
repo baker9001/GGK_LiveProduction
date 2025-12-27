@@ -55,6 +55,7 @@ import {
 } from '../../lib/validation/acceptableVariationsValidation';
 import EnhancedAnswerFormatSelector from './EnhancedAnswerFormatSelector';
 import DynamicAnswerField from './DynamicAnswerField';
+import { mergeQuestionsWithSmartVariations, validateVariationsBeforeSave } from '../../lib/utils/acceptableVariationsSmartMerge';
 
 const formatOptionLabel = (value: string) =>
   value
@@ -341,16 +342,53 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             throw fetchError;
           }
 
+          // VALIDATION: Check for acceptable_variations data loss before saving
+          const { warnings, lostVariationsCount } = validateVariationsBeforeSave(
+            updatedQuestions as any,
+            session.raw_json?.questions
+          );
+
+          if (warnings.length > 0) {
+            console.warn('[Auto-Save] Detected potential acceptable_variations loss:', {
+              lostCount: lostVariationsCount,
+              warnings: warnings.slice(0, 3)
+            });
+          }
+
           // Get base JSON structure (preserve metadata)
           const baseJson = session.working_json || session.raw_json || {};
+
+          // Explicitly preserve ALL fields including acceptable_variations
+          const questionsToSave = updatedQuestions.map(q => ({
+            ...q,
+            last_updated: new Date().toISOString(),
+            // Explicitly map correct_answers with acceptable_variations
+            correct_answers: (q.correct_answers || []).map(ans => ({
+              ...ans,
+              acceptable_variations: ans.acceptable_variations || []
+            })),
+            // Explicitly map parts
+            parts: (q.parts || []).map(part => ({
+              ...part,
+              correct_answers: (part.correct_answers || []).map(ans => ({
+                ...ans,
+                acceptable_variations: ans.acceptable_variations || []
+              })),
+              // Explicitly map subparts
+              subparts: (part.subparts || []).map(subpart => ({
+                ...subpart,
+                correct_answers: (subpart.correct_answers || []).map(ans => ({
+                  ...ans,
+                  acceptable_variations: ans.acceptable_variations || []
+                }))
+              }))
+            }))
+          }));
 
           // Build updated working_json with latest question data
           const workingJson = {
             ...baseJson,
-            questions: updatedQuestions.map(q => ({
-              ...q,
-              last_updated: new Date().toISOString()
-            }))
+            questions: questionsToSave
           };
 
           // VERIFICATION LOG: Confirm data in working_json before database update
@@ -411,18 +449,44 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
   const commitQuestionUpdate = useCallback(
     (question: QuestionDisplayData, updates: Partial<QuestionDisplayData>) => {
-      // CRITICAL FIX: Create complete updated question object locally FIRST
-      // This ensures we have the latest data regardless of parent state propagation timing
-      const completeUpdatedQuestion = { ...question, ...updates };
+      // CRITICAL FIX: Create complete updated question with explicit field preservation
+      // Deep merge to ensure acceptable_variations are never lost during partial updates
+      const completeUpdatedQuestion = {
+        ...question,
+        ...updates,
+        // Explicitly preserve correct_answers with acceptable_variations
+        correct_answers: updates.correct_answers || question.correct_answers,
+        // Explicitly preserve parts with deep merge
+        parts: (updates.parts || question.parts || []).map((updatedPart, idx) => {
+          const originalPart = question.parts?.[idx];
+          return {
+            ...originalPart,
+            ...updatedPart,
+            // Explicitly preserve correct_answers in parts
+            correct_answers: updatedPart.correct_answers || originalPart?.correct_answers,
+            // Explicitly preserve subparts
+            subparts: (updatedPart.subparts || originalPart?.subparts || []).map((updatedSubpart, subIdx) => {
+              const originalSubpart = originalPart?.subparts?.[subIdx];
+              return {
+                ...originalSubpart,
+                ...updatedSubpart,
+                // Explicitly preserve correct_answers in subparts
+                correct_answers: updatedSubpart.correct_answers || originalSubpart?.correct_answers
+              };
+            })
+          };
+        })
+      };
 
-      console.log('[commitQuestionUpdate] Processing update:', {
+      console.log('[commitQuestionUpdate] Processing update with field preservation:', {
         questionId: question.id,
         updateKeys: Object.keys(updates),
         hasParts: !!updates.parts,
         partsCount: updates.parts?.length,
         hasCorrectAnswers: !!completeUpdatedQuestion.correct_answers,
+        correctAnswersPreserved: completeUpdatedQuestion.correct_answers?.some(ans => ans.acceptable_variations?.length),
         sampleAnswer: completeUpdatedQuestion.correct_answers?.[0],
-        samplePartAnswer: updates.parts?.[0]?.correct_answers?.[0]
+        samplePartAnswer: completeUpdatedQuestion.parts?.[0]?.correct_answers?.[0]
       });
 
       // Update parent state (optimistic update)
@@ -433,7 +497,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
 
       // Trigger debounced save to database
-      // CRITICAL FIX: Use complete local copy instead of waiting for parent state
+      // CRITICAL FIX: Use complete local copy with preserved fields
       if (questions && questions.length > 0) {
         const updatedQuestions = questions.map(q =>
           q.id === question.id ? completeUpdatedQuestion : q  // Use local complete copy

@@ -11,6 +11,7 @@ import { cn } from '../../../../../../lib/utils';
 import EnhancedQuestionNavigator, { buildEnhancedNavigationItems, NavigationItem, QuestionStatus, AttachmentStatus } from '../../../../../../components/shared/EnhancedQuestionNavigator';
 import { QuestionCard } from '../components/QuestionCard';
 import { Question, SubQuestion } from '../page';
+import { mergeQuestionsWithSmartVariations, validateVariationsBeforeSave } from '../../../../../../lib/utils/acceptableVariationsSmartMerge';
 
 interface ValidationReport {
   isValid: boolean;
@@ -132,12 +133,28 @@ export default function PaperSetupReviewPage() {
 
       if (sessionError) throw sessionError;
 
-      // Extract questions from working_json first (contains edits), fallback to raw_json
-      const sourceJson = session.working_json || session.raw_json;
-      const rawQuestions = sourceJson?.questions || [];
+      // SMART MERGE STRATEGY: Use working_json, but restore missing acceptable_variations from raw_json
+      const workingJson = session.working_json || session.raw_json;
+      const rawJson = session.raw_json;
+
+      const workingQuestions = workingJson?.questions || [];
+      const rawQuestions = rawJson?.questions || [];
+
+      console.log('[Review Page] Applying smart merge for acceptable_variations', {
+        workingQuestionsCount: workingQuestions.length,
+        rawQuestionsCount: rawQuestions.length,
+        sessionId
+      });
+
+      // Apply smart merge to restore any lost acceptable_variations
+      const mergedQuestions = mergeQuestionsWithSmartVariations(workingQuestions, rawQuestions);
+
+      console.log('[Review Page] Smart merge complete', {
+        questionsProcessed: mergedQuestions.length
+      });
 
       // Transform to Question format with ALL fields including acceptable_variations
-      const questions: Question[] = rawQuestions.map((q: any, index: number) => ({
+      const questions: Question[] = mergedQuestions.map((q: any, index: number) => ({
         id: q.id || `q-${index + 1}`,
         question_number: q.question_number || `${index + 1}`,
         question_type: mapQuestionType(q.question_type || q.type),
@@ -339,12 +356,78 @@ export default function PaperSetupReviewPage() {
         .eq('id', sessionId)
         .single();
 
+      // VALIDATION: Check for acceptable_variations data loss before saving
+      const { warnings, lostVariationsCount } = validateVariationsBeforeSave(
+        state.questions as any,
+        currentSession?.raw_json?.questions
+      );
+
+      if (warnings.length > 0) {
+        console.warn('[Save Validation] Detected potential acceptable_variations loss:', {
+          lostCount: lostVariationsCount,
+          warnings: warnings.slice(0, 5) // Log first 5 warnings
+        });
+      }
+
+      // Explicitly preserve ALL fields including acceptable_variations in nested structures
+      const questionsToSave = state.questions.map(q => ({
+        ...q,
+        // Explicitly map correct_answers with acceptable_variations
+        correct_answers: (q.correct_answers || []).map(ans => ({
+          answer: ans.answer || ans.text || '',
+          marks: ans.marks,
+          alternative_id: ans.alternative_id,
+          acceptable_variations: ans.acceptable_variations || [], // Explicit preservation
+          context: ans.context
+        })),
+        // Explicitly map parts
+        parts: (q.sub_questions || []).map(part => ({
+          ...part,
+          correct_answers: (part.correct_answers || []).map(ans => ({
+            answer: ans.answer || ans.text || '',
+            marks: ans.marks,
+            alternative_id: ans.alternative_id,
+            acceptable_variations: ans.acceptable_variations || [], // Explicit preservation
+            context: ans.context
+          })),
+          // Explicitly map subparts
+          subparts: (part.subparts || []).map(subpart => ({
+            ...subpart,
+            correct_answers: (subpart.correct_answers || []).map(ans => ({
+              answer: ans.answer || ans.text || '',
+              marks: ans.marks,
+              alternative_id: ans.alternative_id,
+              acceptable_variations: ans.acceptable_variations || [], // Explicit preservation
+              context: ans.context
+            }))
+          }))
+        }))
+      }));
+
       // Build working_json with updated questions, preserving other fields from source
       const baseJson = currentSession?.working_json || currentSession?.raw_json || {};
       const workingJson = {
         ...baseJson,
-        questions: state.questions
+        questions: questionsToSave
       };
+
+      // Log preservation confirmation
+      const questionsWithVariations = questionsToSave.filter(q => {
+        if (q.correct_answers?.some(ans => ans.acceptable_variations?.length)) return true;
+        if (q.parts?.some(p => p.correct_answers?.some(ans => ans.acceptable_variations?.length))) return true;
+        return false;
+      });
+
+      if (questionsWithVariations.length > 0) {
+        console.log('[Save] Preserving acceptable_variations in working_json:', {
+          count: questionsWithVariations.length,
+          sampleQuestion: {
+            id: questionsWithVariations[0].id,
+            sampleAnswer: questionsWithVariations[0].correct_answers?.[0],
+            samplePartAnswer: questionsWithVariations[0].parts?.[0]?.correct_answers?.[0]
+          }
+        });
+      }
 
       // Save updated questions to working_json (preserves raw_json as original)
       const { error: updateError } = await supabase
@@ -362,6 +445,8 @@ export default function PaperSetupReviewPage() {
         .eq('id', sessionId);
 
       if (updateError) throw updateError;
+
+      console.log('✅ [Save] Successfully saved questions with acceptable_variations preserved');
 
       toast.success('All questions saved successfully', {
         id: 'papers-review-success',
