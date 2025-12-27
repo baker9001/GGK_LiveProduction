@@ -2550,15 +2550,31 @@ function QuestionsTabInner({
     return processedSubpart;
   };
 
-  const processAnswers = (answers: any[], answerRequirement?: string): ProcessedAnswer[] => {
-    if (!Array.isArray(answers)) {
-      console.warn('processAnswers called with non-array:', answers);
+  const normalizeAnswerInput = (answers: any): any[] => {
+    if (Array.isArray(answers)) return answers;
+    if (answers && typeof answers === 'object') return [answers];
+    if (typeof answers === 'string' || typeof answers === 'number') {
+      return [{ answer: String(answers) }];
+    }
+    return [];
+  };
+
+  const normalizeAcceptableVariations = (variations: unknown): string[] => {
+    if (Array.isArray(variations)) return variations.map(v => String(v));
+    if (typeof variations === 'string') return [variations];
+    return [];
+  };
+
+  const processAnswers = (answers: any, answerRequirement?: string): ProcessedAnswer[] => {
+    const normalizedAnswers = normalizeAnswerInput(answers);
+    if (normalizedAnswers.length === 0) {
+      console.warn('processAnswers called with unsupported data:', answers);
       return [];
     }
 
     // DIAGNOSTIC LOG: Track acceptable_variations in incoming answers
-    const answersWithVariations = answers.filter(ans =>
-      Array.isArray(ans?.acceptable_variations) && ans.acceptable_variations.length > 0
+    const answersWithVariations = normalizedAnswers.filter(ans =>
+      normalizeAcceptableVariations(ans?.acceptable_variations).length > 0
     );
     if (answersWithVariations.length > 0) {
       console.log('[processAnswers] Found answers with acceptable_variations:', {
@@ -2567,7 +2583,7 @@ function QuestionsTabInner({
       });
     }
 
-    return answers.map((ans, index) => {
+    return normalizedAnswers.map((ans, index) => {
       try {
         // Validate answer structure
         if (!ans || typeof ans !== 'object') {
@@ -2588,6 +2604,8 @@ function QuestionsTabInner({
 
         const context = ans.context;
 
+      const acceptableVariations = normalizeAcceptableVariations(ans.acceptable_variations);
+
       let processedAnswer: ProcessedAnswer = {
         answer: answerText,
         answer_text: ans.answer_text,        // Preserve table_completion template data
@@ -2603,7 +2621,7 @@ function QuestionsTabInner({
         error_carried_forward: ans.error_carried_forward,
         answer_requirement: answerRequirement || ans.answer_requirement,
         total_alternatives: ans.total_alternatives,
-        acceptable_variations: ans.acceptable_variations // CRITICAL FIX: Preserve acceptable_variations from JSON
+        acceptable_variations: acceptableVariations // CRITICAL FIX: Preserve acceptable_variations from JSON
       };
 
       if (extractionRules?.forwardSlashHandling) {
