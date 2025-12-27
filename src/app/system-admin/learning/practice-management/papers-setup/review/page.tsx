@@ -132,8 +132,9 @@ export default function PaperSetupReviewPage() {
 
       if (sessionError) throw sessionError;
 
-      // Extract questions from raw_json
-      const rawQuestions = session.raw_json?.questions || [];
+      // Extract questions from working_json first (contains edits), fallback to raw_json
+      const sourceJson = session.working_json || session.raw_json;
+      const rawQuestions = sourceJson?.questions || [];
 
       // Transform to Question format with ALL fields including acceptable_variations
       const questions: Question[] = rawQuestions.map((q: any, index: number) => ({
@@ -331,18 +332,31 @@ export default function PaperSetupReviewPage() {
         return;
       }
 
-      // Save updated questions back to session
+      // Fetch current session to get existing data for proper merge
+      const { data: currentSession } = await supabase
+        .from('past_paper_import_sessions')
+        .select('working_json, raw_json, metadata')
+        .eq('id', sessionId)
+        .single();
+
+      // Build working_json with updated questions, preserving other fields from source
+      const baseJson = currentSession?.working_json || currentSession?.raw_json || {};
+      const workingJson = {
+        ...baseJson,
+        questions: state.questions
+      };
+
+      // Save updated questions to working_json (preserves raw_json as original)
       const { error: updateError } = await supabase
         .from('past_paper_import_sessions')
         .update({
-          raw_json: {
-            questions: state.questions
-          },
+          working_json: workingJson,
           metadata: {
-            ...state.questions[0]?.meta,
+            ...(currentSession?.metadata || {}),
             reviewed: true,
             reviewed_at: new Date().toISOString()
           },
+          last_synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', sessionId);
