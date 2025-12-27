@@ -1313,6 +1313,160 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   ) => {
     const list = Array.isArray(answers) ? answers : [];
 
+    const renderAcceptableVariationsOnly = (
+      items: EditableCorrectAnswer[],
+      context?: {
+        answer_format?: string | null;
+      }
+    ) => {
+      if (items.length === 0) return null;
+
+      return (
+        <div className="mt-4 space-y-3">
+          {items.map((answer, index) => {
+            const isTemplateAnswer = (answer as any)?.answer_type === 'table_template' || Boolean((answer as any)?.answer_text);
+
+            if (isTemplateAnswer) {
+              return null;
+            }
+
+            return (
+              <div
+                key={`${config.keyPrefix}-variation-${index}`}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-2"
+              >
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="font-medium">Answer {index + 1}:</span>{' '}
+                  <span className="text-gray-500 dark:text-gray-400">
+                    {answer?.answer ? answer.answer.replace(/<[^>]*>/g, '').slice(0, 120) : 'No answer text'}
+                  </span>
+                </div>
+
+                {supportsAcceptableVariations(context?.answer_format, answer.acceptable_variations && answer.acceptable_variations.length > 0) && (
+                  <div className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Acceptable Variations
+                      </label>
+                      {answer.acceptable_variations && answer.acceptable_variations.length > 0 && !isFormatRecommendedForVariations(context?.answer_format) && (
+                        <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">
+                          Format "{context?.answer_format || 'none'}" may not support variations
+                        </span>
+                      )}
+                      <div className="group relative">
+                        <Info className="h-3 w-3 text-blue-500" />
+                        <div className="absolute hidden group-hover:block z-10 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg -top-2 left-6">
+                          {getVariationTooltip(context?.answer_format)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {answer.acceptable_variations && answer.acceptable_variations.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {answer.acceptable_variations.map((variation: string, vIndex: number) => (
+                          <div
+                            key={vIndex}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-700 dark:text-blue-300"
+                          >
+                            <span>{variation}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentVariations = answer.acceptable_variations || [];
+                                const updated = removeVariation(currentVariations, vIndex);
+                                config.onChange(index, { acceptable_variations: updated });
+                              }}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newVariations[`${config.keyPrefix}-${index}`] || ''}
+                        onChange={(e) => setNewVariations({
+                          ...newVariations,
+                          [`${config.keyPrefix}-${index}`]: e.target.value
+                        })}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const variationKey = `${config.keyPrefix}-${index}`;
+                            const variation = newVariations[variationKey]?.trim();
+                            if (variation) {
+                              const currentVariations = answer.acceptable_variations || [];
+                              const result = addVariation(currentVariations, variation, answer.answer);
+
+                              if (result.errors.length > 0) {
+                                toast.error(result.errors[0]);
+                                return;
+                              }
+
+                              config.onChange(index, { acceptable_variations: result.updated });
+                              setNewVariations({ ...newVariations, [variationKey]: '' });
+                            }
+                          }
+                        }}
+                        placeholder={getVariationPlaceholder(context?.answer_format)}
+                        className="flex-1 px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const variationKey = `${config.keyPrefix}-${index}`;
+                          const variation = newVariations[variationKey]?.trim();
+                          if (variation) {
+                            const currentVariations = answer.acceptable_variations || [];
+                            const result = addVariation(currentVariations, variation, answer.answer);
+
+                            if (result.errors.length > 0) {
+                              toast.error(result.errors[0]);
+                              return;
+                            }
+
+                            config.onChange(index, { acceptable_variations: result.updated });
+                            setNewVariations({ ...newVariations, [variationKey]: '' });
+                          }
+                        }}
+                        disabled={!newVariations[`${config.keyPrefix}-${index}`]?.trim()}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
+    const hasTableCompletionTemplate = (items: EditableCorrectAnswer[]) => {
+      return items.some((ans: any) => {
+        const candidate = ans.answer_text || ans.answer;
+        if (!candidate || typeof candidate !== 'string') return false;
+        try {
+          const parsed = JSON.parse(candidate);
+          return (
+            parsed &&
+            Array.isArray(parsed.cells) &&
+            parsed.cells.length > 0 &&
+            'rowIndex' in parsed.cells[0] &&
+            'colIndex' in parsed.cells[0]
+          );
+        } catch {
+          return false;
+        }
+      });
+    };
+
     // Formats that require specialized components (should use DynamicAnswerField)
     const complexFormats = [
       'code', 'audio', 'file_upload', 'table', 'table_completion',
@@ -1320,7 +1474,8 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
     ];
 
     const useComplexInput = questionContext?.answer_format &&
-      complexFormats.includes(questionContext.answer_format);
+      complexFormats.includes(questionContext.answer_format) &&
+      (questionContext.answer_format !== 'table_completion' || hasTableCompletionTemplate(list));
 
     // If format requires specialized component, use DynamicAnswerField
     if (useComplexInput && questionContext) {
@@ -1448,6 +1603,10 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               }
             }}
           />
+
+          {renderAcceptableVariationsOnly(list, {
+            answer_format: questionContext.answer_format
+          })}
         </div>
       );
     }
