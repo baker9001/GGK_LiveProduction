@@ -427,6 +427,7 @@ interface ProcessedAnswer {
   required_components?: string[];
   optional_components?: string[];
   needs_context?: boolean;
+  acceptable_variations?: string[]; // Array of acceptable alternative notations for this answer
 }
 
 interface ProcessedOption {
@@ -2525,6 +2526,17 @@ function QuestionsTabInner({
       return [];
     }
 
+    // DIAGNOSTIC LOG: Track acceptable_variations in incoming answers
+    const answersWithVariations = answers.filter(ans =>
+      Array.isArray(ans?.acceptable_variations) && ans.acceptable_variations.length > 0
+    );
+    if (answersWithVariations.length > 0) {
+      console.log('[processAnswers] Found answers with acceptable_variations:', {
+        count: answersWithVariations.length,
+        sampleData: answersWithVariations[0]?.acceptable_variations
+      });
+    }
+
     return answers.map((ans, index) => {
       try {
         // Validate answer structure
@@ -2560,7 +2572,8 @@ function QuestionsTabInner({
         accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
         error_carried_forward: ans.error_carried_forward,
         answer_requirement: answerRequirement || ans.answer_requirement,
-        total_alternatives: ans.total_alternatives
+        total_alternatives: ans.total_alternatives,
+        acceptable_variations: ans.acceptable_variations // CRITICAL FIX: Preserve acceptable_variations from JSON
       };
 
       if (extractionRules?.forwardSlashHandling) {
@@ -2614,6 +2627,14 @@ function QuestionsTabInner({
         if (!validation.hasContext && !context) {
           processedAnswer.needs_context = true;
         }
+      }
+
+      // DIAGNOSTIC LOG: Verify acceptable_variations is preserved
+      if (processedAnswer.acceptable_variations && processedAnswer.acceptable_variations.length > 0) {
+        console.log('[processAnswers] Preserved acceptable_variations for answer:', {
+          answer: answerText.substring(0, 30),
+          variations: processedAnswer.acceptable_variations
+        });
       }
 
       return processedAnswer;
