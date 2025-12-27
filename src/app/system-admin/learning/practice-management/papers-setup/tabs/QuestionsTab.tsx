@@ -3287,7 +3287,8 @@ function QuestionsTabInner({
             accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
             error_carried_forward: ans.error_carried_forward,
             answer_requirement: ans.answer_requirement,
-            total_alternatives: ans.total_alternatives
+            total_alternatives: ans.total_alternatives,
+            acceptable_variations: ans.acceptable_variations
           })),
           correct_answer: validQuestionCorrectAnswers[0]?.answer, // For MCQ compatibility
           total_alternatives: q.total_alternatives,
@@ -3355,7 +3356,8 @@ function QuestionsTabInner({
                 accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
                 error_carried_forward: ans.error_carried_forward,
                 answer_requirement: ans.answer_requirement,
-                total_alternatives: ans.total_alternatives
+                total_alternatives: ans.total_alternatives,
+                acceptable_variations: ans.acceptable_variations
               })),
               correct_answer: validPartCorrectAnswers[0]?.answer, // For MCQ compatibility
               options: partOptions.map((opt, index) => ({
@@ -3402,7 +3404,8 @@ function QuestionsTabInner({
                     accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
                     error_carried_forward: ans.error_carried_forward,
                     answer_requirement: ans.answer_requirement,
-                    total_alternatives: ans.total_alternatives
+                    total_alternatives: ans.total_alternatives,
+                    acceptable_variations: ans.acceptable_variations
                   })),
                   options: subpartOptions.map((opt, index) => ({
                     id: `opt_${index}`,
