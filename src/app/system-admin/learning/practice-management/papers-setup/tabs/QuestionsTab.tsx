@@ -1694,6 +1694,23 @@ function QuestionsTabInner({
         throw new Error('No questions found in parsed data');
       }
 
+      // DIAGNOSTIC LOG: Check if acceptable_variations exists in fetched data
+      const questionsWithVariations = data.questions.filter((q: any) => {
+        if (q.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)) return true;
+        if (q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length))) return true;
+        return false;
+      });
+
+      console.log('[initializeFromParsedData] Fetched data analysis:', {
+        totalQuestions: data.questions.length,
+        questionsWithAcceptableVariations: questionsWithVariations.length,
+        sampleData: questionsWithVariations.length > 0 ? {
+          questionNumber: questionsWithVariations[0].question_number,
+          sampleAnswer: questionsWithVariations[0].correct_answers?.[0],
+          samplePart: questionsWithVariations[0].parts?.[0]
+        } : 'No acceptable_variations found in fetched data'
+      });
+
       // Extract paper metadata with all available fields and validation
       const metadata = {
         title: String(data.title || data.paper_name || data.paper_code || 'Untitled Paper'),

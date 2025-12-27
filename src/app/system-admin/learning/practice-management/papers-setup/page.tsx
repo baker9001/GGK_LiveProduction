@@ -1580,6 +1580,25 @@ export default function PapersSetupPage() {
         }
       }
       
+      // DIAGNOSTIC LOG: Check if acceptable_variations exists in uploaded JSON
+      const questionsWithVariations = jsonData.questions?.filter((q: any) => {
+        if (q.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)) return true;
+        if (q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length))) return true;
+        return false;
+      }) || [];
+
+      console.log('[handleFileSelected] Uploaded JSON analysis:', {
+        totalQuestions: jsonData.questions?.length || 0,
+        questionsWithAcceptableVariations: questionsWithVariations.length,
+        sampleQuestion: questionsWithVariations.length > 0 ? {
+          questionNumber: questionsWithVariations[0].question_number,
+          correctAnswersWithVariations: questionsWithVariations[0].correct_answers?.filter((ans: any) => ans.acceptable_variations?.length),
+          partsWithVariations: questionsWithVariations[0].parts?.filter((p: any) =>
+            p.correct_answers?.some((ans: any) => ans.acceptable_variations?.length)
+          )
+        } : 'No questions with acceptable_variations found'
+      });
+
       // Create new import session
       const sessionData: any = {
         json_file_name: file.name,

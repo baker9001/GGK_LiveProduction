@@ -48,6 +48,29 @@ export function CorrectAnswersDisplay({
   const [editedAnswers, setEditedAnswers] = useState<CorrectAnswer[]>([]);
   const [newVariations, setNewVariations] = useState<Record<number, string>>({});
 
+  // DIAGNOSTIC LOG: Check if acceptable_variations data exists but is not displayed
+  React.useEffect(() => {
+    const answersWithVariations = correctAnswers?.filter(ans =>
+      ans.acceptable_variations && ans.acceptable_variations.length > 0
+    ) || [];
+
+    if (answersWithVariations.length > 0) {
+      const supportsVariations = supportsAcceptableVariations(answerFormat);
+      console.log('[CorrectAnswersDisplay] Acceptable variations analysis:', {
+        answerFormat,
+        supportsVariations,
+        answersWithVariations: answersWithVariations.length,
+        totalAnswers: correctAnswers?.length,
+        sampleData: answersWithVariations[0],
+        hiddenBecauseOfFormat: !supportsVariations
+      });
+
+      if (!supportsVariations) {
+        console.warn(`[CorrectAnswersDisplay] acceptable_variations exist but UI is hidden because answer_format "${answerFormat}" does not support variations in edit mode`);
+      }
+    }
+  }, [correctAnswers, answerFormat]);
+
   // Initialize edited answers when starting edit
   const startEditing = () => {
     if (correctAnswers && correctAnswers.length > 0) {
